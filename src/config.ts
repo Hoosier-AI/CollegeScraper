@@ -11,6 +11,7 @@ const schema = z.object({
   CRAWL_GLOBAL_CONCURRENCY: z.coerce.number().int().positive().default(8),
   LOG_LEVEL: z.string().default('info'),
   PORT: z.coerce.number().int().default(8080),
+  SCHEDULER_ENABLED: z.string().default('0'),
 });
 
 export type Config = z.infer<typeof schema> & { userAgent: string; contactEmail: string };
@@ -30,6 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     CRAWL_GLOBAL_CONCURRENCY: env.CRAWL_GLOBAL_CONCURRENCY,
     LOG_LEVEL: env.LOG_LEVEL,
     PORT: env.PORT,
+    SCHEDULER_ENABLED: env.SCHEDULER_ENABLED,
   });
   const cfg: Config = {
     ...parsed,

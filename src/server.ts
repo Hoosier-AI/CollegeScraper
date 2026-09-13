@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { getDb } from './db/client.js';
 import { enqueue, jobNames, workerLoop } from './jobs/runner.js';
 import { registerAllJobs } from './jobs/index.js';
+import { startScheduler } from './jobs/scheduler.js';
 import { registerUiApi } from './ui/api.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -71,4 +72,5 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   process.on('SIGTERM', () => controller.abort());
   process.on('SIGINT', () => controller.abort());
   workerLoop(getDb(), { signal: controller.signal }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });
