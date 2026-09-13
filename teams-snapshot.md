@@ -1,0 +1,145 @@
+- generic [ref=f175e3]:
+  - banner [ref=f175e4]:
+    - generic [ref=f175e5]:
+      - generic [ref=f175e6]: College Stats
+      - navigation [ref=f175e7]:
+        - link "Teams" [ref=f175e8] [cursor=pointer]:
+          - /url: /teams
+        - link "Leaders" [ref=f175e9] [cursor=pointer]:
+          - /url: /leaders
+        - link "Standings" [ref=f175e10] [cursor=pointer]:
+          - /url: /standings
+        - link "Rankings" [ref=f175e11] [cursor=pointer]:
+          - /url: /rankings
+        - link "Jobs" [ref=f175e12] [cursor=pointer]:
+          - /url: /jobs
+        - link "Quality" [ref=f175e13] [cursor=pointer]:
+          - /url: /quality
+      - generic [ref=f175e14]:
+        - combobox [ref=f175e15]:
+          - option "2026" [selected]
+          - option "2025"
+          - option "2024"
+        - combobox [ref=f175e16]:
+          - option "Men" [selected]
+          - option "Women"
+      - button "Sign out" [ref=f175e17] [cursor=pointer]
+  - main [ref=f175e18]:
+    - generic [ref=f175e19]:
+      - generic [ref=f175e20]:
+        - heading "Teams 0 programs · 2026 · men's" [level=1] [ref=f175e21]:
+          - text: Teams
+          - generic [ref=f175e22]: 0 programs · 2026 · men's
+        - textbox "Search school…" [ref=f175e23]
+        - combobox [ref=f175e24]:
+          - option "All divisions" [selected]
+          - option "D1"
+          - option "D2"
+          - option "D3"
+        - combobox [ref=f175e25]:
+          - option "All conferences" [selected]
+          - option "ACC"
+          - option "Amcc"
+          - option "America East"
+          - option "American"
+          - option "American Rivers"
+          - option "ASC"
+          - option "Asun"
+          - option "Atlantic 10"
+          - option "Atlantic East"
+          - option "BIG 12"
+          - option "BIG East"
+          - option "BIG SKY"
+          - option "BIG South"
+          - option "BIG TEN"
+          - option "BIG West"
+          - option "C2C"
+          - option "CAA"
+          - option "Cacc"
+          - option "Ccaa"
+          - option "Cciw"
+          - option "CCS"
+          - option "Centennial"
+          - option "CNE"
+          - option "Conference Carolinas"
+          - option "Cunyac"
+          - option "Cusa"
+          - option "DI Independent"
+          - option "DII Independent"
+          - option "Diii Independent"
+          - option "ECC"
+          - option "Empire 8"
+          - option "G MAC"
+          - option "GAC"
+          - option "Gliac"
+          - option "Glvc"
+          - option "Great Northeast"
+          - option "Great Northwest"
+          - option "Gulf South"
+          - option "Hcac"
+          - option "Horizon"
+          - option "IND"
+          - option "IVY League"
+          - option "Landmark"
+          - option "Liberty League"
+          - option "Little East"
+          - option "Lone Star"
+          - option "MAAC"
+          - option "MAC"
+          - option "MAC Commonwealth"
+          - option "MAC Freedom"
+          - option "Mascac"
+          - option "MEC"
+          - option "Metro"
+          - option "Miac"
+          - option "Michigan Intercol. ath. assn."
+          - option "Michigan Intercol. Ath. Assn."
+          - option "MID America Intercollegiate"
+          - option "Mountain West"
+          - option "MVC"
+          - option "MWC"
+          - option "Nacc"
+          - option "Ncac"
+          - option "Ne10"
+          - option "NEC"
+          - option "Nescac"
+          - option "Newmac"
+          - option "Njac"
+          - option "North Atlantic"
+          - option "Nsic"
+          - option "NWC"
+          - option "OAC"
+          - option "Odac"
+          - option "OVC"
+          - option "PAC"
+          - option "PAC 12"
+          - option "Pacwest"
+          - option "Patriot"
+          - option "Peach Belt"
+          - option "Psac"
+          - option "Rmac"
+          - option "SAA"
+          - option "SAC"
+          - option "Scac"
+          - option "Sciac"
+          - option "SEC"
+          - option "Siac"
+          - option "Skyline"
+          - option "Sliac"
+          - option "Socon"
+          - option "Southland"
+          - option "Summit League"
+          - option "SUN Belt"
+          - option "Sunshine State"
+          - option "Sunyac"
+          - option "Swac"
+          - option "UAA"
+          - option "UAC"
+          - option "Umac"
+          - option "United East"
+          - option "USA South"
+          - option "WAC"
+          - option "WCC"
+          - option "Wiac"
+      - paragraph [ref=f175e26]: Click a program to open its stats. Sync pulls that team's roster, schedule, season stats, box scores and bios from its athletics site, then the NCAA.com box scores, and recomputes aggregates (about 1–2 minutes).
+      - generic [ref=f175e27]: Internal Server Error

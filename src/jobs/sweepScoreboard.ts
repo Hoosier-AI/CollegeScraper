@@ -1,0 +1,71 @@
+// NCAA.com scoreboard sweep → college_games rows (keyed by ncaa_contest_id) linked to programs by seo.
+import { registerJob, type JobContext } from './runner.js';
+import { makeFetcher } from './fetcher.js';
+import { scoreboardDay } from '../sources/ncaa/index.js';
+import { makeTransport } from './fetchGamesNcaa.js';
+import { log } from '../log.js';
+import { listPrograms, listGames, upsertGameByNcaa, updateGame } from '../db/repos.js';
+import { findGame } from '../identity/gameMatch.js';
+import { currentSeason, eachDate } from './seasons.js';
+import type { Division, Gender } from '../model.js';
+
+/** params: { season?, gender?, division?, days?: 'all'|'recent', force? } */
+export async function sweepScoreboard(ctx: JobContext): Promise<void> {
+  const db = ctx.db;
+  const season = Number(ctx.params.season ?? currentSeason());
+  const fetcher = makeFetcher(db, { freshMs: ctx.params.force ? 0 : (ctx.params.days === 'recent' ? 0 : 7 * 86400_000) });
+  const { store } = makeTransport(db, fetcher);
+  await store.init();
+  const genders: Gender[] = ctx.params.gender ? [ctx.params.gender as Gender] : ['m', 'w'];
+  const divisions: Division[] = ctx.params.division ? [ctx.params.division as Division] : ['d1', 'd2', 'd3'];
+  const programs = await listPrograms(db);
+  const bySeo = new Map(programs.map((p) => [`${p.school_seo}|${p.gender}`, p.id]));
+  const games = await listGames(db, season);
+  const byContest = new Map(games.filter((g) => g.ncaa_contest_id).map((g) => [String(g.ncaa_contest_id), g]));
+
+  let dates: string[];
+  if (ctx.params.days === 'recent') {
+    const d = new Date(); dates = [];
+    for (const off of [-1, 0, 1]) { const x = new Date(d); x.setUTCDate(d.getUTCDate() + off); dates.push(x.toISOString().slice(0, 10)); }
+  } else { const today = new Date().toISOString().slice(0, 10); dates = [...eachDate(`${season}-08-10`, `${season}-12-20` < today ? `${season}-12-20` : today)]; }
+
+  for (const gender of genders) for (const division of divisions) for (const date of dates) {
+    if (await ctx.cancelled()) return;
+    let dayGames;
+    try { dayGames = await scoreboardDay(fetcher, store, gender, division, date); }
+    catch (err) { ctx.inc('days_failed'); log.warn({ gender, division, date, err: err instanceof Error ? err.message : String(err) }, 'scoreboard day failed'); continue; }
+    if (!dayGames.length) { ctx.inc('days_missing'); continue; }
+    for (const g of dayGames) {
+      const homeId = g.home.seo ? bySeo.get(`${g.home.seo}|${gender}`) ?? null : null;
+      const awayId = g.away.seo ? bySeo.get(`${g.away.seo}|${gender}`) ?? null : null;
+      const existing = byContest.get(g.contestId) ?? (homeId && awayId ? findGame(games, g.date, homeId, awayId) : null);
+      const base = {
+        season, game_date: g.date, start_epoch: g.startTimeEpoch, gender, division,
+        home_program_id: homeId, away_program_id: awayId, home_name: g.home.short ?? g.home.full, away_name: g.away.short ?? g.away.full,
+      };
+      if (existing) {
+        const patch: Record<string, unknown> = { ncaa_contest_id: Number(g.contestId), start_epoch: g.startTimeEpoch ?? undefined, division };
+        if (!existing.home_program_id && homeId) patch.home_program_id = homeId;
+        if (!existing.away_program_id && awayId) patch.away_program_id = awayId;
+        if (existing.status !== 'final') {
+          if (g.state === 'final') { patch.status = 'final'; patch.home_score = g.home.score; patch.away_score = g.away.score; }
+          else if (g.state === 'live') patch.status = 'live';
+        }
+        if (existing.home_score == null && g.home.score != null && g.state === 'final') { patch.home_score = g.home.score; patch.away_score = g.away.score; }
+        await updateGame(db, existing.id, patch);
+        existing.ncaa_contest_id = Number(g.contestId);
+        byContest.set(g.contestId, existing);
+        ctx.inc('games_updated');
+      } else {
+        const row = await upsertGameByNcaa(db, { ...base, ncaa_contest_id: Number(g.contestId), status: g.state === 'final' ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: g.state === 'final' ? g.home.score : null, away_score: g.state === 'final' ? g.away.score : null });
+        games.push(row); byContest.set(g.contestId, row);
+        ctx.inc('games_created');
+      }
+      if (!homeId || !awayId) ctx.inc('games_with_unknown_program');
+    }
+    ctx.inc('days');
+    await ctx.heartbeat();
+  }
+}
+
+registerJob('sweep-scoreboard', sweepScoreboard);

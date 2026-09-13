@@ -1,0 +1,70 @@
+# Render blueprint: one always-on web service that runs the crawl worker, plus cron
+# jobs that only enqueue work (the worker drains college_crawl_runs).
+services:
+  - type: web
+    name: plaibook-college-scraper
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: COLLEGE_TRIGGER_SECRET
+        generateValue: true
+      - key: CONTACT_EMAIL
+        value: hoosieraisolutions@gmail.com
+      - key: COLLEGE_ALLOW_PROD
+        value: "1"
+      - key: NCAA_API_BASE
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: PORT
+        value: "8080"
+
+  # In-season (Aug-Dec) every 30 minutes: scoreboard + newly-final games + site results.
+  - type: cron
+    name: college-hourly
+    runtime: image
+    image:
+      url: docker.io/curlimages/curl:latest
+    schedule: "*/30 * * 8-12 *"
+    dockerCommand: sh -c 'curl -fsS -X POST -H "Authorization: Bearer $COLLEGE_TRIGGER_SECRET" "https://plaibook-college-scraper.onrender.com/jobs/enqueue?job=hourly"'
+    envVars:
+      - key: COLLEGE_TRIGGER_SECRET
+        fromService:
+          type: web
+          name: plaibook-college-scraper
+          envVarKey: COLLEGE_TRIGGER_SECRET
+
+  # Nightly: corrections, rosters/bios/season stats for programs that played, aggregates, transfers.
+  - type: cron
+    name: college-nightly
+    runtime: image
+    image:
+      url: docker.io/curlimages/curl:latest
+    schedule: "15 8 * * *"
+    dockerCommand: sh -c 'curl -fsS -X POST -H "Authorization: Bearer $COLLEGE_TRIGGER_SECRET" "https://plaibook-college-scraper.onrender.com/jobs/enqueue?job=nightly"'
+    envVars:
+      - key: COLLEGE_TRIGGER_SECRET
+        fromService:
+          type: web
+          name: plaibook-college-scraper
+          envVarKey: COLLEGE_TRIGGER_SECRET
+
+  # Weekly: rankings, standings, leaderboards, re-discovery, persisted-query health.
+  - type: cron
+    name: college-weekly
+    runtime: image
+    image:
+      url: docker.io/curlimages/curl:latest
+    schedule: "0 15 * * 2"
+    dockerCommand: sh -c 'curl -fsS -X POST -H "Authorization: Bearer $COLLEGE_TRIGGER_SECRET" "https://plaibook-college-scraper.onrender.com/jobs/enqueue?job=weekly"'
+    envVars:
+      - key: COLLEGE_TRIGGER_SECRET
+        fromService:
+          type: web
+          name: plaibook-college-scraper
+          envVarKey: COLLEGE_TRIGGER_SECRET

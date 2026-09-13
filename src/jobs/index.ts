@@ -1,0 +1,12 @@
+// Importing each job module registers it with the runner.
+import './discoverTeams.js';
+import './detectSites.js';
+import './sweepScoreboard.js';
+import './fetchGamesNcaa.js';
+import './syncSite.js';
+import './reconcileGames.js';
+import './computeAggregates.js';
+import './refreshRankings.js';
+import './schedules.js';
+
+export function registerAllJobs(): void { /* side-effect imports above */ }

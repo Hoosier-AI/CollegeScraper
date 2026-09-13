@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body { @apply bg-navy-950 text-ink-100 antialiased; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  ::selection { @apply bg-teal-500/40; }
+}
+@layer components {
+  .card { @apply rounded-2xl border border-navy-700 bg-navy-900/80 p-4 shadow-lg shadow-black/20; }
+  .btn { @apply inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-teal-500 text-navy-950 hover:bg-teal-400; }
+  .btn-ghost { @apply btn border border-navy-700 text-ink-300 hover:bg-navy-800; }
+  .input { @apply rounded-lg border border-navy-700 bg-navy-950 px-3 py-1.5 text-sm text-ink-100 placeholder:text-ink-500 focus:border-teal-500 focus:outline-none; }
+  .badge { @apply inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide; }
+  .th { @apply sticky top-0 z-10 bg-navy-900 px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-400 whitespace-nowrap cursor-pointer select-none; }
+  .td { @apply px-2 py-1.5 text-sm whitespace-nowrap border-t border-navy-800/70; }
+  .num { @apply text-right tabular-nums; }
+}

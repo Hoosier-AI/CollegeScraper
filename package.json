@@ -1,0 +1,47 @@
+{
+  "name": "plaibook-college-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NCAA college soccer team + player data collector for Plaibook (school athletics sites + NCAA.com).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json && npm --prefix ui run build",
+    "start": "node dist/server.js",
+    "cli": "tsx src/cli.ts",
+    "smoke": "tsx src/cli.ts smoke",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "dev:ui": "npm --prefix ui run dev",
+    "build:ui": "npm --prefix ui run build",
+    "postinstall": "npm --prefix ui install --no-audit --no-fund"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.3.0",
+    "@supabase/supabase-js": "^2.96.0",
+    "cheerio": "^1.0.0",
+    "commander": "^13.1.0",
+    "domhandler": "^5.0.3",
+    "fastify": "^5.3.0",
+    "p-queue": "^8.1.0",
+    "pino": "^9.7.0",
+    "undici": "^7.10.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
