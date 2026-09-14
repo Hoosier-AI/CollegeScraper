@@ -9,10 +9,12 @@
 import type { BoxScore, Fetcher, Gender, PlayerBio, Roster, ScheduleEntry, SeasonStats, SiteAdapter, SiteContext } from '../../../model.js';
 import { isNotFound, isObj, obj, sidearmSportSlug, str } from './common.js';
 import { parseBoxScore } from './boxScore.js';
+import { parseLegacyBoxScore, looksLikeLegacyBoxScore } from './boxScoreHtml.js';
 import { parseCumulativeStats } from './cumulativeStats.js';
 import { parsePlayerBio } from './playerBio.js';
 import { parseResults, resultsUrl } from './results.js';
 import { parseRosterHtml } from './rosterHtml.js';
+import { extractEmbeddedRoster, parseRosterEmbedded } from './rosterEmbedded.js';
 import { parseRosterJson, rosterJsonUrl } from './rosterJson.js';
 import { parseScheduleBoxScoreLinks, parseScheduleHtml } from './scheduleHtml.js';
 
@@ -90,6 +92,9 @@ async function roster(fetcher: Fetcher, ctx: SiteContext): Promise<Roster> {
   for (const url of [`${base(ctx)}/sports/${slug}/roster/${ctx.season}`, `${base(ctx)}/sports/${slug}/roster`]) {
     const html = await tryGet(fetcher, url);
     if (!html) continue;
+    // Legacy template: the roster object is embedded in the page script.
+    const embedded = extractEmbeddedRoster(html);
+    if (embedded) { const r = parseRosterEmbedded(embedded, ctx, url); if (r.players.length) return r; }
     const r = parseRosterHtml(html, ctx, url);
     if (r.players.length) return r;
   }
@@ -135,9 +140,13 @@ async function seasonStats(fetcher: Fetcher, ctx: SiteContext): Promise<SeasonSt
   return stats;
 }
 
-async function boxScore(fetcher: Fetcher, ctx: SiteContext, url: string): Promise<BoxScore> {
-  const res = await fetcher.get(url);
-  return parseBoxScore(res.text, res.url || url, ctx);
+async function boxScore(fetcher: Fetcher, ctx: SiteContext, url: string, hint: { date?: string | null } = {}): Promise<BoxScore> {
+  const abs = url.startsWith('http') ? url : `${ctx.baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  const res = await fetcher.get(abs);
+  const finalUrl = res.url || abs;
+  // Legacy Sidearm template: server-rendered captioned tables, no embedded game object.
+  if (looksLikeLegacyBoxScore(res.text)) return parseLegacyBoxScore(res.text, finalUrl, ctx, hint);
+  return parseBoxScore(res.text, finalUrl, ctx);
 }
 
 async function playerBio(fetcher: Fetcher, _ctx: SiteContext, url: string): Promise<PlayerBio> {

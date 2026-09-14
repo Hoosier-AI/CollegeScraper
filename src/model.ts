@@ -216,7 +216,7 @@ export interface SiteAdapter {
   roster(fetcher: Fetcher, ctx: SiteContext): Promise<Roster>;
   schedule(fetcher: Fetcher, ctx: SiteContext): Promise<ScheduleEntry[]>;
   seasonStats(fetcher: Fetcher, ctx: SiteContext): Promise<SeasonStats | null>;
-  boxScore(fetcher: Fetcher, ctx: SiteContext, url: string): Promise<BoxScore>;
+  boxScore(fetcher: Fetcher, ctx: SiteContext, url: string, hint?: { date?: string | null }): Promise<BoxScore>;
   playerBio(fetcher: Fetcher, ctx: SiteContext, url: string): Promise<PlayerBio>;
 }
 

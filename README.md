@@ -72,6 +72,9 @@ a restart resumes from the queue and every fetch is cached in `college_source_fe
   lacks them. NCAA.com prints full legal names in capitals ("JARAN LILLEHOLT KLEVBERG"), so player matching
   also accepts same jersey + same first name, and `mergeBoxscoreOnly` folds placeholder identities into the
   roster identity after every roster sync.
+- About half of D1 Sidearm tenants still run the older Sidearm template: box scores are captioned HTML tables
+  (`boxScoreHtml.ts`) and the roster JSON API returns 404/204 while the page embeds the roster object in its
+  script (`rosterEmbedded.ts`); both are automatic fallbacks in the Sidearm adapter.
 - Some Presto rosters print the class as a bare digit (1-5); `parseClassYear` maps those.
 - Team-name matching keeps "College" and "State" significant (Boston College vs Boston U., NC State vs
   North Carolina, San Diego State vs San Diego); ambiguous aliases resolve to nothing rather than to a guess.

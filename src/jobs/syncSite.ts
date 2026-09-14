@@ -126,7 +126,7 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
   }
 
   const resolveOpponent = makeResolver(aliasIndex, p.gender, division, ownConference, divisionOf, conferenceOf);
-  let boxScoreUrls: { url: string; gameId: string }[] = [];
+  let boxScoreUrls: { url: string; gameId: string; date: string }[] = [];
   if (stages.has('schedule') || stages.has('boxscores')) {
     const entries = (await adapter.schedule(fetcher, site)).filter((e) => inSeason(e.date, season) && !(e.state !== 'final' && PLACEHOLDER_OPPONENT.test(e.opponentName) && e.opponentName.split(' ').length > 2));
     const w = await writeSchedule(db, { programId: p.id, season, gender: p.gender, division, host: site.host, entries, resolveOpponent, existing: games });
@@ -135,7 +135,7 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
     for (const e of entries) {
       if (!e.boxScoreUrl || e.state !== 'final') continue;
       const gid = w.gameIds.get(`${e.boxScoreUrl}|${e.date}`);
-      if (gid) boxScoreUrls.push({ url: e.boxScoreUrl, gameId: gid });
+      if (gid) boxScoreUrls.push({ url: e.boxScoreUrl, gameId: gid, date: e.date });
     }
     await markProgramSeason(db, p.id, season, { schedule_synced_at: new Date().toISOString() });
   }
@@ -163,7 +163,7 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
       if (done.has(b.gameId)) { ctx.inc('boxscores_skipped'); continue; }
       if (await ctx.cancelled()) return;
       try {
-        const box = await adapter.boxScore(fetcher, site, b.url);
+        const box = await adapter.boxScore(fetcher, site, b.url, { date: b.date });
         const game = games.find((g) => g.id === b.gameId);
         const homeId = game?.home_program_id ?? null, awayId = game?.away_program_id ?? null;
         for (const pid of [homeId, awayId]) if (pid && pid !== p.id && !candMap.has(pid)) candMap.set(pid, await statLineCandidates(db, pid, season));

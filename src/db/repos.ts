@@ -194,7 +194,8 @@ export async function writeSiteSeasonStats(db: Db, programId: string, season: nu
     rows.push({ player_season_id: m.playerSeasonId, gp: l.gp, gs: l.gs, minutes: l.minutes, goals: l.goals, assists: l.assists, points: l.points,
       shots: l.shots, sog: l.sog, yc: l.yellow, rc: l.red, gwg: l.gwg, pk_g: l.pkGoals, pk_a: l.pkAttempts, ga: l.goalsAllowed, saves: l.saves, shutouts: l.shutouts, fetched_at: new Date().toISOString() });
   }
-  if (rows.length) written = await upsertChunked(db, 'college_site_season_stats', rows, { onConflict: 'player_season_id' });
+  const uniq = [...new Map(rows.map((r) => [r.player_season_id as string, r])).values()]; // two table lines matching one identity
+  if (uniq.length) written = await upsertChunked(db, 'college_site_season_stats', uniq, { onConflict: 'player_season_id' });
   return { written, unmatched };
 }
 
@@ -287,8 +288,12 @@ export async function writeBoxScore(db: Db, w: BoxScoreWrite): Promise<BoxScoreW
       });
     }
   }
+  // Two lines can share a source key (blank names, duplicate jersey numbers): keep the one with more minutes.
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const r of playerRows) { const k = `${r.program_id}|${r.source_key}`; const prev = byKey.get(k); if (!prev || Number(r.minutes ?? 0) > Number(prev.minutes ?? 0)) byKey.set(k, r); }
+  if (byKey.size !== playerRows.length) problems.push(`${playerRows.length - byKey.size} duplicate player keys collapsed`);
   if (teamRows.length) await upsertChunked(db, 'college_game_team_stats', teamRows, { onConflict: 'game_id,program_id,source' });
-  if (playerRows.length) await upsertChunked(db, 'college_game_player_stats', playerRows, { onConflict: 'game_id,program_id,source,source_key' });
+  if (byKey.size) await upsertChunked(db, 'college_game_player_stats', [...byKey.values()], { onConflict: 'game_id,program_id,source,source_key' });
 
   // events: replace the set for this game+source
   const nameIndex = new Map<string, string>(); // "programId|nameKey" → player_season_id
