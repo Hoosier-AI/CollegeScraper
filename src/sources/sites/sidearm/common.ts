@@ -129,6 +129,11 @@ export function collapse(s: string | null | undefined): string | null {
 
 /** Strip a leading "#14 " rank prefix from a team name. */
 export function stripRank(name: string): string {
+  // "vs #6 Georgetown", "at Wake Forest", "@ UNC", "vs. Elon" → team name only.
+  const cleaned = String(name ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').trim();
+  return stripRankInner(cleaned);
+}
+function stripRankInner(name: string): string {
   return name.replace(/^\s*(?:#|no\.?\s*)\d+\s+/i, '').trim();
 }
 

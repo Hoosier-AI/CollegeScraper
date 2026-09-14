@@ -32,7 +32,7 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
   ctx.inc('schools_indexed', wanted.length);
 
   // 2. scoreboard sweep → programs that played + conferences
-  const seen = new Map<string, { seo: string; gender: Gender; division: Division; name: string; short: string; char6: string; conf: { name: string; seo: string } | null }>();
+  const seen = new Map<string, { seo: string; gender: Gender; division: Division; name: string; short: string; char6: string; conf: { name: string; seo: string } | null; divCounts: Partial<Record<Division, number>> }>();
   for (const gender of genders) for (const division of divisions) {
     let days = 0, games = 0;
     for (const date of eachDate(`${season}-08-10`, minDate(`${season}-12-20`, today()))) {
@@ -47,7 +47,10 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
         for (const t of [g.home, g.away]) {
           if (!t.seo) continue;
           const key = `${t.seo}|${gender}`;
-          if (!seen.has(key)) seen.set(key, { seo: t.seo, gender, division, name: t.short || t.full || t.seo, short: t.short ?? '', char6: t.char6 ?? '', conf: t.conferences[0] && t.conferences[0].seo ? { name: t.conferences[0].name, seo: t.conferences[0].seo } : null });
+          const cur = seen.get(key);
+          const conf = t.conferences[0] && t.conferences[0].seo ? { name: t.conferences[0].name, seo: t.conferences[0].seo } : null;
+          if (!cur) seen.set(key, { seo: t.seo, gender, division, name: t.short || t.full || t.seo, short: t.short ?? '', char6: t.char6 ?? '', conf, divCounts: { [division]: 1 } });
+          else { cur.divCounts[division] = (cur.divCounts[division] ?? 0) + 1; if (!cur.conf && conf) cur.conf = conf; }
         }
       }
       await ctx.heartbeat();
@@ -65,6 +68,8 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
   const confIds = new Map<string, string>();
   const seasonRows: { program_id: string; season: number; division: Division; conference_id: string | null }[] = [];
   for (const t of seen.values()) {
+    // A D3 school on a D1 scoreboard is still D3: use the division it appeared in most often.
+    t.division = (Object.entries(t.divCounts).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0]?.[0] as Division) ?? t.division;
     let confId: string | null = null;
     if (t.conf?.seo) {
       confId = confIds.get(t.conf.seo) ?? null;

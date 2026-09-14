@@ -86,7 +86,8 @@ const PLACEHOLDER_OPPONENT = /\b(tba|tbd|championship|tournament|semifinal|quart
 
 /** Pick one program for an opponent name: exact parenthetical key first, then the plain key; ties broken by division, then conference. */
 function makeResolver(aliasIndex: Map<string, Map<string, string[]>>, gender: string, ownDivision: string | null, ownConference: string | null, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>) {
-  return async (name: string): Promise<string | null> => {
+  return async (rawName: string): Promise<string | null> => {
+    const name = String(rawName ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').replace(/^#\d+\s*/, '').trim();
     if (!name || PLACEHOLDER_OPPONENT.test(name) && !/\(/.test(name) && name.split(' ').length > 2) return null;
     const m = aliasIndex.get(gender);
     if (!m) return null;
