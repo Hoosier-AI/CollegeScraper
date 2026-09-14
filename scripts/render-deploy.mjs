@@ -47,6 +47,7 @@ if (existing) {
   service = service.service || service;
   console.log('created service', service.id);
 }
-const deploy = await api(`/services/${service.id}/deploys`, { method: 'POST', body: JSON.stringify({ clearCache: 'do_not_clear' }) });
-console.log('deploy', deploy.id, deploy.status);
+// Creation auto-starts a build; an explicit deploy is only needed on update (the API may answer with an empty body).
+const deploy = existing ? await api(`/services/${service.id}/deploys`, { method: 'POST', body: JSON.stringify({ clearCache: 'do_not_clear' }) }) : null;
+if (deploy) console.log('deploy', deploy.id, deploy.status);
 console.log('url', service.serviceDetails?.url || `https://${NAME}.onrender.com`);
