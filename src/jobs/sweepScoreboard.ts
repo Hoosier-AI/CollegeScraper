@@ -3,9 +3,11 @@ import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { scoreboardDay } from '../sources/ncaa/index.js';
 import { makeTransport } from './fetchGamesNcaa.js';
+import { kvGet, kvSet } from '../db/client.js';
 import { log } from '../log.js';
 import { listPrograms, listGames, upsertGameByNcaa, updateGame, reorientGame, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { findGame } from '../identity/gameMatch.js';
+import { isCleanOpponentName, opponentSeo } from '../normalize/aliasIndex.js';
 import { currentSeason, eachDate } from './seasons.js';
 import type { Division, Gender } from '../model.js';
 
@@ -14,6 +16,7 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
   const fetcher = makeFetcher(db, { freshMs: ctx.params.force ? 0 : (ctx.params.days === 'recent' ? 0 : 7 * 86400_000) });
+  const freshFetcher = makeFetcher(db, { freshMs: 0 });
   const { store } = makeTransport(db, fetcher);
   await store.init();
   const genders: Gender[] = ctx.params.gender ? [ctx.params.gender as Gender] : ['m', 'w'];
@@ -22,6 +25,8 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
   const bySeo = new Map(programs.map((p) => [`${p.school_seo}|${p.gender}`, p.id]));
   const games = await listGames(db, season);
   const byContest = new Map(games.filter((g) => g.ncaa_contest_id).map((g) => [String(g.ncaa_contest_id), g]));
+  type DupContest = { gender: string; division: string; date: string; home: string | null; away: string | null; homeScore: number | null; awayScore: number | null; contests: string[] };
+  const dupContests = new Map<string, DupContest>(Object.entries((await kvGet<Record<string, DupContest>>(db, `ncaa_duplicate_contests:${season}`)) ?? {}));
 
   let dates: string[];
   if (ctx.params.days === 'recent') {
@@ -32,21 +37,25 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
   for (const gender of genders) for (const division of divisions) for (const date of dates) {
     if (await ctx.cancelled()) return;
     let dayGames;
-    try { dayGames = await scoreboardDay(fetcher, store, gender, division, date); }
+    // Scoreboard days change until their games end: the last three days are always refetched, older days may be cached.
+    const recentDay = Date.now() - Date.parse(`${date}T00:00:00Z`) < 3 * 86400_000;
+    try { dayGames = await scoreboardDay(recentDay ? freshFetcher : fetcher, store, gender, division, date); }
     catch (err) { ctx.inc('days_failed'); log.warn({ gender, division, date, err: err instanceof Error ? err.message : String(err) }, 'scoreboard day failed'); continue; }
     if (!dayGames.length) { ctx.inc('days_missing'); continue; }
     for (const g of dayGames) {
       // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
       // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
       const ensure = async (t: typeof g.home): Promise<string | null> => {
-        if (!t.seo) return null;
-        const hit = bySeo.get(`${t.seo}|${gender}`);
+        const name = t.short || t.full || t.seo || '';
+        // Teams NCAA.com lists without a school page (NAIA, junior colleges) get a synthetic slug from their name.
+        const seo = t.seo || (isCleanOpponentName(name) ? opponentSeo(name) : null);
+        if (!seo) return null;
+        const hit = bySeo.get(`${seo}|${gender}`);
         if (hit) return hit;
-        const name = t.short || t.full || t.seo;
-        await upsertSchools(db, [{ seo: t.seo, name }]);
-        const prog = await upsertProgram(db, { school_seo: t.seo, gender, name, short_name: t.short ?? name, name6: t.char6 ?? null });
+        await upsertSchools(db, [{ seo, name }]);
+        const prog = await upsertProgram(db, { school_seo: seo, gender, name, short_name: t.short ?? name, name6: t.char6 ?? null });
         await upsertProgramSeasons(db, [{ program_id: prog.id, season, division, conference_id: null, ncaa_member: false, member_source: 'scoreboard' } as any]);
-        bySeo.set(`${t.seo}|${gender}`, prog.id);
+        bySeo.set(`${seo}|${gender}`, prog.id);
         ctx.inc('programs_created_from_scoreboard');
         return prog.id;
       };
@@ -62,6 +71,14 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         season, game_date: g.date, start_epoch: g.startTimeEpoch, gender, division,
         home_program_id: homeId, away_program_id: awayId, home_name: g.home.short ?? g.home.full, away_name: g.away.short ?? g.away.full,
       };
+      if (existing && existing.ncaa_contest_id && String(existing.ncaa_contest_id) !== g.contestId && !byContest.has(g.contestId)) {
+        // NCAA.com sometimes lists one game twice under two contest ids (often with home and away swapped) and counts it
+        // twice in its leaderboards. The first link is kept; the pair is recorded so record checks can explain it.
+        const k = [String(existing.ncaa_contest_id), g.contestId].sort().join('|');
+        dupContests.set(k, { gender, division, date: g.date, home: g.home.seo ?? null, away: g.away.seo ?? null, homeScore: g.home.score ?? null, awayScore: g.away.score ?? null, contests: k.split('|') });
+        ctx.inc('ncaa_duplicate_contests');
+        continue;
+      }
       if (existing) {
         // NCAA.com's home/away is official: a fixture stored the other way round (from a schedule stamp) is flipped.
         if (homeId && awayId && existing.home_program_id === awayId && existing.away_program_id === homeId) {
@@ -102,6 +119,7 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     ctx.inc('days');
     await ctx.heartbeat();
   }
+  await kvSet(db, `ncaa_duplicate_contests:${season}`, Object.fromEntries(dupContests));
 }
 
 registerJob('sweep-scoreboard', sweepScoreboard);

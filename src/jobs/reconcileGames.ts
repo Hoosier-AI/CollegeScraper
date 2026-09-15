@@ -20,6 +20,17 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   const opener = new Map<string, string>();
   for (const g of openRows) if (g.ncaa_contest_id && g.division) { const k = `${g.gender}_${g.division}`; if (!opener.has(k) || g.game_date < opener.get(k)!) opener.set(k, g.game_date); }
   for (const [k, d] of [...opener]) if (d > `${season}-09-01`) opener.delete(k); // a sweep that never covered August proves nothing
+  // In season, NCAA.com's D1 scoreboard lists every counted game involving a D1 program (including games against NAIA
+  // or junior-college teams). A D1 program's final that is not linked to a contest, on a date the scoreboard has
+  // contests for that gender, is not in the official record (an exhibition, a scrimmage or a duplicate).
+  const d1Seasons = await listProgramSeasons(db, season);
+  const d1Member = new Set(d1Seasons.filter((x) => x.division === 'd1' && (x as { ncaa_member?: boolean }).ncaa_member !== false).map((x) => x.program_id));
+  const covered = new Set(openRows.filter((g) => g.ncaa_contest_id && g.division === 'd1').map((g) => `${g.gender}|${g.game_date}`));
+  const finalsUnlinked = await selectAll<{ id: string; gender: string; game_date: string; home_program_id: string | null; away_program_id: string | null }>(db, 'college_games', 'id,gender,game_date,home_program_id,away_program_id',
+    (q) => q.eq('season', season).eq('status', 'final').is('ncaa_contest_id', null));
+  const uncounted = finalsUnlinked.filter((g) => covered.has(`${g.gender}|${g.game_date}`) && ((g.home_program_id && d1Member.has(g.home_program_id)) || (g.away_program_id && d1Member.has(g.away_program_id))) && g.game_date < new Date(Date.now() - 86400_000).toISOString().slice(0, 10));
+  for (let i = 0; i < uncounted.length; i += 100) await db.from('college_games').delete().in('id', uncounted.slice(i, i + 100).map((g) => g.id));
+  ctx.inc('d1_unlinked_finals_deleted', uncounted.length);
   if (opener.size) {
     await kvSet(db, `season_open:${season}`, Object.fromEntries(opener));
     const pre = openRows.filter((g) => !g.ncaa_contest_id && g.division && opener.has(`${g.gender}_${g.division}`) && g.game_date < opener.get(`${g.gender}_${g.division}`)!);

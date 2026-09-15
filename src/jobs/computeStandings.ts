@@ -11,7 +11,7 @@ import { parseSidearmStandings, conferenceStandingsUrl, type ConfStandingsRow } 
 import { parsePrestoStandings, prestoSeasonSlug } from '../sources/conferences/prestoStandings.js';
 import { listPrograms, listSchools, listProgramSeasons, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { listConferences, updateConference, writeStandings, writeStandingsChecks, confPoints, type StandingRow, type StandingsCheck } from '../db/standingsRepo.js';
-import { selectAll, kvSet } from '../db/client.js';
+import { selectAll, kvSet, kvGet } from '../db/client.js';
 import { setMembership, setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, opponentSeo, isCleanOpponentName, type MemberNames } from '../normalize/aliasIndex.js';
 import { currentSeason } from './seasons.js';
 import { compareRecord, wltString, type GameResult } from '../normalize/records.js';
@@ -71,6 +71,10 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
   setMembership(new Map(seasons.map((x) => [x.program_id, (x as { ncaa_member?: boolean }).ncaa_member !== false])));
   const index = buildAliasIndex(programs, schools);
   const stats = new Map((await selectAll<TeamStat>(db, 'college_team_season_stats', 'program_id,w,l,t,conf_w,conf_l,conf_t,gf,ga,gd,gp', (q) => q.eq('season', season))).map((s) => [s.program_id, s]));
+  // Checks are rebuilt for the whole scope of this run: a conference whose page fails or yields no rows must not keep
+  // mismatches from an earlier run.
+  const scopeIds = seasons.filter((x) => (!onlyDivision || x.division === onlyDivision) && genders.includes(programById.get(x.program_id)?.gender as Gender) && (!onlyConf || conferences.find((c) => c.id === x.conference_id)?.ncaa_seo === onlyConf)).map((x) => x.program_id);
+  await writeStandingsChecks(db, season, scopeIds, []);
   // Every final with both programs and a score, per program, for record verification (independent of aggregates).
   const finals = await selectAll<{ game_date: string; home_program_id: string; away_program_id: string; home_score: number; away_score: number; conference_game: boolean }>(db, 'college_games', 'game_date,home_program_id,away_program_id,home_score,away_score,conference_game',
     (q) => q.eq('season', season).eq('status', 'final').not('home_program_id', 'is', null).not('away_program_id', 'is', null).not('home_score', 'is', null).not('away_score', 'is', null));
@@ -79,10 +83,21 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
     gamesOf.set(g.home_program_id, [...(gamesOf.get(g.home_program_id) ?? []), { date: g.game_date, gf: g.home_score, ga: g.away_score, conf: g.conference_game }]);
     gamesOf.set(g.away_program_id, [...(gamesOf.get(g.away_program_id) ?? []), { date: g.game_date, gf: g.away_score, ga: g.home_score, conf: g.conference_game }]);
   }
+  const dupList = Object.values((await kvGet<Record<string, { gender: string; date: string; home: string | null; away: string | null; homeScore: number | null; awayScore: number | null }>>(db, `ncaa_duplicate_contests:${season}`)) ?? {});
   const verify = (checks: StandingsCheck[], pid: string, field: string, official: { w: number | null; l: number | null; t: number | null } | null, confOnly: boolean) => {
     if (!official || official.w == null) return;
     const c = compareRecord(gamesOf.get(pid) ?? [], official, confOnly);
     if (c.status === 'ok') return;
+    if (field === 'ncaa_record') {
+      const pr = programById.get(pid);
+      const extra = dupList.filter((d) => pr && d.gender === pr.gender && (d.home === pr.school_seo || d.away === pr.school_seo) && d.homeScore != null && d.awayScore != null)
+        .map((d) => ({ date: d.date, gf: d.home === pr!.school_seo ? d.homeScore! : d.awayScore!, ga: d.home === pr!.school_seo ? d.awayScore! : d.homeScore!, conf: false }));
+      if (extra.length && compareRecord([...(gamesOf.get(pid) ?? []), ...extra], official, false).status !== 'mismatch') {
+        checks.push({ season, program_id: pid, field: 'ncaa_record_ncaa_duplicate', official: wltString(official), computed: wltString(c.ours), checked_at: now });
+        ctx.inc('ncaa_record_explained_by_ncaa_duplicate');
+        return;
+      }
+    }
     checks.push({ season, program_id: pid, field: c.status === 'lag' ? `${field}_lag` : field, official: wltString(official), computed: wltString(c.ours), checked_at: now });
     ctx.inc(c.status === 'lag' ? `${field}_lag` : `${field}_mismatch`);
   };

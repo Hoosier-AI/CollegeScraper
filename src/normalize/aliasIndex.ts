@@ -146,6 +146,12 @@ export function resolveName(index: AliasIndex, scope: ResolverScope, rawName: st
   return null;
 }
 
+/** Like resolveName without the promo-prefix fallback ("Florida Poly" must not match "Florida"). */
+export function resolveNameExact(index: AliasIndex, scope: ResolverScope, rawName: string): string | null {
+  const m = index.get(scope.gender);
+  return m ? resolveExact(m, scope, cleanOpponentName(rawName)) : null;
+}
+
 function resolveExact(m: Map<string, string[]>, scope: ResolverScope, name: string): string | null {
   const exact = m.get(teamKeyKeepParens(name));
   const plain = m.get(teamKey(name));

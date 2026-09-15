@@ -4,7 +4,7 @@
 // rows ("TBD", "Semifinals") are deleted.  params: { season? }
 import { registerJob, type JobContext } from './runner.js';
 import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame, upsertSchools, upsertProgram, upsertProgramSeasons, type GameRow } from '../db/repos.js';
-import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName, isCleanOpponentName, opponentSeo, cleanOpponentName } from '../normalize/aliasIndex.js';
+import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName, isCleanOpponentName, opponentSeo, cleanOpponentName, resolveNameExact } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import { findGame } from '../identity/gameMatch.js';
 import { teamKey as teamKeyOf } from '../normalize/teamIdentity.js';
@@ -46,7 +46,7 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
     // official record: give the opponent a non-member program so both sides exist.
     if (!oppId && ownId && g.status === 'final' && g.home_score != null && isCleanOpponentName(name)) {
       const other = g.gender === 'm' ? 'w' : 'm';
-      const otherHit = resolveName(index, { gender: other, ownDivision: null, ownConference: null, divisionOf, conferenceOf }, name);
+      const otherHit = resolveNameExact(index, { gender: other, ownDivision: null, ownConference: null, divisionOf, conferenceOf }, name);
       if (!otherHit) {
         const seo = opponentSeo(name);
         const display = cleanOpponentName(name);
