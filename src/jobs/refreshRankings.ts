@@ -65,8 +65,18 @@ export async function refreshRankings(ctx: JobContext): Promise<void> {
         try {
           const latest = site.polls[site.polls.length - 1]!;
           const copy = parseUscPoll((await fetcher.get(uscPollUrl(gender, division), { skipCache: true })).text);
-          const mine = new Map(latest.rows.map((r) => [r.rank, resolve(gender, division, r.school)]));
-          const diffs = copy.rows.filter((r) => { const pid = resolve(gender, division, r.school); return pid && mine.get(r.rank) !== pid; }).map((r) => `#${r.rank} ncaa.com=${r.school}`);
+          // Compare each ranked team's position; a tie printed as "T23" covers ranks 23..23+k-1.
+          const siteRank = new Map<string, number>();
+          for (const r of latest.rows) { const pid = resolve(gender, division, r.school); if (pid && !siteRank.has(pid)) siteRank.set(pid, r.rank); }
+          const tie = new Map<number, number>(); for (const r of copy.rows) tie.set(r.rank, (tie.get(r.rank) ?? 0) + 1);
+          const diffs: string[] = [];
+          for (const r of copy.rows) {
+            const pid = resolve(gender, division, r.school);
+            if (!pid) { diffs.push(`#${r.rank} ncaa.com=${r.school} (unmatched name)`); continue; }
+            const sr = siteRank.get(pid); const k = tie.get(r.rank) ?? 1;
+            if (sr == null || sr < r.rank || sr >= r.rank + k) diffs.push(`#${r.rank} ncaa.com=${r.school} site=${sr ?? 'unranked'}`);
+          }
+          if (copy.rows.length !== latest.rows.length) diffs.push(`row count ncaa.com=${copy.rows.length} site=${latest.rows.length}`);
           checks[tag] = { site_poll: latest.label, site_date: latest.publishedOn, ncaa_week: copy.weekOf, ncaa_rows: copy.rows.length, mismatches: diffs };
           ctx.inc('usc_ncaa_mismatch', diffs.length);
         } catch (err) { ctx.inc('usc_ncaa_copy_errors'); log.warn({ tag, err: String(err) }, 'ncaa.com poll copy failed'); }

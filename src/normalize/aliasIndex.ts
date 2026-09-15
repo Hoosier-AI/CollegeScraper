@@ -128,3 +128,36 @@ function resolveExact(m: Map<string, string[]>, scope: ResolverScope, name: stri
 export function makeResolver(index: AliasIndex, scope: ResolverScope): (rawName: string) => Promise<string | null> {
   return async (rawName: string) => (isPlaceholderOpponent(rawName) ? null : resolveName(index, scope, rawName));
 }
+
+/** Tokens for matching a standings row against a conference's own members ("UW-Eau Claire" ≡ "Wis.-Eau Claire"). */
+export function memberTokens(name: string): string[] {
+  const s = String(name ?? '').toLowerCase().replace(/^uw[-\s]+/, 'wisconsin ').replace(/^umaine[-\s]+/, 'maine ').replace(/[()]/g, ' ').replace(/&/g, ' and ');
+  return teamKey(s).replace(/\bsaint\b/g, 'state').split(' ').filter(Boolean);
+}
+
+/** Every token of `short` is a prefix of a token of `long`, in order ("e stroudsburg" ⊑ "east stroudsburg"). */
+export function prefixSubsequence(short: string[], long: string[]): boolean {
+  if (!short.length || short.length > long.length) return false;
+  let j = 0;
+  for (const t of short) {
+    while (j < long.length && !long[j]!.startsWith(t)) j++;
+    if (j === long.length) return false;
+    j++;
+  }
+  return true;
+}
+
+export interface MemberNames { id: string; names: (string | null | undefined)[] }
+
+/** Unique member of one conference whose names match `rowName` exactly, else by prefix subsequence either way. */
+export function matchAmongMembers(rowName: string | null | undefined, members: MemberNames[]): string | null {
+  if (!rowName) return null;
+  const rt = memberTokens(rowName);
+  if (!rt.length) return null;
+  const key = rt.join(' ');
+  const exact = members.filter((m) => m.names.some((n) => n && memberTokens(n).join(' ') === key));
+  if (exact.length === 1) return exact[0]!.id;
+  if (exact.length > 1) return null;
+  const hits = members.filter((m) => m.names.some((n) => { if (!n) return false; const nt = memberTokens(n); return prefixSubsequence(rt, nt) || prefixSubsequence(nt, rt); }));
+  return hits.length === 1 ? hits[0]!.id : null;
+}

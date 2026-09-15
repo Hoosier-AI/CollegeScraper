@@ -24,6 +24,16 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     team.push(...await selectAll<TS>(db, 'college_game_team_stats', 'game_id,program_id,source,is_home,goals,shots,yellow_cards', (q) => q.in('game_id', chunk)));
     players.push(...await selectAll<PS>(db, 'college_game_player_stats', 'game_id,program_id,source,goals,participated', (q) => q.in('game_id', chunk)));
   }
+  // Invariant: a team-stat row's is_home matches the game's home program (rows moved between fixtures of
+  // opposite orientation would otherwise swap GF/GA in the aggregates).
+  const homeOf = new Map(games.map((g) => [g.id, g.home_program_id]));
+  for (const t of team) {
+    const want = t.program_id === homeOf.get(t.game_id);
+    if (homeOf.get(t.game_id) && t.is_home !== want) {
+      await db.from('college_game_team_stats').update({ is_home: want }).eq('game_id', t.game_id).eq('program_id', t.program_id).eq('source', t.source);
+      t.is_home = want; ctx.inc('is_home_repaired');
+    }
+  }
   const byGame = new Map<string, { site: TS[]; ncaa: TS[] }>();
   for (const t of team) { const e = byGame.get(t.game_id) ?? { site: [], ncaa: [] }; (t.source === 'site' ? e.site : e.ncaa).push(t); byGame.set(t.game_id, e); }
   const goalsBy = new Map<string, number>();

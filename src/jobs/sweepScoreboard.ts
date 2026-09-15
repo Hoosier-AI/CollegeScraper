@@ -4,7 +4,7 @@ import { makeFetcher } from './fetcher.js';
 import { scoreboardDay } from '../sources/ncaa/index.js';
 import { makeTransport } from './fetchGamesNcaa.js';
 import { log } from '../log.js';
-import { listPrograms, listGames, upsertGameByNcaa, updateGame } from '../db/repos.js';
+import { listPrograms, listGames, upsertGameByNcaa, updateGame, reorientGame } from '../db/repos.js';
 import { findGame } from '../identity/gameMatch.js';
 import { currentSeason, eachDate } from './seasons.js';
 import type { Division, Gender } from '../model.js';
@@ -44,7 +44,18 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         home_program_id: homeId, away_program_id: awayId, home_name: g.home.short ?? g.home.full, away_name: g.away.short ?? g.away.full,
       };
       if (existing) {
+        // NCAA.com's home/away is official: a fixture stored the other way round (from a schedule stamp) is flipped.
+        if (homeId && awayId && existing.home_program_id === awayId && existing.away_program_id === homeId) {
+          ctx.inc(await reorientGame(db, existing) ? 'orientation_fixed' : 'orientation_conflicts');
+        }
         const patch: Record<string, unknown> = { ncaa_contest_id: Number(g.contestId), start_epoch: g.startTimeEpoch ?? undefined, division };
+        const sameSides = existing.home_program_id === homeId && existing.away_program_id === awayId;
+        if (g.state === 'final' && existing.status === 'final' && sameSides && g.home.score != null && g.away.score != null
+            && existing.home_score != null && (existing.home_score !== g.home.score || existing.away_score !== g.away.score)) {
+          patch.home_score = g.home.score; patch.away_score = g.away.score; patch.source_of_truth = null;
+          ctx.inc('scores_corrected');
+          log.info({ game: existing.id, date: g.date, ours: `${existing.home_score}-${existing.away_score}`, ncaa: `${g.home.score}-${g.away.score}` }, 'final score corrected from NCAA.com');
+        }
         if (!existing.home_program_id && homeId) patch.home_program_id = homeId;
         if (!existing.away_program_id && awayId) patch.away_program_id = awayId;
         if (existing.status !== 'final') {

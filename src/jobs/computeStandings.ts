@@ -12,7 +12,7 @@ import { parsePrestoStandings, prestoSeasonSlug } from '../sources/conferences/p
 import { listPrograms, listSchools, listProgramSeasons } from '../db/repos.js';
 import { listConferences, updateConference, writeStandings, writeStandingsChecks, confPoints, type StandingRow, type StandingsCheck } from '../db/standingsRepo.js';
 import { selectAll, kvSet } from '../db/client.js';
-import { setKnownConferences, buildAliasIndex, resolveName } from '../normalize/aliasIndex.js';
+import { setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, type MemberNames } from '../normalize/aliasIndex.js';
 import { currentSeason } from './seasons.js';
 import type { Gender } from '../model.js';
 import { log } from '../log.js';
@@ -91,15 +91,23 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
         try {
           const html = (await fetcher.get(url, { skipCache: true })).text;
           const parsed = presto ? parsePrestoStandings(html) : parseSidearmStandings(html);
+          // Two conferences can share one site and page (MAC Commonwealth / MAC Freedom): keep the pods named after this one.
+          const distinctive = c.name.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['mac', 'conference', 'league', 'athletic', 'the', 'and'].includes(w));
+          const named = parsed.pods.filter((pod) => pod.name && distinctive.some((w) => pod.name!.toLowerCase().includes(w)));
+          if (parsed.pods.length > 1 && named.length) parsed.pods = named;
+          const memberNames: MemberNames[] = members.map((m) => { const pr = programById.get(m.program_id)!; const sc = schools.get(pr.school_seo); return { id: m.program_id, names: [pr.name, pr.short_name, sc?.name, sc?.long_name, pr.school_seo.replace(/-/g, ' ')] }; });
           // A program may appear in a division/pod table and in the full table: keep the row from the biggest
           // table (conference-wide rank) and remember the small pod's name.
           const best = new Map<string, { row: ConfStandingsRow; rank: number; podSize: number; pod: string | null }>();
           const podOf = new Map<string, string>();
           for (const pod of parsed.pods) {
             pod.rows.forEach((row, i) => {
-              const pid = resolveName(index, { gender, ownDivision: division, ownConference: c.id, divisionOf, conferenceOf }, row.school)
+              const pid = matchAmongMembers(row.school, memberNames) ?? matchAmongMembers(row.logoAlt, memberNames)
+                ?? resolveName(index, { gender, ownDivision: division, ownConference: c.id, divisionOf, conferenceOf }, row.school)
                 ?? (row.logoAlt ? resolveName(index, { gender, ownDivision: division, ownConference: c.id, divisionOf, conferenceOf }, row.logoAlt) : null);
               if (!pid) { ctx.inc('standings_unresolved'); unresolvedNotes.push(`${c.ncaa_seo}/${gender}: ${row.school}`); return; }
+              // A row that resolves to a program of another conference is never written under this one.
+              if (conferenceOf.get(pid) !== c.id) { ctx.inc('standings_foreign_rows'); unresolvedNotes.push(`${c.ncaa_seo}/${gender}: ${row.school} (stored under another conference)`); return; }
               const cur = best.get(pid);
               if (!cur || pod.rows.length > cur.podSize) best.set(pid, { row, rank: i + 1, podSize: pod.rows.length, pod: cur?.pod ?? null });
               if (parsed.pods.length > 1 && pod.name && pod.rows.length < Math.max(...parsed.pods.map((p) => p.rows.length))) podOf.set(pid, pod.name);
@@ -109,7 +117,6 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
             official = true;
             for (const [pid, b] of best) {
               const r = b.row;
-              if (conferenceOf.get(pid) !== c.id) ctx.inc('standings_foreign_rows');
               const ts = stats.get(pid);
               const ps = seasonOf.get(pid);
               rows.push({ season, program_id: pid, division, conference_id: c.id,

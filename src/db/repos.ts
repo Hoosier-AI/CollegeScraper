@@ -322,7 +322,7 @@ export async function writeBoxScore(db: Db, w: BoxScoreWrite): Promise<BoxScoreW
   }
   if (source === 'site') {
     Object.assign(headerPatch, { attendance: box.attendance, venue_name: box.venueName, venue_city: box.venueCity, duration_min: box.durationMin,
-      officials: box.officials.length ? box.officials : null, neutral_site: box.neutral, conference_game: box.conferenceGame, postseason: box.postseason, tournament: box.tournament });
+      officials: box.officials.length ? box.officials : null, neutral_site: box.neutral, postseason: box.postseason, tournament: box.tournament });
   }
   await updateGame(db, gameId, headerPatch);
 
@@ -343,6 +343,25 @@ export async function refreshAggregates(db: Db, season: number, programId: strin
   const { data, error } = await db.rpc('college_refresh_season_aggregates', { p_season: season, p_program: programId });
   if (error) throw new Error(`refresh aggregates: ${error.message}`);
   return data;
+}
+
+/**
+ * Swap a game's home/away orientation (program ids, names, scores). Every stat row, event and raw payload of the
+ * game is deleted and the game is marked for a fresh site and NCAA.com fetch: box scores written under the wrong
+ * orientation attributed each side's lines to the other program. Returns false when the flip would clash with an
+ * existing fixture row.
+ */
+export async function reorientGame(db: Db, game: GameRow): Promise<boolean> {
+  const patch = { home_program_id: game.away_program_id, away_program_id: game.home_program_id, home_name: game.away_name, away_name: game.home_name,
+    home_score: game.away_score, away_score: game.home_score, site_fetched_at: null, ncaa_fetched_at: null, source_of_truth: null, detail_attempts: 0 };
+  const { error } = await db.from('college_games').update(patch).eq('id', game.id);
+  if (error) { log.warn({ id: game.id, err: error.message }, 'reorient game failed'); return false; }
+  for (const t of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events', 'college_game_raw']) {
+    const { error: e } = await db.from(t).delete().eq('game_id', game.id);
+    if (e) log.warn({ t, id: game.id, err: e.message }, 'reorient cleanup failed');
+  }
+  Object.assign(game, patch);
+  return true;
 }
 
 // ---------- schedule → games ----------
@@ -380,7 +399,6 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
       if (game.status !== 'final' && status) patch.status = status;
       if (game.home_score == null && homeScore != null) { patch.home_score = homeScore; patch.away_score = awayScore; }
       if (e.homeAway === 'N') patch.neutral_site = true;
-      if (e.isConference) patch.conference_game = true;
       if (e.attendance != null) patch.attendance = e.attendance;
       await updateGame(db, game.id, patch);
       updated += 1;
@@ -388,7 +406,7 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
       game = await insertGame(db, {
         season: input.season, game_date: e.date, gender: input.gender, division: input.division,
         home_program_id: home, away_program_id: away, home_name: isHome ? null : e.opponentName, away_name: isHome ? e.opponentName : null,
-        home_score: homeScore, away_score: awayScore, status: status ?? 'scheduled', neutral_site: e.homeAway === 'N', conference_game: e.isConference,
+        home_score: homeScore, away_score: awayScore, status: status ?? 'scheduled', neutral_site: e.homeAway === 'N',
         tournament: e.tournament, attendance: e.attendance, site_game_refs: e.boxScoreUrl ? refs : {},
       });
       input.existing.push(game);

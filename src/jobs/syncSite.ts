@@ -3,10 +3,10 @@
 import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { adapterFor } from '../sources/sites/detect.js';
-import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, type ProgramRow, type SchoolRow } from '../db/repos.js';
+import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, reorientGame, type ProgramRow, type SchoolRow } from '../db/repos.js';
 import { selectAll } from '../db/client.js';
 import { currentSeason, inSeason } from './seasons.js';
-import { setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, type AliasIndex } from '../normalize/aliasIndex.js';
+import { setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, matchAmongMembers, type AliasIndex } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import type { SiteContext } from '../model.js';
 import { log } from '../log.js';
@@ -34,6 +34,8 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   setKnownConferences((await listConferences(db)).map((c) => c.name));
   const aliasIndex = buildAliasIndex(allPrograms, schools);
   const games = await listGames(db, season);
+  const allById = new Map(allPrograms.map((x) => [x.id, x]));
+  const namesOf = (id: string): (string | null | undefined)[] => { const pr = allById.get(id); const sc = pr ? schools.get(pr.school_seo) : undefined; return pr ? [pr.name, pr.short_name, sc?.name, sc?.long_name, pr.school_seo.replace(/-/g, ' ')] : []; };
 
   let recentSet: Set<string> | null = null;
   if (ctx.params.only_recent_days) {
@@ -52,7 +54,7 @@ export async function syncSite(ctx: JobContext): Promise<void> {
     const site: SiteContext = { host: school.athletics_host, baseUrl: `https://${school.athletics_host}`, gender: p.gender, season, sportSlug: p.site_sport_slug, sportId: p.site_sport_id, teamSlug: p.site_team_slug };
     ctx.inc('programs');
     try {
-      await syncOne(ctx, fetcher, adapter, site, p, school, season, ps.division, stages, aliasIndex, games, divisionOf, conferenceOf, ps.conference_id ?? null);
+      await syncOne(ctx, fetcher, adapter, site, p, school, season, ps.division, stages, aliasIndex, games, divisionOf, conferenceOf, ps.conference_id ?? null, namesOf);
     } catch (err) {
       ctx.inc('program_failures');
       await markProgramSeason(db, p.id, season, { site_parse_failures: (Number(ps.site_parse_failures) || 0) + 1 });
@@ -62,7 +64,7 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   }
 }
 
-async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>, adapter: NonNullable<ReturnType<typeof adapterFor>>, site: SiteContext, p: ProgramRow, school: SchoolRow, season: number, division: 'd1' | 'd2' | 'd3', stages: Set<Stage>, aliasIndex: AliasIndex, games: Awaited<ReturnType<typeof listGames>>, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>, ownConference: string | null): Promise<void> {
+async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>, adapter: NonNullable<ReturnType<typeof adapterFor>>, site: SiteContext, p: ProgramRow, school: SchoolRow, season: number, division: 'd1' | 'd2' | 'd3', stages: Set<Stage>, aliasIndex: AliasIndex, games: Awaited<ReturnType<typeof listGames>>, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>, ownConference: string | null, namesOf: (id: string) => (string | null | undefined)[]): Promise<void> {
   const db = ctx.db;
   const tag = `${p.school_seo}/${p.gender}`;
   let rosterIds: Map<string, string> | null = null;
@@ -123,6 +125,14 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
       try {
         const box = await adapter.boxScore(fetcher, site, b.url, { date: b.date });
         const game = games.find((g) => g.id === b.gameId);
+        // Box scores name the home and visiting teams explicitly; schedule home/away stamps are less reliable.
+        if (game?.home_program_id && game.away_program_id) {
+          const sides = [{ id: game.home_program_id, names: namesOf(game.home_program_id) }, { id: game.away_program_id, names: namesOf(game.away_program_id) }];
+          const bh = matchAmongMembers(box.home.name, sides), ba = matchAmongMembers(box.away.name, sides);
+          if ((bh === game.away_program_id && ba !== game.away_program_id) || (ba === game.home_program_id && bh !== game.home_program_id)) {
+            ctx.inc(await reorientGame(db, game) ? 'boxscore_orientation_fixed' : 'boxscore_orientation_conflicts');
+          }
+        }
         const homeId = game?.home_program_id ?? null, awayId = game?.away_program_id ?? null;
         for (const pid of [homeId, awayId]) if (pid && pid !== p.id && !candMap.has(pid)) candMap.set(pid, await statLineCandidates(db, pid, season));
         // Only the tenant's own side gets boxscore-only players created; the opponent's site will create theirs.

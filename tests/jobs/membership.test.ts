@@ -83,3 +83,39 @@ describe('placeholders', () => {
     for (const n of ['Duke', 'Notre Dame (OH)', 'Cal State Bakersfield', 'USC Lancaster', 'St. Thomas', 'Loyola Marymount', 'Boston College', 'Wake Forest']) expect(isPlaceholderOpponent(n), n).toBe(false);
   });
 });
+
+describe('conference member matching', async () => {
+  const { matchAmongMembers, prefixSubsequence, memberTokens } = await import('../../src/normalize/aliasIndex.js');
+  const members = [
+    { id: 'uwec', names: ['Wis.-Eau Claire', 'University of Wisconsin-Eau Claire'] },
+    { id: 'uwsp', names: ['Wis.-Stevens Point'] },
+    { id: 'geneseo', names: ['SUNY Geneseo'] },
+    { id: 'poly', names: ['SUNY Poly', 'SUNY Polytechnic Institute'] },
+    { id: 'cms', names: ['Claremont-M-S'] },
+    { id: 'wj', names: ['Wash. & Jeff.', 'Washington & Jefferson College'] },
+    { id: 'esu', names: ['East Stroudsburg'] },
+    { id: 'msm', names: ['Mt. St. Mary (NY)', 'Mount Saint Mary College'] },
+    { id: 'sjb', names: ["St. Joseph's (Brkln)", "St. Joseph's University (Brooklyn)"] },
+    { id: 'sjli', names: ["St. Joseph's (L.I.)", "St. Joseph's University (Long Island)"] },
+  ];
+  it('matches short conference-site spellings to the right member', () => {
+    expect(matchAmongMembers('UW-Eau Claire', members)).toBe('uwec');
+    expect(matchAmongMembers('UW-Stevens Point', members)).toBe('uwsp');
+    expect(matchAmongMembers('Geneseo', members)).toBe('geneseo');
+    expect(matchAmongMembers('Poly', members)).toBe('poly');
+    expect(matchAmongMembers('Claremont-Mudd-Scripps', members)).toBe('cms');
+    expect(matchAmongMembers('W&J', members)).toBe('wj');
+    expect(matchAmongMembers('E. Stroudsburg', members)).toBe('esu');
+    expect(matchAmongMembers('Mount Saint Mary', members)).toBe('msm');
+    expect(matchAmongMembers("St. Joseph's-Brooklyn", members)).toBe('sjb');
+  });
+  it('refuses ambiguous matches', () => {
+    expect(matchAmongMembers("St. Joseph's", members)).toBeNull();
+    expect(matchAmongMembers('Wisconsin', members)).toBeNull();
+  });
+  it('helpers', () => {
+    expect(prefixSubsequence(['e', 'stroudsburg'], ['east', 'stroudsburg'])).toBe(true);
+    expect(prefixSubsequence(['stroudsburg', 'east'], ['east', 'stroudsburg'])).toBe(false);
+    expect(memberTokens('UW-La Crosse')).toEqual(['wisconsin', 'la', 'crosse']);
+  });
+});

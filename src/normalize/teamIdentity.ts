@@ -7,6 +7,10 @@ const AP_ABBR: [string, string][] = [
   ['mass', 'massachusetts'], ['miss', 'mississippi'], ['ill', 'illinois'], ['ind', 'indiana'], ['kan', 'kansas'], ['neb', 'nebraska'],
   ['ala', 'alabama'], ['ark', 'arkansas'], ['mont', 'montana'], ['nev', 'nevada'], ['penn', 'pennsylvania'], ['va', 'virginia'],
   ['intl', 'international'], ['tech', 'technology'], ['inst', 'institute'], ['so', 'southern'], ['no', 'northern'], ['cal', 'california'],
+];
+// Short abbreviations that are also ordinary words or name parts ("La Salle", "La Crosse", "Me", "Col") are only
+// expanded when written with a period ("La.-Lafayette", "Southeast Mo. St.", "Mississippi Col.").
+const DOTTED_ABBR: [string, string][] = [
   ['mo', 'missouri'], ['tex', 'texas'], ['ga', 'georgia'], ['la', 'louisiana'], ['md', 'maryland'], ['del', 'delaware'], ['wyo', 'wyoming'],
   ['ky', 'kentucky'], ['vt', 'vermont'], ['nm', 'new mexico'], ['nj', 'new jersey'], ['me', 'maine'], ['col', 'college'], ['univ', 'university'],
 ];
@@ -24,6 +28,7 @@ export function teamKey(raw: string | null | undefined): string {
   s = s.replace(/\bn\.c\.?(?=\s|$)/g, 'north carolina').replace(/\bs\.c\.?(?=\s|$)/g, 'south carolina').replace(/\bw\.va\.?(?=\s|$)/g, 'west virginia').replace(/\bn\.j\.?(?=\s|$)/g, 'new jersey');
   s = s.replace(/\bst\.?\b/g, 'state');
   for (const [abbr, full] of AP_ABBR) s = s.replace(new RegExp(`\\b${abbr}\\.?\\b`, 'g'), full);
+  for (const [abbr, full] of DOTTED_ABBR) s = s.replace(new RegExp(`\\b${abbr}\\.`, 'g'), `${full} `);
   s = s.replace(/\bmt\.?\b/g, 'mount');
   s = s.replace(/\bft\.?\b/g, 'fort');
   s = s.replace(/&/g, 'and');

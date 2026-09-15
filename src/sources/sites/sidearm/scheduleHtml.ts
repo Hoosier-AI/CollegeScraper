@@ -116,7 +116,10 @@ function parseLegacyGame($: CheerioAPI, el: Element, ctx: SiteContext): Schedule
   const result = parseScore(`${statusText} ${scoreText}`) ?? parseScore(resultRaw);
   const stamp = t('.sidearm-schedule-game-away-neutral, .sidearm-schedule-game-conference-vs, .sidearm-schedule-game-opponent-name ~ span');
   const isNeutral = g.hasClass('sidearm-schedule-game-neutral') || /neutral/i.test(g.attr('class') ?? '');
-  const isAway = g.hasClass('sidearm-schedule-game-away') || /\bat\b/i.test(stamp ?? '');
+  // Many legacy tenants mark the side with a span before the opponent name:
+  // <span class="sidearm-schedule-game-away">at</span> / <span class="sidearm-schedule-game-home">vs</span>.
+  const sideSpan = collapse(g.find('.sidearm-schedule-game-opponent-text .sidearm-schedule-game-away').first().text());
+  const isAway = g.hasClass('sidearm-schedule-game-away') || /\bat\b/i.test(stamp ?? '') || /^(at|@)$/i.test(sideSpan ?? '');
   const boxHref = g.find('a[href*="boxscore"]').first().attr('href');
   const descriptors = g.find('.sidearm-schedule-game-conference, .sidearm-schedule-game-tournament, .sidearm-schedule-game-conference-conference').map((_, e) => collapse($(e).text()) ?? '').get().filter(Boolean);
   const { isExhibition, tournament, isConference } = classify(descriptors);
