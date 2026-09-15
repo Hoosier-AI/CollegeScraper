@@ -4,7 +4,7 @@
 // rows ("TBD", "Semifinals") are deleted.  params: { season? }
 import { registerJob, type JobContext } from './runner.js';
 import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame } from '../db/repos.js';
-import { setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent } from '../normalize/aliasIndex.js';
+import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import { findGame } from '../identity/gameMatch.js';
 import { selectAll } from '../db/client.js';
@@ -20,6 +20,7 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
   const divisionOf = new Map(seasons.map((s) => [s.program_id, s.division as string]));
   const conferenceOf = new Map(seasons.map((s) => [s.program_id, (s.conference_id as string | null) ?? null]));
   setKnownConferences((await listConferences(db)).map((c) => c.name));
+  setMembership(new Map(seasons.map((x) => [x.program_id, (x as { ncaa_member?: boolean }).ncaa_member !== false])));
   const index = buildAliasIndex(programs, schools);
   const games = await listGames(db, season);
   const orphans = games.filter((g) => !g.home_program_id || !g.away_program_id);
@@ -34,7 +35,8 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
     const name = g.home_program_id ? g.away_name : g.home_name;
     if (!ownId && !name) { ctx.inc('orphans_left'); continue; }
     if (!name || isPlaceholderOpponent(name)) {
-      if (g.status !== 'final') { await db.from('college_games').delete().eq('id', g.id); ctx.inc('orphans_deleted'); }
+      // Scheduled placeholders and exhibitions (even played ones) are not counted games.
+      if (g.status !== 'final' || isExhibitionName(name ?? '')) { await db.from('college_games').delete().eq('id', g.id); ctx.inc(g.status === 'final' ? 'exhibitions_deleted' : 'orphans_deleted'); }
       else { ctx.inc('orphans_left_placeholder'); left.push(`${g.game_date} ${name ?? '?'} (final)`); }
       continue;
     }

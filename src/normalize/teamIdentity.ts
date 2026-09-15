@@ -6,7 +6,7 @@ const AP_ABBR: [string, string][] = [
   ['ariz', 'arizona'], ['calif', 'california'], ['colo', 'colorado'], ['okla', 'oklahoma'], ['ore', 'oregon'], ['wash', 'washington'],
   ['mass', 'massachusetts'], ['miss', 'mississippi'], ['ill', 'illinois'], ['ind', 'indiana'], ['kan', 'kansas'], ['neb', 'nebraska'],
   ['ala', 'alabama'], ['ark', 'arkansas'], ['mont', 'montana'], ['nev', 'nevada'], ['penn', 'pennsylvania'], ['va', 'virginia'],
-  ['intl', 'international'], ['tech', 'technology'], ['inst', 'institute'], ['so', 'southern'], ['no', 'northern'], ['cal', 'california'],
+  ['intl', 'international'], ['fl', 'florida'], ['tech', 'technology'], ['inst', 'institute'], ['so', 'southern'], ['no', 'northern'], ['cal', 'california'],
 ];
 // Short abbreviations that are also ordinary words or name parts ("La Salle", "La Crosse", "Me", "Col") are only
 // expanded when written with a period ("La.-Lafayette", "Southeast Mo. St.", "Mississippi Col.").

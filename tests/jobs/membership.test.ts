@@ -119,3 +119,39 @@ describe('conference member matching', async () => {
     expect(memberTokens('UW-La Crosse')).toEqual(['wisconsin', 'la', 'crosse']);
   });
 });
+
+describe('opponent name cleanup', async () => {
+  const m = await import('../../src/normalize/aliasIndex.js');
+  it('strips poll markers', () => {
+    expect(m.cleanOpponentName('#T19 South Carolina')).toBe('South Carolina');
+    expect(m.cleanOpponentName('NR/#20 North Carolina')).toBe('North Carolina');
+    expect(m.cleanOpponentName('[RV] Xavier')).toBe('Xavier');
+    expect(m.cleanOpponentName('RV St. Mary\'s')).toBe("St. Mary's");
+    expect(m.cleanOpponentName('vs. No. 12 Elon')).toBe('Elon');
+    expect(m.cleanOpponentName('#2/5 Duke')).toBe('Duke');
+    expect(m.cleanOpponentName('Rider')).toBe('Rider');
+  });
+  it('flags exhibitions', () => {
+    expect(m.isExhibitionName('Drake (Exh.)')).toBe(true);
+    expect(m.isExhibitionName('Hawkeye (Exhibition)')).toBe(true);
+    expect(m.isExhibitionName('Exeter')).toBe(false);
+  });
+  it('treats a conference name that is also a team as a team', () => {
+    m.setKnownConferences(['American', 'Big East']);
+    const progs = [{ id: 'au', gender: 'm', school_seo: 'american', name: 'American', short_name: 'American', name6: 'AMER' }];
+    m.buildAliasIndex(progs, new Map([['american', { seo: 'american', name: 'American', long_name: 'American University' }]]), []);
+    expect(m.isPlaceholderOpponent('American')).toBe(false);
+    expect(m.isPlaceholderOpponent('Big East')).toBe(true);
+  });
+  it('prefers NCAA members for ambiguous names', () => {
+    const progs = [
+      { id: 'mn', gender: 'm', school_seo: 'st-thomas-mn', name: 'St. Thomas (MN)', short_name: null, name6: null },
+      { id: 'fl', gender: 'm', school_seo: 'st-thomas-fl', name: 'St. Thomas (FL)', short_name: null, name6: null },
+    ];
+    const idx = m.buildAliasIndex(progs, new Map(), []);
+    const scope = { gender: 'm', ownDivision: 'd1', ownConference: null, divisionOf: new Map([['mn', 'd1'], ['fl', 'd1']]), conferenceOf: new Map() };
+    m.setMembership(new Map([['mn', true], ['fl', false]]));
+    expect(m.resolveName(idx, scope, 'St. Thomas')).toBe('mn');
+    expect(m.resolveName(idx, scope, 'St. Thomas University (Fla.) 77\' (F) - Lightning')).toBe('fl');
+  });
+});

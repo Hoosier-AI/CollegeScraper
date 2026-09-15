@@ -6,7 +6,7 @@ import { adapterFor } from '../sources/sites/detect.js';
 import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, reorientGame, type ProgramRow, type SchoolRow } from '../db/repos.js';
 import { selectAll } from '../db/client.js';
 import { currentSeason, inSeason } from './seasons.js';
-import { setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, matchAmongMembers, type AliasIndex } from '../normalize/aliasIndex.js';
+import { setMembership, setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, isExhibitionName, matchAmongMembers, type AliasIndex } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import type { SiteContext } from '../model.js';
 import { log } from '../log.js';
@@ -32,6 +32,7 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   const programById = new Map(programs.map((p) => [p.id, p]));
   // Opponent resolution: by school name aliases within the same gender.
   setKnownConferences((await listConferences(db)).map((c) => c.name));
+  setMembership(new Map(seasons.map((x) => [x.program_id, (x as { ncaa_member?: boolean }).ncaa_member !== false])));
   const aliasIndex = buildAliasIndex(allPrograms, schools);
   const games = await listGames(db, season);
   const allById = new Map(allPrograms.map((x) => [x.id, x]));
@@ -89,6 +90,7 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
   if (stages.has('schedule') || stages.has('boxscores')) {
     // Placeholder rows ("TBD", "Semifinals", "MAC Tournament") are dropped unless the game was actually played.
     const entries = (await adapter.schedule(fetcher, site)).filter((e) => inSeason(e.date, season) && !(e.state !== 'final' && isPlaceholderOpponent(e.opponentName)));
+    for (const e of entries) if (isExhibitionName(e.opponentName)) e.isExhibition = true;
     const w = await writeSchedule(db, { programId: p.id, season, gender: p.gender, division, host: site.host, entries, resolveOpponent, existing: games });
     ctx.inc('schedule_entries', entries.length); ctx.inc('games_created', w.created); ctx.inc('games_updated', w.updated);
     if (w.unresolvedOpponents.length) { ctx.inc('unresolved_opponents', w.unresolvedOpponents.length); log.debug({ tag, unresolved: w.unresolvedOpponents }, 'unresolved opponents'); }

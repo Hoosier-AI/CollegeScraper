@@ -1,3 +1,4 @@
+import { cleanOpponentName } from '../../../normalize/aliasIndex.js';
 // Small pure helpers shared by the Sidearm parsers. No network, no model changes.
 import type { Gender } from '../../../model.js';
 import { stripDiacritics } from '../../../normalize/names.js';
@@ -129,13 +130,8 @@ export function collapse(s: string | null | undefined): string | null {
 
 /** Strip a leading "#14 " rank prefix from a team name. */
 export function stripRank(name: string): string {
-  // "vs #6 Georgetown", "at Wake Forest", "@ UNC", "vs. Elon" → team name only.
-  const cleaned = String(name ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').trim();
-  return stripRankInner(cleaned);
-}
-function stripRankInner(name: string): string {
-  // "#6 Georgetown", "No. 4 Stanford", "#2/5 Duke" (two polls), "RV TCU" (receiving votes).
-  return name.replace(/^\s*(?:#|no\.?\s*)\d+(?:\/\d+)?\s+/i, '').replace(/^\s*rv\s+/i, '').trim();
+  // "vs #6 Georgetown", "at Wake Forest", "@ UNC", "#T19 South Carolina", "NR/#20 North Carolina", "[RV] Xavier" → team name only.
+  return cleanOpponentName(name);
 }
 
 /** Last-resort stable key for a player row: "last|first|jersey" lowercased ASCII. */

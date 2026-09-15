@@ -493,6 +493,122 @@
     {
       "alias": "Hawaii",
       "seo": "hawaii"
+    },
+    {
+      "alias": "Tarleton",
+      "seo": "tarleton-st"
+    },
+    {
+      "alias": "IU Pennsylvania",
+      "seo": "indiana-pa"
+    },
+    {
+      "alias": "IUP",
+      "seo": "indiana-pa"
+    },
+    {
+      "alias": "Wayne State (Mich.)",
+      "seo": "wayne-st-mi"
+    },
+    {
+      "alias": "Saint Mary-of-the-Woods",
+      "seo": "st-mary-woods"
+    },
+    {
+      "alias": "UT - Chattanooga",
+      "seo": "chattanooga"
+    },
+    {
+      "alias": "UT Chattanooga",
+      "seo": "chattanooga"
+    },
+    {
+      "alias": "Chattanooga",
+      "seo": "chattanooga"
+    },
+    {
+      "alias": "Webber",
+      "seo": "webber-intl"
+    },
+    {
+      "alias": "Webber International",
+      "seo": "webber-intl"
+    },
+    {
+      "alias": "Mobile (Ala.)",
+      "seo": "mobile"
+    },
+    {
+      "alias": "United States Sports Univ. (USSU)",
+      "seo": "us-sports-academy"
+    },
+    {
+      "alias": "USSU",
+      "seo": "us-sports-academy"
+    },
+    {
+      "alias": "UL Lafayette",
+      "seo": "la-lafayette"
+    },
+    {
+      "alias": "UL-Lafayette",
+      "seo": "la-lafayette"
+    },
+    {
+      "alias": "UL-Monroe",
+      "seo": "la-monroe"
+    },
+    {
+      "alias": "UL Monroe",
+      "seo": "la-monroe"
+    },
+    {
+      "alias": "UNC",
+      "seo": "north-carolina"
+    },
+    {
+      "alias": "Santa Barbara",
+      "seo": "uc-santa-barbara"
+    },
+    {
+      "alias": "MSU Billings",
+      "seo": "mont-st-billings"
+    },
+    {
+      "alias": "Montana State Billings",
+      "seo": "mont-st-billings"
+    },
+    {
+      "alias": "UI-Springfield",
+      "seo": "ill-springfield"
+    },
+    {
+      "alias": "UIS",
+      "seo": "ill-springfield"
+    },
+    {
+      "alias": "Maritime",
+      "seo": "suny-maritime"
+    },
+    {
+      "alias": "SUNY Maritime",
+      "seo": "suny-maritime"
+    },
+    {
+      "alias": "Long Beach",
+      "seo": "long-beach-st"
+    },
+    {
+      "alias": "Long Beach State",
+      "seo": "long-beach-st"
+    },
+    {
+      "alias": "University of Miami",
+      "seo": "miami-fl"
+    },
+    {
+      "alias": "USD",
+      "seo": "san-diego"
     }
   ]
 }

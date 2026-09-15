@@ -57,6 +57,8 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
   for (const a of extra) {
     for (const p of bySeo.get(a.seo) ?? []) if (!a.gender || a.gender === p.gender) addName(p.gender, a.alias, p.id);
   }
+  // A conference name that is also a team name ("American") is a team, not a placeholder.
+  for (const m of byGender.values()) for (const k of m.keys()) knownConferenceKeys.delete(k);
   return byGender;
 }
 
@@ -64,10 +66,24 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
 const knownConferenceKeys = new Set<string>();
 export function setKnownConferences(names: Iterable<string>): void { for (const n of names) { const k = teamKey(n); if (k) knownConferenceKeys.add(k); } }
 
-/** "RV TCU", "#2/5 Duke", "No. 4 Stanford", "vs. #12 Elon" → "TCU", "Duke", … */
+/** "RV TCU", "#2/5 Duke", "#T19 South Carolina", "NR/#20 North Carolina", "[RV] Xavier", "vs. No. 12 Elon" → team name only. */
 export function cleanOpponentName(raw: string): string {
-  return String(raw ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').replace(/^(?:#|no\.?\s*)\d+(?:\/\d+)?\s+/i, '').replace(/^rv\s+/i, '').replace(/\s+/g, ' ').trim();
+  let s = String(raw ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:vs\.?|at|@|versus)\s+/i, '');
+  for (let i = 0; i < 3; i++) {
+    s = s.replace(/^(?:\[rv\]|\(rv\)|rv|nr)(?:\s*\/\s*|\s+)/i, '')
+      .replace(/^(?:#|no\.?\s*)t?\d+(?:\s*\/\s*(?:#|no\.?\s*)?t?\d+)?\s+/i, '');
+  }
+  return s.trim();
 }
+
+/** "Drake (Exh.)", "Hawkeye (Exhibition)", "Alumni scrimmage": not a counted game. */
+export function isExhibitionName(raw: string): boolean {
+  return /\((?:exh\.?|exhib\.?|exhibition|scrimmage)\)|\bexhibition\b|\bscrimmage\b/i.test(String(raw ?? ''));
+}
+
+let membership: Map<string, boolean> | null = null;
+/** program id → NCAA member; ambiguous names prefer members ("St. Thomas" = St. Thomas (MN), not St. Thomas (FL)). */
+export function setMembership(m: Map<string, boolean>): void { membership = m; }
 
 const PLACEHOLDER_EXACT = /^(tba|tbd|opponent (tba|tbd)|to be (announced|determined)|semi-?finals?|quarter-?finals?|finals?|first round|second round|third round|championship( game| match)?|consolation( game)?|winner|loser|title game|play-?in|bye|exhibition|scrimmage|alumni( game)?)$/i;
 const PLACEHOLDER_SUFFIX = /\b(semi-?finals?|quarter-?finals?|finals?|championships?|tournament|classic|invitational|college cup|cup|showcase|round(?: \d+| of \d+)?|game \d+|match \d+|bracket|winner|loser)$/i;
@@ -80,7 +96,7 @@ export function isPlaceholderOpponent(name: string): boolean {
   if (PLACEHOLDER_EXACT.test(n)) return true;
   if (PLACEHOLDER_SUFFIX.test(n) && !/\(/.test(n)) return true;
   if (CONFERENCE_LIKE.test(n)) return true;
-  if (/\((?:exh|exhibition|scrimmage)/i.test(n)) return true;
+  if (isExhibitionName(n)) return true;
   if (knownConferenceKeys.has(teamKey(n))) return true;
   return false;
 }
@@ -115,6 +131,7 @@ function resolveExact(m: Map<string, string[]>, scope: ResolverScope, name: stri
   if (!cands.length && /^[A-Z][A-Za-z&.]{1,6}$/.test(name)) cands = m.get(`~${name.toLowerCase().replace(/[^a-z]/g, '')}`) ?? [];
   if (cands.length === 1) return cands[0]!;
   if (!cands.length) return null;
+  if (membership) { const mem = cands.filter((id) => membership!.get(id) !== false); if (mem.length === 1) return mem[0]!; if (mem.length) cands = mem; }
   const sameDiv = scope.ownDivision ? cands.filter((id) => scope.divisionOf.get(id) === scope.ownDivision) : cands;
   if (sameDiv.length === 1) return sameDiv[0]!;
   const pool = sameDiv.length ? sameDiv : cands;
