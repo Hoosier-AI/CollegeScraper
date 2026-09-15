@@ -617,6 +617,14 @@
     {
       "alias": "College of Charleston",
       "seo": "col-of-charleston"
+    },
+    {
+      "alias": "NM State",
+      "seo": "new-mexico-st"
+    },
+    {
+      "alias": "New Mexico State",
+      "seo": "new-mexico-st"
     }
   ]
 }

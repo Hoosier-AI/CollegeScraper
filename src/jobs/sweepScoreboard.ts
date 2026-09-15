@@ -4,7 +4,7 @@ import { makeFetcher } from './fetcher.js';
 import { scoreboardDay } from '../sources/ncaa/index.js';
 import { makeTransport } from './fetchGamesNcaa.js';
 import { log } from '../log.js';
-import { listPrograms, listGames, upsertGameByNcaa, updateGame, reorientGame } from '../db/repos.js';
+import { listPrograms, listGames, upsertGameByNcaa, updateGame, reorientGame, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { findGame } from '../identity/gameMatch.js';
 import { currentSeason, eachDate } from './seasons.js';
 import type { Division, Gender } from '../model.js';
@@ -36,8 +36,22 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     catch (err) { ctx.inc('days_failed'); log.warn({ gender, division, date, err: err instanceof Error ? err.message : String(err) }, 'scoreboard day failed'); continue; }
     if (!dayGames.length) { ctx.inc('days_missing'); continue; }
     for (const g of dayGames) {
-      const homeId = g.home.seo ? bySeo.get(`${g.home.seo}|${gender}`) ?? null : null;
-      const awayId = g.away.seo ? bySeo.get(`${g.away.seo}|${gender}`) ?? null : null;
+      // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
+      // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
+      const ensure = async (t: typeof g.home): Promise<string | null> => {
+        if (!t.seo) return null;
+        const hit = bySeo.get(`${t.seo}|${gender}`);
+        if (hit) return hit;
+        const name = t.short || t.full || t.seo;
+        await upsertSchools(db, [{ seo: t.seo, name }]);
+        const prog = await upsertProgram(db, { school_seo: t.seo, gender, name, short_name: t.short ?? name, name6: t.char6 ?? null });
+        await upsertProgramSeasons(db, [{ program_id: prog.id, season, division, conference_id: null, ncaa_member: false, member_source: 'scoreboard' } as any]);
+        bySeo.set(`${t.seo}|${gender}`, prog.id);
+        ctx.inc('programs_created_from_scoreboard');
+        return prog.id;
+      };
+      const homeId = await ensure(g.home);
+      const awayId = await ensure(g.away);
       let existing = byContest.get(g.contestId) ?? (homeId && awayId ? findGame(games, g.date, homeId, awayId) : null);
       if (!existing && homeId && awayId && g.state !== 'cancelled') {
         // Not in the snapshot loaded at start: the fixture may have been inserted meanwhile (a concurrent site sync).

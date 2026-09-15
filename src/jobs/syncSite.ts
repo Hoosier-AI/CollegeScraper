@@ -4,7 +4,7 @@ import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { adapterFor } from '../sources/sites/detect.js';
 import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, reorientGame, type ProgramRow, type SchoolRow } from '../db/repos.js';
-import { selectAll } from '../db/client.js';
+import { selectAll, kvGet } from '../db/client.js';
 import { currentSeason, inSeason } from './seasons.js';
 import { setMembership, setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, isExhibitionName, matchAmongMembers, type AliasIndex } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
@@ -15,6 +15,9 @@ type Stage = 'roster' | 'schedule' | 'stats' | 'boxscores' | 'bios';
 const ALL_STAGES: Stage[] = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
 /** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, force?: boolean } */
+/** gender_division → first NCAA-listed contest date of the season (written by reconcile-games). */
+let seasonOpeners: Record<string, string> = {};
+
 export async function syncSite(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
@@ -35,6 +38,7 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   setMembership(new Map(seasons.map((x) => [x.program_id, (x as { ncaa_member?: boolean }).ncaa_member !== false])));
   const aliasIndex = buildAliasIndex(allPrograms, schools);
   const games = await listGames(db, season);
+  seasonOpeners = (await kvGet<Record<string, string>>(db, `season_open:${season}`)) ?? {};
   const allById = new Map(allPrograms.map((x) => [x.id, x]));
   const namesOf = (id: string): (string | null | undefined)[] => { const pr = allById.get(id); const sc = pr ? schools.get(pr.school_seo) : undefined; return pr ? [pr.name, pr.short_name, sc?.name, sc?.long_name, pr.school_seo.replace(/-/g, ' ')] : []; };
 
@@ -90,7 +94,8 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
   if (stages.has('schedule') || stages.has('boxscores')) {
     // Placeholder rows ("TBD", "Semifinals", "MAC Tournament") are dropped unless the game was actually played.
     const entries = (await adapter.schedule(fetcher, site)).filter((e) => inSeason(e.date, season) && !(e.state !== 'final' && isPlaceholderOpponent(e.opponentName)));
-    for (const e of entries) if (isExhibitionName(e.opponentName)) e.isExhibition = true;
+    const opener = seasonOpeners[`${p.gender}_${division}`];
+    for (const e of entries) if (isExhibitionName(e.opponentName) || (opener && e.date < opener)) e.isExhibition = true;
     const w = await writeSchedule(db, { programId: p.id, season, gender: p.gender, division, host: site.host, entries, resolveOpponent, existing: games });
     ctx.inc('schedule_entries', entries.length); ctx.inc('games_created', w.created); ctx.inc('games_updated', w.updated);
     if (w.unresolvedOpponents.length) { ctx.inc('unresolved_opponents', w.unresolvedOpponents.length); log.debug({ tag, unresolved: w.unresolvedOpponents }, 'unresolved opponents'); }

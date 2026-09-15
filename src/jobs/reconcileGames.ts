@@ -1,6 +1,6 @@
 // Choose source_of_truth per final game: 'site' when the school box score validated, else 'ncaa'.
 import { registerJob, type JobContext } from './runner.js';
-import { selectAll } from '../db/client.js';
+import { selectAll, kvSet } from '../db/client.js';
 import { updateGame, listProgramSeasons } from '../db/repos.js';
 import { currentSeason } from './seasons.js';
 
@@ -14,6 +14,18 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   const season = Number(ctx.params.season ?? currentSeason());
   let programIds: string[] | null = null;
   if (typeof ctx.params.program === 'string') { const { data } = await db.from('college_programs').select('id').eq('school_seo', ctx.params.program); programIds = (data ?? []).map((r: any) => r.id); }
+  // Preseason exhibitions: NCAA.com's scoreboard lists every counted contest. A game not linked to one and dated before
+  // the first linked contest of its gender and division is an exhibition, whatever the school schedule calls it.
+  const openRows = await selectAll<{ id: string; gender: string; division: string | null; game_date: string; ncaa_contest_id: number | null }>(db, 'college_games', 'id,gender,division,game_date,ncaa_contest_id', (q) => q.eq('season', season));
+  const opener = new Map<string, string>();
+  for (const g of openRows) if (g.ncaa_contest_id && g.division) { const k = `${g.gender}_${g.division}`; if (!opener.has(k) || g.game_date < opener.get(k)!) opener.set(k, g.game_date); }
+  for (const [k, d] of [...opener]) if (d > `${season}-09-01`) opener.delete(k); // a sweep that never covered August proves nothing
+  if (opener.size) {
+    await kvSet(db, `season_open:${season}`, Object.fromEntries(opener));
+    const pre = openRows.filter((g) => !g.ncaa_contest_id && g.division && opener.has(`${g.gender}_${g.division}`) && g.game_date < opener.get(`${g.gender}_${g.division}`)!);
+    for (let i = 0; i < pre.length; i += 100) await db.from('college_games').delete().in('id', pre.slice(i, i + 100).map((g) => g.id));
+    ctx.inc('preseason_exhibitions_deleted', pre.length);
+  }
   let games = await selectAll<G>(db, 'college_games', 'id,status,home_program_id,away_program_id,home_score,away_score,source_of_truth,site_fetched_at,ncaa_fetched_at,conference_game,postseason,tournament',
     (q) => { q = q.eq('season', season).eq('status', 'final'); return ctx.params.all ? q : q.or(`source_of_truth.is.null,site_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()},ncaa_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()}`); });
   if (programIds) games = games.filter((g) => (g.home_program_id && programIds!.includes(g.home_program_id)) || (g.away_program_id && programIds!.includes(g.away_program_id)));

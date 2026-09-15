@@ -112,13 +112,15 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
     const [cf, ca] = ours(canon);
     for (const dup of live.filter((x) => x !== canon && !x.ncaa_contest_id)) {
       const [df, da] = ours(dup);
-      // Same result, or the same two scores reversed (a schedule that printed the winner's score first).
-      if (df != null && cf != null && !((df === cf && da === ca) || (df === ca && da === cf))) continue;
-      // The duplicate's lines may be attributed to a wrong opponent: never moved. The canonical keeps its refs and
-      // is marked for a fresh site fetch when it has no site data yet.
-      const patch: Record<string, unknown> = { site_game_refs: { ...(canon.site_game_refs ?? {}), ...(dup.site_game_refs ?? {}) } };
-      if (!canon.site_fetched_at) patch.site_fetched_at = null;
-      await updateGame(db, canon.id, patch);
+      // Programs do not play twice in a day: an unlinked final next to an NCAA-listed one is a duplicate or a line
+      // whose opponent resolved to the wrong school ("Loyola" → Loyola Chicago for Lehigh's opponent). When the result
+      // agrees (or is the same pair reversed) the canonical keeps its site refs for a fresh box-score fetch.
+      const sameResult = df == null || cf == null || (df === cf && da === ca) || (df === ca && da === cf);
+      if (sameResult) {
+        const patch: Record<string, unknown> = { site_game_refs: { ...(canon.site_game_refs ?? {}), ...(dup.site_game_refs ?? {}) } };
+        if (!canon.site_fetched_at) patch.site_fetched_at = null;
+        await updateGame(db, canon.id, patch);
+      }
       await db.from('college_games').delete().eq('id', dup.id);
       removed.add(dup.id);
       ctx.inc('same_day_duplicates_merged');
