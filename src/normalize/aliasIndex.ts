@@ -54,6 +54,26 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
     const code = (p.name6 ?? '').toLowerCase().replace(/[^a-z]/g, '');
     if (code.length >= 2) add(p.gender, `~${code}`, p.id);
   }
+  // "Loyola (IL)" is plainly "Loyola", and so are Loyola Maryland and Loyola Marymount to their opponents: a bare stem of a
+  // parenthetical name maps to every school named stem + one word (or another parenthetical), so context decides.
+  const stems = new Map<string, Set<string>>();
+  const plainNames = new Map<string, { id: string; key: string }[]>();
+  for (const p of programs) {
+    const sc = schools.get(p.school_seo);
+    for (const n of [p.name, p.short_name, sc?.name]) {
+      if (!n) continue;
+      const plain = teamKey(n);
+      if (!plain) continue;
+      if (/\(.+\)/.test(n)) { const k = `${p.gender}|${plain}`; stems.set(k, (stems.get(k) ?? new Set<string>()).add(p.id)); }
+      const list = plainNames.get(p.gender) ?? []; list.push({ id: p.id, key: plain }); plainNames.set(p.gender, list);
+    }
+  }
+  for (const [gk, ids] of stems) {
+    const gender = gk.slice(0, gk.indexOf('|')), stem = gk.slice(gk.indexOf('|') + 1);
+    const words = stem.split(' ').length;
+    for (const { id, key } of plainNames.get(gender) ?? []) if (key.startsWith(`${stem} `) && key.split(' ').length === words + 1) ids.add(id);
+    if (ids.size > 1) for (const id of ids) add(gender, stem, id);
+  }
   for (const a of extra) {
     for (const p of bySeo.get(a.seo) ?? []) if (!a.gender || a.gender === p.gender) addName(p.gender, a.alias, p.id);
   }

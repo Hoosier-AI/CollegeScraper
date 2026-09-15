@@ -13,9 +13,12 @@ export default function Standings() {
   for (const r of q.data?.rows ?? []) { const k = r.college_conferences?.name ?? 'Unknown'; groups.set(k, [...(groups.get(k) ?? []), r]); }
   const check = (r: any) => {
     if (r.source !== 'conference') return null;
-    const bad = (r.checks ?? []).filter((c: any) => c.field !== 'ncaa_record');
+    const bad = (r.checks ?? []).filter((c: any) => c.field === 'conf_record' || c.field === 'overall_record');
+    const lag = (r.checks ?? []).filter((c: any) => c.field === 'conf_record_lag' || c.field === 'overall_record_lag');
     if (!r.computed) return <span className="text-ink-500" title="No computed record yet (no games stored)">·</span>;
-    return bad.length ? <span className="text-amber-300" title={bad.map((c: any) => `${c.field}: official ${c.official} vs ours ${c.computed}`).join('\n')}>≠</span> : <span className="text-emerald-300" title="Official conference and overall records equal our computed records">✓</span>;
+    if (bad.length) return <span className="text-amber-300" title={bad.map((c: any) => `${c.field}: official ${c.official} vs ours ${c.computed}`).join('\n')}>≠</span>;
+    if (lag.length) return <span className="text-sky-300" title={lag.map((c: any) => `${String(c.field).replace('_lag', '')}: official ${c.official}, ours ${c.computed} including games the conference has not posted yet`).join('\n')}>✓…</span>;
+    return <span className="text-emerald-300" title="Official conference and overall records equal our computed records">✓</span>;
   };
   return (
     <div className="space-y-3">
@@ -23,7 +26,7 @@ export default function Standings() {
         {q.data && <span className="text-xs text-ink-500">{q.data.official} rows from conference websites · {q.data.computed} computed from stored games</span>}</div>
       {q.isLoading && <Spinner />}{q.error && <ErrorBox error={q.error} />}
       {q.data && !q.data.rows.length && <p className="text-sm text-ink-500">No standings yet — run compute-standings from the Jobs page.</p>}
-      <p className="text-xs text-ink-500"><Badge tone="teal">official</Badge> = the conference's own standings page (rank, points and records as published). <Badge tone="gray">computed</Badge> = derived from our stored results (3 pts win, 1 tie). ✓ means the official conference and overall records equal our computed records; ≠ lists the difference on hover.</p>
+      <p className="text-xs text-ink-500"><Badge tone="teal">official</Badge> = the conference's own standings page (rank, points and records as published). <Badge tone="gray">computed</Badge> = derived from our stored results (3 pts win, 1 tie). ✓ means the official conference and overall records equal our computed records; ✓… means they match once games the conference has not posted yet are left out; ≠ lists a real difference on hover.</p>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[...groups.entries()].map(([conf, rows]) => {
         const official = rows[0]?.source === 'conference';
         const pods = [...new Set(rows.map((r) => r.pod).filter(Boolean))] as string[];

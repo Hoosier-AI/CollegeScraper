@@ -60,13 +60,45 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   // for this season and not a postseason/tournament game. Applied to every game of the season (standings need
   // the scheduled ones too); the official conference tables verify the result.
   const conferenceOf = new Map((await listProgramSeasons(db, season)).map((s) => [s.program_id, s.conference_id as string | null]));
-  const allGames = await selectAll<{ id: string; home_program_id: string | null; away_program_id: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }>(db, 'college_games', 'id,home_program_id,away_program_id,conference_game,postseason,tournament', (q) => q.eq('season', season));
+  const allGames = await selectAll<{ id: string; game_date: string; status: string; home_program_id: string | null; away_program_id: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }>(db, 'college_games', 'id,game_date,status,home_program_id,away_program_id,conference_game,postseason,tournament', (q) => q.eq('season', season));
   for (const g of allGames) {
     if (!g.home_program_id || !g.away_program_id) continue;
     if (programIds && !programIds.includes(g.home_program_id) && !programIds.includes(g.away_program_id)) continue;
     const hc = conferenceOf.get(g.home_program_id), ac = conferenceOf.get(g.away_program_id);
     const want = !!hc && hc === ac && !g.postseason && !g.tournament;
     if (want !== g.conference_game) { await updateGame(db, g.id, { conference_game: want }); ctx.inc(want ? 'conference_flag_set' : 'conference_flag_cleared'); }
+  }
+  // Conference mates sometimes meet before conference play (a non-conference game). Where the conference publishes an
+  // official table, a team with more flagged conference games than its official conference games played has its
+  // earliest excess same-conference games unflagged, provided they precede its last non-conference game (a table that
+  // merely lags behind the latest conference game never unflags a real one) and the opponent agrees.
+  const official = await selectAll<{ program_id: string; conf_w: number | null; conf_l: number | null; conf_t: number | null }>(db, 'college_standings', 'program_id,conf_w,conf_l,conf_t', (q) => q.eq('season', season).eq('source', 'conference'));
+  if (official.length) {
+    const offGp = new Map(official.filter((o) => o.conf_w != null).map((o) => [o.program_id, (o.conf_w ?? 0) + (o.conf_l ?? 0) + (o.conf_t ?? 0)]));
+    const finalsBoth = allGames.filter((g) => g.status === 'final' && g.home_program_id && g.away_program_id);
+    const lastNonConf = new Map<string, string>();
+    const flagged = new Map<string, typeof finalsBoth>();
+    for (const g of finalsBoth) for (const pid of [g.home_program_id!, g.away_program_id!]) {
+      if (g.conference_game) flagged.set(pid, [...(flagged.get(pid) ?? []), g]);
+      else if ((lastNonConf.get(pid) ?? '') < g.game_date) lastNonConf.set(pid, g.game_date);
+    }
+    const excess = new Map<string, Set<string>>();
+    for (const [pid, list] of flagged) {
+      const off = offGp.get(pid);
+      if (off == null || list.length <= off) continue;
+      list.sort((a, b) => a.game_date.localeCompare(b.game_date));
+      const last = lastNonConf.get(pid) ?? '';
+      excess.set(pid, new Set(list.slice(0, list.length - off).filter((g) => g.game_date < last).map((g) => g.id)));
+    }
+    for (const g of finalsBoth) {
+      if (!g.conference_game) continue;
+      const h = excess.get(g.home_program_id!), a = excess.get(g.away_program_id!);
+      const hOk = h ? h.has(g.id) : !offGp.has(g.home_program_id!);
+      const aOk = a ? a.has(g.id) : !offGp.has(g.away_program_id!);
+      if ((h?.has(g.id) || a?.has(g.id)) && hOk && aOk) {
+        await updateGame(db, g.id, { conference_game: false }); g.conference_game = false; ctx.inc('conference_flag_preseason_meeting');
+      }
+    }
   }
   for (const g of games) {
     const e = byGame.get(g.id) ?? { site: [], ncaa: [] };

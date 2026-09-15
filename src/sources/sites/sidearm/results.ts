@@ -1,3 +1,4 @@
+import { normalizeResult } from '../../../normalize/records.js';
 // Sidearm EventsResults JSON: /api/v2.1/EventsResults/{results|upcoming}?sportId=N&pageIndex=0&pageSize=M
 // Both endpoints return {items:[...], before, after}. The results feed can span several seasons,
 // and `gameStateDisplay` is unreliable (completed games are frequently still "SCHEDULED" while
@@ -48,7 +49,7 @@ export function parseResultItem(raw: unknown, ctx: SiteContext, prettyLinks?: Ma
   const opponent = obj(item['opponent']);
   const opponentName = stripRank(str(opponent['title']) ?? str(opponent['name']) ?? str(item['eventName']) ?? '');
   if (!opponentName) return null;
-  const result = parseResult(item['result']);
+  const result = normalizeResult(parseResult(item['result']));
   const res = obj(item['result']);
   const gameId = str(res['gameId']) ?? str(item['gameId']) ?? str(item['id']);
   const tournament = str(item['tournament']) ?? str(item['eventName']);

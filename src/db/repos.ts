@@ -385,6 +385,16 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
     const home = isHome ? input.programId : oppId;
     const away = isHome ? oppId : input.programId;
     let game = oppId ? findGame(input.existing, e.date, input.programId, oppId) : null;
+    // Opponent resolved, but the program's only NCAA-linked game that day is against someone else with this exact
+    // result: the schedule name matched the wrong school ("Charleston" → Charleston (WV) instead of College of Charleston).
+    if (!game && oppId && e.result) {
+      const linked = input.existing.filter((g) => g.game_date === e.date && g.ncaa_contest_id && (g.home_program_id === input.programId || g.away_program_id === input.programId));
+      if (linked.length === 1) {
+        const x = linked[0]!;
+        const [f, a] = x.home_program_id === input.programId ? [x.home_score, x.away_score] : [x.away_score, x.home_score];
+        if (f === e.result.teamScore && a === e.result.opponentScore) game = x;
+      }
+    }
     // Opponent unresolved (promo text, unknown school): the program's only game that day is this fixture.
     if (!game && !oppId) {
       const sameDay = input.existing.filter((g) => g.game_date === e.date && (g.home_program_id === input.programId || g.away_program_id === input.programId));

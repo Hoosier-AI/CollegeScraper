@@ -1,3 +1,4 @@
+import { normalizeResult } from '../../../normalize/records.js';
 // Sidearm schedule page: /sports/{sportSlug}/schedule/{season}
 // Used (a) to map gameId → pretty box score URL, and (b) as a best-effort ScheduleEntry fallback
 // when the EventsResults JSON endpoints are unavailable. Handles the nextgen `.s-game-card`
@@ -38,7 +39,7 @@ function parseScore(raw: string | null): ScheduleEntry['result'] {
   if (!raw) return null;
   const m = raw.replace(/\s+/g, ' ').match(/\b([WLT])\b[,\s]*(\d+)\s*-\s*(\d+)/i);
   if (!m) return null;
-  return { status: m[1]!.toUpperCase() as 'W' | 'L' | 'T', teamScore: Number(m[2]), opponentScore: Number(m[3]) };
+  return normalizeResult({ status: m[1]!.toUpperCase() as 'W' | 'L' | 'T', teamScore: Number(m[2]), opponentScore: Number(m[3]) });
 }
 
 function homeAwayFromStamp(stamp: string | null, neutralHint: boolean): 'H' | 'A' | 'N' {

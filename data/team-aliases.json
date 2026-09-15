@@ -609,6 +609,14 @@
     {
       "alias": "USD",
       "seo": "san-diego"
+    },
+    {
+      "alias": "Charleston",
+      "seo": "col-of-charleston"
+    },
+    {
+      "alias": "College of Charleston",
+      "seo": "col-of-charleston"
     }
   ]
 }

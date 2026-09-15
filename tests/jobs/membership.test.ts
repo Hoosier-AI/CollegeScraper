@@ -181,3 +181,26 @@ describe('opponent records', async () => {
     expect(m.resolveName(idx, { ...scope, ownDivision: 'd3' }, 'Trinity College Senior Day')).toBe('tct');
   });
 });
+
+describe('shared stems', async () => {
+  const m = await import('../../src/normalize/aliasIndex.js');
+  it('"Loyola" is ambiguous and resolved by conference', () => {
+    const progs = [
+      { id: 'luc', gender: 'm', school_seo: 'loyola-chicago', name: 'Loyola Chicago', short_name: null, name6: null },
+      { id: 'lmd', gender: 'm', school_seo: 'loyola-maryland', name: 'Loyola Maryland', short_name: null, name6: null },
+      { id: 'lmu', gender: 'm', school_seo: 'loyola-marymount', name: 'LMU (CA)', short_name: null, name6: null },
+    ];
+    const schools = new Map([
+      ['loyola-chicago', { seo: 'loyola-chicago', name: 'Loyola (IL)', long_name: 'Loyola University Chicago' }],
+      ['loyola-maryland', { seo: 'loyola-maryland', name: 'Loyola Maryland', long_name: 'Loyola University Maryland' }],
+      ['loyola-marymount', { seo: 'loyola-marymount', name: 'Loyola Marymount', long_name: 'Loyola Marymount University' }],
+    ]);
+    const idx = m.buildAliasIndex(progs, schools, []);
+    m.setMembership(new Map());
+    const divisionOf = new Map([['luc', 'd1'], ['lmd', 'd1'], ['lmu', 'd1']]);
+    const conferenceOf = new Map([['luc', 'a10'], ['lmd', 'patriot'], ['lmu', 'wcc']]);
+    expect(m.resolveName(idx, { gender: 'm', ownDivision: 'd1', ownConference: 'patriot', divisionOf, conferenceOf }, 'Loyola')).toBe('lmd');
+    expect(m.resolveName(idx, { gender: 'm', ownDivision: 'd1', ownConference: 'nec', divisionOf, conferenceOf }, 'at Loyola')).toBeNull();
+    expect(m.resolveName(idx, { gender: 'm', ownDivision: 'd1', ownConference: 'nec', divisionOf, conferenceOf }, 'Loyola Chicago')).toBe('luc');
+  });
+});

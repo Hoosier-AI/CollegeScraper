@@ -1,3 +1,4 @@
+import { normalizeResult } from '../../../normalize/records.js';
 // Presto schedule parsers: the HTML card list (`.event-row`) and the `?print=rss` feed.
 import * as cheerio from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
@@ -119,7 +120,7 @@ function parseEventRow($: CheerioAPI, row: AnyNode, baseUrl: string, season: num
   const resultText = txt(R.find('.event-result, .result').first());
   const result = parseResultText(resultText);
   if (result) {
-    e.result = result;
+    e.result = normalizeResult(result);
     e.state = 'final';
   } else if (st) {
     e.state = st;
@@ -166,7 +167,7 @@ function parseScheduleTables($: CheerioAPI, baseUrl: string, season: number): Sc
       const rt = ri >= 0 ? row.texts[ri] ?? '' : '';
       const result = parseResultText(rt);
       if (result) {
-        e.result = result;
+        e.result = normalizeResult(result);
         e.state = 'final';
       } else e.state = stateFromStatus(rt) ?? 'scheduled';
       if (ti >= 0) e.startTimeLocal = to24h(row.texts[ti]);
@@ -257,7 +258,7 @@ export function parseScheduleRss(xml: string, _baseUrl: string, _season: number)
     e.homeAway = homeAway;
     const result = parseResultText(score);
     if (result) {
-      e.result = result;
+      e.result = normalizeResult(result);
       e.state = 'final';
     } else {
       e.state = stateFromStatus(`${title} ${desc}`) ?? 'scheduled';

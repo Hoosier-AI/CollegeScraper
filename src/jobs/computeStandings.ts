@@ -14,6 +14,7 @@ import { listConferences, updateConference, writeStandings, writeStandingsChecks
 import { selectAll, kvSet } from '../db/client.js';
 import { setMembership, setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, opponentSeo, isCleanOpponentName, type MemberNames } from '../normalize/aliasIndex.js';
 import { currentSeason } from './seasons.js';
+import { compareRecord, wltString, type GameResult } from '../normalize/records.js';
 import type { Gender } from '../model.js';
 import { log } from '../log.js';
 
@@ -70,6 +71,21 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
   setMembership(new Map(seasons.map((x) => [x.program_id, (x as { ncaa_member?: boolean }).ncaa_member !== false])));
   const index = buildAliasIndex(programs, schools);
   const stats = new Map((await selectAll<TeamStat>(db, 'college_team_season_stats', 'program_id,w,l,t,conf_w,conf_l,conf_t,gf,ga,gd,gp', (q) => q.eq('season', season))).map((s) => [s.program_id, s]));
+  // Every final with both programs and a score, per program, for record verification (independent of aggregates).
+  const finals = await selectAll<{ game_date: string; home_program_id: string; away_program_id: string; home_score: number; away_score: number; conference_game: boolean }>(db, 'college_games', 'game_date,home_program_id,away_program_id,home_score,away_score,conference_game',
+    (q) => q.eq('season', season).eq('status', 'final').not('home_program_id', 'is', null).not('away_program_id', 'is', null).not('home_score', 'is', null).not('away_score', 'is', null));
+  const gamesOf = new Map<string, GameResult[]>();
+  for (const g of finals) {
+    gamesOf.set(g.home_program_id, [...(gamesOf.get(g.home_program_id) ?? []), { date: g.game_date, gf: g.home_score, ga: g.away_score, conf: g.conference_game }]);
+    gamesOf.set(g.away_program_id, [...(gamesOf.get(g.away_program_id) ?? []), { date: g.game_date, gf: g.away_score, ga: g.home_score, conf: g.conference_game }]);
+  }
+  const verify = (checks: StandingsCheck[], pid: string, field: string, official: { w: number | null; l: number | null; t: number | null } | null, confOnly: boolean) => {
+    if (!official || official.w == null) return;
+    const c = compareRecord(gamesOf.get(pid) ?? [], official, confOnly);
+    if (c.status === 'ok') return;
+    checks.push({ season, program_id: pid, field: c.status === 'lag' ? `${field}_lag` : field, official: wltString(official), computed: wltString(c.ours), checked_at: now });
+    ctx.inc(c.status === 'lag' ? `${field}_lag` : `${field}_mismatch`);
+  };
   const unresolvedNotes: string[] = [];
   const now = new Date().toISOString();
 
@@ -143,16 +159,9 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
                 overall_w: r.overall?.w ?? null, overall_l: r.overall?.l ?? null, overall_t: r.overall?.t ?? null, rank: b.rank,
                 source: 'conference', source_url: url, pod: podOf.get(pid) ?? null, conf_pct: r.confPct, overall_pct: r.overallPct,
                 conf_gf: r.confGf, conf_ga: r.confGa, gf: r.gf, ga: r.ga, streak: r.streak, home_record: r.home, away_record: r.away, fetched_at: now, updated_at: now });
-              if (ts) {
-                const oc = rec(r.conf?.w, r.conf?.l, r.conf?.t), cc = rec(ts.conf_w, ts.conf_l, ts.conf_t);
-                if (oc && oc !== cc) { checks.push({ season, program_id: pid, field: 'conf_record', official: oc, computed: cc, checked_at: now }); ctx.inc('standings_conf_mismatch'); }
-                const oo = rec(r.overall?.w, r.overall?.l, r.overall?.t), co = rec(ts.w, ts.l, ts.t);
-                if (oo && oo !== co) { checks.push({ season, program_id: pid, field: 'overall_record', official: oo, computed: co, checked_at: now }); ctx.inc('standings_overall_mismatch'); }
-              }
-              if (ts && ps && (ps as any).official_w != null) {
-                const on = rec((ps as any).official_w, (ps as any).official_l, (ps as any).official_t), co = rec(ts.w, ts.l, ts.t);
-                if (on !== co) { checks.push({ season, program_id: pid, field: 'ncaa_record', official: on, computed: co, checked_at: now }); ctx.inc('ncaa_record_mismatch'); }
-              }
+              verify(checks, pid, 'conf_record', r.conf, true);
+              verify(checks, pid, 'overall_record', r.overall, false);
+              if (ps && (ps as any).official_w != null) verify(checks, pid, 'ncaa_record', { w: (ps as any).official_w, l: (ps as any).official_l, t: (ps as any).official_t }, false);
             }
             ctx.inc('official_conferences');
           } else ctx.inc('standings_empty_pages');
@@ -177,10 +186,7 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
             overall_w: t.w, overall_l: t.l, overall_t: t.t, rank: i + 1, source: 'computed', source_url: null, pod: null, conf_pct: confPct,
             overall_pct: g ? Math.round(1000 * (t.w + 0.5 * t.t) / g) / 1000 : null, conf_gf: null, conf_ga: null, gf: t.gf, ga: t.ga, streak: null, home_record: null, away_record: null, fetched_at: now, updated_at: now });
           const ps = seasonOf.get(m.program_id);
-          if (ps && (ps as any).official_w != null) {
-            const on = rec((ps as any).official_w, (ps as any).official_l, (ps as any).official_t), co = rec(t.w, t.l, t.t);
-            if (on !== co) { checks.push({ season, program_id: m.program_id, field: 'ncaa_record', official: on, computed: co, checked_at: now }); ctx.inc('ncaa_record_mismatch'); }
-          }
+          if (ps && (ps as any).official_w != null) verify(checks, m.program_id, 'ncaa_record', { w: (ps as any).official_w, l: (ps as any).official_l, t: (ps as any).official_t }, false);
         });
         if (rows.length) ctx.inc('computed_conferences');
       }
