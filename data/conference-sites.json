@@ -1,0 +1,524 @@
+{
+  "_doc": "Conference websites that publish official standings. platform: sidearm = https://{host}{standings_path_m|w} renders <table class=sidearm-standings-table>; none = no server-rendered standings (computed fallback). points_rule: wlt-3-1-0 (default) | wl-2-1-0 | pct. Verified by scripts/find-conference-sites.mjs.",
+  "conferences": [
+    {
+      "ncaa_seo": "acc",
+      "host": "theacc.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "america-east",
+      "host": "americaeast.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "american",
+      "host": "theamerican.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "asun",
+      "host": "asunsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "atlantic-10",
+      "host": "atlantic10.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "big-12",
+      "host": "big12sports.com",
+      "platform": "none",
+      "notes": "standings.aspx 500"
+    },
+    {
+      "ncaa_seo": "big-east",
+      "host": "bigeast.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "big-sky",
+      "host": "bigskyconf.com",
+      "platform": "sidearm",
+      "standings_path_m": null
+    },
+    {
+      "ncaa_seo": "big-south",
+      "host": "bigsouthsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "big-ten",
+      "host": "bigten.org",
+      "platform": "none",
+      "notes": "client-rendered (WMT)"
+    },
+    {
+      "ncaa_seo": "big-west",
+      "host": "bigwest.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "caa",
+      "host": "caasports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "cusa",
+      "host": "conferenceusa.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "horizon",
+      "host": "horizonleague.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "ivy-league",
+      "host": "ivyleague.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mac",
+      "host": "getsomemaction.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "metro",
+      "host": "metroathleticconference.org",
+      "platform": "none",
+      "notes": "arbiter marketing site"
+    },
+    {
+      "ncaa_seo": "mountain-west",
+      "host": "themw.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mvc",
+      "host": "mvc-sports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "nec",
+      "host": "necsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "ovc",
+      "host": "ovcsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "pac-12",
+      "host": "pac-12.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "patriot",
+      "host": "patriotleague.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "sec",
+      "host": "secsports.com",
+      "platform": "none",
+      "notes": "no soccer standings page"
+    },
+    {
+      "ncaa_seo": "socon",
+      "host": "soconsports.com",
+      "platform": "none",
+      "notes": "non-standard template"
+    },
+    {
+      "ncaa_seo": "southland",
+      "host": "southland.org",
+      "platform": "sidearm",
+      "standings_path_m": null
+    },
+    {
+      "ncaa_seo": "summit-league",
+      "host": "thesummitleague.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "sun-belt",
+      "host": "sunbeltsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "swac",
+      "host": "swac.org",
+      "platform": "sidearm",
+      "standings_path_m": null
+    },
+    {
+      "ncaa_seo": "uac-",
+      "host": "theuac.org",
+      "platform": "none",
+      "notes": "host unreachable"
+    },
+    {
+      "ncaa_seo": "wcc",
+      "host": "wccsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "cacc",
+      "host": "caccathletics.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "ccaa",
+      "host": "goccaa.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "conference-carolinas",
+      "host": "conferencecarolinas.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "ecc",
+      "host": "eccsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "g-mac",
+      "host": "greatmidwestsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "gac",
+      "host": "greatamericanconference.com",
+      "platform": "none",
+      "notes": "conference does not sponsor soccer"
+    },
+    {
+      "ncaa_seo": "gliac",
+      "host": "gliac.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "glvc",
+      "host": "glvcsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "great-northwest",
+      "host": "gnacsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "gulf-south",
+      "host": "gulfsouthconference.org",
+      "platform": "none",
+      "notes": "no standings table served"
+    },
+    {
+      "ncaa_seo": "lone-star",
+      "host": "lonestarconference.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mec",
+      "host": "mountaineast.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mid-america-intercollegiate",
+      "host": "themiaa.com",
+      "platform": "sidearm",
+      "standings_path_m": null,
+      "notes": "no men's soccer"
+    },
+    {
+      "ncaa_seo": "ne10",
+      "host": "northeast10.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "nsic",
+      "host": "northernsun.org",
+      "platform": "sidearm",
+      "standings_path_m": null,
+      "notes": "no men's soccer"
+    },
+    {
+      "ncaa_seo": "pacwest",
+      "host": "thepacwest.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "peach-belt",
+      "host": "peachbelt.com",
+      "platform": "none",
+      "notes": "host unreachable from crawler"
+    },
+    {
+      "ncaa_seo": "psac",
+      "host": "psacsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "rmac",
+      "host": "rmacsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "sac",
+      "host": "thesac.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "siac",
+      "host": "thesiac.com",
+      "platform": "none",
+      "notes": "standings.aspx 500"
+    },
+    {
+      "ncaa_seo": "sunshine-state",
+      "host": "sunshinestateconference.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "amcc",
+      "host": "amccsports.org",
+      "platform": "presto",
+      "standings_path_m": "/sports/msoc/standings",
+      "standings_path_w": "/sports/wsoc/standings",
+      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+    },
+    {
+      "ncaa_seo": "american-rivers",
+      "host": "americanriversconference.org",
+      "platform": "none",
+      "notes": "no standings page"
+    },
+    {
+      "ncaa_seo": "asc",
+      "host": "ascsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "atlantic-east",
+      "host": "atlanticeast.org",
+      "platform": "none",
+      "notes": "host unreachable"
+    },
+    {
+      "ncaa_seo": "c2c",
+      "host": "c2csports.org",
+      "platform": "none",
+      "notes": "no standings table served"
+    },
+    {
+      "ncaa_seo": "cciw",
+      "host": "cciw.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "ccs",
+      "host": "ccsathletics.com",
+      "platform": "none",
+      "notes": "host unreachable"
+    },
+    {
+      "ncaa_seo": "centennial",
+      "host": "centennial.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "cne",
+      "host": "cneathletics.com",
+      "platform": "none",
+      "notes": "host unreachable"
+    },
+    {
+      "ncaa_seo": "cunyac",
+      "host": "cunyathletics.com",
+      "platform": "sidearm",
+      "standings_path_m": "/standings.aspx?path=msoccer",
+      "standings_path_w": "/standings.aspx?path=wsoccer"
+    },
+    {
+      "ncaa_seo": "empire-8",
+      "host": "empire8.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "great-northeast",
+      "host": "thegnac.com",
+      "platform": "presto",
+      "standings_path_m": "/sports/msoc/standings",
+      "standings_path_w": "/sports/wsoc/standings",
+      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+    },
+    {
+      "ncaa_seo": "hcac",
+      "host": "heartlandconf.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "landmark",
+      "host": "landmarkconference.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "liberty-league",
+      "host": "libertyleagueathletics.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "little-east",
+      "host": "littleeast.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mac-commonwealth",
+      "host": "gomacsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mac-freedom",
+      "host": "gomacsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mascac",
+      "host": "mascac.com",
+      "platform": "presto",
+      "standings_path_m": "/sports/msoc/standings",
+      "standings_path_w": "/sports/wsoc/standings",
+      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+    },
+    {
+      "ncaa_seo": "miac",
+      "host": "miacjump.prestosports.com",
+      "platform": "presto",
+      "standings_path_m": "/sports/msoc/standings",
+      "standings_path_w": "/sports/wsoc/standings",
+      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+    },
+    {
+      "ncaa_seo": "michigan-intercol. ath. assn.",
+      "host": "miaa.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "mwc",
+      "host": "midwestconference.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "nacc",
+      "host": "naccsports.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "ncac",
+      "host": "northcoast.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "nescac",
+      "host": "nescac.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "newmac",
+      "host": "newmacsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "njac",
+      "host": "njacsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "north-atlantic",
+      "host": "nacathletics.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "nwc",
+      "host": "nwcsports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "oac",
+      "host": "oac.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "odac",
+      "host": "odaconline.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "pac",
+      "host": "pacathletics.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "saa",
+      "host": "saa-sports.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "scac",
+      "host": "scacsports.com",
+      "platform": "presto",
+      "standings_path_m": "/sports/msoc/standings",
+      "standings_path_w": "/sports/wsoc/standings",
+      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+    },
+    {
+      "ncaa_seo": "sciac",
+      "host": "thesciac.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "skyline",
+      "host": "skylineconference.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "sliac",
+      "host": "sliac.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "sunyac",
+      "host": "sunyac.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "uaa",
+      "host": "uaasports.info",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "umac",
+      "host": "umacathletics.com",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "united-east",
+      "host": "unitedeast.org",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "usa-south",
+      "host": "usasouth.net",
+      "platform": "sidearm"
+    },
+    {
+      "ncaa_seo": "wiac",
+      "host": "wiacsports.com",
+      "platform": "sidearm"
+    }
+  ]
+}

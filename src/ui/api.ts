@@ -18,7 +18,7 @@ export function registerUiApi(app: FastifyInstance, authorized: (h: string | und
 
   app.get<{ Querystring: Record<string, string> }>('/api/programs', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    return q.programs(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), q: str(req.query.q) });
+    return q.programs(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), q: str(req.query.q), members: req.query.members !== 'all' });
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
@@ -69,7 +69,7 @@ export function registerUiApi(app: FastifyInstance, authorized: (h: string | und
 
   app.get<{ Querystring: Record<string, string> }>('/api/leaders', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    return { stats: req.query.kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS, rows: await q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit }) };
+    return { stats: req.query.kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS, rows: await q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, members: req.query.members !== 'all' }) };
   });
   app.get<{ Querystring: Record<string, string> }>('/api/standings', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

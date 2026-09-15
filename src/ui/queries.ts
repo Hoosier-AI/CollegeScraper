@@ -1,10 +1,10 @@
 // Read helpers for the stats-viewer API. Service-role reads (internal tool).
 import type { Db } from '../db/client.js';
-import { selectAll } from '../db/client.js';
+import { selectAll, kvGet } from '../db/client.js';
 
-export const PLAYER_STATS = ['goals', 'assists', 'points', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'minutes_share'];
-export const TEAM_STATS = ['w', 'l', 't', 'gp', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'shots', 'sog', 'shots_pg', 'sog_pg', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t'];
-const ASC = new Set(['gaa', 'ga', 'ga_pg', 'l']);
+export const PLAYER_STATS = ['goals', 'assists', 'points', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
+export const TEAM_STATS = ['w', 'l', 't', 'gp', 'ppg', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'gf_home', 'gf_away', 'ga_home', 'ga_away', 'gf_1h', 'gf_2h', 'ga_1h', 'ga_2h', 'shots', 'sog', 'shots_pg', 'sog_pg', 'sog_pct', 'shots_per_goal', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'pk_goals', 'pk_att', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t', 'vs_ranked_w', 'vs_ranked_l', 'vs_ranked_t', 'last5_gf', 'last5_ga', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'div_pct_gf_pg', 'div_pct_ga_pg', 'div_pct_shots_pg'];
+const ASC = new Set(['gaa', 'ga', 'ga_pg', 'l', 'minutes_per_goal', 'shots_per_goal', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'ga_home', 'ga_away', 'ga_1h', 'ga_2h', 'last5_ga', 'vs_ranked_l']);
 
 const clamp = (v: unknown, lo: number, hi: number, d: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.trunc(n))) : d; };
 
@@ -18,12 +18,12 @@ export async function meta(db: Db) {
   return { seasons: seasons.map((s) => s.season), currentSeason, genders: ['m', 'w'], divisions: ['d1', 'd2', 'd3'], conferences: confs };
 }
 
-export interface ProgramFilter { season: number; gender?: string; division?: string; conference?: string; q?: string }
+export interface ProgramFilter { season: number; gender?: string; division?: string; conference?: string; q?: string; members?: boolean }
 
 export async function programs(db: Db, f: ProgramFilter) {
   // No `in (...)` id lists: PostgREST URLs blow past 8 KB with 300 UUIDs. Filter by season/gender and join in JS.
-  const seasons = await selectAll<any>(db, 'college_program_seasons', 'program_id,season,division,conference_id,roster_synced_at,schedule_synced_at,stats_synced_at,boxscores_synced_at,site_parse_failures',
-    (q) => { q = q.eq('season', f.season); if (f.division) q = q.eq('division', f.division); if (f.conference) q = q.eq('conference_id', f.conference); return q; });
+  const seasons = await selectAll<any>(db, 'college_program_seasons', 'program_id,season,division,conference_id,roster_synced_at,schedule_synced_at,stats_synced_at,boxscores_synced_at,site_parse_failures,ncaa_member,member_source,official_w,official_l,official_t',
+    (q) => { q = q.eq('season', f.season); if (f.division) q = q.eq('division', f.division); if (f.conference) q = q.eq('conference_id', f.conference); if (f.members !== false) q = q.eq('ncaa_member', true); return q; });
   if (!seasons.length) return [];
   const bySeason = new Map(seasons.map((s) => [s.program_id, s]));
   const progs = (await selectAll<any>(db, 'college_programs', 'id,name,short_name,gender,school_seo,site_status,site_sport_slug,college_schools(seo,name,logo_svg_url,athletics_host,site_platform)',
@@ -48,6 +48,7 @@ export async function programs(db: Db, f: ProgramFilter) {
     .map((p) => {
       const s = bySeason.get(p.id); const st = byStats.get(p.id); const c = s?.conference_id ? confs.get(s.conference_id) : null;
       return { id: p.id, name: p.name, gender: p.gender, school_seo: p.school_seo, site_status: p.site_status, school: p.college_schools, division: s?.division, conference: c ?? null,
+        member: s?.ncaa_member !== false, member_source: s?.member_source ?? null, official: s?.official_w != null ? { w: s.official_w, l: s.official_l, t: s.official_t } : null,
         synced: { roster: s?.roster_synced_at, schedule: s?.schedule_synced_at, stats: s?.stats_synced_at, boxscores: s?.boxscores_synced_at, failures: s?.site_parse_failures ?? 0 },
         record: st ? { gp: st.gp, w: st.w, l: st.l, t: st.t, gf: st.gf, ga: st.ga, computed_at: st.computed_at } : null,
         games: gameAgg.get(p.id) ?? { games: 0, finals: 0, site: 0, ncaa: 0, truth: 0 } };
@@ -59,30 +60,37 @@ export async function program(db: Db, id: string, season: number) {
   const { data: p, error } = await db.from('college_programs').select('*,college_schools(*)').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!p) return null;
-  const [ps, coaches, tss, standing, rankings, runs, seasonsAvail] = await Promise.all([
-    db.from('college_program_seasons').select('*,college_conferences(id,name,ncaa_seo)').eq('program_id', id).eq('season', season).maybeSingle(),
+  const [ps, coaches, tss, standing, rankings, runs, seasonsAvail, checks] = await Promise.all([
+    db.from('college_program_seasons').select('*,college_conferences(id,name,ncaa_seo,site_host,points_rule)').eq('program_id', id).eq('season', season).maybeSingle(),
     selectAll<any>(db, 'college_coach_seasons', 'title,is_head,college_coaches(id,name,headshot_url)', (q) => q.eq('program_id', id).eq('season', season)),
     db.from('college_team_season_stats').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
     db.from('college_standings').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
-    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false }).limit(20)),
+    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false }).limit(200)),
     selectAll<any>(db, 'college_crawl_runs', 'id,job,status,started_at,finished_at,counters,error,params', (q) => q.contains('params', { program: p.school_seo }).order('created_at', { ascending: false }).limit(5)),
     selectAll<any>(db, 'college_program_seasons', 'season', (q) => q.eq('program_id', id).order('season', { ascending: false })),
+    selectAll<any>(db, 'college_standings_checks', '*', (q) => q.eq('program_id', id).eq('season', season)),
   ]);
-  return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, rankings, runs, seasons: seasonsAvail.map((s) => s.season) };
+  // Conference table for the position badge (rank within the conference).
+  const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs(id,name)', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).order('rank')) : [];
+  const usc = rankings.filter((r) => r.poll === 'usc' && !String(r.label ?? '').includes('(RV)')).sort((a, b) => String(b.week_of).localeCompare(String(a.week_of)));
+  const categories = rankings.filter((r) => r.poll.startsWith('ncaa:')).map((r) => ({ category: r.label ?? r.poll, rank: r.rank, value: r.value, week_of: r.week_of })).sort((a, b) => a.rank - b.rank);
+  return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, standingsChecks: checks, conferenceTable: confRows, rankings, usc: usc[0] ?? null, uscHistory: usc, categories, runs, seasons: seasonsAvail.map((s) => s.season) };
 }
 
 export async function roster(db: Db, id: string, season: number) {
   const rows = await selectAll<any>(db, 'college_player_seasons', '*,college_players(id,first_name,last_name,display_name,hometown_city,hometown_region,hometown_country,headshot_url,bio_url,suppress)', (q) => q.eq('program_id', id).eq('season', season));
   const ids = rows.map((r) => r.id);
   if (!ids.length) return [];
-  const [agg, site, honors] = await Promise.all([
+  const [agg, site, honors, splits] = await Promise.all([
     selectAll<any>(db, 'college_player_season_stats', '*', (q) => q.in('player_season_id', ids)),
     selectAll<any>(db, 'college_site_season_stats', '*', (q) => q.in('player_season_id', ids)),
     selectAll<any>(db, 'college_player_honors', 'player_season_id,text', (q) => q.in('player_season_id', ids)),
+    selectAll<any>(db, 'college_player_season_splits', '*', (q) => q.in('player_season_id', ids)),
   ]);
   const a = new Map(agg.map((x) => [x.player_season_id, x])); const s = new Map(site.map((x) => [x.player_season_id, x]));
   const h = new Map<string, string[]>(); for (const x of honors) h.set(x.player_season_id, [...(h.get(x.player_season_id) ?? []), x.text]);
-  return rows.map((r) => ({ ...r, player: r.college_players, college_players: undefined, stats: a.get(r.id) ?? null, site: s.get(r.id) ?? null, honors: h.get(r.id) ?? [] }))
+  const sp = new Map<string, Record<string, any>>(); for (const x of splits) { const m = sp.get(x.player_season_id) ?? {}; m[x.split] = x; sp.set(x.player_season_id, m); }
+  return rows.map((r) => ({ ...r, player: r.college_players, college_players: undefined, stats: a.get(r.id) ?? null, site: s.get(r.id) ?? null, honors: h.get(r.id) ?? [], splits: sp.get(r.id) ?? {} }))
     .sort((x, y) => (x.jersey ?? 999) - (y.jersey ?? 999));
 }
 
@@ -113,13 +121,15 @@ export async function player(db: Db, id: string) {
   if (!p) return null;
   const seasons = await selectAll<any>(db, 'college_player_seasons', '*,college_programs(id,name,gender,school_seo,college_schools(logo_svg_url,name))', (q) => q.eq('player_id', id).order('season', { ascending: false }));
   const ids = seasons.map((s) => s.id);
-  const [agg, site, honors, career, transfers, log] = await Promise.all([
+  const [agg, site, honors, career, transfers, log, splits, ranks] = await Promise.all([
     ids.length ? selectAll<any>(db, 'college_player_season_stats', '*', (q) => q.in('player_season_id', ids)) : [],
     ids.length ? selectAll<any>(db, 'college_site_season_stats', '*', (q) => q.in('player_season_id', ids)) : [],
     ids.length ? selectAll<any>(db, 'college_player_honors', '*', (q) => q.in('player_season_id', ids)) : [],
     db.from('college_v_player_career').select('*').eq('player_id', id).maybeSingle(),
     selectAll<any>(db, 'college_transfers', '*', (q) => q.eq('player_id', id)),
     ids.length ? selectAll<any>(db, 'college_game_player_stats', '*,college_games!inner(id,game_date,season,home_program_id,away_program_id,home_name,away_name,home_score,away_score,source_of_truth)', (q) => q.in('player_season_id', ids)) : [],
+    ids.length ? selectAll<any>(db, 'college_player_season_splits', '*', (q) => q.in('player_season_id', ids)) : [],
+    ids.length ? selectAll<any>(db, 'college_rankings', 'player_season_id,season,poll,label,rank,value,week_of', (q) => q.in('player_season_id', ids).order('rank')) : [],
   ]);
   const truthLog = log.filter((r) => r.college_games?.source_of_truth === r.source).map((r) => ({ ...r, game: r.college_games, college_games: undefined })).sort((a, b) => String(b.game.game_date).localeCompare(String(a.game.game_date)));
   // Own-side names are null on site-created games; fill both sides from the programs table.
@@ -130,10 +140,10 @@ export async function player(db: Db, id: string) {
   // The same honor is re-extracted from the bio every season: keep one row per text (latest season first).
   const seen = new Set<string>();
   const honorsDedup = honors.sort((a, b) => (seasons.findIndex((s) => s.id === a.player_season_id)) - (seasons.findIndex((s) => s.id === b.player_season_id))).filter((h) => { const k = h.text.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null })), honors: honorsDedup, career: career.data, transfers, gameLog: truthLog };
+  return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers, gameLog: truthLog };
 }
 
-export async function leaders(db: Db, o: { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown }) {
+export async function leaders(db: Db, o: { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown; members?: boolean }) {
   const team = o.kind === 'team';
   const allow = team ? TEAM_STATS : PLAYER_STATS;
   const stat = allow.includes(o.stat ?? '') ? o.stat! : (team ? 'w' : 'goals');
@@ -143,6 +153,7 @@ export async function leaders(db: Db, o: { season: number; gender?: string; divi
   if (o.gender) q = q.eq('gender', o.gender);
   if (o.division) q = q.eq('division', o.division);
   if (o.conference) q = q.eq('conference_id', o.conference);
+  if (o.members !== false) q = q.eq('ncaa_member', true);
   if (!team) { q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm); }
   const { data, error } = await q;
   if (error) throw new Error(`leaders: ${error.message}`);
@@ -150,33 +161,29 @@ export async function leaders(db: Db, o: { season: number; gender?: string; divi
 }
 
 export async function standings(db: Db, o: { season: number; gender?: string; division?: string }) {
-  const rows = await selectAll<any>(db, 'college_standings', '*,college_conferences(id,name),college_programs!inner(id,name,gender,school_seo,college_schools(logo_svg_url))', (q) => {
+  const rows = await selectAll<any>(db, 'college_standings', '*,college_conferences(id,name,ncaa_seo,site_host,points_rule),college_programs!inner(id,name,gender,school_seo,college_schools(logo_svg_url))', (q) => {
     q = q.eq('season', o.season); if (o.division) q = q.eq('division', o.division); if (o.gender) q = q.eq('college_programs.gender', o.gender); return q;
   });
-  if (rows.length) return { source: 'ncaa', rows: rows.sort((a, b) => (a.college_conferences?.name ?? '').localeCompare(b.college_conferences?.name ?? '') || (a.rank ?? 99) - (b.rank ?? 99)) };
-  // No published standings stored (NCAA.com renders them client-side): derive from our own computed season records.
-  const seasons = await selectAll<any>(db, 'college_program_seasons', 'program_id,division,conference_id,college_conferences(id,name),college_programs!inner(id,name,gender,school_seo,college_schools(logo_svg_url))', (q) => {
-    q = q.eq('season', o.season); if (o.division) q = q.eq('division', o.division); if (o.gender) q = q.eq('college_programs.gender', o.gender); return q;
-  });
+  const checks = await selectAll<any>(db, 'college_standings_checks', 'program_id,field,official,computed', (q) => q.eq('season', o.season));
+  const byProgram = new Map<string, any[]>(); for (const c of checks) byProgram.set(c.program_id, [...(byProgram.get(c.program_id) ?? []), c]);
   const stats = new Map((await selectAll<any>(db, 'college_team_season_stats', 'program_id,w,l,t,conf_w,conf_l,conf_t,gf,ga,gd', (q) => q.eq('season', o.season))).map((x) => [x.program_id, x]));
-  const derived = seasons.filter((s) => stats.has(s.program_id)).map((s) => { const st = stats.get(s.program_id)!; return {
-    season: o.season, program_id: s.program_id, division: s.division, conference_id: s.conference_id, college_conferences: s.college_conferences, college_programs: s.college_programs,
-    conf_w: st.conf_w, conf_l: st.conf_l, conf_t: st.conf_t, conf_pts: st.conf_w * 3 + st.conf_t, overall_w: st.w, overall_l: st.l, overall_t: st.t, gd: st.gd, rank: null as number | null, fetched_at: null };
-  });
-  derived.sort((a, b) => (a.college_conferences?.name ?? '').localeCompare(b.college_conferences?.name ?? '') || b.conf_pts - a.conf_pts || (b.gd ?? 0) - (a.gd ?? 0));
-  let conf = ''; let n = 0;
-  for (const r of derived) { if (r.college_conferences?.name !== conf) { conf = r.college_conferences?.name ?? ''; n = 0; } r.rank = ++n; }
-  return { source: 'computed', rows: derived };
+  const out = rows.map((r) => ({ ...r, checks: byProgram.get(r.program_id) ?? [], computed: stats.get(r.program_id) ?? null }));
+  out.sort((a, b) => (a.college_conferences?.name ?? '').localeCompare(b.college_conferences?.name ?? '') || (a.pod ?? '').localeCompare(b.pod ?? '') || (a.rank ?? 99) - (b.rank ?? 99));
+  const official = out.filter((r) => r.source === 'conference').length;
+  return { source: official ? 'conference' : out.length ? 'computed' : 'none', official, computed: out.length - official, rows: out };
 }
 
 export async function rankings(db: Db, o: { season: number; gender?: string; division?: string; poll?: string; week_of?: string }) {
-  const polls = await selectAll<any>(db, 'college_rankings', 'poll,week_of', (q) => { q = q.eq('season', o.season); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; });
-  const pollNames = [...new Set(polls.map((p) => p.poll))].sort();
+  const polls = await selectAll<any>(db, 'college_rankings', 'poll,week_of,label', (q) => { q = q.eq('season', o.season); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; });
+  const pollNames = [...new Set(polls.map((p) => p.poll))].sort((a, b) => (a === 'usc' ? -1 : b === 'usc' ? 1 : a.localeCompare(b)));
+  const labelOf = (poll: string) => poll === 'usc' ? 'United Soccer Coaches' : (polls.find((p) => p.poll === poll)?.label ?? poll);
   const poll = o.poll && pollNames.includes(o.poll) ? o.poll : (pollNames.includes('usc') ? 'usc' : pollNames[0]);
-  const weeks = [...new Set(polls.filter((p) => p.poll === poll).map((p) => p.week_of))].sort().reverse();
-  const week = o.week_of && weeks.includes(o.week_of) ? o.week_of : weeks[0];
-  const rows = poll && week ? await selectAll<any>(db, 'college_rankings', '*,college_programs(id,name,school_seo,college_schools(logo_svg_url))', (q) => { q = q.eq('season', o.season).eq('poll', poll).eq('week_of', week).order('rank'); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; }) : [];
-  return { polls: pollNames, poll, weeks, week, rows };
+  const weekRows = polls.filter((p) => p.poll === poll);
+  const weeks = [...new Map(weekRows.map((p) => [p.week_of, { week_of: p.week_of, label: p.poll === 'usc' ? String(p.label ?? '').replace(/ \(RV\)$/, '') : p.week_of }])).values()].sort((a, b) => b.week_of.localeCompare(a.week_of));
+  const week = o.week_of && weeks.some((w) => w.week_of === o.week_of) ? o.week_of : weeks[0]?.week_of;
+  const rows = poll && week ? await selectAll<any>(db, 'college_rankings', '*,college_programs(id,name,school_seo,college_schools(logo_svg_url)),college_player_seasons(id,player_id,college_players(display_name))', (q) => { q = q.eq('season', o.season).eq('poll', poll).eq('week_of', week).order('rank'); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; }) : [];
+  const [uscUnresolved, uscCheck] = await Promise.all([kvGet<any>(db, `usc:unresolved:${o.season}`), kvGet<any>(db, `usc:ncaa_check:${o.season}`)]);
+  return { polls: pollNames.map((p) => ({ poll: p, label: labelOf(p) })), poll, weeks, week, rows, unresolved: uscUnresolved?.by_list ?? {}, ncaaCheck: uscCheck?.lists ?? {} };
 }
 
 export async function runs(db: Db, limit = 50) {
@@ -237,6 +244,20 @@ export async function quality(db: Db, season: number) {
   const byHost = new Map<string, { fetches: number; errors: number }>();
   // 404s are expected while probing optional endpoints (roster JSON, stats pages); only network / 5xx / 429 count.
   for (const f of fetches) { const h = byHost.get(f.host) ?? { fetches: 0, errors: 0 }; h.fetches += 1; if (f.error && (!f.status || f.status >= 500 || f.status === 429)) h.errors += 1; byHost.set(f.host, h); }
+  // ---- standings / membership / rankings ----
+  const stChecks = await selectAll<any>(db, 'college_standings_checks', 'program_id,field,official,computed,checked_at', (q) => q.eq('season', season));
+  const stRows = await selectAll<any>(db, 'college_standings', 'program_id,source,college_conferences(name)', (q) => q.eq('season', season));
+  const confOf = new Map(stRows.map((r) => [r.program_id, r.college_conferences?.name]));
+  push('standings_vs_computed', 'Official standings ≠ our computed record', 'Conference or overall W-L-T on the conference website differs from the record computed from our stored games (missing/duplicate games or a wrong conference flag).', stChecks.filter((c) => c.field !== 'ncaa_record').map((c) => ({ program: progNames.get(c.program_id), conference: confOf.get(c.program_id), field: c.field, official: c.official, computed: c.computed })));
+  push('record_vs_ncaa', 'NCAA leaderboard record ≠ our computed record', 'The Won-Lost-Tied leaderboard on NCAA.com lists every member with its official overall record; differences mean missing or extra games on our side.', stChecks.filter((c) => c.field === 'ncaa_record').map((c) => ({ program: progNames.get(c.program_id), conference: confOf.get(c.program_id), official: c.official, computed: c.computed })));
+  push('computed_standings', 'Conferences without an official standings source', 'Standings computed from our games (conference site not registered or not server-rendered).', [...new Set(stRows.filter((r) => r.source === 'computed').map((r) => r.college_conferences?.name ?? '?'))].sort().map((name) => ({ conference: name })));
+  const members = await selectAll<any>(db, 'college_program_seasons', 'program_id,division,ncaa_member,member_source,official_w,college_programs!inner(name,gender)', (q) => q.eq('season', season));
+  push('non_member_programs', 'Programs classed as non-NCAA opponents', 'Appeared on NCAA scoreboards without a conference and are absent from the NCAA leaderboards (NAIA, Canadian, club, …). Hidden from team lists, leaders and standings.', members.filter((m) => m.ncaa_member === false).map((m) => ({ program: m.college_programs?.name, gender: m.college_programs?.gender, division: m.division })));
+  push('members_unlisted', 'Members not (yet) on the NCAA leaderboard', 'Have a conference but no NCAA.com record row yet (usually no games played); kept as members.', members.filter((m) => m.ncaa_member && m.member_source === 'conference').map((m) => ({ program: m.college_programs?.name, gender: m.college_programs?.gender, division: m.division })));
+  const [stUnres, uscUnres, uscCheck] = await Promise.all([kvGet<any>(db, `standings:unresolved:${season}`), kvGet<any>(db, `usc:unresolved:${season}`), kvGet<any>(db, `usc:ncaa_check:${season}`)]);
+  push('standings_unresolved', 'Conference standings rows not matched to a program', 'School names on conference websites that resolve to no program (add an alias in data/team-aliases.json).', (stUnres?.rows ?? []).map((r: string) => ({ row: r })));
+  push('usc_unresolved', 'Poll entries not matched to a program', 'United Soccer Coaches school names that resolve to no program.', Object.entries(uscUnres?.by_list ?? {}).flatMap(([list, names]: [string, any]) => [...new Set(names as string[])].map((n) => ({ list, school: n }))));
+  push('usc_vs_ncaa', 'USC poll ≠ NCAA.com copy', 'Latest United Soccer Coaches poll compared rank-by-rank with the copy published on ncaa.com (D1).', Object.entries(uscCheck ?? {}).flatMap(([list, c]: [string, any]) => (c.mismatches ?? []).map((m: string) => ({ list, mismatch: m, site_poll: c.site_poll, ncaa_week: c.ncaa_week }))));
   push('fetch_errors', 'Hosts with fetch errors (7 days)', 'Network, 5xx or 429 failures per host (404 probes excluded); expect < 2%.', [...byHost.entries()].filter(([, v]) => v.errors > 0).map(([host, v]) => ({ host, ...v, pct: Math.round(1000 * v.errors / v.fetches) / 10 })).sort((a: any, b: any) => b.pct - a.pct));
   return { season, games: games.length, finals: finals.length, checks };
 }

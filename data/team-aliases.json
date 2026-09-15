@@ -1,0 +1,482 @@
+{
+  "_doc": "Curated opponent/poll spellings that the automatic name keys cannot bridge. alias = text as printed by a source; seo = NCAA school seo slug (college_schools.seo). Optional gender restricts the alias.",
+  "aliases": [
+    {
+      "alias": "Cal State Bakersfield",
+      "seo": "bakersfield"
+    },
+    {
+      "alias": "CSUB",
+      "seo": "bakersfield"
+    },
+    {
+      "alias": "Southeast Missouri",
+      "seo": "southeast-mo-st"
+    },
+    {
+      "alias": "SEMO",
+      "seo": "southeast-mo-st"
+    },
+    {
+      "alias": "Central Connecticut",
+      "seo": "central-conn-st"
+    },
+    {
+      "alias": "Central Connecticut State",
+      "seo": "central-conn-st"
+    },
+    {
+      "alias": "CCSU",
+      "seo": "central-conn-st"
+    },
+    {
+      "alias": "Incarnate Word",
+      "seo": "uiw"
+    },
+    {
+      "alias": "Incarnate Word",
+      "seo": "incarnate-word"
+    },
+    {
+      "alias": "University of the Incarnate Word",
+      "seo": "uiw"
+    },
+    {
+      "alias": "University of the Incarnate Word",
+      "seo": "incarnate-word"
+    },
+    {
+      "alias": "HCU",
+      "seo": "houston-christian"
+    },
+    {
+      "alias": "Houston Christian",
+      "seo": "houston-christian"
+    },
+    {
+      "alias": "UNCG",
+      "seo": "unc-greensboro"
+    },
+    {
+      "alias": "UNC Greensboro",
+      "seo": "unc-greensboro"
+    },
+    {
+      "alias": "North Carolina Greensboro",
+      "seo": "unc-greensboro"
+    },
+    {
+      "alias": "St. Thomas",
+      "seo": "st-thomas-mn"
+    },
+    {
+      "alias": "UT Rio Grande Valley",
+      "seo": "utrgv"
+    },
+    {
+      "alias": "Texas Rio Grande Valley",
+      "seo": "utrgv"
+    },
+    {
+      "alias": "UMKC",
+      "seo": "umkc"
+    },
+    {
+      "alias": "Kansas City",
+      "seo": "umkc"
+    },
+    {
+      "alias": "University of Missouri-Kansas City",
+      "seo": "umkc"
+    },
+    {
+      "alias": "University of California Santa Barbara",
+      "seo": "uc-santa-barbara"
+    },
+    {
+      "alias": "UCSB",
+      "seo": "uc-santa-barbara"
+    },
+    {
+      "alias": "University of California, Santa Barbara",
+      "seo": "uc-santa-barbara"
+    },
+    {
+      "alias": "University of North Carolina-Wilmington",
+      "seo": "unc-wilmington"
+    },
+    {
+      "alias": "UNC Wilmington",
+      "seo": "unc-wilmington"
+    },
+    {
+      "alias": "SMU",
+      "seo": "smu"
+    },
+    {
+      "alias": "Southern Methodist University",
+      "seo": "smu"
+    },
+    {
+      "alias": "FDU",
+      "seo": "fdu"
+    },
+    {
+      "alias": "Fairleigh Dickinson",
+      "seo": "fdu"
+    },
+    {
+      "alias": "LIU",
+      "seo": "long-island"
+    },
+    {
+      "alias": "Long Island University",
+      "seo": "long-island"
+    },
+    {
+      "alias": "App State",
+      "seo": "appalachian-st"
+    },
+    {
+      "alias": "Appalachian State",
+      "seo": "appalachian-st"
+    },
+    {
+      "alias": "Ole Miss",
+      "seo": "ole-miss"
+    },
+    {
+      "alias": "University of Mississippi",
+      "seo": "ole-miss"
+    },
+    {
+      "alias": "Pitt",
+      "seo": "pittsburgh"
+    },
+    {
+      "alias": "UMass",
+      "seo": "massachusetts"
+    },
+    {
+      "alias": "UMass Lowell",
+      "seo": "umass-lowell"
+    },
+    {
+      "alias": "Saint Joseph's",
+      "seo": "saint-josephs"
+    },
+    {
+      "alias": "Saint Louis",
+      "seo": "saint-louis"
+    },
+    {
+      "alias": "Miami (OH)",
+      "seo": "miami-oh"
+    },
+    {
+      "alias": "Miami (FL)",
+      "seo": "miami-fl"
+    },
+    {
+      "alias": "Loyola Chicago",
+      "seo": "loyola-chicago"
+    },
+    {
+      "alias": "Loyola Maryland",
+      "seo": "loyola-maryland"
+    },
+    {
+      "alias": "Loyola Marymount",
+      "seo": "loyola-marymount"
+    },
+    {
+      "alias": "FGCU",
+      "seo": "fgcu"
+    },
+    {
+      "alias": "Florida Gulf Coast",
+      "seo": "fgcu"
+    },
+    {
+      "alias": "UCF",
+      "seo": "ucf"
+    },
+    {
+      "alias": "Central Florida",
+      "seo": "ucf"
+    },
+    {
+      "alias": "USF",
+      "seo": "south-fla"
+    },
+    {
+      "alias": "South Florida",
+      "seo": "south-fla"
+    },
+    {
+      "alias": "FIU",
+      "seo": "fiu"
+    },
+    {
+      "alias": "Florida International",
+      "seo": "fiu"
+    },
+    {
+      "alias": "UIC",
+      "seo": "ill-chicago"
+    },
+    {
+      "alias": "Illinois Chicago",
+      "seo": "ill-chicago"
+    },
+    {
+      "alias": "UNLV",
+      "seo": "unlv"
+    },
+    {
+      "alias": "UTSA",
+      "seo": "utsa"
+    },
+    {
+      "alias": "UTEP",
+      "seo": "utep"
+    },
+    {
+      "alias": "UAB",
+      "seo": "uab"
+    },
+    {
+      "alias": "VCU",
+      "seo": "vcu"
+    },
+    {
+      "alias": "ETSU",
+      "seo": "east-tenn-st"
+    },
+    {
+      "alias": "East Tennessee State",
+      "seo": "east-tenn-st"
+    },
+    {
+      "alias": "Cal Poly",
+      "seo": "cal-poly"
+    },
+    {
+      "alias": "Cal Baptist",
+      "seo": "california-baptist"
+    },
+    {
+      "alias": "CBU",
+      "seo": "california-baptist"
+    },
+    {
+      "alias": "Cal State Fullerton",
+      "seo": "cal-st-fullerton"
+    },
+    {
+      "alias": "Cal State Northridge",
+      "seo": "cal-st-northridge"
+    },
+    {
+      "alias": "CSUN",
+      "seo": "cal-st-northridge"
+    },
+    {
+      "alias": "Cal State Monterey Bay",
+      "seo": "cal-st-monterey-bay"
+    },
+    {
+      "alias": "Cal State East Bay",
+      "seo": "cal-st-east-bay"
+    },
+    {
+      "alias": "Cal State LA",
+      "seo": "cal-st-la"
+    },
+    {
+      "alias": "Cal State Dominguez Hills",
+      "seo": "cal-st-dom-hills"
+    },
+    {
+      "alias": "Cal State San Bernardino",
+      "seo": "cal-st-san-bdino"
+    },
+    {
+      "alias": "Cal State San Marcos",
+      "seo": "cal-st-san-marcos"
+    },
+    {
+      "alias": "Cal State Stanislaus",
+      "seo": "cal-st-stanislaus"
+    },
+    {
+      "alias": "Ga. Southern",
+      "seo": "ga-southern"
+    },
+    {
+      "alias": "Georgia Southern",
+      "seo": "ga-southern"
+    },
+    {
+      "alias": "Southern Miss",
+      "seo": "southern-miss"
+    },
+    {
+      "alias": "Southern Mississippi",
+      "seo": "southern-miss"
+    },
+    {
+      "alias": "Louisiana",
+      "seo": "la-lafayette"
+    },
+    {
+      "alias": "Louisiana-Lafayette",
+      "seo": "la-lafayette"
+    },
+    {
+      "alias": "ULM",
+      "seo": "la-monroe"
+    },
+    {
+      "alias": "Louisiana-Monroe",
+      "seo": "la-monroe"
+    },
+    {
+      "alias": "Utah Valley University",
+      "seo": "utah-valley"
+    },
+    {
+      "alias": "University of Memphis",
+      "seo": "memphis"
+    },
+    {
+      "alias": "Wake Forest University",
+      "seo": "wake-forest"
+    },
+    {
+      "alias": "Stanford University",
+      "seo": "stanford"
+    },
+    {
+      "alias": "University of Washington",
+      "seo": "washington"
+    },
+    {
+      "alias": "University of Denver",
+      "seo": "denver"
+    },
+    {
+      "alias": "Duke University",
+      "seo": "duke"
+    },
+    {
+      "alias": "University of Michigan",
+      "seo": "michigan"
+    },
+    {
+      "alias": "University of Kentucky",
+      "seo": "kentucky"
+    },
+    {
+      "alias": "Cornell University",
+      "seo": "cornell"
+    },
+    {
+      "alias": "University of North Carolina",
+      "seo": "north-carolina"
+    },
+    {
+      "alias": "Bryant University",
+      "seo": "bryant"
+    },
+    {
+      "alias": "University of Massachusetts",
+      "seo": "massachusetts"
+    },
+    {
+      "alias": "Missouri State University",
+      "seo": "missouri-st"
+    },
+    {
+      "alias": "St. Thomas",
+      "seo": "st-thomas-mn",
+      "note": "D1 St. Thomas (MN); the Florida/Texas schools are non-NCAA or use their suffix"
+    },
+    {
+      "alias": "Point Loma Nazarene University",
+      "seo": "point-loma"
+    },
+    {
+      "alias": "Point Loma Nazarene",
+      "seo": "point-loma"
+    },
+    {
+      "alias": "Maryville University of St. Louis",
+      "seo": "maryville-mo"
+    },
+    {
+      "alias": "Maryville (MO)",
+      "seo": "maryville-mo"
+    },
+    {
+      "alias": "Missouri University of Science & Technology",
+      "seo": "missouri-snt"
+    },
+    {
+      "alias": "Missouri S&T",
+      "seo": "missouri-snt"
+    },
+    {
+      "alias": "Augsburg College",
+      "seo": "augsburg"
+    },
+    {
+      "alias": "Augsburg University",
+      "seo": "augsburg"
+    },
+    {
+      "alias": "Embry-Riddle Aeronautical University (Fla.)",
+      "seo": "embry-riddle-fl"
+    },
+    {
+      "alias": "Embry-Riddle (FL)",
+      "seo": "embry-riddle-fl"
+    },
+    {
+      "alias": "Massachusetts Institute of Technology",
+      "seo": "mit"
+    },
+    {
+      "alias": "Illinois Institute of Technology",
+      "seo": "iit"
+    },
+    {
+      "alias": "Illinois Tech",
+      "seo": "iit"
+    },
+    {
+      "alias": "University of Vermont",
+      "seo": "vermont"
+    },
+    {
+      "alias": "University of California-Irvine",
+      "seo": "uc-irvine"
+    },
+    {
+      "alias": "UC Irvine",
+      "seo": "uc-irvine"
+    },
+    {
+      "alias": "Mississippi College",
+      "seo": "mississippi-christ"
+    },
+    {
+      "alias": "Saint Mary's College Of California",
+      "seo": "st-marys-ca"
+    },
+    {
+      "alias": "Saint Mary's (CA)",
+      "seo": "st-marys-ca"
+    }
+  ]
+}

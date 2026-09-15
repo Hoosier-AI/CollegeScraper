@@ -78,6 +78,32 @@ a restart resumes from the queue and every fetch is cached in `college_source_fe
 - Some Presto rosters print the class as a bare digit (1-5); `parseClassYear` maps those.
 - Team-name matching keeps "College" and "State" significant (Boston College vs Boston U., NC State vs
   North Carolina, San Diego State vs San Diego); ambiguous aliases resolve to nothing rather than to a guess.
+  Curated spellings live in `data/team-aliases.json`; initialisms (UNCG, HCU, CCSU) and NCAA six-letter codes
+  are weak keys that only win when nothing else matches (`src/normalize/aliasIndex.ts`).
+- **Membership** (`verify-membership`): NCAA.com's "Won-Lost-Tied Percentage" team leaderboard lists every
+  member of a division with its official overall record (D1 men = 210 teams in 2026). Programs that appear on
+  scoreboards without a conference and are absent from the leaderboard (NAIA, Canadian, club sides) are kept
+  as opponents but flagged `ncaa_member = false` and hidden from team lists, leaders and standings. The
+  official record is stored on `college_program_seasons.official_w/l/t` and compared with our computed record.
+- **Standings** (`compute-standings`): NCAA.com's standings page is empty for soccer in 2026, so the official
+  source is each conference's own website. Sidearm conference sites serve `standings.aspx?path=msoc|wsoc` as a
+  server-rendered `sidearm-standings-table` (rank order, conference W-L-T, points, pct, overall, GF-GA, home/away,
+  streak; pods such as "East Division" are kept). The registry `data/conference-sites.json` (verified with
+  `scripts/find-conference-sites.mjs`) covers ~75% of conferences; the rest (Big Ten, Big 12, SEC, SoCon,
+  PrestoSports conference sites…) fall back to standings computed from our stored results (3-1-0 points).
+  Every official row is compared with our computed conference and overall records
+  (`college_standings_checks`); an empty check table means the stored games are complete.
+- **Rankings** (`refresh-rankings`): unitedsoccercoaches.org publishes every poll of the season on one page
+  per list (D1/D2/D3 × men/women) — pre-season and weekly polls with previous rank, first-place votes, points,
+  record and "also receiving votes" — all of which are stored per `week_of`. The D1 lists are cross-checked
+  rank-by-rank against ncaa.com's copy. NCAA.com stat-category leaderboards (team and individual, ids differ
+  per gender and are discovered from the landing page) provide national ranks per stat, linked to
+  `player_season_id` where the name matches the roster.
+- **Richer aggregates** (migration 122): per-player splits (home/away/neutral, conference/non-conference,
+  vs USC-ranked opponents), goals by half, minutes and shots per goal, PK %, individual clean sheets, division
+  ranks and percentiles (players with ≥30% of team minutes; keepers with ≥180 minutes); per-team home/away and
+  first/second-half goals, shots per goal, points per game with division/conference ranks, record vs ranked
+  teams, last-5 goals.
 
 ## Stats viewer UI (`ui/`)
 
@@ -85,7 +111,10 @@ A Vite + React + Tailwind app served by the same Fastify server (built into `ui/
 Sign in with `COLLEGE_TRIGGER_SECRET`. Pages: Teams (click a program → its stats; **Sync** pulls that
 program's roster, schedule, season stats, box scores and bios from its athletics site plus NCAA.com box
 scores and recomputes aggregates), Team, Game (site vs NCAA side by side, events, raw payloads), Player,
-Leaders, Standings, Rankings, Jobs (enqueue + watch runs), Quality (sanity checks).
+Leaders (division/conference ranks and percentiles, NCAA members only by default), Standings (official
+conference tables with a ✓ when they equal our computed records), Rankings (every USC poll of the season with
+movement, plus NCAA.com category ranks), Jobs (enqueue + watch runs), Quality (sanity checks incl.
+standings-vs-computed, NCAA-record-vs-computed, unresolved names, non-member programs).
 
 ```
 npm run dev            # server + worker on :8080 (serves ui/dist if built)

@@ -1,98 +1,125 @@
-// USC poll + NCAA stat-category national ranks + conference standings.
+// Rankings: every United Soccer Coaches poll of the season for all six lists (unitedsoccercoaches.org),
+// cross-checked against NCAA.com's D1 copy, plus NCAA.com stat-category national ranks (team + individual).
+// params: { season?, gender?, division?, categories?: boolean }
 import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
-import { loadConfig } from '../config.js';
-import { parseUscPoll, uscPollUrl, parseStatCategories, parseStatTable, statUrl, parseStandings, parseHenrygdStandings, standingsUrl } from '../sources/ncaa/index.js';
-import { listPrograms, listSchools, listProgramSeasons, upsertConference } from '../db/repos.js';
-import { upsertChunked } from '../db/client.js';
-import { teamKey } from '../normalize/teamIdentity.js';
+import { parseUscPoll, uscPollUrl, parseStatCategories, parseStatTable, statUrl, sportPath } from '../sources/ncaa/index.js';
+import { parseUscSite, uscSiteUrl } from '../sources/usc/polls.js';
+import { listPrograms, listSchools, listProgramSeasons, statLineCandidates } from '../db/repos.js';
+import { upsertChunked, kvSet } from '../db/client.js';
+import { buildAliasIndex, resolveName } from '../normalize/aliasIndex.js';
+import { splitName, nameKey, looseNameMatch } from '../normalize/names.js';
 import { currentSeason } from './seasons.js';
 import type { Division, Gender } from '../model.js';
 import { log } from '../log.js';
 
-/** params: { season?, gender?, division?, categories?: boolean } */
 export async function refreshRankings(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
   const fetcher = makeFetcher(db);
-  const cfg = loadConfig();
   const genders: Gender[] = ctx.params.gender ? [ctx.params.gender as Gender] : ['m', 'w'];
   const divisions: Division[] = ctx.params.division ? [ctx.params.division as Division] : ['d1', 'd2', 'd3'];
   const programs = await listPrograms(db);
   const schools = new Map((await listSchools(db)).map((s) => [s.seo, s]));
   const seasons = await listProgramSeasons(db, season);
-  const divOf = new Map(seasons.map((s) => [s.program_id, s.division]));
-  const index = new Map<string, string>(); // `${gender}|${teamKey}` → program id
-  for (const p of programs) {
-    const s = schools.get(p.school_seo);
-    for (const n of [p.name, p.short_name, p.name6, s?.name, s?.long_name, p.school_seo]) if (n) { const k = `${p.gender}|${teamKey(n)}`; if (!index.has(k)) index.set(k, p.id); }
-  }
-  const resolve = (gender: Gender, name: string, division?: Division) => {
-    const id = index.get(`${gender}|${teamKey(name)}`);
-    if (!id) return null;
-    if (division && divOf.get(id) && divOf.get(id) !== division) return null;
-    return id;
-  };
-  const weekOf = new Date().toISOString().slice(0, 10);
+  const divisionOf = new Map(seasons.map((s) => [s.program_id, s.division as string]));
+  const conferenceOf = new Map(seasons.map((s) => [s.program_id, (s.conference_id as string | null) ?? null]));
+  const bySeo = new Map<string, string>(); for (const p of programs) bySeo.set(`${p.school_seo}|${p.gender}`, p.id);
+  const index = buildAliasIndex(programs, schools);
+  const resolve = (gender: Gender, division: Division, name: string) => resolveName(index, { gender, ownDivision: division, ownConference: null, divisionOf, conferenceOf }, name);
+  const today = new Date().toISOString().slice(0, 10);
+  const unresolved: Record<string, string[]> = {};
+  const checks: Record<string, unknown> = {};
 
   for (const gender of genders) for (const division of divisions) {
     if (await ctx.cancelled()) return;
-    // USC poll
+    const tag = `${gender}/${division}`;
+    // ---- USC polls (all weeks) ----
     try {
-      const poll = parseUscPoll((await fetcher.get(uscPollUrl(gender, division), { skipCache: true })).text);
-      const rows = poll.rows.map((r) => ({ season, gender, division, poll: 'usc', week_of: weekOf, rank: r.rank, program_id: resolve(gender, r.school), subject_name: r.school, value: r.points ?? null }));
-      if (rows.length) { await upsertChunked(db, 'college_rankings', rows, { onConflict: 'season,poll,week_of,subject_key' }); ctx.inc('usc_rows', rows.length); }
-      ctx.inc('usc_unresolved', rows.filter((r) => !r.program_id).length);
-    } catch (err) { ctx.inc('usc_errors'); log.warn({ gender, division, err: String(err) }, 'usc poll failed'); }
+      const url = uscSiteUrl(gender, division);
+      const site = parseUscSite((await fetcher.get(url, { skipCache: true })).text);
+      for (const poll of site.polls) {
+        if (!poll.publishedOn) { ctx.inc('usc_polls_without_date'); continue; }
+        const rows: Record<string, unknown>[] = [];
+        const push = (rank: number, school: string, extra: Record<string, unknown>, label: string) => {
+          const pid = resolve(gender, division, school);
+          if (!pid) { ctx.inc('usc_unresolved'); (unresolved[tag] ??= []).push(school); }
+          rows.push({ season, gender, division, poll: 'usc', week_of: poll.publishedOn, rank, program_id: pid, subject_name: school, label, source_url: url, ...extra });
+        };
+        for (const r of poll.rows) push(r.rank, r.school, { value: r.points, previous_rank: r.previous, first_place_votes: r.firstPlaceVotes, record: r.record }, poll.label);
+        poll.alsoReceiving.forEach((o, i) => push(poll.rows.length + 1 + i, o.school, { value: o.points }, `${poll.label} (RV)`));
+        // Re-resolution may change subject keys: replace the week wholesale.
+        await db.from('college_rankings').delete().eq('season', season).eq('poll', 'usc').eq('gender', gender).eq('division', division).eq('week_of', poll.publishedOn);
+        const uniq = [...new Map(rows.map((r) => [`${r.program_id ?? ''}|${r.subject_name}`, r])).values()];
+        if (uniq.length) await upsertChunked(db, 'college_rankings', uniq, { onConflict: 'season,poll,week_of,subject_key' });
+        ctx.inc('usc_rows', uniq.length);
+        ctx.inc('usc_polls');
+      }
+      // Cross-check the latest poll with NCAA.com's copy (D1 only on ncaa.com).
+      if (division === 'd1' && site.polls.length) {
+        try {
+          const latest = site.polls[site.polls.length - 1]!;
+          const copy = parseUscPoll((await fetcher.get(uscPollUrl(gender, division), { skipCache: true })).text);
+          const mine = new Map(latest.rows.map((r) => [r.rank, resolve(gender, division, r.school)]));
+          const diffs = copy.rows.filter((r) => { const pid = resolve(gender, division, r.school); return pid && mine.get(r.rank) !== pid; }).map((r) => `#${r.rank} ncaa.com=${r.school}`);
+          checks[tag] = { site_poll: latest.label, site_date: latest.publishedOn, ncaa_week: copy.weekOf, ncaa_rows: copy.rows.length, mismatches: diffs };
+          ctx.inc('usc_ncaa_mismatch', diffs.length);
+        } catch (err) { ctx.inc('usc_ncaa_copy_errors'); log.warn({ tag, err: String(err) }, 'ncaa.com poll copy failed'); }
+      }
+    } catch (err) { ctx.inc('usc_errors'); log.warn({ tag, err: String(err) }, 'usc site failed'); }
 
-    // NCAA team stat categories → national ranks (page 1..n)
+    // ---- NCAA stat categories → national ranks (team + individual) ----
     if (ctx.params.categories !== false) {
       try {
-        const first = (await fetcher.get(statUrl(gender, division, 'current', 'team', 30), { skipCache: true })).text;
-        const cats = parseStatCategories(first);
-        for (const cat of cats.team) {
+        const landing = (await fetcher.get(`https://www.ncaa.com/stats/${sportPath(gender)}/${division}`, { skipCache: true })).text;
+        const cats = parseStatCategories(landing);
+        const candCache = new Map<string, Awaited<ReturnType<typeof statLineCandidates>>>();
+        for (const cat of [...cats.team, ...cats.individual]) {
+          if (await ctx.cancelled()) return;
           const rows: Record<string, unknown>[] = [];
           let page = 1, pages = 1;
           do {
-            const html = (await fetcher.get(statUrl(gender, division, 'current', 'team', cat.id, page), { skipCache: true })).text;
-            const t = parseStatTable(html);
+            const t = parseStatTable((await fetcher.get(statUrl(gender, division, 'current', cat.kind, cat.id, page), { skipCache: true })).text);
             pages = t.pages || 1;
             const valueCol = t.columns[t.columns.length - 1]!;
             for (const r of t.rows) {
-              const team = r.Team ?? r.Name ?? '';
-              rows.push({ season, gender, division, poll: `ncaa:${cat.id}`, week_of: weekOf, rank: Number(String(r.Rank ?? '').replace(/\D/g, '')) || rows.length + 1, program_id: resolve(gender, team, division), subject_name: `${cat.name}|${team}`, value: Number(r[valueCol]) || null });
+              const team = r.Team ?? '';
+              const pid = (r.teamSeo ? bySeo.get(`${r.teamSeo}|${gender}`) : null) ?? resolve(gender, division, team);
+              const rank = Number(String(r.Rank ?? '').replace(/\D/g, '')) || rows.length + 1;
+              const value = Number(r[valueCol]) || null;
+              if (cat.kind === 'team') {
+                rows.push({ season, gender, division, poll: `ncaa:${cat.id}`, week_of: today, rank, program_id: pid, subject_name: `${cat.name}|${team}`, value, label: cat.name });
+              } else {
+                const name = r.Name ?? '';
+                let psId: string | null = null;
+                if (pid && name) {
+                  let cands = candCache.get(pid);
+                  if (!cands) { cands = await statLineCandidates(db, pid, season); candCache.set(pid, cands); }
+                  const { firstName, lastName } = splitName(name);
+                  const key = nameKey(firstName, lastName);
+                  psId = cands.find((c) => c.nameKey === key)?.playerSeasonId ?? cands.find((c) => looseNameMatch(c, { firstName, lastName }))?.playerSeasonId ?? null;
+                  if (!psId) ctx.inc('category_players_unresolved');
+                }
+                rows.push({ season, gender, division, poll: `ncaa:${cat.id}`, week_of: today, rank, program_id: pid, player_season_id: psId, subject_name: `${cat.name}|${name}|${team}`, value, label: cat.name });
+              }
             }
             page += 1;
           } while (page <= pages && page <= 12);
-          if (rows.length) await upsertChunked(db, 'college_rankings', rows, { onConflict: 'season,poll,week_of,subject_key' });
+          await db.from('college_rankings').delete().eq('season', season).eq('poll', `ncaa:${cat.id}`).eq('gender', gender).eq('division', division);
+          // A pager glitch or two identical names on one team would repeat a subject key inside one batch.
+          const uniq = [...new Map(rows.map((r) => [`${r.program_id ?? ''}|${r.player_season_id ?? ''}|${r.subject_name}`, r])).values()];
+          if (uniq.length) await upsertChunked(db, 'college_rankings', uniq, { onConflict: 'season,poll,week_of,subject_key' });
           ctx.inc('category_rows', rows.length);
           await ctx.heartbeat();
         }
-      } catch (err) { ctx.inc('category_errors'); log.warn({ gender, division, err: String(err) }, 'stat categories failed'); }
+        ctx.inc('categories', cats.team.length + cats.individual.length);
+      } catch (err) { ctx.inc('category_errors'); log.warn({ tag, err: String(err) }, 'stat categories failed'); }
     }
-
-    // Standings: HTML first, henrygd JSON if configured and HTML is empty.
-    try {
-      let st = parseStandings((await fetcher.get(standingsUrl(gender, division), { skipCache: true })).text);
-      if (!st.conferences.length && cfg.NCAA_API_BASE) {
-        const j = JSON.parse((await fetcher.get(`${cfg.NCAA_API_BASE.replace(/\/$/, '')}/standings/${gender === 'w' ? 'soccer-women' : 'soccer-men'}/${division}`, { accept: 'application/json', skipCache: true })).text);
-        st = parseHenrygdStandings(j);
-      }
-      const rows: Record<string, unknown>[] = [];
-      for (const conf of st.conferences) {
-        const confName = conf.conference;
-        const confId = confName ? await upsertConference(db, teamKey(confName).replace(/\s+/g, '-'), confName, division) : null;
-        conf.rows.forEach((r, i) => {
-          const rr = r as typeof r & { rank?: number | null; points?: number | null };
-          const pid = (r.seo ? index.get(`${gender}|${teamKey(r.seo.replace(/-/g, ' '))}`) : null) ?? resolve(gender, r.school, division);
-          if (!pid) { ctx.inc('standings_unresolved'); return; }
-          rows.push({ season, program_id: pid, division, conference_id: confId, conf_w: r.conference.w, conf_l: r.conference.l, conf_t: r.conference.t, conf_pts: rr.points ?? null, overall_w: r.overall.w, overall_l: r.overall.l, overall_t: r.overall.t, rank: rr.rank ?? i + 1, fetched_at: new Date().toISOString() });
-        });
-      }
-      if (rows.length) await upsertChunked(db, 'college_standings', rows, { onConflict: 'season,program_id' });
-      ctx.inc('standings_rows', rows.length);
-    } catch (err) { ctx.inc('standings_errors'); log.warn({ gender, division, err: String(err) }, 'standings failed'); }
   }
+  await kvSet(db, `usc:unresolved:${season}`, { at: new Date().toISOString(), by_list: unresolved });
+  await kvSet(db, `usc:ncaa_check:${season}`, { at: new Date().toISOString(), lists: checks });
+  const flat = Object.entries(unresolved).flatMap(([k, v]) => v.map((s) => `${k}: ${s}`));
+  if (flat.length) ctx.note('usc_unresolved_sample', [...new Set(flat)].slice(0, 40));
 }
 
 registerJob('refresh-rankings', refreshRankings);

@@ -7,6 +7,9 @@ import './syncSite.js';
 import './reconcileGames.js';
 import './computeAggregates.js';
 import './refreshRankings.js';
+import './verifyMembership.js';
+import './computeStandings.js';
+import './resolveOrphans.js';
 import './schedules.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

@@ -6,7 +6,7 @@ import { adapterFor } from '../sources/sites/detect.js';
 import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, type ProgramRow, type SchoolRow } from '../db/repos.js';
 import { selectAll } from '../db/client.js';
 import { currentSeason, inSeason } from './seasons.js';
-import { teamKey } from '../normalize/teamIdentity.js';
+import { buildAliasIndex, makeResolver, isPlaceholderOpponent, type AliasIndex } from '../normalize/aliasIndex.js';
 import type { SiteContext } from '../model.js';
 import { log } from '../log.js';
 
@@ -60,53 +60,7 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   }
 }
 
-/** gender → teamKey → candidate program ids (several when the plain name is ambiguous, e.g. "Queens"). */
-function buildAliasIndex(programs: ProgramRow[], schools: Map<string, SchoolRow>): Map<string, Map<string, string[]>> {
-  const byGender = new Map<string, Map<string, string[]>>();
-  const add = (gender: string, name: string | null | undefined, id: string) => {
-    if (!name) return;
-    for (const k of [teamKey(name), teamKeyKeepParens(name)]) {
-      if (!k) continue;
-      let m = byGender.get(gender);
-      if (!m) { m = new Map(); byGender.set(gender, m); }
-      const cur = m.get(k) ?? [];
-      if (!cur.includes(id)) { cur.push(id); m.set(k, cur); }
-    }
-  };
-  for (const p of programs) { const s = schools.get(p.school_seo); for (const n of [p.name, p.short_name, s?.name, s?.long_name, p.name6, p.school_seo.replace(/-/g, ' ')]) add(p.gender, n, p.id); }
-  return byGender;
-}
-
-/** "Notre Dame (OH)" → "notre dame oh": keeps the disambiguating parenthetical as words. */
-function teamKeyKeepParens(name: string): string {
-  return teamKey(name.replace(/[()]/g, ' '));
-}
-
-const PLACEHOLDER_OPPONENT = /\b(tba|tbd|championship|tournament|semifinal|quarterfinal|final|round|winner|loser|opponent)\b/i;
-
-/** Pick one program for an opponent name: exact parenthetical key first, then the plain key; ties broken by division, then conference. */
-function makeResolver(aliasIndex: Map<string, Map<string, string[]>>, gender: string, ownDivision: string | null, ownConference: string | null, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>) {
-  return async (rawName: string): Promise<string | null> => {
-    const name = String(rawName ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').replace(/^#\d+\s*/, '').trim();
-    if (!name || PLACEHOLDER_OPPONENT.test(name) && !/\(/.test(name) && name.split(' ').length > 2) return null;
-    const m = aliasIndex.get(gender);
-    if (!m) return null;
-    const exact = m.get(teamKeyKeepParens(name));
-    const plain = m.get(teamKey(name));
-    const cands = (exact && exact.length ? exact : plain) ?? [];
-    if (cands.length === 1) return cands[0]!;
-    if (!cands.length) return null;
-    const sameDiv = ownDivision ? cands.filter((id) => divisionOf.get(id) === ownDivision) : cands;
-    if (sameDiv.length === 1) return sameDiv[0]!;
-    const sameConf = ownConference ? sameDiv.filter((id) => conferenceOf.get(id) === ownConference) : [];
-    if (sameConf.length === 1) return sameConf[0]!;
-    const d1 = sameDiv.filter((id) => divisionOf.get(id) === 'd1');
-    if (d1.length === 1) return d1[0]!;
-    return null;
-  };
-}
-
-async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>, adapter: NonNullable<ReturnType<typeof adapterFor>>, site: SiteContext, p: ProgramRow, school: SchoolRow, season: number, division: 'd1' | 'd2' | 'd3', stages: Set<Stage>, aliasIndex: Map<string, Map<string, string[]>>, games: Awaited<ReturnType<typeof listGames>>, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>, ownConference: string | null): Promise<void> {
+async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>, adapter: NonNullable<ReturnType<typeof adapterFor>>, site: SiteContext, p: ProgramRow, school: SchoolRow, season: number, division: 'd1' | 'd2' | 'd3', stages: Set<Stage>, aliasIndex: AliasIndex, games: Awaited<ReturnType<typeof listGames>>, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>, ownConference: string | null): Promise<void> {
   const db = ctx.db;
   const tag = `${p.school_seo}/${p.gender}`;
   let rosterIds: Map<string, string> | null = null;
@@ -126,10 +80,11 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
     } else ctx.inc('empty_rosters');
   }
 
-  const resolveOpponent = makeResolver(aliasIndex, p.gender, division, ownConference, divisionOf, conferenceOf);
+  const resolveOpponent = makeResolver(aliasIndex, { gender: p.gender, ownDivision: division, ownConference, divisionOf, conferenceOf });
   let boxScoreUrls: { url: string; gameId: string; date: string }[] = [];
   if (stages.has('schedule') || stages.has('boxscores')) {
-    const entries = (await adapter.schedule(fetcher, site)).filter((e) => inSeason(e.date, season) && !(e.state !== 'final' && PLACEHOLDER_OPPONENT.test(e.opponentName) && e.opponentName.split(' ').length > 2));
+    // Placeholder rows ("TBD", "Semifinals", "MAC Tournament") are dropped unless the game was actually played.
+    const entries = (await adapter.schedule(fetcher, site)).filter((e) => inSeason(e.date, season) && !(e.state !== 'final' && isPlaceholderOpponent(e.opponentName)));
     const w = await writeSchedule(db, { programId: p.id, season, gender: p.gender, division, host: site.host, entries, resolveOpponent, existing: games });
     ctx.inc('schedule_entries', entries.length); ctx.inc('games_created', w.created); ctx.inc('games_updated', w.updated);
     if (w.unresolvedOpponents.length) { ctx.inc('unresolved_opponents', w.unresolvedOpponents.length); log.debug({ tag, unresolved: w.unresolvedOpponents }, 'unresolved opponents'); }

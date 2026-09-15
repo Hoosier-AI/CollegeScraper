@@ -26,16 +26,20 @@ function paramsFrom(opts: Record<string, unknown>): Record<string, unknown> {
   return p;
 }
 
-for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-games-ncaa', 'sync-site', 'reconcile-games', 'compute-aggregates', 'refresh-rankings', 'pq-health', 'backfill', 'sync-program', 'hourly', 'nightly', 'weekly']) {
+for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-games-ncaa', 'sync-site', 'reconcile-games', 'compute-aggregates', 'refresh-rankings', 'verify-membership', 'compute-standings', 'resolve-orphans', 'pq-health', 'backfill', 'sync-program', 'hourly', 'nightly', 'weekly']) {
   common(program.command(job).description(`run the ${job} job inline`))
     .option('--stages <list>', 'sync-site: comma list of roster,schedule,stats,boxscores,bios')
     .option('--days <all|recent>', 'sweep-scoreboard: date range')
     .option('--all', 'reconcile-games: re-evaluate every final game')
+    .option('--conference <seo>', 'compute-standings: one conference (ncaa seo)')
+    .option('--only-unknown', 'detect-sites: only schools not yet classified')
     .action(async (opts) => {
       const p = paramsFrom(opts);
       if (opts.stages) p.stages = String(opts.stages).split(',');
       if (opts.days) p.days = opts.days;
       if (opts.all) p.all = true;
+      if (opts.conference) p.conference = String(opts.conference);
+      if (opts.onlyUnknown) p.only_unknown = true;
       const counters = await runInline(getDb(), job, p);
       console.log(JSON.stringify(counters, null, 2));
     });

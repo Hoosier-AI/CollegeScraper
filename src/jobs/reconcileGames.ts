@@ -1,10 +1,10 @@
 // Choose source_of_truth per final game: 'site' when the school box score validated, else 'ncaa'.
 import { registerJob, type JobContext } from './runner.js';
 import { selectAll } from '../db/client.js';
-import { updateGame } from '../db/repos.js';
+import { updateGame, listProgramSeasons } from '../db/repos.js';
 import { currentSeason } from './seasons.js';
 
-interface G { id: string; status: string; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; source_of_truth: string | null; site_fetched_at: string | null; ncaa_fetched_at: string | null }
+interface G { id: string; status: string; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; source_of_truth: string | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }
 interface TS { game_id: string; program_id: string; source: string; is_home: boolean; goals: number | null; shots: number | null; yellow_cards: number | null }
 interface PS { game_id: string; program_id: string; source: string; goals: number | null; participated: boolean }
 
@@ -14,7 +14,7 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   const season = Number(ctx.params.season ?? currentSeason());
   let programIds: string[] | null = null;
   if (typeof ctx.params.program === 'string') { const { data } = await db.from('college_programs').select('id').eq('school_seo', ctx.params.program); programIds = (data ?? []).map((r: any) => r.id); }
-  let games = await selectAll<G>(db, 'college_games', 'id,status,home_program_id,away_program_id,home_score,away_score,source_of_truth,site_fetched_at,ncaa_fetched_at',
+  let games = await selectAll<G>(db, 'college_games', 'id,status,home_program_id,away_program_id,home_score,away_score,source_of_truth,site_fetched_at,ncaa_fetched_at,conference_game,postseason,tournament',
     (q) => { q = q.eq('season', season).eq('status', 'final'); return ctx.params.all ? q : q.or(`source_of_truth.is.null,site_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()},ncaa_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()}`); });
   if (programIds) games = games.filter((g) => (g.home_program_id && programIds!.includes(g.home_program_id)) || (g.away_program_id && programIds!.includes(g.away_program_id)));
   const ids = games.map((g) => g.id);
@@ -40,7 +40,14 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     return true;
   };
 
+  // Conference flag for games known only from NCAA.com (schools' schedules carry the flag; NCAA's does not):
+  // both sides in the same conference, regular season → conference game.
+  const conferenceOf = new Map((await listProgramSeasons(db, season)).map((s) => [s.program_id, s.conference_id as string | null]));
   for (const g of games) {
+    if (!g.conference_game && !g.site_fetched_at && g.home_program_id && g.away_program_id && !g.postseason && !g.tournament) {
+      const hc = conferenceOf.get(g.home_program_id), ac = conferenceOf.get(g.away_program_id);
+      if (hc && hc === ac) { await updateGame(db, g.id, { conference_game: true }); g.conference_game = true; ctx.inc('conference_flag_filled'); }
+    }
     const e = byGame.get(g.id) ?? { site: [], ncaa: [] };
     let truth: 'site' | 'ncaa' | null = null;
     if (valid(g, e.site, 'site')) truth = 'site';

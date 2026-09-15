@@ -18,6 +18,7 @@ registerJob('hourly', async (ctx) => {
   await step(ctx, 'sync-site', { season, only_recent_days: 3, stages: ['schedule', 'boxscores'] });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: false });
+  await step(ctx, 'compute-standings', { season });
 });
 
 /** Nightly: corrections + rosters/bios/season stats for programs that played in the last week, full aggregates, transfers. */
@@ -26,16 +27,20 @@ registerJob('nightly', async (ctx) => {
   await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
   await step(ctx, 'fetch-games-ncaa', { season, recent_days: 2, refetch: true });
   await step(ctx, 'sync-site', { season, only_recent_days: 7, stages: ['roster', 'schedule', 'stats', 'boxscores', 'bios'] });
+  await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: true });
+  await step(ctx, 'compute-standings', { season });
 });
 
 /** Weekly: rankings/standings/leaderboards, re-discovery, persisted-query health. */
 registerJob('weekly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'discover-teams', { season });
+  await step(ctx, 'verify-membership', { season });
   await step(ctx, 'detect-sites', { season, only_unknown: true });
   await step(ctx, 'refresh-rankings', { season });
+  await step(ctx, 'compute-standings', { season });
   await step(ctx, 'pq-health', {});
 });
 
@@ -43,13 +48,16 @@ registerJob('weekly', async (ctx) => {
 registerJob('backfill', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'discover-teams', { season });
+  await step(ctx, 'verify-membership', { season });
   await step(ctx, 'detect-sites', { season });
   await step(ctx, 'sync-site', { season, stages: ['roster', 'schedule', 'stats', 'boxscores', 'bios'] });
   await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
   await step(ctx, 'fetch-games-ncaa', { season });
+  await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season, all: true });
   await step(ctx, 'compute-aggregates', { season, transfers: true });
   await step(ctx, 'refresh-rankings', { season });
+  await step(ctx, 'compute-standings', { season });
 });
 
 /** On-demand crawl of one program: params { season, program (seo), gender } */
@@ -63,4 +71,5 @@ registerJob('sync-program', async (ctx) => {
   await step(ctx, 'fetch-games-ncaa', { season, program, gender, refetch: !!ctx.params.force });
   await step(ctx, 'reconcile-games', { season, program, all: true });
   await step(ctx, 'compute-aggregates', { season, program, gender, transfers: false });
+  await step(ctx, 'compute-standings', { season, gender, conference: ctx.params.conference });
 });
