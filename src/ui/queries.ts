@@ -71,7 +71,7 @@ export async function program(db: Db, id: string, season: number) {
     selectAll<any>(db, 'college_standings_checks', '*', (q) => q.eq('program_id', id).eq('season', season)),
   ]);
   // Conference table for the position badge (rank within the conference).
-  const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs(id,name)', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).order('rank')) : [];
+  const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(id,name,gender)', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).eq('college_programs.gender', p.gender).order('rank')) : [];
   const usc = rankings.filter((r) => r.poll === 'usc' && !String(r.label ?? '').includes('(RV)')).sort((a, b) => String(b.week_of).localeCompare(String(a.week_of)));
   const categories = rankings.filter((r) => r.poll.startsWith('ncaa:')).map((r) => ({ category: r.label ?? r.poll, rank: r.rank, value: r.value, week_of: r.week_of })).sort((a, b) => a.rank - b.rank);
   return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, standingsChecks: checks, conferenceTable: confRows, rankings, usc: usc[0] ?? null, uscHistory: usc, categories, runs, seasons: seasonsAvail.map((s) => s.season) };

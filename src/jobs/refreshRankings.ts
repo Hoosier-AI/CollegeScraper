@@ -57,6 +57,9 @@ export async function refreshRankings(ctx: JobContext): Promise<void> {
         ctx.inc('usc_rows', uniq.length);
         ctx.inc('usc_polls');
       }
+      // Weeks no longer on the site (e.g. snapshots dated by crawl day from older code) are dropped.
+      const keep = site.polls.map((p) => p.publishedOn).filter((d): d is string => !!d);
+      if (keep.length) await db.from('college_rankings').delete().eq('season', season).eq('poll', 'usc').eq('gender', gender).eq('division', division).not('week_of', 'in', `(${keep.join(',')})`);
       // Cross-check the latest poll with NCAA.com's copy (D1 only on ncaa.com).
       if (division === 'd1' && site.polls.length) {
         try {

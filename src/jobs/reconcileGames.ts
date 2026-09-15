@@ -40,14 +40,20 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     return true;
   };
 
-  // Conference flag for games known only from NCAA.com (schools' schedules carry the flag; NCAA's does not):
-  // both sides in the same conference, regular season → conference game.
+  // Conference flag: school schedules mark many non-conference games as "conference" (their descriptor cell also
+  // carries TV/network text), so the flag is derived from membership instead: both sides in the same conference
+  // for this season and not a postseason/tournament game. Applied to every game of the season (standings need
+  // the scheduled ones too); the official conference tables verify the result.
   const conferenceOf = new Map((await listProgramSeasons(db, season)).map((s) => [s.program_id, s.conference_id as string | null]));
+  const allGames = await selectAll<{ id: string; home_program_id: string | null; away_program_id: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }>(db, 'college_games', 'id,home_program_id,away_program_id,conference_game,postseason,tournament', (q) => q.eq('season', season));
+  for (const g of allGames) {
+    if (!g.home_program_id || !g.away_program_id) continue;
+    if (programIds && !programIds.includes(g.home_program_id) && !programIds.includes(g.away_program_id)) continue;
+    const hc = conferenceOf.get(g.home_program_id), ac = conferenceOf.get(g.away_program_id);
+    const want = !!hc && hc === ac && !g.postseason && !g.tournament;
+    if (want !== g.conference_game) { await updateGame(db, g.id, { conference_game: want }); ctx.inc(want ? 'conference_flag_set' : 'conference_flag_cleared'); }
+  }
   for (const g of games) {
-    if (!g.conference_game && !g.site_fetched_at && g.home_program_id && g.away_program_id && !g.postseason && !g.tournament) {
-      const hc = conferenceOf.get(g.home_program_id), ac = conferenceOf.get(g.away_program_id);
-      if (hc && hc === ac) { await updateGame(db, g.id, { conference_game: true }); g.conference_game = true; ctx.inc('conference_flag_filled'); }
-    }
     const e = byGame.get(g.id) ?? { site: [], ncaa: [] };
     let truth: 'site' | 'ncaa' | null = null;
     if (valid(g, e.site, 'site')) truth = 'site';
