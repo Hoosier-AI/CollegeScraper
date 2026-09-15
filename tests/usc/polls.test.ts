@@ -3,6 +3,12 @@ import { fixture } from '../helpers/fakeFetcher.js';
 import { parseUscSite, parseUscDate, parseOthers, uscSiteUrl } from '../../src/sources/usc/polls.js';
 
 describe('united soccer coaches polls', () => {
+  it('keeps tied ranks on the ncaa.com copy', async () => {
+    const { parseUscPoll } = await import('../../src/sources/ncaa/rankings.js');
+    const html = '<table><thead><tr><th>RANK</th><th>SCHOOL</th><th>FIRST-PLACE VOTES</th><th>RECORD</th><th>PREVIOUS</th><th>POINTS</th></tr></thead><tbody><tr><td>22</td><td>Akron</td><td>0</td><td>3-1-0</td><td>18</td><td>20</td></tr><tr><td>T23</td><td>Oregon State</td><td>0</td><td>2-1-1</td><td>10</td><td>13</td></tr><tr><td>T23</td><td>High Point</td><td>0</td><td>2-1-1</td><td>14</td><td>13</td></tr></tbody></table>';
+    const p = parseUscPoll(html);
+    expect(p.rows.map((r) => [r.rank, r.school])).toEqual([[22, 'Akron'], [23, 'Oregon State'], [23, 'High Point']]);
+  });
   it('parses every poll on the D1 men page in chronological order', () => {
     const site = parseUscSite(fixture('usc/ncaa-di-men.html'));
     expect(site.title).toMatch(/DI Mens/);

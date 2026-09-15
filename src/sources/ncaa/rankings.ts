@@ -43,7 +43,8 @@ export function parseUscPoll(html: string): UscPoll {
   table.find('tbody tr').each((_, tr) => {
     const cells = $(tr).find('td').map((_, td) => $(td).text().replace(/\s+/g, ' ').trim()).get();
     if (cells.length === 0) return;
-    const rank = int(cells[iRank >= 0 ? iRank : 0]);
+    // Tied ranks print as "T23".
+    const rank = int(String(cells[iRank >= 0 ? iRank : 0] ?? '').replace(/^t-?/i, ''));
     const school = cells[iSchool >= 0 ? iSchool : 1] ?? '';
     if (rank == null || !school) return;
     rows.push({

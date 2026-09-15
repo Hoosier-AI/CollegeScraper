@@ -69,7 +69,7 @@ export function parseUscSite(html: string): UscSite {
     table.find('tbody tr').each((_, tr) => {
       const cells = $(tr).find('td').map((_, td) => clean($(td).text())).get();
       if (!cells.length) return;
-      const rank = int(cells[iRank >= 0 ? iRank : 0]);
+      const rank = int(String(cells[iRank >= 0 ? iRank : 0] ?? '').replace(/^t-?/i, ''));
       const school = cells[iSchool >= 0 ? iSchool : 1] ?? '';
       if (rank == null || !school) return;
       rows.push({ rank, school: school.replace(/\s*\(\d+\)\s*$/, ''), previous: iPrev >= 0 ? int(cells[iPrev]) : null, firstPlaceVotes: iFpv >= 0 ? int(cells[iFpv]) : null, points: iPts >= 0 ? int(cells[iPts]) : null, record: iRec >= 0 ? (cells[iRec] || null) : null });

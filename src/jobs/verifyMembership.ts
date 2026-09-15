@@ -12,6 +12,8 @@ import type { Division, Gender } from '../model.js';
 import { log } from '../log.js';
 
 export const WLT_CATEGORY = /won-?lost-?tied/i;
+/** Team leaderboards whose union is the membership list (different sort keys → different tie shuffles). */
+export const MEMBERSHIP_CATEGORIES = [WLT_CATEGORY, /scoring offense/i, /goal differential/i, /shots per game/i, /fouls per game/i, /corner kicks per game/i];
 
 export async function verifyMembership(ctx: JobContext): Promise<void> {
   const db = ctx.db;
@@ -30,41 +32,55 @@ export async function verifyMembership(ctx: JobContext): Promise<void> {
 
   for (const gender of genders) for (const division of divisions) {
     if (await ctx.cancelled()) return;
-    let catId: number | null = null;
+    // NCAA.com paginates each leaderboard with an unstable sort: rows tied on the ranked value shuffle between
+    // page requests, so one leaderboard repeats some teams and omits others (D1 women 2026: 344 rows, 294 unique).
+    // Membership is therefore the union of several team leaderboards with different sort keys; the official
+    // W-L-T record comes from the Won-Lost-Tied board whenever the team appears on it.
+    let cats: { id: number; name: string }[] = [];
     try {
       const landing = (await fetcher.get(`https://www.ncaa.com/stats/${sportPath(gender)}/${division}`, { skipCache: true })).text;
-      catId = parseStatCategories(landing).team.find((c) => WLT_CATEGORY.test(c.name))?.id ?? null;
+      cats = parseStatCategories(landing).team.filter((c) => MEMBERSHIP_CATEGORIES.some((re) => re.test(c.name)));
     } catch (err) { log.warn({ gender, division, err: String(err) }, 'stats landing failed'); }
-    if (!catId) { ctx.inc('leaderboard_missing'); continue; }
-    let page = 1, pages = 1, n = 0;
-    do {
-      let t;
-      try { t = parseStatTable((await fetcher.get(statUrl(gender, division, 'current', 'team', catId, page), { skipCache: true })).text); }
-      catch (err) { ctx.inc('leaderboard_errors'); log.warn({ gender, division, page, err: String(err) }, 'leaderboard page failed'); break; }
-      pages = t.pages || 1;
-      for (const r of t.rows) {
-        const seo = r.teamSeo;
-        if (!seo) { ctx.inc('leaderboard_rows_without_seo'); continue; }
-        n += 1;
-        const w = int(r.Won ?? r.W), l = int(r.Loss ?? r.Lost ?? r.L), tt = int(r.Tied ?? r.T);
-        let p = byKey.get(`${seo}|${gender}`);
-        if (!p) {
-          if (!schools.has(seo)) { await upsertSchools(db, [{ seo, name: r.Team ?? seo }]); schools.set(seo, { seo, name: r.Team ?? seo } as any); }
-          p = await upsertProgram(db, { school_seo: seo, gender, name: r.Team ?? seo, short_name: r.Team ?? null });
-          byKey.set(`${seo}|${gender}`, p);
-          ctx.inc('members_created');
-          log.info({ seo, gender, division }, 'program created from NCAA leaderboard');
+    if (!cats.some((c) => WLT_CATEGORY.test(c.name))) { ctx.inc('leaderboard_missing'); continue; }
+    const found = new Map<string, { name: string; record: { w: number | null; l: number | null; t: number | null } | null }>();
+    for (const cat of cats) {
+      const isWlt = WLT_CATEGORY.test(cat.name);
+      let page = 1, pages = 1;
+      do {
+        let t;
+        try { t = parseStatTable((await fetcher.get(statUrl(gender, division, 'current', 'team', cat.id, page), { skipCache: true })).text); }
+        catch (err) { ctx.inc('leaderboard_errors'); log.warn({ gender, division, cat: cat.name, page, err: String(err) }, 'leaderboard page failed'); break; }
+        pages = t.pages || 1;
+        if (!t.rows.length) break;
+        for (const r of t.rows) {
+          const seo = r.teamSeo;
+          if (!seo) { ctx.inc('leaderboard_rows_without_seo'); continue; }
+          const cur = found.get(seo) ?? { name: r.Team ?? seo, record: null };
+          if (isWlt) cur.record = { w: int(r.Won ?? r.W), l: int(r.Loss ?? r.Lost ?? r.L), t: int(r.Tied ?? r.T) };
+          found.set(seo, cur);
         }
-        listed.add(p.id);
-        const ps = seasonOf.get(p.id);
-        if (ps && ps.division !== division) ctx.inc('division_corrected');
-        patches.set(p.id, { program_id: p.id, season, division, conference_id: ps?.conference_id ?? null, ncaa_member: true, member_source: 'leaderboard', official_w: w, official_l: l, official_t: tt, official_record_at: now });
+        page += 1;
+        await ctx.heartbeat();
+      } while (page <= pages && page <= 20);
+    }
+    for (const [seo, info] of found) {
+      let p = byKey.get(`${seo}|${gender}`);
+      if (!p) {
+        if (!schools.has(seo)) { await upsertSchools(db, [{ seo, name: info.name }]); schools.set(seo, { seo, name: info.name } as any); }
+        p = await upsertProgram(db, { school_seo: seo, gender, name: info.name, short_name: info.name });
+        byKey.set(`${seo}|${gender}`, p);
+        ctx.inc('members_created');
+        log.info({ seo, gender, division }, 'program created from NCAA leaderboard');
       }
-      page += 1;
-      await ctx.heartbeat();
-    } while (page <= pages && page <= 20);
-    ctx.inc(`members_${gender}_${division}`, n);
-    ctx.inc('members_expected', n);
+      listed.add(p.id);
+      const ps = seasonOf.get(p.id);
+      if (ps && ps.division !== division) ctx.inc('division_corrected');
+      if (!info.record) ctx.inc('members_without_official_record');
+      patches.set(p.id, { program_id: p.id, season, division, conference_id: ps?.conference_id ?? null, ncaa_member: true, member_source: 'leaderboard',
+        official_w: info.record?.w ?? null, official_l: info.record?.l ?? null, official_t: info.record?.t ?? null, official_record_at: info.record ? now : null });
+    }
+    ctx.inc(`members_${gender}_${division}`, found.size);
+    ctx.inc('members_expected', found.size);
   }
 
   // Programs known for the season but absent from every leaderboard.
