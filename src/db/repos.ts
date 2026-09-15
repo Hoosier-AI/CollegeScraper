@@ -385,6 +385,15 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
     const home = isHome ? input.programId : oppId;
     const away = isHome ? oppId : input.programId;
     let game = oppId ? findGame(input.existing, e.date, input.programId, oppId) : null;
+    // Opponent unresolved (promo text, unknown school): the program's only game that day is this fixture.
+    if (!game && !oppId) {
+      const sameDay = input.existing.filter((g) => g.game_date === e.date && (g.home_program_id === input.programId || g.away_program_id === input.programId));
+      const ours = (g: GameRow) => (g.home_program_id === input.programId ? [g.home_score, g.away_score] : [g.away_score, g.home_score]);
+      if (sameDay.length === 1) {
+        const [f, a] = ours(sameDay[0]!);
+        if (!e.result || f == null || (f === e.result.teamScore && a === e.result.opponentScore)) game = sameDay[0]!;
+      }
+    }
     // A row created earlier for this fixture while the opponent was still unresolved (one side null): adopt it.
     if (!game) {
       const orphan = input.existing.find((g) => g.game_date === e.date && (isHome ? g.home_program_id === input.programId && g.away_program_id == null : g.away_program_id === input.programId && g.home_program_id == null));

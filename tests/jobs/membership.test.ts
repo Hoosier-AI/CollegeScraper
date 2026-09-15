@@ -155,3 +155,29 @@ describe('opponent name cleanup', async () => {
     expect(m.resolveName(idx, scope, 'St. Thomas University (Fla.) 77\' (F) - Lightning')).toBe('fl');
   });
 });
+
+describe('opponent records', async () => {
+  const m = await import('../../src/normalize/aliasIndex.js');
+  it('accepts clean school names only', () => {
+    expect(m.isCleanOpponentName('Monroe University')).toBe(true);
+    expect(m.isCleanOpponentName('Shawnee State ')).toBe(true);
+    expect(m.isCleanOpponentName('Andrew (GA)')).toBe(true);
+    expect(m.isCleanOpponentName('Long Beach Purple-Out')).toBe(false);
+    expect(m.isCleanOpponentName("Miami Kid's Game | Triple Points in FIU Sports App")).toBe(false);
+    expect(m.isCleanOpponentName("St. Thomas University (Fla.) 77' (F) - Lightning")).toBe(false);
+    expect(m.isCleanOpponentName('NEC Tournament')).toBe(false);
+    expect(m.isCleanOpponentName('Drake (Exh.)')).toBe(false);
+  });
+  it('makes stable synthetic slugs', () => {
+    expect(m.opponentSeo('Monroe University')).toBe('x-monroe');
+    expect(m.opponentSeo('#12 Shawnee State')).toBe('x-shawnee-state');
+  });
+  it('prefix matches stay inside the division', () => {
+    const progs = [{ id: 'tct', gender: 'm', school_seo: 'trinity-ct', name: 'Trinity (CT)', short_name: null, name6: null }];
+    const idx = m.buildAliasIndex(progs, new Map([['trinity-ct', { seo: 'trinity-ct', name: 'Trinity (CT)', long_name: 'Trinity College' }]]), []);
+    const scope = { gender: 'm', ownDivision: 'd1', ownConference: null, divisionOf: new Map([['tct', 'd3']]), conferenceOf: new Map() };
+    m.setMembership(new Map());
+    expect(m.resolveName(idx, scope, 'Trinity College of Jacksonville International Celebration Night')).toBeNull();
+    expect(m.resolveName(idx, { ...scope, ownDivision: 'd3' }, 'Trinity College Senior Day')).toBe('tct');
+  });
+});

@@ -116,10 +116,12 @@ export function resolveName(index: AliasIndex, scope: ResolverScope, rawName: st
   if (direct) return direct;
   // School schedules often append promotions to the opponent ("North Dakota State Senior Day",
   // "Hofstra Res-Co Night", "UIC Free admission for alumni…"): try the longest word prefix that names a team.
+  // Only a program of the same division is accepted this way: "Trinity College of Jacksonville … Night" must not
+  // become Trinity (CT).
   const words = name.split(/\s*[|/\u2013\u2014-]\s*|\s+/).filter(Boolean);
   for (let k = words.length - 1; k >= 1; k--) {
     const hit = resolveExact(m, scope, words.slice(0, k).join(' '));
-    if (hit) return hit;
+    if (hit && (!scope.ownDivision || scope.divisionOf.get(hit) === scope.ownDivision)) return hit;
   }
   return null;
 }
@@ -177,4 +179,19 @@ export function matchAmongMembers(rowName: string | null | undefined, members: M
   if (exact.length > 1) return null;
   const hits = members.filter((m) => m.names.some((n) => { if (!n) return false; const nt = memberTokens(n); return prefixSubsequence(rt, nt) || prefixSubsequence(nt, rt); }));
   return hits.length === 1 ? hits[0]!.id : null;
+}
+
+const PROMO_WORDS = /\b(day|night|game|opener|senior|seniors|giveaway|appreciation|youth|kids?|alumni|homecoming|fest|dh|doubleheader|out|recognition|welcome|celebration|triple|points|app|student|students|school|pink|purple|white|gold|military|heritage|hispanic|faculty|staff|family|weekend|free|admission|tournament|classic|cup|showcase|tba|tbd)\b/i;
+
+/** A name clean enough to become an opponent record: no promo text, digits or separators, at most five words. */
+export function isCleanOpponentName(raw: string): boolean {
+  const n = cleanOpponentName(raw);
+  if (!n || n.length > 40 || /\d|[|!]/.test(n) || PROMO_WORDS.test(n)) return false;
+  if (n.split(' ').length > 5) return false;
+  return !isPlaceholderOpponent(n) && !isExhibitionName(n);
+}
+
+/** Synthetic school slug for a team NCAA.com does not index ("Monroe University" → "x-monroe"). */
+export function opponentSeo(raw: string): string {
+  return `x-${teamKey(cleanOpponentName(raw)).replace(/\s+/g, '-')}`;
 }

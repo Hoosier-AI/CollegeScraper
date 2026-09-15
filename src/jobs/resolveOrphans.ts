@@ -3,10 +3,11 @@
 // exists (their site box-score rows move over), otherwise the missing side is filled in. Scheduled placeholder
 // rows ("TBD", "Semifinals") are deleted.  params: { season? }
 import { registerJob, type JobContext } from './runner.js';
-import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame } from '../db/repos.js';
-import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName } from '../normalize/aliasIndex.js';
+import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame, upsertSchools, upsertProgram, upsertProgramSeasons, type GameRow } from '../db/repos.js';
+import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName, isCleanOpponentName, opponentSeo, cleanOpponentName } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import { findGame } from '../identity/gameMatch.js';
+import { teamKey as teamKeyOf } from '../normalize/teamIdentity.js';
 import { selectAll } from '../db/client.js';
 import { currentSeason } from './seasons.js';
 import { log } from '../log.js';
@@ -40,7 +41,26 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
       else { ctx.inc('orphans_left_placeholder'); left.push(`${g.game_date} ${name ?? '?'} (final)`); }
       continue;
     }
-    const oppId = ownId ? resolveName(index, { gender: g.gender, ownDivision: divisionOf.get(ownId) ?? null, ownConference: conferenceOf.get(ownId) ?? null, divisionOf, conferenceOf }, name) : null;
+    let oppId = ownId ? resolveName(index, { gender: g.gender, ownDivision: divisionOf.get(ownId) ?? null, ownConference: conferenceOf.get(ownId) ?? null, divisionOf, conferenceOf }, name) : null;
+    // A played game against a team NCAA.com does not index (NAIA, junior college, new members) still counts in the
+    // official record: give the opponent a non-member program so both sides exist.
+    if (!oppId && ownId && g.status === 'final' && g.home_score != null && isCleanOpponentName(name)) {
+      const other = g.gender === 'm' ? 'w' : 'm';
+      const otherHit = resolveName(index, { gender: other, ownDivision: null, ownConference: null, divisionOf, conferenceOf }, name);
+      if (!otherHit) {
+        const seo = opponentSeo(name);
+        const display = cleanOpponentName(name);
+        await upsertSchools(db, [{ seo, name: display }]);
+        const prog = await upsertProgram(db, { school_seo: seo, gender: g.gender, name: display, short_name: display });
+        await upsertProgramSeasons(db, [{ program_id: prog.id, season, division: (divisionOf.get(ownId) ?? 'd3') as 'd1' | 'd2' | 'd3', conference_id: null, ncaa_member: false, member_source: 'opponent' } as any]);
+        divisionOf.set(prog.id, divisionOf.get(ownId) ?? 'd3');
+        const m = index.get(g.gender) ?? new Map<string, string[]>();
+        for (const k of [teamKeyOf(display)]) m.set(k, [prog.id]);
+        index.set(g.gender, m);
+        oppId = prog.id;
+        ctx.inc('opponents_created');
+      }
+    }
     if (!oppId || !ownId) { ctx.inc('orphans_left'); left.push(`${g.game_date} ${name}`); continue; }
     const homeId = g.home_program_id ?? oppId, awayId = g.away_program_id ?? oppId;
     const canonical = games.find((x) => x.id !== g.id && x.home_program_id && x.away_program_id && findGame([x], g.game_date, homeId, awayId) === x) ?? null;
@@ -76,6 +96,33 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
     ctx.inc('orphans_merged');
   }
   if (left.length) ctx.note('orphans_left_sample', left.slice(0, 40));
+
+  // Same program, same date, two final rows, exactly one linked to an NCAA contest: the other is a duplicate made from
+  // a schedule line whose opponent resolved wrongly or not at all. Merged when the result agrees (or is missing).
+  const fresh = await listGames(db, season);
+  const byProgDate = new Map<string, GameRow[]>();
+  for (const x of fresh) if (x.status === 'final') for (const pid of [x.home_program_id, x.away_program_id]) if (pid) { const k = `${pid}|${x.game_date}`; byProgDate.set(k, [...(byProgDate.get(k) ?? []), x]); }
+  const removed = new Set<string>();
+  for (const [k, list] of byProgDate) {
+    const live = list.filter((x) => !removed.has(x.id));
+    const linked = live.filter((x) => x.ncaa_contest_id);
+    if (live.length < 2 || linked.length !== 1) continue;
+    const canon = linked[0]!; const pid = k.slice(0, k.indexOf('|'));
+    const ours = (x: GameRow) => (x.home_program_id === pid ? [x.home_score, x.away_score] : [x.away_score, x.home_score]);
+    const [cf, ca] = ours(canon);
+    for (const dup of live.filter((x) => x !== canon && !x.ncaa_contest_id)) {
+      const [df, da] = ours(dup);
+      if (df != null && cf != null && (df !== cf || da !== ca)) continue;
+      // The duplicate's lines may be attributed to a wrong opponent: never moved. The canonical keeps its refs and
+      // is marked for a fresh site fetch when it has no site data yet.
+      const patch: Record<string, unknown> = { site_game_refs: { ...(canon.site_game_refs ?? {}), ...(dup.site_game_refs ?? {}) } };
+      if (!canon.site_fetched_at) patch.site_fetched_at = null;
+      await updateGame(db, canon.id, patch);
+      await db.from('college_games').delete().eq('id', dup.id);
+      removed.add(dup.id);
+      ctx.inc('same_day_duplicates_merged');
+    }
+  }
 
   // Box-score-only identities that no longer have any game line (their lines were re-attributed after an
   // orientation fix or a merge) are removed, with their player row when no other season references it.

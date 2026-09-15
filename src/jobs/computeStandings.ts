@@ -9,10 +9,10 @@ import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { parseSidearmStandings, conferenceStandingsUrl, type ConfStandingsRow } from '../sources/conferences/sidearmStandings.js';
 import { parsePrestoStandings, prestoSeasonSlug } from '../sources/conferences/prestoStandings.js';
-import { listPrograms, listSchools, listProgramSeasons } from '../db/repos.js';
+import { listPrograms, listSchools, listProgramSeasons, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { listConferences, updateConference, writeStandings, writeStandingsChecks, confPoints, type StandingRow, type StandingsCheck } from '../db/standingsRepo.js';
 import { selectAll, kvSet } from '../db/client.js';
-import { setMembership, setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, type MemberNames } from '../normalize/aliasIndex.js';
+import { setMembership, setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, opponentSeo, isCleanOpponentName, type MemberNames } from '../normalize/aliasIndex.js';
 import { currentSeason } from './seasons.js';
 import type { Gender } from '../model.js';
 import { log } from '../log.js';
@@ -100,12 +100,19 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
           // A program may appear in a division/pod table and in the full table: keep the row from the biggest
           // table (conference-wide rank) and remember the small pod's name.
           const best = new Map<string, { row: ConfStandingsRow; rank: number; podSize: number; pod: string | null }>();
+          const pendingCreates: { row: ConfStandingsRow; rank: number; pod: string | null; podSize: number }[] = [];
           const podOf = new Map<string, string>();
           for (const pod of parsed.pods) {
             pod.rows.forEach((row, i) => {
               const pid = matchAmongMembers(row.school, memberNames) ?? matchAmongMembers(row.logoAlt, memberNames)
                 ?? resolveName(index, { gender, ownDivision: division, ownConference: c.id, divisionOf, conferenceOf }, row.school)
                 ?? (row.logoAlt ? resolveName(index, { gender, ownDivision: division, ownConference: c.id, divisionOf, conferenceOf }, row.logoAlt) : null);
+              if (!pid && isCleanOpponentName(row.school)) {
+                // The conference lists a member we have never seen on an NCAA.com scoreboard or leaderboard
+                // (new or provisional members): the official table is the source, so the program is created in it.
+                pendingCreates.push({ row, rank: i + 1, pod: pod.name, podSize: pod.rows.length });
+                return;
+              }
               if (!pid) { ctx.inc('standings_unresolved'); unresolvedNotes.push(`${c.ncaa_seo}/${gender}: ${row.school}`); return; }
               // A row that resolves to a program of another conference is never written under this one.
               if (conferenceOf.get(pid) !== c.id) { ctx.inc('standings_foreign_rows'); unresolvedNotes.push(`${c.ncaa_seo}/${gender}: ${row.school} (stored under another conference)`); return; }
@@ -113,6 +120,16 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
               if (!cur || pod.rows.length > cur.podSize) best.set(pid, { row, rank: i + 1, podSize: pod.rows.length, pod: cur?.pod ?? null });
               if (parsed.pods.length > 1 && pod.name && pod.rows.length < Math.max(...parsed.pods.map((p) => p.rows.length))) podOf.set(pid, pod.name);
             });
+          }
+          for (const pc of pendingCreates) {
+            const seo = opponentSeo(pc.row.school);
+            await upsertSchools(db, [{ seo, name: pc.row.school }]);
+            const prog = await upsertProgram(db, { school_seo: seo, gender, name: pc.row.school, short_name: pc.row.school });
+            await upsertProgramSeasons(db, [{ program_id: prog.id, season, division: division as 'd1' | 'd2' | 'd3', conference_id: c.id, ncaa_member: true, member_source: 'conference_site' } as any]);
+            conferenceOf.set(prog.id, c.id); divisionOf.set(prog.id, division);
+            const cur = best.get(prog.id);
+            if (!cur || pc.podSize > cur.podSize) best.set(prog.id, { row: pc.row, rank: pc.rank, podSize: pc.podSize, pod: cur?.pod ?? null });
+            ctx.inc('programs_created_from_standings');
           }
           if (best.size) {
             official = true;

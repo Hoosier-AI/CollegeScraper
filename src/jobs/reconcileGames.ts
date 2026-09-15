@@ -39,8 +39,13 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   const goalsBy = new Map<string, number>();
   for (const p of players) { const k = `${p.game_id}|${p.program_id}|${p.source}`; goalsBy.set(k, (goalsBy.get(k) ?? 0) + (p.goals ?? 0)); }
 
+  // Non-member opponents (NAIA, junior colleges) rarely have their own box score line: only NCAA members must.
+  const seasonRows = await listProgramSeasons(db, season);
+  const memberOf = new Map(seasonRows.map((s) => [s.program_id, (s as { ncaa_member?: boolean }).ncaa_member !== false]));
   const valid = (g: G, rows: TS[], source: string) => {
-    if (rows.length !== 2 || !g.home_program_id || !g.away_program_id) return false;
+    if (!g.home_program_id || !g.away_program_id || !rows.length) return false;
+    const need = [g.home_program_id, g.away_program_id].filter((id) => memberOf.get(id) !== false);
+    if (!need.every((id) => rows.some((r) => r.program_id === id))) return false;
     for (const r of rows) {
       const score = r.is_home ? g.home_score : g.away_score;
       if (score == null || r.goals !== score) return false;
