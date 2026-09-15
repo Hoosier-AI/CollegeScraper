@@ -68,3 +68,17 @@ describe('parseScheduleHtml (nextgen s-game-card fallback)', () => {
     expect(out[1]).toMatchObject({ date: '2026-01-12', startTimeLocal: null, opponentName: 'Syracuse', homeAway: 'H', isConference: true, state: 'postponed', result: null });
   });
 });
+
+describe('legacy template side markers', () => {
+  const hp: SiteContext = { host: 'highpointpanthers.com', baseUrl: 'https://highpointpanthers.com', gender: 'm', season: 2026, sportSlug: 'mens-soccer', sportId: null, teamSlug: null };
+  const entries = parseScheduleHtml(fixture('sidearm/highpoint-schedule-2026-legacy.html'), hp);
+  it('reads <span class="sidearm-schedule-game-away">at</span> as an away game', () => {
+    const uva = entries.find((e) => e.opponentName === 'Virginia' && e.date === '2026-08-24');
+    expect(uva?.homeAway).toBe('A');
+  });
+  it('keeps home and away games apart on the same page', () => {
+    const sides = new Set(entries.map((e) => e.homeAway));
+    expect(sides.has('H')).toBe(true);
+    expect(sides.has('A')).toBe(true);
+  });
+});

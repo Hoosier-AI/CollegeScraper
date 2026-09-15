@@ -80,6 +80,13 @@ a restart resumes from the queue and every fetch is cached in `college_source_fe
   North Carolina, San Diego State vs San Diego); ambiguous aliases resolve to nothing rather than to a guess.
   Curated spellings live in `data/team-aliases.json`; initialisms (UNCG, HCU, CCSU) and NCAA six-letter codes
   are weak keys that only win when nothing else matches (`src/normalize/aliasIndex.ts`).
+- **Home/away orientation**: school schedules are the weakest signal (older Sidearm tenants mark away games with a
+  separate `<span class="sidearm-schedule-game-away">at</span>`). NCAA.com's scoreboard is authoritative when a
+  contest exists (`sweep-scoreboard` flips reversed fixtures and takes NCAA's final score); otherwise the box score's
+  own home/visitor names decide (`sync-site`). A flipped game loses all stored lines and is refetched from both
+  sources (`reorientGame`), because lines written under the wrong orientation belong to the other program.
+- **Conference games** are derived, not scraped: both programs in the same conference for the season and not a
+  postseason/tournament game (`reconcile-games`). Site "conference" markers were wrong often enough to break standings.
 - **Membership** (`verify-membership`): NCAA.com's "Won-Lost-Tied Percentage" team leaderboard lists every
   member of a division with its official overall record (D1 men = 210 teams in 2026). Programs that appear on
   scoreboards without a conference and are absent from the leaderboard (NAIA, Canadian, club sides) are kept
