@@ -134,7 +134,8 @@ export function stripRank(name: string): string {
   return stripRankInner(cleaned);
 }
 function stripRankInner(name: string): string {
-  return name.replace(/^\s*(?:#|no\.?\s*)\d+\s+/i, '').trim();
+  // "#6 Georgetown", "No. 4 Stanford", "#2/5 Duke" (two polls), "RV TCU" (receiving votes).
+  return name.replace(/^\s*(?:#|no\.?\s*)\d+(?:\/\d+)?\s+/i, '').replace(/^\s*rv\s+/i, '').trim();
 }
 
 /** Last-resort stable key for a player row: "last|first|jersey" lowercased ASCII. */

@@ -61,7 +61,10 @@ function classify(descriptors: string[]): { isExhibition: boolean; tournament: s
 function parseNextgenCard($: CheerioAPI, cardEl: Element, ctx: SiteContext): ScheduleEntry | null {
   const card = $(cardEl);
   const t = (sel: string) => collapse(card.find(sel).first().clone().find('picture, svg').remove().end().text());
-  const opponentRaw = t('[data-test-id="s-game-card-standard__header-team-opponent-link"], [class*="opponent-link"], [class*="__opponent-name"], [class*="team-name"]');
+  const firstText = (sels: string[]) => { for (const sel of sels) { const v = t(sel); if (v) return v; } return null; };
+  // Selectors in priority order (a comma list would return the outermost match in document order, whose text
+  // also carries the promotion line: "UC Davis Home Opener | Welcome Back campus").
+  const opponentRaw = firstText(['[data-test-id="s-game-card-standard__header-team-opponent-link"]', '[class*="opponent-link"]', '[class*="__opponent-name"]', '[class*="team-name"]']);
   if (!opponentRaw) return null;
   const dateRaw = t('[data-test-id="s-game-card-standard__header-game-date-details"], [class*="game-date"], time');
   const timeRaw = t('[data-test-id="s-game-card-standard__header-game-time"], [class*="game-time"]');
@@ -100,7 +103,8 @@ function parseNextgenCard($: CheerioAPI, cardEl: Element, ctx: SiteContext): Sch
 function parseLegacyGame($: CheerioAPI, el: Element, ctx: SiteContext): ScheduleEntry | null {
   const g = $(el);
   const t = (sel: string) => collapse(g.find(sel).first().text());
-  const opponentRaw = t('.sidearm-schedule-game-opponent-name a, .sidearm-schedule-game-opponent-name, .sidearm-schedule-game-opponent-text');
+  const firstText = (sels: string[]) => { for (const sel of sels) { const v = t(sel); if (v) return v; } return null; };
+  const opponentRaw = firstText(['.sidearm-schedule-game-opponent-name a', '.sidearm-schedule-game-opponent-name', '.sidearm-schedule-game-opponent-text']);
   if (!opponentRaw) return null;
   const dateRaw = t('.sidearm-schedule-game-opponent-date span:first-child, .sidearm-schedule-game-opponent-date');
   const timeRaw = t('.sidearm-schedule-game-opponent-date span:nth-child(2), .sidearm-schedule-game-time');

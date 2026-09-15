@@ -4,7 +4,8 @@
 // rows ("TBD", "Semifinals") are deleted.  params: { season? }
 import { registerJob, type JobContext } from './runner.js';
 import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame } from '../db/repos.js';
-import { buildAliasIndex, resolveName, isPlaceholderOpponent } from '../normalize/aliasIndex.js';
+import { setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent } from '../normalize/aliasIndex.js';
+import { listConferences } from '../db/standingsRepo.js';
 import { findGame } from '../identity/gameMatch.js';
 import { currentSeason } from './seasons.js';
 import { log } from '../log.js';
@@ -17,6 +18,7 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
   const seasons = await listProgramSeasons(db, season);
   const divisionOf = new Map(seasons.map((s) => [s.program_id, s.division as string]));
   const conferenceOf = new Map(seasons.map((s) => [s.program_id, (s.conference_id as string | null) ?? null]));
+  setKnownConferences((await listConferences(db)).map((c) => c.name));
   const index = buildAliasIndex(programs, schools);
   const games = await listGames(db, season);
   const orphans = games.filter((g) => !g.home_program_id || !g.away_program_id);

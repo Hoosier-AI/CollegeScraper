@@ -60,18 +60,28 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
   return byGender;
 }
 
+/** Conference names known to the database, as teamKey()s; jobs populate this so "Empire 8" is not treated as a team. */
+const knownConferenceKeys = new Set<string>();
+export function setKnownConferences(names: Iterable<string>): void { for (const n of names) { const k = teamKey(n); if (k) knownConferenceKeys.add(k); } }
+
+/** "RV TCU", "#2/5 Duke", "No. 4 Stanford", "vs. #12 Elon" → "TCU", "Duke", … */
+export function cleanOpponentName(raw: string): string {
+  return String(raw ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').replace(/^(?:#|no\.?\s*)\d+(?:\/\d+)?\s+/i, '').replace(/^rv\s+/i, '').replace(/\s+/g, ' ').trim();
+}
+
 const PLACEHOLDER_EXACT = /^(tba|tbd|opponent (tba|tbd)|to be (announced|determined)|semi-?finals?|quarter-?finals?|finals?|first round|second round|third round|championship( game| match)?|consolation( game)?|winner|loser|title game|play-?in|bye|exhibition|scrimmage|alumni( game)?)$/i;
 const PLACEHOLDER_SUFFIX = /\b(semi-?finals?|quarter-?finals?|finals?|championships?|tournament|classic|invitational|college cup|cup|showcase|round(?: \d+| of \d+)?|game \d+|match \d+|bracket|winner|loser)$/i;
 const CONFERENCE_LIKE = /(^conference\b|\b(conference|league|athletic association|ncaa)$|^ncaa\b)/i;
 
 /** True for schedule rows that are not a team: "TBD", "Semifinals", "MAC Tournament", "Conference USA", "NCAA College Cup". */
-export function isPlaceholderOpponent(name: string, knownConferenceKeys?: Set<string>): boolean {
-  const n = String(name ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').replace(/^#\d+\s*/, '').replace(/\s+/g, ' ').trim();
+export function isPlaceholderOpponent(name: string): boolean {
+  const n = cleanOpponentName(name);
   if (!n) return true;
   if (PLACEHOLDER_EXACT.test(n)) return true;
   if (PLACEHOLDER_SUFFIX.test(n) && !/\(/.test(n)) return true;
   if (CONFERENCE_LIKE.test(n)) return true;
-  if (knownConferenceKeys?.has(teamKey(n))) return true;
+  if (/\((?:exh|exhibition|scrimmage)/i.test(n)) return true;
+  if (knownConferenceKeys.has(teamKey(n))) return true;
   return false;
 }
 
@@ -82,10 +92,23 @@ export interface ResolverScope { gender: string; ownDivision: string | null; own
  * initialism key; ties broken by division, then conference, then D1.
  */
 export function resolveName(index: AliasIndex, scope: ResolverScope, rawName: string): string | null {
-  const name = String(rawName ?? '').replace(/^\s*(?:vs\.?|at|@|versus)\s+/i, '').replace(/^#\d+\s*/, '').trim();
+  const name = cleanOpponentName(rawName);
   if (!name) return null;
   const m = index.get(scope.gender);
   if (!m) return null;
+  const direct = resolveExact(m, scope, name);
+  if (direct) return direct;
+  // School schedules often append promotions to the opponent ("North Dakota State Senior Day",
+  // "Hofstra Res-Co Night", "UIC Free admission for alumni…"): try the longest word prefix that names a team.
+  const words = name.split(/\s*[|/\u2013\u2014-]\s*|\s+/).filter(Boolean);
+  for (let k = words.length - 1; k >= 1; k--) {
+    const hit = resolveExact(m, scope, words.slice(0, k).join(' '));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function resolveExact(m: Map<string, string[]>, scope: ResolverScope, name: string): string | null {
   const exact = m.get(teamKeyKeepParens(name));
   const plain = m.get(teamKey(name));
   let cands = (exact && exact.length ? exact : plain) ?? [];

@@ -7,7 +7,8 @@ import { parseUscPoll, uscPollUrl, parseStatCategories, parseStatTable, statUrl,
 import { parseUscSite, uscSiteUrl } from '../sources/usc/polls.js';
 import { listPrograms, listSchools, listProgramSeasons, statLineCandidates } from '../db/repos.js';
 import { upsertChunked, kvSet } from '../db/client.js';
-import { buildAliasIndex, resolveName } from '../normalize/aliasIndex.js';
+import { setKnownConferences, buildAliasIndex, resolveName } from '../normalize/aliasIndex.js';
+import { listConferences } from '../db/standingsRepo.js';
 import { splitName, nameKey, looseNameMatch } from '../normalize/names.js';
 import { currentSeason } from './seasons.js';
 import type { Division, Gender } from '../model.js';
@@ -25,6 +26,7 @@ export async function refreshRankings(ctx: JobContext): Promise<void> {
   const divisionOf = new Map(seasons.map((s) => [s.program_id, s.division as string]));
   const conferenceOf = new Map(seasons.map((s) => [s.program_id, (s.conference_id as string | null) ?? null]));
   const bySeo = new Map<string, string>(); for (const p of programs) bySeo.set(`${p.school_seo}|${p.gender}`, p.id);
+  setKnownConferences((await listConferences(db)).map((c) => c.name));
   const index = buildAliasIndex(programs, schools);
   const resolve = (gender: Gender, division: Division, name: string) => resolveName(index, { gender, ownDivision: division, ownConference: null, divisionOf, conferenceOf }, name);
   const today = new Date().toISOString().slice(0, 10);

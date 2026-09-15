@@ -6,7 +6,8 @@ import { adapterFor } from '../sources/sites/detect.js';
 import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, type ProgramRow, type SchoolRow } from '../db/repos.js';
 import { selectAll } from '../db/client.js';
 import { currentSeason, inSeason } from './seasons.js';
-import { buildAliasIndex, makeResolver, isPlaceholderOpponent, type AliasIndex } from '../normalize/aliasIndex.js';
+import { setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, type AliasIndex } from '../normalize/aliasIndex.js';
+import { listConferences } from '../db/standingsRepo.js';
 import type { SiteContext } from '../model.js';
 import { log } from '../log.js';
 
@@ -30,6 +31,7 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   const conferenceOf = new Map(seasons.map((s) => [s.program_id, (s.conference_id as string | null) ?? null]));
   const programById = new Map(programs.map((p) => [p.id, p]));
   // Opponent resolution: by school name aliases within the same gender.
+  setKnownConferences((await listConferences(db)).map((c) => c.name));
   const aliasIndex = buildAliasIndex(allPrograms, schools);
   const games = await listGames(db, season);
 

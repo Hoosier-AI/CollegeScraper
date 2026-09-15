@@ -14,6 +14,7 @@ const AP_ABBR: [string, string][] = [
 /** Aggressive team-name normaliser used to match names across sources. */
 export function teamKey(raw: string | null | undefined): string {
   let s = stripDiacritics(String(raw ?? '')).toLowerCase();
+  s = s.replace(/['\u2018\u2019`]/g, '');   // Hawai‘i → hawaii, St. John's → st johns
   s = s.replace(/\(.*?\)/g, ' ');
   s = s.replace(/#\d+\s*/g, ' ');
   // "college" and "state" are significant (Boston College vs Boston U., NC State vs North Carolina).

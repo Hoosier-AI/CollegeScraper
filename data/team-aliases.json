@@ -477,6 +477,22 @@
     {
       "alias": "Saint Mary's (CA)",
       "seo": "st-marys-ca"
+    },
+    {
+      "alias": "Jax State",
+      "seo": "jacksonville-st"
+    },
+    {
+      "alias": "Jacksonville State",
+      "seo": "jacksonville-st"
+    },
+    {
+      "alias": "Hawai'i",
+      "seo": "hawaii"
+    },
+    {
+      "alias": "Hawaii",
+      "seo": "hawaii"
     }
   ]
 }

@@ -11,7 +11,7 @@ import { parseSidearmStandings, conferenceStandingsUrl, type ConfStandingsRow } 
 import { listPrograms, listSchools, listProgramSeasons } from '../db/repos.js';
 import { listConferences, updateConference, writeStandings, writeStandingsChecks, confPoints, type StandingRow, type StandingsCheck } from '../db/standingsRepo.js';
 import { selectAll, kvSet } from '../db/client.js';
-import { buildAliasIndex, resolveName } from '../normalize/aliasIndex.js';
+import { setKnownConferences, buildAliasIndex, resolveName } from '../normalize/aliasIndex.js';
 import { currentSeason } from './seasons.js';
 import type { Gender } from '../model.js';
 import { log } from '../log.js';
@@ -64,6 +64,7 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
   const seasonOf = new Map(seasons.map((s) => [s.program_id, s]));
   const divisionOf = new Map(seasons.map((s) => [s.program_id, s.division as string]));
   const conferenceOf = new Map(seasons.map((s) => [s.program_id, (s.conference_id as string | null) ?? null]));
+  setKnownConferences((await listConferences(db)).map((c) => c.name));
   const index = buildAliasIndex(programs, schools);
   const stats = new Map((await selectAll<TeamStat>(db, 'college_team_season_stats', 'program_id,w,l,t,conf_w,conf_l,conf_t,gf,ga,gd,gp', (q) => q.eq('season', season))).map((s) => [s.program_id, s]));
   const unresolvedNotes: string[] = [];
