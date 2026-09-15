@@ -38,7 +38,12 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     for (const g of dayGames) {
       const homeId = g.home.seo ? bySeo.get(`${g.home.seo}|${gender}`) ?? null : null;
       const awayId = g.away.seo ? bySeo.get(`${g.away.seo}|${gender}`) ?? null : null;
-      const existing = byContest.get(g.contestId) ?? (homeId && awayId ? findGame(games, g.date, homeId, awayId) : null);
+      let existing = byContest.get(g.contestId) ?? (homeId && awayId ? findGame(games, g.date, homeId, awayId) : null);
+      if (!existing && homeId && awayId && g.state !== 'cancelled') {
+        // Not in the snapshot loaded at start: the fixture may have been inserted meanwhile (a concurrent site sync).
+        const { data } = await db.from('college_games').select('*').eq('season', season).in('game_date', [g.date]).or(`and(home_program_id.eq.${homeId},away_program_id.eq.${awayId}),and(home_program_id.eq.${awayId},away_program_id.eq.${homeId})`).limit(1);
+        if (data?.[0]) { existing = data[0] as typeof games[number]; games.push(existing); ctx.inc('games_found_late'); }
+      }
       const base = {
         season, game_date: g.date, start_epoch: g.startTimeEpoch, gender, division,
         home_program_id: homeId, away_program_id: awayId, home_name: g.home.short ?? g.home.full, away_name: g.away.short ?? g.away.full,
@@ -68,9 +73,15 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         byContest.set(g.contestId, existing);
         ctx.inc('games_updated');
       } else {
-        const row = await upsertGameByNcaa(db, { ...base, ncaa_contest_id: Number(g.contestId), status: g.state === 'final' ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: g.state === 'final' ? g.home.score : null, away_score: g.state === 'final' ? g.away.score : null });
-        games.push(row); byContest.set(g.contestId, row);
-        ctx.inc('games_created');
+        try {
+          const row = await upsertGameByNcaa(db, { ...base, ncaa_contest_id: Number(g.contestId), status: g.state === 'final' ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: g.state === 'final' ? g.home.score : null, away_score: g.state === 'final' ? g.away.score : null });
+          games.push(row); byContest.set(g.contestId, row);
+          ctx.inc('games_created');
+        } catch (err) {
+          // A fixture clash (same date and programs under another contest id or created concurrently) must not stop the sweep.
+          ctx.inc('games_insert_conflicts');
+          log.warn({ contest: g.contestId, date: g.date, err: err instanceof Error ? err.message : String(err) }, 'scoreboard game insert skipped');
+        }
       }
       if (!homeId || !awayId) ctx.inc('games_with_unknown_program');
     }
