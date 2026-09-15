@@ -287,9 +287,9 @@
       "ncaa_seo": "amcc",
       "host": "amccsports.org",
       "platform": "presto",
-      "standings_path_m": "/sports/msoc/standings",
-      "standings_path_w": "/sports/wsoc/standings",
-      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+      "standings_path_m": "/sports/msoc/{season}/standings",
+      "standings_path_w": "/sports/wsoc/{season}/standings",
+      "notes": "PrestoSports: {season} \u2192 2026-27; first response is often 202 (client retries)"
     },
     {
       "ncaa_seo": "american-rivers",
@@ -352,9 +352,9 @@
       "ncaa_seo": "great-northeast",
       "host": "thegnac.com",
       "platform": "presto",
-      "standings_path_m": "/sports/msoc/standings",
-      "standings_path_w": "/sports/wsoc/standings",
-      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+      "standings_path_m": "/sports/msoc/{season}/standings",
+      "standings_path_w": "/sports/wsoc/{season}/standings",
+      "notes": "PrestoSports: {season} \u2192 2026-27; first response is often 202 (client retries)"
     },
     {
       "ncaa_seo": "hcac",
@@ -390,17 +390,17 @@
       "ncaa_seo": "mascac",
       "host": "mascac.com",
       "platform": "presto",
-      "standings_path_m": "/sports/msoc/standings",
-      "standings_path_w": "/sports/wsoc/standings",
-      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+      "standings_path_m": "/sports/msoc/{season}/standings",
+      "standings_path_w": "/sports/wsoc/{season}/standings",
+      "notes": "PrestoSports: {season} \u2192 2026-27; first response is often 202 (client retries)"
     },
     {
       "ncaa_seo": "miac",
-      "host": "miacjump.prestosports.com",
+      "host": "miac-online.org",
       "platform": "presto",
-      "standings_path_m": "/sports/msoc/standings",
-      "standings_path_w": "/sports/wsoc/standings",
-      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+      "standings_path_m": "/sports/msoc/{season}/standings",
+      "standings_path_w": "/sports/wsoc/{season}/standings",
+      "notes": "PrestoSports: {season} \u2192 2026-27; first response is often 202 (client retries)"
     },
     {
       "ncaa_seo": "michigan-intercol. ath. assn.",
@@ -471,9 +471,9 @@
       "ncaa_seo": "scac",
       "host": "scacsports.com",
       "platform": "presto",
-      "standings_path_m": "/sports/msoc/standings",
-      "standings_path_w": "/sports/wsoc/standings",
-      "notes": "PrestoSports standings (not parsed yet \u2192 computed)"
+      "standings_path_m": "/sports/msoc/{season}/standings",
+      "standings_path_w": "/sports/wsoc/{season}/standings",
+      "notes": "PrestoSports: {season} \u2192 2026-27; first response is often 202 (client retries)"
     },
     {
       "ncaa_seo": "sciac",

@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path';
 import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { parseSidearmStandings, conferenceStandingsUrl, type ConfStandingsRow } from '../sources/conferences/sidearmStandings.js';
+import { parsePrestoStandings, prestoSeasonSlug } from '../sources/conferences/prestoStandings.js';
 import { listPrograms, listSchools, listProgramSeasons } from '../db/repos.js';
 import { listConferences, updateConference, writeStandings, writeStandingsChecks, confPoints, type StandingRow, type StandingsCheck } from '../db/standingsRepo.js';
 import { selectAll, kvSet } from '../db/client.js';
@@ -46,9 +47,10 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
     const s = sites.get(c.ncaa_seo);
     if (!s) continue;
     const patch: Record<string, unknown> = {};
-    const host = s.platform === 'sidearm' ? (s.host ?? null) : null;
-    const pm = host ? (s.standings_path_m === null ? null : (s.standings_path_m ?? '/standings.aspx?path=msoc')) : null;
-    const pw = host ? (s.standings_path_w === null ? null : (s.standings_path_w ?? '/standings.aspx?path=wsoc')) : null;
+    const host = s.platform === 'sidearm' || s.platform === 'presto' ? (s.host ?? null) : null;
+    const dflt = (g: 'm' | 'w') => (s.platform === 'presto' ? `/sports/${g === 'w' ? 'wsoc' : 'msoc'}/{season}/standings` : `/standings.aspx?path=${g === 'w' ? 'wsoc' : 'msoc'}`);
+    const pm = host ? (s.standings_path_m === null ? null : (s.standings_path_m ?? dflt('m'))) : null;
+    const pw = host ? (s.standings_path_w === null ? null : (s.standings_path_w ?? dflt('w'))) : null;
     if (c.site_host !== host) patch.site_host = host;
     if (c.standings_path_m !== pm) patch.standings_path_m = pm;
     if (c.standings_path_w !== pw) patch.standings_path_w = pw;
@@ -84,9 +86,11 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
       let official = false;
 
       if (c.site_host && path) {
-        const url = conferenceStandingsUrl(c.site_host, gender, path);
+        const url = conferenceStandingsUrl(c.site_host, gender, path.replace('{season}', prestoSeasonSlug(season)));
+        const presto = sites.get(c.ncaa_seo)?.platform === 'presto' || /\/sports\/[mw]soc\//.test(path);
         try {
-          const parsed = parseSidearmStandings((await fetcher.get(url, { skipCache: true })).text);
+          const html = (await fetcher.get(url, { skipCache: true })).text;
+          const parsed = presto ? parsePrestoStandings(html) : parseSidearmStandings(html);
           // A program may appear in a division/pod table and in the full table: keep the row from the biggest
           // table (conference-wide rank) and remember the small pod's name.
           const best = new Map<string, { row: ConfStandingsRow; rank: number; podSize: number; pod: string | null }>();
