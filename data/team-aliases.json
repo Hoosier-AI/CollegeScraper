@@ -625,6 +625,18 @@
     {
       "alias": "New Mexico State",
       "seo": "new-mexico-st"
+    },
+    {
+      "alias": "Claremont-McKenna-Harvey Mudd-Scripps Colleges",
+      "seo": "claremont-m-s"
+    },
+    {
+      "alias": "Claremont-Mudd-Scripps",
+      "seo": "claremont-m-s"
+    },
+    {
+      "alias": "University of Rochester",
+      "seo": "rochester-ny"
     }
   ]
 }

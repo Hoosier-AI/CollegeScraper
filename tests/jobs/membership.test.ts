@@ -204,3 +204,25 @@ describe('shared stems', async () => {
     expect(m.resolveName(idx, { gender: 'm', ownDivision: 'd1', ownConference: 'nec', divisionOf, conferenceOf }, 'Loyola Chicago')).toBe('luc');
   });
 });
+
+describe('division-scoped short names', async () => {
+  const m = await import('../../src/normalize/aliasIndex.js');
+  it('matches a shortened name to the only program of that division it can be', () => {
+    const progs = [
+      { id: 'mosou', gender: 'm', school_seo: 'mssu', name: 'Missouri Southern St.', short_name: null, name6: null },
+      { id: 'wconn', gender: 'm', school_seo: 'western-conn-st', name: 'WestConn', short_name: null, name6: null },
+      { id: 'delhi', gender: 'm', school_seo: 'suny-delhi', name: 'SUNY Delhi', short_name: null, name6: null },
+      { id: 'miami', gender: 'm', school_seo: 'miami-fl', name: 'Miami (Fla.)', short_name: null, name6: null },
+    ];
+    const schools = new Map([['western-conn-st', { seo: 'western-conn-st', name: 'WestConn', long_name: 'Western Connecticut State University' }]]);
+    const idx = m.buildAliasIndex(progs, schools, []);
+    m.setMembership(new Map());
+    const divisionOf = new Map([['mosou', 'd2'], ['wconn', 'd3'], ['delhi', 'd3'], ['miami', 'd1']]);
+    const scope = (d: string) => ({ gender: 'm', ownDivision: d, ownConference: null, divisionOf, conferenceOf: new Map() });
+    expect(m.resolveName(idx, scope('d2'), 'Missouri Southern')).toBe('mosou');
+    expect(m.resolveName(idx, scope('d3'), 'Western Connecticut')).toBe('wconn');
+    expect(m.resolveName(idx, scope('d3'), 'Delhi')).toBe('delhi');
+    expect(m.resolveName(idx, scope('d1'), 'Miami Dade')).toBeNull();
+    expect(m.resolveName(idx, scope('d1'), 'Missouri Southern')).toBeNull(); // another division, and the slug does not spell the name
+  });
+});

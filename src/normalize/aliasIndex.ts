@@ -77,6 +77,16 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
   for (const a of extra) {
     for (const p of bySeo.get(a.seo) ?? []) if (!a.gender || a.gender === p.gender) addName(p.gender, a.alias, p.id);
   }
+  // Division-scoped fallback: "Missouri Southern" for Missouri Southern St., "Delhi" for SUNY Delhi.
+  programTokens = new Map();
+  for (const p of programs) {
+    const sc = schools.get(p.school_seo);
+    const names = [p.name, p.short_name, sc?.name, sc?.long_name].filter((x): x is string => !!x);
+    const list = programTokens.get(p.gender) ?? [];
+    list.push({ id: p.id, names: names.map((n) => memberTokens(n)) });
+    programTokens.set(p.gender, list);
+  }
+
   // A conference name that is also a team name ("American") is a team, not a placeholder.
   for (const m of byGender.values()) for (const k of m.keys()) knownConferenceKeys.delete(k);
   return byGender;
@@ -85,6 +95,8 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
 /** Conference names known to the database, as teamKey()s; jobs populate this so "Empire 8" is not treated as a team. */
 const knownConferenceKeys = new Set<string>();
 export function setKnownConferences(names: Iterable<string>): void { for (const n of names) { const k = teamKey(n); if (k) knownConferenceKeys.add(k); } }
+
+const PROMO_WORDS = /\b(day|night|game|opener|senior|seniors|giveaway|appreciation|youth|kids?|alumni|homecoming|fest|dh|doubleheader|out|recognition|welcome|celebration|triple|points|app|student|students|school|pink|purple|white|gold|military|heritage|hispanic|faculty|staff|family|weekend|free|admission|tournament|classic|cup|showcase|tba|tbd)\b/i;
 
 /** "RV TCU", "#2/5 Duke", "#T19 South Carolina", "NR/#20 North Carolina", "[RV] Xavier", "vs. No. 12 Elon" → team name only. */
 export function cleanOpponentName(raw: string): string {
@@ -101,6 +113,7 @@ export function isExhibitionName(raw: string): boolean {
   return /\((?:exh\.?|exhib\.?|exhibition|scrimmage)\)|\bexhibition\b|\bscrimmage\b/i.test(String(raw ?? ''));
 }
 
+let programTokens = new Map<string, { id: string; names: string[][] }[]>();
 let membership: Map<string, boolean> | null = null;
 /** program id → NCAA member; ambiguous names prefer members ("St. Thomas" = St. Thomas (MN), not St. Thomas (FL)). */
 export function setMembership(m: Map<string, boolean>): void { membership = m; }
@@ -136,10 +149,24 @@ export function resolveName(index: AliasIndex, scope: ResolverScope, rawName: st
   if (direct) return direct;
   // School schedules often append promotions to the opponent ("North Dakota State Senior Day",
   // "Hofstra Res-Co Night", "UIC Free admission for alumni…"): try the longest word prefix that names a team.
+  // A shortened name that is a prefix subsequence of exactly one program in the same division ("Missouri Southern"
+  // for Missouri Southern St.). Never the other way round, so "Miami Dade" cannot become "Miami".
+  if (scope.ownDivision) {
+    const rt = memberTokens(name);
+    if (rt.length) {
+      const hits = (programTokens.get(scope.gender) ?? []).filter((p) => scope.divisionOf.get(p.id) === scope.ownDivision && p.names.some((nt) => prefixSubsequence(rt, nt)));
+      const ids = [...new Set(hits.map((h) => h.id))];
+      if (ids.length === 1) return ids[0]!;
+    }
+  }
   // Only a program of the same division is accepted this way: "Trinity College of Jacksonville … Night" must not
   // become Trinity (CT).
+  // Only promotional text is dropped ("North Dakota State Senior Day", "Hofstra Res-Co Night") or trailing junk with
+  // digits; an ordinary trailing word is part of the name, so "Miami Dade" never becomes Miami.
   const words = name.split(/\s*[|/\u2013\u2014-]\s*|\s+/).filter(Boolean);
   for (let k = words.length - 1; k >= 1; k--) {
+    const dropped = words.slice(k).join(' ');
+    if (!PROMO_WORDS.test(dropped) && !/\d/.test(dropped)) continue;
     const hit = resolveExact(m, scope, words.slice(0, k).join(' '));
     if (hit && (!scope.ownDivision || scope.divisionOf.get(hit) === scope.ownDivision)) return hit;
   }
@@ -207,7 +234,6 @@ export function matchAmongMembers(rowName: string | null | undefined, members: M
   return hits.length === 1 ? hits[0]!.id : null;
 }
 
-const PROMO_WORDS = /\b(day|night|game|opener|senior|seniors|giveaway|appreciation|youth|kids?|alumni|homecoming|fest|dh|doubleheader|out|recognition|welcome|celebration|triple|points|app|student|students|school|pink|purple|white|gold|military|heritage|hispanic|faculty|staff|family|weekend|free|admission|tournament|classic|cup|showcase|tba|tbd)\b/i;
 
 /** A name clean enough to become an opponent record: no promo text, digits or separators, at most five words. */
 export function isCleanOpponentName(raw: string): boolean {
