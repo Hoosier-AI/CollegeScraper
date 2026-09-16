@@ -22,6 +22,14 @@ services:
         value: "1"
       - key: NCAA_API_BASE
         sync: false
+      - key: COLLEGE_API_KEYS
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://www.plaibook.soccer,https://plaibook.soccer
+      - key: API_RATE_LIMIT_PER_MIN
+        value: "600"
+      - key: PUBLIC_URL
+        value: https://plaibook-college-scraper.onrender.com
       - key: LOG_LEVEL
         value: info
       - key: PORT

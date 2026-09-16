@@ -12,6 +12,12 @@ const schema = z.object({
   LOG_LEVEL: z.string().default('info'),
   PORT: z.coerce.number().int().default(8080),
   SCHEDULER_ENABLED: z.string().default('0'),
+  // Public read API (/v1): "name:key,name:key" (keys ≥ 16 chars), browser origins allowed to call it, per-key
+  // requests per minute, and the base URL advertised in /v1/openapi.json.
+  COLLEGE_API_KEYS: z.string().default(''),
+  CORS_ORIGINS: z.string().default(''),
+  API_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(600),
+  PUBLIC_URL: z.string().url().optional(),
 });
 
 export type Config = z.infer<typeof schema> & { userAgent: string; contactEmail: string };
@@ -32,6 +38,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     LOG_LEVEL: env.LOG_LEVEL,
     PORT: env.PORT,
     SCHEDULER_ENABLED: env.SCHEDULER_ENABLED,
+    COLLEGE_API_KEYS: env.COLLEGE_API_KEYS,
+    CORS_ORIGINS: env.CORS_ORIGINS,
+    API_RATE_LIMIT_PER_MIN: env.API_RATE_LIMIT_PER_MIN,
+    PUBLIC_URL: env.PUBLIC_URL || undefined,
   });
   const cfg: Config = {
     ...parsed,

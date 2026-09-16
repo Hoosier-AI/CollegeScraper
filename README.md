@@ -112,6 +112,13 @@ a restart resumes from the queue and every fetch is cached in `college_source_fe
   first/second-half goals, shots per goal, points per game with division/conference ranks, record vs ranked
   teams, last-5 goals.
 
+## Public API (`/v1`) — what Plaibook connects to
+
+Read-only, key-authenticated HTTP API over the whole catalog: `docs/API.md` (endpoints, auth, limits, field
+dictionary) and `docs/plaibook-client.mjs` (a drop-in for Plaibook's `api/_lib/college.mjs` with the same op
+names). Keys: `COLLEGE_API_KEYS="plaibook:<key>"`; spec at `GET /v1/openapi.json`. Plaibook needs only
+`COLLEGE_API_URL` and `COLLEGE_API_KEY` on its side.
+
 ## Stats viewer UI (`ui/`)
 
 A Vite + React + Tailwind app served by the same Fastify server (built into `ui/dist`, SPA fallback).

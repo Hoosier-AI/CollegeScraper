@@ -7,6 +7,8 @@ import { enqueue, jobNames, workerLoop } from './jobs/runner.js';
 import { registerAllJobs } from './jobs/index.js';
 import { startScheduler } from './jobs/scheduler.js';
 import { registerUiApi } from './ui/api.js';
+import { registerPublicApi } from './api/v1.js';
+import { makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -28,6 +30,16 @@ function authorized(header: string | undefined): boolean {
 
 registerUiApi(app, authorized);
 
+// Public read API for Plaibook and other consumers: named keys, per-key limits, CORS for the configured origins.
+const apiKeys = parseApiKeys(cfg.COLLEGE_API_KEYS);
+registerPublicApi(app, {
+  authenticate: makeAuthenticator({ adminSecret: cfg.COLLEGE_TRIGGER_SECRET ?? null, keys: apiKeys }),
+  limiter: new RateLimiter(cfg.API_RATE_LIMIT_PER_MIN),
+  corsOrigins: cfg.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
+  publicUrl: cfg.PUBLIC_URL,
+});
+log.info({ keys: apiKeys.map((k) => k.name) }, 'public api keys loaded');
+
 // Built stats viewer (ui/dist) with SPA fallback; API and health routes are registered above it.
 const uiDist = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'dist');
 if (existsSync(uiDist)) {
@@ -35,12 +47,12 @@ if (existsSync(uiDist)) {
   app.register(fastifyStatic, { root: uiDist, prefix: '/', wildcard: true });
   app.setNotFoundHandler((req, reply) => {
     // API-ish paths 404 as JSON; everything else (including the SPA's /jobs page) gets index.html.
-    if (req.url.startsWith('/api/') || /^\/jobs\/(enqueue|runs|[^/?]+\/cancel)/.test(req.url) || req.url.startsWith('/health')) return reply.code(404).send({ error: 'not found' });
+    if (req.url.startsWith('/api/') || req.url.startsWith('/v1/') || /^\/jobs\/(enqueue|runs|[^/?]+\/cancel)/.test(req.url) || req.url.startsWith('/health')) return reply.code(404).send({ error: 'not found' });
     return reply.sendFile('index.html');
   });
 }
 
-app.get('/health', async () => ({ ok: true, jobs: jobNames(), time: new Date().toISOString() }));
+app.get('/health', async () => ({ ok: true, jobs: jobNames(), api: '/v1', time: new Date().toISOString() }));
 
 app.post<{ Querystring: { job?: string }; Body: Record<string, unknown> | null }>('/jobs/enqueue', async (req, reply) => {
   if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
