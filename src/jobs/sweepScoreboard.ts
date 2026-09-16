@@ -42,6 +42,9 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     try { dayGames = await scoreboardDay(recentDay ? freshFetcher : fetcher, store, gender, division, date); }
     catch (err) { ctx.inc('days_failed'); log.warn({ gender, division, date, err: err instanceof Error ? err.message : String(err) }, 'scoreboard day failed'); continue; }
     if (!dayGames.length) { ctx.inc('days_missing'); continue; }
+    // NCAA.com leaves some finished games marked 'pre' while still counting them in its records: a past date with
+    // both scores is final (Presbyterian 1 @ Wofford 0, 2026-09-06).
+    const played = (x: typeof dayGames[number]) => x.state === 'final' || (x.home.score != null && x.away.score != null && x.date < new Date().toISOString().slice(0, 10));
     for (const g of dayGames) {
       // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
       // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
@@ -86,7 +89,7 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         }
         const patch: Record<string, unknown> = { ncaa_contest_id: Number(g.contestId), start_epoch: g.startTimeEpoch ?? undefined, division };
         const sameSides = existing.home_program_id === homeId && existing.away_program_id === awayId;
-        if (g.state === 'final' && existing.status === 'final' && sameSides && g.home.score != null && g.away.score != null
+        if (played(g) && existing.status === 'final' && sameSides && g.home.score != null && g.away.score != null
             && existing.home_score != null && (existing.home_score !== g.home.score || existing.away_score !== g.away.score)) {
           patch.home_score = g.home.score; patch.away_score = g.away.score; patch.source_of_truth = null;
           ctx.inc('scores_corrected');
@@ -95,17 +98,17 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         if (!existing.home_program_id && homeId) patch.home_program_id = homeId;
         if (!existing.away_program_id && awayId) patch.away_program_id = awayId;
         if (existing.status !== 'final') {
-          if (g.state === 'final') { patch.status = 'final'; patch.home_score = g.home.score; patch.away_score = g.away.score; }
+          if (played(g)) { patch.status = 'final'; patch.home_score = g.home.score; patch.away_score = g.away.score; }
           else if (g.state === 'live') patch.status = 'live';
         }
-        if (existing.home_score == null && g.home.score != null && g.state === 'final') { patch.home_score = g.home.score; patch.away_score = g.away.score; }
+        if (existing.home_score == null && g.home.score != null && played(g)) { patch.home_score = g.home.score; patch.away_score = g.away.score; }
         await updateGame(db, existing.id, patch);
         existing.ncaa_contest_id = Number(g.contestId);
         byContest.set(g.contestId, existing);
         ctx.inc('games_updated');
       } else {
         try {
-          const row = await upsertGameByNcaa(db, { ...base, ncaa_contest_id: Number(g.contestId), status: g.state === 'final' ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: g.state === 'final' ? g.home.score : null, away_score: g.state === 'final' ? g.away.score : null });
+          const row = await upsertGameByNcaa(db, { ...base, ncaa_contest_id: Number(g.contestId), status: played(g) ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: played(g) ? g.home.score : null, away_score: played(g) ? g.away.score : null });
           games.push(row); byContest.set(g.contestId, row);
           ctx.inc('games_created');
         } catch (err) {

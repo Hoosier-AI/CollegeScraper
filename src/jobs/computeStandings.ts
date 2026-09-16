@@ -102,6 +102,7 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
     ctx.inc(c.status === 'lag' ? `${field}_lag` : `${field}_mismatch`);
   };
   const unresolvedNotes: string[] = [];
+  const officialMembership: [string, string][] = [];
   const now = new Date().toISOString();
 
   for (const c of conferences) {
@@ -145,7 +146,9 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
                 return;
               }
               if (!pid) { ctx.inc('standings_unresolved'); unresolvedNotes.push(`${c.ncaa_seo}/${gender}: ${row.school}`); return; }
-              // A row that resolves to a program of another conference is never written under this one.
+              officialMembership.push([pid, c.id]);
+              // A row that resolves to a program of another conference is never written under this one (the move is
+              // applied at the end of the run, once every conference has been read).
               if (conferenceOf.get(pid) !== c.id) { ctx.inc('standings_foreign_rows'); unresolvedNotes.push(`${c.ncaa_seo}/${gender}: ${row.school} (stored under another conference)`); return; }
               const cur = best.get(pid);
               if (!cur || pod.rows.length > cur.podSize) best.set(pid, { row, rank: i + 1, podSize: pod.rows.length, pod: cur?.pod ?? null });
@@ -213,6 +216,18 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
       await ctx.heartbeat();
     }
   }
+  // A conference's own table is the authority on who is in it: a program listed by exactly one conference and stored
+  // under another (Shawnee State in the MEC, SUNY Cobleskill in the North Atlantic) is moved.
+  const listedIn = new Map<string, Set<string>>();
+  for (const [pid, cid] of officialMembership) listedIn.set(pid, (listedIn.get(pid) ?? new Set<string>()).add(cid));
+  const moves = [...listedIn].filter(([pid, cids]) => cids.size === 1 && conferenceOf.get(pid) !== [...cids][0]);
+  for (const [pid, cids] of moves) {
+    const cid = [...cids][0]!;
+    const { error } = await db.from('college_program_seasons').update({ conference_id: cid }).eq('program_id', pid).eq('season', season);
+    if (error) log.warn({ pid, err: error.message }, 'conference move failed');
+    else { conferenceOf.set(pid, cid); ctx.inc('conference_moved_to_official'); }
+  }
+
   await kvSet(db, `standings:unresolved:${season}`, { at: now, rows: unresolvedNotes.slice(0, 500) });
   if (unresolvedNotes.length) ctx.note('standings_unresolved_sample', unresolvedNotes.slice(0, 40));
 }
