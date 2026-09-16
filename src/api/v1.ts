@@ -61,15 +61,26 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     return { ...meta, last_completed_runs: last, generated_at: new Date().toISOString() };
   });
 
+  // Crawl health without the viewer's full quality pass (that scans every game and takes minutes): recent runs,
+  // record-check counts from the standings verification, and game/final counts.
   app.get<{ Querystring: Record<string, string> }>('/v1/status', async (req) => {
     const db = getDb();
     const season = seasonOf(req.query.season) ?? (await q.meta(db)).currentSeason;
-    const [runs, quality] = await Promise.all([q.runs(db, 20), q.quality(db, season)]);
+    const count = async (table: string, apply: (x: any) => any) => { const { count: n, error } = await apply(db.from(table).select('*', { count: 'exact', head: true })); if (error) throw new Error(error.message); return n ?? 0; };
+    const [runs, checks, games, finals, programs] = await Promise.all([
+      q.runs(db, 20),
+      selectAll<{ field: string }>(db, 'college_standings_checks', 'field', (x) => x.eq('season', season)),
+      count('college_games', (x) => x.eq('season', season)),
+      count('college_games', (x) => x.eq('season', season).eq('status', 'final')),
+      count('college_program_seasons', (x) => x.eq('season', season).eq('ncaa_member', true)),
+    ]);
+    const byField: Record<string, number> = {};
+    for (const c of checks) byField[c.field] = (byField[c.field] ?? 0) + 1;
     return {
-      season,
+      season, programs, games, finals,
+      record_checks: byField,
       runs: runs.map((r: any) => ({ id: r.id, job: r.job, status: r.status, started_at: r.started_at, finished_at: r.finished_at, error: r.error, counters: r.counters })),
-      checks: quality.checks.map((c: any) => ({ id: c.id, title: c.title, count: c.count })),
-      games: quality.games, finals: quality.finals, generated_at: new Date().toISOString(),
+      generated_at: new Date().toISOString(),
     };
   });
 

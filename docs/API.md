@@ -32,7 +32,7 @@ season (hourly job) and nightly.
 | Route | What it returns |
 |---|---|
 | `GET /v1/meta` | `seasons[]`, `currentSeason`, `genders`, `divisions`, `conferences[]` (id, ncaa_seo, name, division), `last_completed_runs` (job → finished_at) |
-| `GET /v1/status?season=` | Recent crawl runs with counters and errors, the quality-check counts, games/finals stored |
+| `GET /v1/status?season=` | Recent crawl runs with counters and errors, `record_checks` (counts per verification field), member programs, games and finals stored |
 | `GET /v1/search?q=&gender=&limit=` | `programs[]` and `players[]` matching a name (trigram similarity), best first |
 | `GET /v1/programs?season=&gender=&division=&conference=&q=&members=all` | One row per program: school (logo, host, platform), conference, `member` (NCAA membership), `record` (computed W-L-T, GF, GA), `official` (NCAA.com W-L-T), sync timestamps, game/box-score counts. NCAA members only unless `members=all` |
 | `GET /v1/programs/{id}?season=&include=roster,games` | The team page in one call: `program`, `season` row (division, conference, `ncaa_member`, `official_w/l/t`), `coaches`, `teamStats`, `standing`, `standingsChecks`, `conferenceTable`, `usc` (latest poll entry) + `uscHistory`, `categories` (NCAA.com national ranks), `roster[]`, `games[]` |
