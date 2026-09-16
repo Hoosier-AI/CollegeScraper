@@ -43,6 +43,14 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   const namesOf = (id: string): (string | null | undefined)[] => { const pr = allById.get(id); const sc = pr ? schools.get(pr.school_seo) : undefined; return pr ? [pr.name, pr.short_name, sc?.name, sc?.long_name, pr.school_seo.replace(/-/g, ' ')] : []; };
 
   let recentSet: Set<string> | null = null;
+  // only_pending_boxscores: just the programs with a final in the last N days whose school box score is still missing
+  // (the in-season hourly pass; a full schedule refresh for every program is the nightly job's work).
+  if (ctx.params.only_pending_boxscores) {
+    const days = typeof ctx.params.only_pending_boxscores === 'number' ? ctx.params.only_pending_boxscores : 3;
+    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    recentSet = new Set(games.filter((g) => g.status === 'final' && g.game_date >= since && !g.site_fetched_at).flatMap((g) => [g.home_program_id, g.away_program_id]).filter((x): x is string => !!x));
+    ctx.inc('programs_with_pending_boxscores', recentSet.size);
+  }
   if (ctx.params.only_recent_days) {
     const since = new Date(Date.now() - Number(ctx.params.only_recent_days) * 86400000).toISOString().slice(0, 10);
     recentSet = new Set(games.filter((g) => g.game_date >= since && g.game_date <= new Date(Date.now() + 86400000).toISOString().slice(0, 10)).flatMap((g) => [g.home_program_id, g.away_program_id]).filter((x): x is string => !!x));

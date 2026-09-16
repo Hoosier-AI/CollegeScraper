@@ -10,15 +10,19 @@ async function step(ctx: JobContext, job: string, params: Record<string, unknown
   await fn(sub);
 }
 
-/** In-season, every 30 minutes: yesterday/today/tomorrow scoreboard → new NCAA details → site results for programs that played → reconcile → partial aggregates. */
+/**
+ * In-season, every 30 minutes: yesterday/today/tomorrow scoreboard → NCAA box scores for new finals → school box
+ * scores only for programs whose new finals still lack one → reconcile → aggregates. Schedules for every program and
+ * the conference standings pages are refreshed by the nightly job; doing them here made each "hourly" run a
+ * 1,300-program crawl that took two to four hours.
+ */
 registerJob('hourly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
   await step(ctx, 'fetch-games-ncaa', { season, recent_days: 3 });
-  await step(ctx, 'sync-site', { season, only_recent_days: 3, stages: ['schedule', 'boxscores'] });
+  await step(ctx, 'sync-site', { season, only_pending_boxscores: 3, stages: ['boxscores'] });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: false });
-  await step(ctx, 'compute-standings', { season });
 });
 
 /** Nightly: corrections + rosters/bios/season stats for programs that played in the last week, full aggregates, transfers. */
