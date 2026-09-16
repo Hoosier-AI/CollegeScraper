@@ -14,7 +14,7 @@ import { log } from '../log.js';
 type Stage = 'roster' | 'schedule' | 'stats' | 'boxscores' | 'bios';
 const ALL_STAGES: Stage[] = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
-/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, force?: boolean } */
+/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean } */
 /** gender_division → first NCAA-listed contest date of the season (written by reconcile-games). */
 let seasonOpeners: Record<string, string> = {};
 
@@ -60,6 +60,8 @@ export async function syncSite(ctx: JobContext): Promise<void> {
     if (await ctx.cancelled()) return;
     const ps = seasonByProgram.get(p.id);
     if (!ps || (wantedDivision && ps.division !== wantedDivision)) continue;
+    // only_never_synced: programs whose roster has never been read (newly detected sites), nothing else.
+    if (ctx.params.only_never_synced && ps.roster_synced_at) continue;
     if (recentSet && !recentSet.has(p.id)) continue;
     const school = schools.get(p.school_seo);
     const adapter = school ? adapterFor(school.site_platform) : null;

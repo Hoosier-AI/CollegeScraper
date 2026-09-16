@@ -7,7 +7,7 @@ import { currentSeason } from './seasons.js';
 import type { SiteContext } from '../model.js';
 import { log } from '../log.js';
 
-/** params: { season?, program? (seo), only_unknown?, platforms?: string[], force? } */
+/** params: { season?, program? (seo), only_unknown?, platforms?: string[], program_status?: string[], force? } */
 export async function detectSites(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
@@ -18,9 +18,11 @@ export async function detectSites(ctx: JobContext): Promise<void> {
   const reprobe = !!ctx.params.force || !!wantPlatforms;
   const schools = (await listSchools(db)).filter((s) => s.athletics_url && (!onlySeo || s.seo === onlySeo) && (!wantPlatforms || wantPlatforms.has(s.site_platform)));
   const programs = await listPrograms(db);
+  // program_status: only schools with a program in one of these states (e.g. ['unknown','failed'] = sport never found).
+  const wantStatus = Array.isArray(ctx.params.program_status) ? new Set((ctx.params.program_status as string[]).map(String)) : null;
   for (const s of schools) {
     if (await ctx.cancelled()) return;
-    const mine = programs.filter((p) => p.school_seo === s.seo);
+    const mine = programs.filter((p) => p.school_seo === s.seo && (!wantStatus || wantStatus.has(p.site_status)));
     if (!mine.length) continue;
     // only_unknown restricts the set of schools; force only decides whether an already-classified school is re-probed.
     if (ctx.params.only_unknown && s.site_platform !== 'unknown') continue;
@@ -36,7 +38,7 @@ export async function detectSites(ctx: JobContext): Promise<void> {
     const adapter = adapterFor(platform);
     for (const p of mine) {
       if (!adapter) { await db.from('college_programs').update({ site_status: 'not_found' }).eq('id', p.id); continue; }
-      if (p.site_status === 'ok' && p.site_sport_slug && !reprobe) continue;
+      if (p.site_status === 'ok' && p.site_sport_slug && !reprobe && !wantStatus) continue;
       const base: SiteContext = { host, baseUrl, gender: p.gender, season, sportSlug: p.site_sport_slug, sportId: p.site_sport_id, teamSlug: p.site_team_slug };
       try {
         const found = await adapter.discover(fetcher, base);

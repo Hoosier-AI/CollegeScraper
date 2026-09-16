@@ -70,8 +70,12 @@ export const prestoAdapter: SiteAdapter = {
     const html = await getOrNull(fetcher, `${base(ctx)}/sports/${sport}/index`);
     if (html == null) return null;
     const info = parseSportIndex(html, sport);
-    if (!info.teamSlug) return null;
-    return { ...ctx, sportSlug: sport, teamSlug: info.teamSlug };
+    if (info.teamSlug) return { ...ctx, sportSlug: sport, teamSlug: info.teamSlug };
+    // Smaller tenants publish no team-stats page (no /teams/{slug} link), but the roster and schedule still live at
+    // the season path; the slug is only needed for cumulative stats, which seasonStats() skips when it is null.
+    const roster = await getOrNull(fetcher, `${base(ctx)}/sports/${sport}/${prestoSeasonSlug(ctx.season)}/roster`);
+    if (roster == null || !/roster/i.test(roster)) return null;
+    return { ...ctx, sportSlug: sport, teamSlug: null };
   },
 
   async roster(fetcher: Fetcher, ctx: SiteContext): Promise<Roster> {
