@@ -132,8 +132,10 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
       try {
         const box = await adapter.boxScore(fetcher, site, b.url, { date: b.date });
         const game = games.find((g) => g.id === b.gameId);
-        // Box scores name the home and visiting teams explicitly; schedule home/away stamps are less reliable.
-        if (game?.home_program_id && game.away_program_id) {
+        // Box scores name the home and visiting teams explicitly, so they beat a schedule's home/away stamp. They do
+        // not beat NCAA.com: a school's box score sometimes lists its own team first whatever the venue, and flipping
+        // an NCAA-linked fixture here would undo the orientation the scoreboard sweep just set (Spalding at Aurora).
+        if (game?.home_program_id && game.away_program_id && !game.ncaa_contest_id) {
           const sides = [{ id: game.home_program_id, names: namesOf(game.home_program_id) }, { id: game.away_program_id, names: namesOf(game.away_program_id) }];
           const bh = matchAmongMembers(box.home.name, sides), ba = matchAmongMembers(box.away.name, sides);
           if ((bh === game.away_program_id && ba !== game.away_program_id) || (ba === game.home_program_id && bh !== game.home_program_id)) {
