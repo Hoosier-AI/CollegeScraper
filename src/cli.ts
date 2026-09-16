@@ -33,6 +33,7 @@ for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-
     .option('--all', 'reconcile-games: re-evaluate every final game')
     .option('--conference <seo>', 'compute-standings: one conference (ncaa seo)')
     .option('--only-unknown', 'detect-sites: only schools not yet classified')
+    .option('--platforms <list>', 'detect-sites: re-probe only schools with these platforms (comma list)')
     .option('--skip-categories', 'refresh-rankings: polls only, no NCAA.com category ranks')
     .action(async (opts) => {
       const p = paramsFrom(opts);
@@ -41,6 +42,7 @@ for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-
       if (opts.all) p.all = true;
       if (opts.conference) p.conference = String(opts.conference);
       if (opts.onlyUnknown) p.only_unknown = true;
+      if (opts.platforms) p.platforms = String(opts.platforms).split(',');
       if (opts.skipCategories) p.categories = false;
       const counters = await runInline(getDb(), job, p);
       console.log(JSON.stringify(counters, null, 2));

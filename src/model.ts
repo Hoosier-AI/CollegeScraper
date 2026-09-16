@@ -4,7 +4,7 @@
 export type Gender = 'm' | 'w';
 export type Division = 'd1' | 'd2' | 'd3';
 export type SourceKind = 'sidearm' | 'presto' | 'ncaa';
-export type SitePlatform = 'sidearm' | 'presto' | 'other' | 'unknown';
+export type SitePlatform = 'sidearm' | 'presto' | 'wmt' | 'other' | 'unknown';
 export type Num = number | null;
 
 /** A player as listed on a roster page/feed. */

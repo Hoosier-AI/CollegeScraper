@@ -2,16 +2,19 @@
 import type { Fetcher, SiteAdapter, SitePlatform } from '../../model.js';
 import { sidearmAdapter, looksLikeSidearm } from './sidearm/index.js';
 import { prestoAdapter, looksLikePresto } from './presto/index.js';
+import { wmtAdapter, looksLikeWmt } from './wmt/index.js';
 
 export function adapterFor(platform: SitePlatform): SiteAdapter | null {
   if (platform === 'sidearm') return sidearmAdapter;
   if (platform === 'presto') return prestoAdapter;
+  if (platform === 'wmt') return wmtAdapter;
   return null;
 }
 
 export function classifyHtml(html: string): SitePlatform {
   if (looksLikeSidearm(html)) return 'sidearm';
   if (looksLikePresto(html)) return 'presto';
+  if (looksLikeWmt(html)) return 'wmt';
   return 'other';
 }
 

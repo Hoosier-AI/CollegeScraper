@@ -7,13 +7,16 @@ import { currentSeason } from './seasons.js';
 import type { SiteContext } from '../model.js';
 import { log } from '../log.js';
 
-/** params: { season?, program? (seo), only_unknown?, force? } */
+/** params: { season?, program? (seo), only_unknown?, platforms?: string[], force? } */
 export async function detectSites(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
   const fetcher = makeFetcher(db);
   const onlySeo = typeof ctx.params.program === 'string' ? ctx.params.program : null;
-  const schools = (await listSchools(db)).filter((s) => s.athletics_url && (!onlySeo || s.seo === onlySeo));
+  // `platforms` re-probes only schools currently classified a certain way (e.g. ['other','unknown'] after adding an adapter).
+  const wantPlatforms = Array.isArray(ctx.params.platforms) ? new Set((ctx.params.platforms as string[]).map(String)) : null;
+  const reprobe = !!ctx.params.force || !!wantPlatforms;
+  const schools = (await listSchools(db)).filter((s) => s.athletics_url && (!onlySeo || s.seo === onlySeo) && (!wantPlatforms || wantPlatforms.has(s.site_platform)));
   const programs = await listPrograms(db);
   for (const s of schools) {
     if (await ctx.cancelled()) return;
@@ -24,7 +27,7 @@ export async function detectSites(ctx: JobContext): Promise<void> {
     let platform = s.site_platform;
     let baseUrl = `https://${s.athletics_host}`;
     let host = s.athletics_host!;
-    if (platform === 'unknown' || ctx.params.force) {
+    if (platform === 'unknown' || reprobe) {
       const d = await detectSite(fetcher, s.athletics_url!);
       platform = d.platform; baseUrl = d.baseUrl; host = d.host;
       await upsertSchools(db, [{ seo: s.seo, name: s.name, site_platform: platform, site_detected_at: new Date().toISOString(), athletics_host: host }]);
@@ -33,7 +36,7 @@ export async function detectSites(ctx: JobContext): Promise<void> {
     const adapter = adapterFor(platform);
     for (const p of mine) {
       if (!adapter) { await db.from('college_programs').update({ site_status: 'not_found' }).eq('id', p.id); continue; }
-      if (p.site_status === 'ok' && p.site_sport_slug && !ctx.params.force) continue;
+      if (p.site_status === 'ok' && p.site_sport_slug && !reprobe) continue;
       const base: SiteContext = { host, baseUrl, gender: p.gender, season, sportSlug: p.site_sport_slug, sportId: p.site_sport_id, teamSlug: p.site_team_slug };
       try {
         const found = await adapter.discover(fetcher, base);
