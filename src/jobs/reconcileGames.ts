@@ -72,18 +72,23 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     if (!sh || !sa || sh.goals == null || sa.goals == null) continue;
     if (sh.goals === g.home_score && sa.goals === g.away_score) continue;
     if (sh.goals !== g.away_score || sa.goals !== g.home_score) continue;
-    // Swap via a placeholder so the (game_id, program_id, source) key never collides mid-way.
-    const tmp = '00000000-0000-0000-0000-000000000000';
+    // program_id is a foreign key, so the rows are re-inserted with the sides exchanged (no placeholder id).
+    const flip = (pid: string | null) => (pid === g.home_program_id ? g.away_program_id : pid === g.away_program_id ? g.home_program_id : pid);
     for (const table of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events'] as const) {
-      await db.from(table).update({ program_id: tmp }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.home_program_id);
-      await db.from(table).update({ program_id: g.home_program_id }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.away_program_id);
-      await db.from(table).update({ program_id: g.away_program_id }).eq('game_id', g.id).eq('source', 'site').eq('program_id', tmp);
+      const rows = await selectAll<Record<string, unknown>>(db, table, '*', (q) => q.eq('game_id', g.id).eq('source', 'site'));
+      if (!rows.length) continue;
+      const del = await db.from(table).delete().eq('game_id', g.id).eq('source', 'site');
+      if (del.error) throw new Error(`${table} delete: ${del.error.message}`);
+      const next = rows.map((r) => {
+        const x: Record<string, unknown> = { ...r, program_id: flip(r.program_id as string | null) };
+        if (table === 'college_game_team_stats') x.is_home = x.program_id === g.home_program_id;
+        if (table === 'college_game_events' && r.home_score != null) { x.home_score = r.away_score; x.away_score = r.home_score; }
+        if (table === 'college_game_events') delete x.id;
+        return x;
+      });
+      const ins = await db.from(table).insert(next);
+      if (ins.error) throw new Error(`${table} insert: ${ins.error.message}`);
     }
-    await db.from('college_game_team_stats').update({ is_home: true }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.home_program_id);
-    await db.from('college_game_team_stats').update({ is_home: false }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.away_program_id);
-    // Running scores inside the events are printed home-first by the box; swap them the same way.
-    const ev = await selectAll<{ id: number; home_score: number | null; away_score: number | null }>(db, 'college_game_events', 'id,home_score,away_score', (q) => q.eq('game_id', g.id).eq('source', 'site').not('home_score', 'is', null));
-    for (const x of ev) await db.from('college_game_events').update({ home_score: x.away_score, away_score: x.home_score }).eq('id', x.id);
     [sh.program_id, sa.program_id] = [sa.program_id, sh.program_id]; sh.is_home = false; sa.is_home = true;
     ctx.inc('site_box_sides_swapped');
   }
