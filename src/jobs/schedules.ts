@@ -46,6 +46,9 @@ registerJob('nightly', async (ctx) => {
 registerJob('standings', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'compute-standings', { season });
+  // The United Soccer Coaches polls come out on Tuesday afternoons (ET); six poll pages are cheap, so every run
+  // re-reads them and a new poll is live within three hours instead of waiting for the nightly.
+  await step(ctx, 'refresh-rankings', { season, categories: false });
 });
 
 /** Weekly: rankings/standings/leaderboards, re-discovery, persisted-query health. */

@@ -143,21 +143,39 @@ export async function player(db: Db, id: string) {
   return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers, gameLog: truthLog };
 }
 
-export async function leaders(db: Db, o: { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown; members?: boolean }) {
+export interface LeadersFilter { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown; offset?: unknown; q?: string; members?: boolean }
+
+/** One page of a leaderboard plus the total so callers can page through every player or team. */
+export async function leaders(db: Db, o: LeadersFilter) {
   const team = o.kind === 'team';
   const allow = team ? TEAM_STATS : PLAYER_STATS;
   const stat = allow.includes(o.stat ?? '') ? o.stat! : (team ? 'w' : 'goals');
   const limit = clamp(o.limit, 1, 500, 100);
+  const offset = clamp(o.offset, 0, 1_000_000, 0);
   const view = team ? 'college_v_team_leaders' : 'college_v_player_leaders';
-  let q = db.from(view).select('*').eq('season', o.season).not(stat, 'is', null).order(stat, { ascending: ASC.has(stat) }).limit(limit);
-  if (o.gender) q = q.eq('gender', o.gender);
-  if (o.division) q = q.eq('division', o.division);
-  if (o.conference) q = q.eq('conference_id', o.conference);
-  if (o.members !== false) q = q.eq('ncaa_member', true);
-  if (!team) { q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm); }
-  const { data, error } = await q;
-  if (error) throw new Error(`leaders: ${error.message}`);
-  return data ?? [];
+  const term = (o.q ?? '').trim().replace(/[,()%\\]/g, '').slice(0, 60);
+  const filtered = (q: any) => {
+    q = q.eq('season', o.season).not(stat, 'is', null);
+    if (o.gender) q = q.eq('gender', o.gender);
+    if (o.division) q = q.eq('division', o.division);
+    if (o.conference) q = q.eq('conference_id', o.conference);
+    if (o.members !== false) q = q.eq('ncaa_member', true);
+    if (!team) { q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm); }
+    // Name search: PostgREST's `or` syntax reserves commas and parentheses, so they are dropped from the term.
+    if (term) q = team ? q.ilike('program_name', `%${term}%`) : q.or(`display_name.ilike.%${term}%,program_name.ilike.%${term}%`);
+    return q;
+  };
+  const { data, error, count } = await filtered(db.from(view).select('*', { count: 'exact' })).order(stat, { ascending: ASC.has(stat) }).range(offset, offset + limit - 1);
+  if (error) {
+    // An offset past the end is an empty page, not an error (PostgREST answers 416).
+    if (/range not satisfiable/i.test(error.message)) {
+      const { count: total, error: e2 } = await filtered(db.from(view).select('*', { count: 'exact', head: true }));
+      if (e2) throw new Error(`leaders: ${e2.message}`);
+      return { stat, rows: [], total: total ?? 0, limit, offset };
+    }
+    throw new Error(`leaders: ${error.message}`);
+  }
+  return { stat, rows: data ?? [], total: count ?? (data?.length ?? 0), limit, offset };
 }
 
 export async function standings(db: Db, o: { season: number; gender?: string; division?: string }) {

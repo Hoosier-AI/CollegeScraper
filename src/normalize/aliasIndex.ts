@@ -24,6 +24,11 @@ export function curatedAliases(): CuratedAlias[] {
   return curated;
 }
 
+/** Key of a curated alias matched verbatim (case and whitespace insensitive). */
+export function verbatimKey(name: string): string {
+  return `=${String(name ?? '').toLowerCase().replace(/\s+/g, ' ').trim()}`;
+}
+
 /** "Notre Dame (OH)" → "notre dame oh": keeps the disambiguating parenthetical as words. */
 export function teamKeyKeepParens(name: string): string {
   return teamKey(name.replace(/[()]/g, ' '));
@@ -75,7 +80,9 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
     if (ids.size > 1) for (const id of ids) add(gender, stem, id);
   }
   for (const a of extra) {
-    for (const p of bySeo.get(a.seo) ?? []) if (!a.gender || a.gender === p.gender) addName(p.gender, a.alias, p.id);
+    // A curated alias is decisive when the name matches it verbatim: "University of Rochester" is Rochester (NY)
+    // even though its key ("rochester") also fits RIT and Rochester Christian.
+    for (const p of bySeo.get(a.seo) ?? []) if (!a.gender || a.gender === p.gender) { addName(p.gender, a.alias, p.id); add(p.gender, verbatimKey(a.alias), p.id); }
   }
   // Division-scoped fallback: "Missouri Southern" for Missouri Southern St., "Delhi" for SUNY Delhi.
   programTokens = new Map();
@@ -180,6 +187,8 @@ export function resolveNameExact(index: AliasIndex, scope: ResolverScope, rawNam
 }
 
 function resolveExact(m: Map<string, string[]>, scope: ResolverScope, name: string): string | null {
+  const curatedHit = m.get(verbatimKey(name));
+  if (curatedHit?.length === 1) return curatedHit[0]!;
   const exact = m.get(teamKeyKeepParens(name));
   const plain = m.get(teamKey(name));
   let cands = (exact && exact.length ? exact : plain) ?? [];

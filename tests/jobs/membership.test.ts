@@ -59,6 +59,25 @@ describe('opponent aliases', () => {
     expect(r('University of Washington')).toBe('wash');
     expect(r('UMKC')).toBe('umkc');
   });
+  it('a curated alias wins verbatim even when its key is ambiguous', () => {
+    // "University of Rochester" keys to "rochester", which RIT and Rochester Christian share; the poll name is exact.
+    const progs = [
+      { id: 'ur', gender: 'w', school_seo: 'rochester-ny', name: 'Rochester (NY)', short_name: 'Rochester (NY)', name6: 'ROCHES' },
+      { id: 'rit', gender: 'w', school_seo: 'rochester-inst', name: 'RIT', short_name: 'RIT', name6: 'RIT' },
+      { id: 'rc', gender: 'w', school_seo: 'x-rochester', name: 'Rochester', short_name: 'Rochester', name6: null },
+    ];
+    const sch = new Map<string, { seo: string; name: string; long_name: string | null }>([
+      ['rochester-ny', { seo: 'rochester-ny', name: 'Rochester (NY)', long_name: 'University of Rochester' }],
+      ['rochester-inst', { seo: 'rochester-inst', name: 'RIT', long_name: 'Rochester Institute of Technology' }],
+      ['x-rochester', { seo: 'x-rochester', name: 'Rochester', long_name: null }],
+    ]);
+    const idx = buildAliasIndex(progs, sch, [{ alias: 'University of Rochester', seo: 'rochester-ny' }]);
+    const sc = { gender: 'w', ownDivision: 'd3', ownConference: null, divisionOf: new Map(progs.map((p) => [p.id, 'd3'])), conferenceOf: new Map() };
+    expect(resolveName(idx, sc, 'University of Rochester')).toBe('ur');
+    expect(resolveName(idx, sc, 'university  of rochester')).toBe('ur');
+    expect(resolveName(idx, sc, 'Rochester Institute of Technology')).toBe('rit');
+    expect(resolveName(idx, sc, 'Rochester')).toBeNull(); // still ambiguous without the full name
+  });
   it('does not invent matches', () => {
     expect(r('Bob Jones')).toBeNull();
     expect(r('USC Lancaster')).toBeNull();
