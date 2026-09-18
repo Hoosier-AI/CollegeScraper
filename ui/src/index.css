@@ -3,17 +3,43 @@
 @tailwind utilities;
 
 @layer base {
-  body { @apply bg-navy-950 text-ink-100 antialiased; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  ::selection { @apply bg-teal-500/40; }
+  html { font-synthesis: none; text-size-adjust: 100%; }
+  body { @apply bg-field-950 font-sans text-chalk-100 antialiased; }
+  ::selection { @apply bg-pitch-500/40; }
+  /* Every interactive element shows the same ring when reached from the keyboard. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid theme('colors.pitch.400'); outline-offset: 2px; border-radius: 4px; }
+  button, a, select, summary, [role='button'] { touch-action: manipulation; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
 }
+
 @layer components {
-  .card { @apply rounded-2xl border border-navy-700 bg-navy-900/80 p-4 shadow-lg shadow-black/20; }
-  .btn { @apply inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed; }
-  .btn-primary { @apply btn bg-teal-500 text-navy-950 hover:bg-teal-400; }
-  .btn-ghost { @apply btn border border-navy-700 text-ink-300 hover:bg-navy-800; }
-  .input { @apply rounded-lg border border-navy-700 bg-navy-950 px-3 py-1.5 text-sm text-ink-100 placeholder:text-ink-500 focus:border-teal-500 focus:outline-none; }
-  .badge { @apply inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide; }
-  .th { @apply sticky top-0 z-10 bg-navy-900 px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-400 whitespace-nowrap cursor-pointer select-none; }
-  .td { @apply px-2 py-1.5 text-sm whitespace-nowrap border-t border-navy-800/70; }
+  .display { @apply font-display font-bold tracking-tight; font-stretch: 87%; }
   .num { @apply text-right tabular-nums; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  .card { @apply rounded-xl border border-field-700 bg-field-900; }
+  .frame { @apply rounded-lg border border-field-700; }
+
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 coarse:min-h-11; }
+  .btn-primary { @apply btn bg-pitch-400 text-field-950 hover:bg-pitch-300; }
+  .btn-ghost { @apply btn border border-field-700 bg-transparent text-chalk-200 hover:bg-field-800 hover:text-chalk-100; }
+  .btn-quiet { @apply btn text-chalk-300 hover:bg-field-800 hover:text-chalk-100; }
+  .btn-sm { @apply px-2 py-1 text-xs coarse:min-h-9; }
+  .btn-icon { @apply btn h-9 w-9 px-0; }
+
+  .input { @apply h-9 rounded-md border border-field-700 bg-field-950 px-3 text-sm text-chalk-100 placeholder:text-chalk-500 focus:border-pitch-400 coarse:h-11; }
+  .select { @apply input cursor-pointer appearance-none bg-no-repeat pr-8; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237F91AA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.5rem center; }
+
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-field-700 px-2.5 py-1 text-xs font-medium text-chalk-300 transition-colors duration-150 hover:bg-field-800 hover:text-chalk-100 coarse:min-h-9; }
+  .chip-on { @apply border-pitch-400/60 bg-pitch-400/15 text-pitch-300; }
+  .badge { @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium; }
+
+  /* Tables: sentence-case headers, tabular numbers, hairline rows. */
+  .th { @apply bg-field-900 px-2 py-2 text-left text-2xs font-medium text-chalk-500 whitespace-nowrap; }
+  .td { @apply px-2 py-1.5 text-sm whitespace-nowrap border-t border-field-700/70 tnum; }
+
+  .skeleton { @apply animate-shimmer rounded bg-field-800 motion-reduce:animate-none; }
+  .sr-only-focusable { @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-pitch-400 focus:px-3 focus:py-2 focus:text-field-950; }
 }

@@ -1,68 +1,110 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, fmt, useAdmin } from '../lib/api';
-import { useKeepQuery } from '../lib/filters';
-import { Badge, DataTable, DiffCell, ErrorBox, JsonViewer, Section, Spinner, Stat, TeamLogo, type Column } from '../components/ui';
+import { ExternalLink } from 'lucide-react';
+import { api, fmt, resultOf, useAdmin } from '../lib/api';
+import { useHref, genderLabel } from '../lib/filters';
+import { useUrlState } from '../lib/urlState';
+import { DataTable, type Column, type Preset } from '../components/DataTable';
+import { Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TeamLogo } from '../components/primitives';
+
+const PRESETS: Preset[] = [
+  { id: 'overview', label: 'Overview', columns: ['program', 'jersey', 'position', 'class_raw', 'gp', 'gs', 'minutes', 'goals', 'assists', 'points', 'shots', 'sog', 'shot_accuracy'] },
+  { id: 'rates', label: 'Per 90 & ranks', columns: ['program', 'minutes', 'goals_p90', 'assists_p90', 'conversion_pct', 'shots_per_goal', 'minutes_per_goal', 'minutes_share', 'div_rank_points', 'conf_rank_points', 'pct_points_p90', 'pct_goals_p90'] },
+  { id: 'gk', label: 'Goalkeeping', columns: ['program', 'gp', 'gs', 'ga', 'gaa', 'saves', 'save_pct', 'shutouts', 'clean_sheets', 'pct_save_pct'] },
+  { id: 'discipline', label: 'Discipline & extras', columns: ['program', 'gp', 'fouls', 'yc', 'rc', 'gwg', 'halves'] },
+];
+const SPLIT_LABEL: Record<string, string> = { home: 'Home', away: 'Away', neutral: 'Neutral', conf: 'Conference', nonconf: 'Non-conference', vs_ranked: 'Against ranked teams' };
 
 export default function Player() {
   const { id = '' } = useParams();
   const admin = useAdmin();
-  const keep = useKeepQuery();
+  const href = useHref();
+  const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PRESETS.map((p) => p.id) });
   const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`) });
-  if (q.isLoading) return <Spinner />;
-  if (q.error) return <ErrorBox error={q.error} />;
-  const { player: p, seasons, honors, career, transfers, gameLog } = q.data;
+  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
+  if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
+  const p = q.data?.player;
+  if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/leaders">Browse leaders</Link>} />;
+  const seasons: any[] = q.data.seasons ?? [], honors: any[] = q.data.honors ?? [], career = q.data.career, transfers: any[] = q.data.transfers ?? [], gameLog: any[] = q.data.gameLog ?? [];
   const latest = seasons[0];
+  const st = latest?.stats;
+  const isGk = seasons.some((s) => s.stats?.gk_minutes > 0 || s.position === 'GK');
+  const n = (v: unknown, d = 0) => fmt.num(v, d);
+  const sc = (key: string, label: string, title: string, opts: { d?: number; pct?: boolean } = {}): Column<any> => ({ key, label, title, num: true, priority: 3, value: (s) => s.stats?.[key], render: (s) => opts.pct ? fmt.pct(s.stats?.[key]) : n(s.stats?.[key], opts.d ?? 0) });
   const seasonCols: Column<any>[] = [
-    { key: 'season', label: 'Season', sticky: true, render: (s) => <Link className="hover:text-teal-400" to={keep(`/teams/${s.program?.id}?season=${s.season}`)}>{s.season}</Link> },
-    { key: 'program', label: 'Program', value: (s) => s.program?.name, render: (s) => <span className="flex items-center gap-2"><TeamLogo src={s.program?.college_schools?.logo_svg_url} name={s.program?.name} size={20} />{s.program?.name}</span> },
-    { key: 'jersey', label: '#', num: true }, { key: 'position', label: 'Pos' }, { key: 'class_raw', label: 'Class' },
-    { key: 'gp', label: 'GP', num: true, value: (s) => s.stats?.gp, render: (s) => <DiffCell value={s.stats?.gp} vs={s.site?.gp} tolerance={1} /> }, { key: 'gs', label: 'GS', num: true, value: (s) => s.stats?.gs },
-    { key: 'minutes', label: 'MIN', num: true, value: (s) => s.stats?.minutes, render: (s) => <DiffCell value={s.stats?.minutes} vs={s.site?.minutes} tolerance={10} /> },
-    { key: 'goals', label: 'G', num: true, value: (s) => s.stats?.goals, render: (s) => <DiffCell value={s.stats?.goals} vs={s.site?.goals} /> }, { key: 'assists', label: 'A', num: true, value: (s) => s.stats?.assists, render: (s) => <DiffCell value={s.stats?.assists} vs={s.site?.assists} /> }, { key: 'points', label: 'PTS', num: true, value: (s) => s.stats?.points },
-    { key: 'shots', label: 'SH', num: true, value: (s) => s.stats?.shots }, { key: 'sog', label: 'SOG', num: true, value: (s) => s.stats?.sog }, { key: 'goals_p90', label: 'G/90', num: true, value: (s) => s.stats?.goals_p90, render: (s) => fmt.num(s.stats?.goals_p90, 2) }, { key: 'assists_p90', label: 'A/90', num: true, value: (s) => s.stats?.assists_p90, render: (s) => fmt.num(s.stats?.assists_p90, 2) },
-    { key: 'shot_accuracy', label: 'SOG%', num: true, value: (s) => s.stats?.shot_accuracy, render: (s) => fmt.pct(s.stats?.shot_accuracy) }, { key: 'conversion_pct', label: 'Conv%', num: true, value: (s) => s.stats?.conversion_pct, render: (s) => fmt.pct(s.stats?.conversion_pct) },
-    { key: 'yc', label: 'YC', num: true, value: (s) => s.stats?.yc }, { key: 'rc', label: 'RC', num: true, value: (s) => s.stats?.rc }, { key: 'fouls', label: 'Fouls', num: true, value: (s) => s.stats?.fouls }, { key: 'gwg', label: 'GWG', num: true, value: (s) => s.stats?.gwg },
-    { key: 'ga', label: 'GA', num: true, value: (s) => s.stats?.ga }, { key: 'gaa', label: 'GAA', num: true, value: (s) => s.stats?.gaa, render: (s) => fmt.num(s.stats?.gaa, 2) }, { key: 'saves', label: 'SV', num: true, value: (s) => s.stats?.saves }, { key: 'save_pct', label: 'SV%', num: true, value: (s) => s.stats?.save_pct, render: (s) => fmt.pct(s.stats?.save_pct) }, { key: 'shutouts', label: 'SHO', num: true, value: (s) => s.stats?.shutouts },
-    { key: 'minutes_share', label: 'Min share', num: true, value: (s) => s.stats?.minutes_share, render: (s) => fmt.pct(s.stats?.minutes_share) },
-    { key: 'halves', label: 'G 1H·2H·OT', value: (s) => s.stats?.goals_1h, render: (s) => s.stats ? `${s.stats.goals_1h ?? 0}·${s.stats.goals_2h ?? 0}·${s.stats.goals_ot ?? 0}` : '–' },
-    { key: 'div_rank_points', label: 'Div rk (pts)', num: true, value: (s) => s.stats?.div_rank_points }, { key: 'div_rank_goals', label: 'Div rk (G)', num: true, value: (s) => s.stats?.div_rank_goals }, { key: 'conf_rank_points', label: 'Conf rk', num: true, value: (s) => s.stats?.conf_rank_points },
-    { key: 'pct_points_p90', label: 'Pts/90 pctl', num: true, value: (s) => s.stats?.pct_points_p90, render: (s) => fmt.pct(s.stats?.pct_points_p90) }, { key: 'pct_goals_p90', label: 'G/90 pctl', num: true, value: (s) => s.stats?.pct_goals_p90, render: (s) => fmt.pct(s.stats?.pct_goals_p90) }, { key: 'pct_shots_p90', label: 'SH/90 pctl', num: true, value: (s) => s.stats?.pct_shots_p90, render: (s) => fmt.pct(s.stats?.pct_shots_p90) },
-    { key: 'shots_per_goal', label: 'SH/G', num: true, value: (s) => s.stats?.shots_per_goal, render: (s) => fmt.num(s.stats?.shots_per_goal, 1) }, { key: 'minutes_per_goal', label: 'MIN/G', num: true, value: (s) => s.stats?.minutes_per_goal, render: (s) => fmt.num(s.stats?.minutes_per_goal, 0) },
-    { key: 'clean_sheets', label: 'CS', num: true, value: (s) => s.stats?.clean_sheets }, { key: 'pct_save_pct', label: 'SV% pctl', num: true, value: (s) => s.stats?.pct_save_pct, render: (s) => fmt.pct(s.stats?.pct_save_pct) }, { key: 'source', label: 'Src', render: (s) => <Badge tone={s.source === 'boxscore_only' ? 'amber' : 'gray'} title={`confidence ${s.confidence}`}>{s.source.replace('site_', '')}</Badge> },
+    { key: 'season', label: 'Season', primary: true, render: (s) => String(s.season) },
+    { key: 'program', label: 'Team', priority: 3, value: (s) => s.program?.name, render: (s) => <Link className="flex items-center gap-2 hover:text-pitch-300" to={href(`/teams/${s.program?.id}`, { season: s.season, gender: s.program?.gender })}><TeamLogo src={s.program?.college_schools?.logo_svg_url} name={s.program?.name} size={20} />{s.program?.name}</Link> },
+    { key: 'jersey', label: '#', title: 'Jersey', num: true, priority: 3 }, { key: 'position', label: 'Pos', title: 'Position', priority: 3 }, { key: 'class_raw', label: 'Class', priority: 3 },
+    sc('gp', 'GP', 'Games played'), sc('gs', 'GS', 'Games started'), sc('minutes', 'Min', 'Minutes'), sc('goals', 'G', 'Goals'), sc('assists', 'A', 'Assists'), sc('points', 'Pts', 'Points'), sc('shots', 'Sh', 'Shots'), sc('sog', 'SOG', 'Shots on goal'),
+    sc('shot_accuracy', 'SOG%', 'Shot accuracy', { pct: true }), sc('conversion_pct', 'Conv%', 'Goals per shot', { pct: true }), sc('goals_p90', 'G/90', 'Goals per 90', { d: 2 }), sc('assists_p90', 'A/90', 'Assists per 90', { d: 2 }),
+    sc('shots_per_goal', 'Sh/G', 'Shots per goal', { d: 1 }), sc('minutes_per_goal', 'Min/G', 'Minutes per goal'), sc('minutes_share', 'Min share', 'Share of team minutes', { pct: true }),
+    sc('div_rank_points', 'Div rank', 'Division rank by points'), sc('conf_rank_points', 'Conf rank', 'Conference rank by points'), sc('pct_points_p90', 'Pts/90 pctl', 'Points per 90 percentile', { pct: true }), sc('pct_goals_p90', 'G/90 pctl', 'Goals per 90 percentile', { pct: true }),
+    sc('ga', 'GA', 'Goals against'), sc('gaa', 'GAA', 'Goals against average', { d: 2 }), sc('saves', 'Saves', 'Saves'), sc('save_pct', 'Save%', 'Save percentage', { pct: true }), sc('shutouts', 'SHO', 'Shutouts'), sc('clean_sheets', 'CS', 'Clean sheets'), sc('pct_save_pct', 'Save% pctl', 'Save percentage percentile', { pct: true }),
+    sc('fouls', 'Fouls', 'Fouls'), sc('yc', 'YC', 'Yellow cards'), sc('rc', 'RC', 'Red cards'), sc('gwg', 'GWG', 'Game-winning goals'),
+    { key: 'halves', label: 'G by half', title: 'Goals in the first half, second half, overtime', priority: 3, value: (s) => s.stats?.goals_1h, render: (s) => s.stats ? `${s.stats.goals_1h ?? 0} / ${s.stats.goals_2h ?? 0} / ${s.stats.goals_ot ?? 0}` : '–' },
   ];
+  if (admin) seasonCols.push({ key: 'source', label: 'Identity', priority: 3, render: (s) => <Badge tone={s.source === 'boxscore_only' ? 'amber' : 'gray'} title={`confidence ${s.confidence}`}>{String(s.source).replace('site_', '')}</Badge> });
+  const own = (r: any) => (r.program_id ?? latest?.program?.id);
   const logCols: Column<any>[] = [
-    { key: 'date', label: 'Date', sticky: true, value: (r) => r.game.game_date, render: (r) => <Link className="hover:text-teal-400" to={keep(`/games/${r.game.id}`)}>{fmt.date(r.game.game_date)}</Link> },
-    { key: 'opp', label: 'Game', value: (r) => `${r.game.away_name} @ ${r.game.home_name}`, render: (r) => `${r.game.away_name ?? '?'} ${r.game.away_score ?? ''} @ ${r.game.home_name ?? '?'} ${r.game.home_score ?? ''}` },
-    { key: 'starter', label: 'GS', render: (r) => r.starter ? '★' : '' }, { key: 'minutes', label: 'MIN', num: true }, { key: 'goals', label: 'G', num: true }, { key: 'assists', label: 'A', num: true }, { key: 'shots', label: 'SH', num: true }, { key: 'shots_on_goal', label: 'SOG', num: true }, { key: 'fouls', label: 'Fouls', num: true }, { key: 'yellow_cards', label: 'YC', num: true }, { key: 'red_cards', label: 'RC', num: true }, { key: 'corners', label: 'CK', num: true },
-    { key: 'goals_allowed', label: 'GA', num: true, render: (r) => r.is_goalie ? fmt.num(r.goals_allowed) : '' }, { key: 'saves', label: 'SV', num: true, render: (r) => r.is_goalie ? fmt.num(r.saves) : '' }, { key: 'source', label: 'Src', render: (r) => <Badge tone={r.source === 'site' ? 'teal' : 'blue'}>{r.source}</Badge> },
+    { key: 'date', label: 'Date', primary: true, value: (r) => r.game.game_date, render: (r) => fmt.day(r.game.game_date) },
+    { key: 'opp', label: 'Game', value: (r) => r.game.game_date, sortable: false, render: (r) => { const g = r.game; const home = g.home_program_id === own(r); const us = home ? g.home_score : g.away_score, them = home ? g.away_score : g.home_score; const opp = home ? g.away_name : g.home_name; return <span className="flex items-center gap-2"><span className="text-chalk-500">{home ? 'vs' : 'at'}</span><span>{opp ?? '?'}</span><ResultBadge result={resultOf(us, them)} us={us} them={them} /></span>; } },
+    { key: 'starter', label: 'Start', render: (r) => r.starter ? 'Started' : r.participated ? 'Sub' : '' },
+    { key: 'minutes', label: 'Min', num: true }, { key: 'goals', label: 'G', num: true }, { key: 'assists', label: 'A', num: true }, { key: 'shots', label: 'Sh', num: true, priority: 2 }, { key: 'shots_on_goal', label: 'SOG', num: true, priority: 2 },
+    { key: 'fouls', label: 'Fouls', num: true, priority: 2 }, { key: 'yellow_cards', label: 'YC', num: true, priority: 2 }, { key: 'red_cards', label: 'RC', num: true, priority: 2 },
+    ...(isGk ? [{ key: 'goals_allowed', label: 'GA', num: true, render: (r: any) => r.is_goalie ? n(r.goals_allowed) : '' }, { key: 'saves', label: 'Saves', num: true, render: (r: any) => r.is_goalie ? n(r.saves) : '' }] as Column<any>[] : []),
   ];
+  const bioLine = latest ? [latest.position ?? latest.position_raw, latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null, latest.weight_lb ? `${latest.weight_lb} lb` : null].filter(Boolean).join(', ') : '';
+  const bioUrl = latest?.bio_url ?? p.bio_url;
   return (
-    <div className="space-y-4">
-      <div className="card flex flex-wrap gap-4">
-        <TeamLogo src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={96} />
-        <div className="min-w-[240px]">
-          <h1 className="text-2xl font-black">{p.display_name}{p.suppress && <Badge tone="red">suppressed</Badge>}</h1>
-          <div className="text-sm text-ink-400">{latest ? <>#{latest.jersey ?? '–'} · {latest.position ?? latest.position_raw ?? '–'} · {latest.class_raw ?? '–'}{latest.is_redshirt ? ' (RS)' : ''} · {latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}-${Math.round(latest.height_cm / 2.54 % 12)}` : '–'}{latest.weight_lb ? ` · ${latest.weight_lb} lb` : ''}</> : 'no season row'}</div>
-          <div className="mt-1 text-sm text-ink-400">Hometown: {latest?.hometown_raw ?? '–'}{admin && <span className="text-ink-500"> ({[p.hometown_city, p.hometown_region, p.hometown_country].filter(Boolean).join(', ') || 'unparsed'})</span>}</div>
-          <div className="text-sm text-ink-400">High school: {latest?.high_school ?? p.high_school ?? '–'} · Previous school: {latest?.previous_school ?? '–'} · Major: {latest?.major ?? '–'}</div>
-          <div className="mt-1 flex gap-2 text-xs">{(latest?.bio_url ?? p.bio_url) && <a className="text-teal-400 hover:underline" href={latest?.bio_url ?? p.bio_url} target="_blank" rel="noreferrer">school bio</a>}</div>
+    <div className="space-y-6">
+      <header className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-start sm:p-6">
+        <TeamLogo src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} />
+        <div className="min-w-0 flex-1">
+          <h1 className="display text-3xl leading-none sm:text-4xl">{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</h1>
+          {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
+          <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, (latest?.high_school ?? p.high_school) ? `${latest?.high_school ?? p.high_school}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null, latest?.major ? `studying ${latest.major}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
+          {bioUrl && <a className="mt-1 inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={bioUrl} target="_blank" rel="noreferrer">School bio <ExternalLink size={12} aria-hidden /></a>}
         </div>
-        {career && <div className="ml-auto grid grid-cols-3 gap-2 sm:grid-cols-6">
-          <Stat label="Seasons" value={career.seasons} sub={`${career.programs} program${career.programs === 1 ? '' : 's'}`} /><Stat label="GP / GS" value={`${career.gp ?? 0} / ${career.gs ?? 0}`} /><Stat label="Minutes" value={fmt.num(career.minutes)} /><Stat label="G / A / PTS" value={`${career.goals ?? 0} / ${career.assists ?? 0} / ${career.points ?? 0}`} /><Stat label="SH / SOG" value={`${career.shots ?? 0} / ${career.sog ?? 0}`} /><Stat label="GK" value={career.gk_minutes ? `${career.ga} GA · ${career.saves} SV` : '–'} sub={career.shutouts ? `${career.shutouts} SHO` : undefined} />
-        </div>}
-      </div>
-      <Section title="Seasons"><DataTable rows={seasons} columns={seasonCols} rowKey={(s) => s.id} dense /></Section>
-      {latest?.splits?.length > 0 && <Section title={`Splits · ${latest.season}`}>
-        <div className="overflow-auto rounded-xl border border-navy-700"><table className="min-w-full text-sm"><thead><tr><th className="th">Split</th><th className="th text-right">GP</th><th className="th text-right">GS</th><th className="th text-right">MIN</th><th className="th text-right">G</th><th className="th text-right">A</th><th className="th text-right">PTS</th><th className="th text-right">SH</th><th className="th text-right">SOG</th><th className="th text-right">SV</th><th className="th text-right">GA</th></tr></thead><tbody>
-          {['home', 'away', 'neutral', 'conf', 'nonconf', 'vs_ranked'].map((k) => latest.splits.find((x: any) => x.split === k)).filter(Boolean).map((x: any) => <tr key={x.split}><td className="td">{{ home: 'Home', away: 'Away', neutral: 'Neutral', conf: 'Conference', nonconf: 'Non-conference', vs_ranked: 'vs ranked (USC top 25)' }[x.split as string]}</td><td className="td num">{x.gp}</td><td className="td num">{x.gs}</td><td className="td num">{fmt.num(x.minutes)}</td><td className="td num">{fmt.num(x.goals)}</td><td className="td num">{fmt.num(x.assists)}</td><td className="td num">{fmt.num(x.points)}</td><td className="td num">{fmt.num(x.shots)}</td><td className="td num">{fmt.num(x.sog)}</td><td className="td num">{fmt.num(x.saves)}</td><td className="td num">{fmt.num(x.ga)}</td></tr>)}
-        </tbody></table></div>
-      </Section>}
-      {latest?.ranks?.length > 0 && <Section title={`NCAA.com national ranks · ${latest.season}`}><div className="flex flex-wrap gap-2">{latest.ranks.map((r: any) => <span key={r.category} className="rounded-lg border border-navy-700 bg-navy-950/60 px-2 py-1 text-sm"><span className="text-ink-400">{r.category}</span> <b className="text-teal-400">#{r.rank}</b> <span className="text-ink-500">{fmt.num(r.value, Number(r.value) % 1 ? 2 : 0)}</span></span>)}</div></Section>}
-      {transfers.length > 0 && <Section title="Transfers"><ul className="text-sm">{transfers.map((t: any) => <li key={t.id}>{t.from_season} → {t.to_season}: confidence {t.confidence} ({t.evidence?.rule})</li>)}</ul></Section>}
-      <Section title={`Honors (${honors.length})`}>{honors.length ? <ul className="list-disc space-y-1 pl-5 text-sm">{honors.map((h: any) => <li key={h.id}>{h.text}{h.source_url && <a className="ml-2 text-xs text-teal-400" href={h.source_url} target="_blank" rel="noreferrer">source</a>}</li>)}</ul> : <p className="text-sm text-ink-500">None extracted.</p>}</Section>
-      <Section title={`Game log (${gameLog.length})`}><DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} dense /></Section>
-      {admin && <JsonViewer title="identity row" value={p} />}
+        {st && (
+          <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-3 sm:justify-end">
+            {isGk ? <>
+              <Figure big label={`${latest.season} save %`} value={fmt.pct(st.save_pct)} sub={`${st.saves ?? 0} saves`} />
+              <Figure label="Goals against avg" value={n(st.gaa, 2)} sub={`${st.ga ?? 0} conceded in ${n(st.gk_minutes)} min`} />
+              <Figure label="Shutouts" value={st.shutouts ?? 0} />
+            </> : <>
+              <Figure big label={`${latest.season} goals`} value={st.goals ?? 0} sub={`${st.assists ?? 0} assists`} />
+              <Figure label="Games" value={`${st.gp ?? 0}`} sub={`${st.gs ?? 0} starts, ${n(st.minutes)} min`} />
+              <Figure label="Goals per 90" value={n(st.goals_p90, 2)} sub={st.pct_goals_p90 != null ? `${fmt.pct(st.pct_goals_p90)} percentile` : undefined} />
+            </>}
+          </div>
+        )}
+      </header>
+      {career && seasons.length > 1 && (
+        <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6">
+          <Figure label="Seasons" value={career.seasons} sub={`${career.programs} program${career.programs === 1 ? '' : 's'}`} />
+          <Figure label="Games" value={career.gp ?? 0} sub={`${career.gs ?? 0} starts`} />
+          <Figure label="Minutes" value={n(career.minutes)} />
+          <Figure label="Goals" value={career.goals ?? 0} /><Figure label="Assists" value={career.assists ?? 0} /><Figure label="Shots" value={career.shots ?? 0} sub={`${career.sog ?? 0} on goal`} />
+        </div>
+      )}
+      <Section title="Seasons">
+        <DataTable rows={seasons} columns={seasonCols} rowKey={(s) => s.id} caption="Season by season" presets={PRESETS} preset={preset} onPreset={setPreset} dense empty={<EmptyState title="No seasons recorded" />} />
+      </Section>
+      {latest?.splits?.length > 0 && (
+        <Section title={`Splits, ${latest.season}`}>
+          <div className="frame overflow-x-auto"><table className="w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Season splits</caption>
+            <thead><tr><th scope="col" className="th">Split</th><th scope="col" className="th text-right">GP</th><th scope="col" className="th text-right">GS</th><th scope="col" className="th text-right">Min</th><th scope="col" className="th text-right">G</th><th scope="col" className="th text-right">A</th><th scope="col" className="th text-right">Pts</th><th scope="col" className="th hidden text-right sm:table-cell">Sh</th><th scope="col" className="th hidden text-right sm:table-cell">SOG</th>{isGk && <><th scope="col" className="th text-right">Saves</th><th scope="col" className="th text-right">GA</th></>}</tr></thead>
+            <tbody>{['home', 'away', 'neutral', 'conf', 'nonconf', 'vs_ranked'].map((k) => latest.splits.find((x: any) => x.split === k)).filter(Boolean).map((x: any) => <tr key={x.split}><th scope="row" className="td text-left font-normal text-chalk-300">{SPLIT_LABEL[x.split] ?? x.split}</th><td className="td num">{x.gp}</td><td className="td num">{x.gs}</td><td className="td num">{n(x.minutes)}</td><td className="td num">{n(x.goals)}</td><td className="td num">{n(x.assists)}</td><td className="td num">{n(x.points)}</td><td className="td num hidden sm:table-cell">{n(x.shots)}</td><td className="td num hidden sm:table-cell">{n(x.sog)}</td>{isGk && <><td className="td num">{n(x.saves)}</td><td className="td num">{n(x.ga)}</td></>}</tr>)}</tbody>
+          </table></div>
+        </Section>
+      )}
+      {latest?.ranks?.length > 0 && <Section title={`National ranks, ${latest.season}`}><ul className="flex flex-wrap gap-1.5">{latest.ranks.map((r: any) => <li key={r.category} className="chip"><span className="text-chalk-100 tnum">{fmt.ordinal(r.rank)}</span>{r.category}<span className="text-chalk-500 tnum">{n(r.value, Number(r.value) % 1 ? 2 : 0)}</span></li>)}</ul></Section>}
+      {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => <li key={t.id} className="px-3 py-2">{t.from_season} to {t.to_season}{admin && <span className="text-chalk-500"> (confidence {t.confidence}, {t.evidence?.rule})</span>}</li>)}</ul></Section>}
+      {honors.length > 0 && <Section title="Honors"><ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any) => <li key={h.id} className="flex items-center gap-2 px-3 py-2"><span>{h.text}</span>{h.source_url && <a className="ml-auto inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={h.source_url} target="_blank" rel="noreferrer">source <ExternalLink size={11} aria-hidden /></a>}</li>)}</ul></Section>}
+      <Section title="Game log">
+        <DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} caption="Game by game" rowHref={(r) => href(`/games/${r.game.id}`)} dense defaultSort={{ key: 'date', dir: 'desc' }} empty={<EmptyState title="No box scores yet" body="Game-by-game lines appear once box scores are collected." />} />
+      </Section>
+      {admin && <JsonViewer title="Identity row" value={p} />}
     </div>
   );
 }

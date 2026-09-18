@@ -108,11 +108,13 @@ export async function game(db: Db, id: string) {
   const [header, team, players, events, raw] = await Promise.all([
     db.from('college_games').select('officials,duration_min,site_game_refs,site_fetched_at,ncaa_fetched_at,detail_attempts,start_epoch').eq('id', id).maybeSingle(),
     selectAll<any>(db, 'college_game_team_stats', '*', (q) => q.eq('game_id', id)),
-    selectAll<any>(db, 'college_game_player_stats', '*', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
+    selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id)', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
     selectAll<any>(db, 'college_game_events', '*', (q) => q.eq('game_id', id).order('period').order('seq')),
     selectAll<any>(db, 'college_game_raw', 'source,payload,fetched_at', (q) => q.eq('game_id', id)),
   ]);
-  return { game: { ...g, ...(header.data ?? {}) }, team, players, events, raw };
+  // Box-score lines link to the player page through their roster identity.
+  const lines = players.map((p) => ({ ...p, player_id: p.college_player_seasons?.player_id ?? null, college_player_seasons: undefined }));
+  return { game: { ...g, ...(header.data ?? {}) }, team, players: lines, events, raw };
 }
 
 export async function player(db: Db, id: string) {

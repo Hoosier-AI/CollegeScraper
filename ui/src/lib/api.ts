@@ -61,4 +61,22 @@ export const fmt = {
     return `${Math.round(s / 86400)}d ago`;
   },
   rec: (w?: number | null, l?: number | null, t?: number | null) => (w == null ? '–' : `${w}-${l ?? 0}-${t ?? 0}`),
+  /** "Sep 15" — the year is implied by the season everywhere it is shown. */
+  day: (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '–'),
+  weekday: (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '–'),
+  /** Ordinal: 1st, 2nd, 3rd, 11th. */
+  ordinal: (n: number | null | undefined) => { if (n == null) return '–'; const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`; },
+  /** Whole minutes ago in words: "just now", "23 minutes ago", "3 hours ago", "2 days ago". */
+  agoWords: (iso: string | null | undefined) => {
+    if (!iso) return 'never';
+    const s = (Date.now() - Date.parse(iso)) / 1000;
+    if (s < 90) return 'just now';
+    if (s < 3600) return `${Math.round(s / 60)} minutes ago`;
+    if (s < 7200) return 'an hour ago';
+    if (s < 86400) return `${Math.round(s / 3600)} hours ago`;
+    const d = Math.round(s / 86400); return d === 1 ? 'yesterday' : `${d} days ago`;
+  },
 };
+
+/** W / L / T from the perspective of `us`. */
+export const resultOf = (us: number | null | undefined, them: number | null | undefined): 'W' | 'L' | 'T' | null => (us == null || them == null ? null : us > them ? 'W' : us < them ? 'L' : 'T');

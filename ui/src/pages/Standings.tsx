@@ -1,48 +1,100 @@
-import { useState } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { ExternalLink } from 'lucide-react';
 import { api, qs, fmt, useAdmin } from '../lib/api';
-import { useFilters, useKeepQuery } from '../lib/filters';
-import { Badge, ErrorBox, Spinner, TeamLogo } from '../components/ui';
+import { useFilters, useHref, genderLabel, divisionLabel } from '../lib/filters';
+import { useUrlPatch, useUrlState } from '../lib/urlState';
+import { Badge, EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Select, Skeleton, TeamLogo, VerifiedMark, type VerifyState } from '../components/primitives';
+
+const DIV_OPTIONS = [{ value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
+
+function verify(r: any): { state: VerifyState; details?: { field: string; official: string; ours: string }[] } {
+  if (r.source !== 'conference' || !r.computed) return { state: 'none' };
+  const checks: any[] = r.checks ?? [];
+  const bad = checks.filter((c) => c.field === 'conf_record' || c.field === 'overall_record');
+  const lag = checks.filter((c) => c.field === 'conf_record_lag' || c.field === 'overall_record_lag');
+  if (bad.length) return { state: 'mismatch', details: bad.map((c) => ({ field: c.field, official: c.official, ours: c.computed })) };
+  if (lag.length) return { state: 'lag', details: lag.map((c) => ({ field: String(c.field).replace('_lag', ''), official: c.official, ours: c.computed })) };
+  return { state: 'ok' };
+}
 
 export default function Standings() {
   const admin = useAdmin();
-  const f = useFilters(); const keep = useKeepQuery();
-  const [division, setDivision] = useState('d1');
+  const f = useFilters();
+  const href = useHref();
+  const patch = useUrlPatch();
+  const [division] = useUrlState('division', 'd1', { allow: ['d1', 'd2', 'd3'] });
+  const [conference, setConference] = useUrlState('conference');
   const q = useQuery({ queryKey: ['standings', f.season, f.gender, division], queryFn: () => api<{ source: string; official: number; computed: number; rows: any[] }>(`/api/standings${qs({ season: f.season, gender: f.gender, division })}`) });
-  const groups = new Map<string, any[]>();
-  for (const r of q.data?.rows ?? []) { const k = r.college_conferences?.name ?? 'Unknown'; groups.set(k, [...(groups.get(k) ?? []), r]); }
-  const check = (r: any) => {
-    if (r.source !== 'conference') return null;
-    const bad = (r.checks ?? []).filter((c: any) => c.field === 'conf_record' || c.field === 'overall_record');
-    const lag = (r.checks ?? []).filter((c: any) => c.field === 'conf_record_lag' || c.field === 'overall_record_lag');
-    if (!r.computed) return <span className="text-ink-500" title="No computed record yet (no games stored)">·</span>;
-    if (bad.length) return <span className="text-amber-300" title={bad.map((c: any) => `${c.field}: official ${c.official} vs ours ${c.computed}`).join('\n')}>≠</span>;
-    if (lag.length) return <span className="text-sky-300" title={lag.map((c: any) => `${String(c.field).replace('_lag', '')}: official ${c.official}, ours ${c.computed}: every result it lists is in our record, we hold extra games it does not`).join('\n')}>✓…</span>;
-    return <span className="text-emerald-300" title="Official conference and overall records equal our computed records">✓</span>;
-  };
+  const groups = useMemo(() => {
+    const m = new Map<string, { id: string; rows: any[] }>();
+    for (const r of q.data?.rows ?? []) { const k = r.college_conferences?.name ?? 'No conference'; const g: { id: string; rows: any[] } = m.get(k) ?? { id: String(r.conference_id ?? r.college_conferences?.id ?? k), rows: [] }; g.rows.push(r); m.set(k, g); }
+    return [...m.entries()];
+  }, [q.data]);
+  const confOptions = [{ value: '', label: 'All conferences' }, ...groups.map(([name, g]) => ({ value: g.id, label: name }))];
+  const shown = conference ? groups.filter(([, g]) => g.id === conference) : groups;
+  const scope = `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2"><h1 className="text-xl font-black">Standings</h1><select className="input" value={division} onChange={(e) => setDivision(e.target.value)}><option value="d1">D1</option><option value="d2">D2</option><option value="d3">D3</option></select>
-        {q.data && <span className="text-xs text-ink-500">{q.data.official} rows from conference websites · {q.data.computed} computed from stored games</span>}</div>
-      {q.isLoading && <Spinner />}{q.error && <ErrorBox error={q.error} />}
-      {q.data && !q.data.rows.length && <p className="text-sm text-ink-500">No standings stored for this division yet.{admin && ' Run compute-standings from the Jobs page.'}</p>}
-      <p className="text-xs text-ink-500"><Badge tone="teal">official</Badge> = the conference's own standings page (rank, points and records as published). <Badge tone="gray">computed</Badge> = derived from our stored results (3 pts win, 1 tie). ✓ means the official conference and overall records equal our computed records; ✓… means every result the conference lists is in our record and we hold extra games it has not posted; ≠ lists a real difference on hover.</p>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[...groups.entries()].map(([conf, rows]) => {
-        const official = rows[0]?.source === 'conference';
-        const pods = [...new Set(rows.map((r) => r.pod).filter(Boolean))] as string[];
-        const hasGfga = rows.some((r) => r.conf_gf != null);
-        const hasStreak = rows.some((r) => r.streak);
-        return (
-          <div key={conf} className="card">
-            <div className="mb-2 flex items-center justify-between"><h2 className="font-bold">{conf}</h2><span className="flex items-center gap-1">{official ? <a className="badge bg-teal-500/20 text-teal-400" href={rows[0].source_url} target="_blank" rel="noreferrer" title={rows[0].source_url}>official</a> : <Badge tone="gray">computed</Badge>}</span></div>
-            <table className="w-full text-sm"><thead><tr><th className="th">#</th><th className="th">Team</th><th className="th text-right">Conf</th><th className="th text-right">Pts</th>{hasGfga && <th className="th text-right">GF-GA</th>}<th className="th text-right">Overall</th>{hasStreak && <th className="th">Strk</th>}<th className="th"></th></tr></thead><tbody>
-              {rows.map((r, i) => <>{pods.length > 0 && r.pod && (i === 0 || rows[i - 1].pod !== r.pod) && <tr key={`${r.pod}-h`}><td className="td text-xs font-semibold uppercase text-ink-500" colSpan={8}>{r.pod}</td></tr>}
-                <tr key={r.program_id}><td className="td">{r.rank ?? ''}</td><td className="td"><Link className="flex items-center gap-2 hover:text-teal-400" to={keep(`/teams/${r.program_id}`)}><TeamLogo src={r.college_programs?.college_schools?.logo_svg_url} name={r.college_programs?.name} size={18} />{r.college_programs?.name}</Link></td><td className="td num">{fmt.rec(r.conf_w, r.conf_l, r.conf_t)}</td><td className="td num">{r.conf_pts ?? ''}</td>{hasGfga && <td className="td num">{r.conf_gf != null ? `${r.conf_gf}-${r.conf_ga}` : ''}</td>}<td className="td num">{fmt.rec(r.overall_w, r.overall_l, r.overall_t)}</td>{hasStreak && <td className="td">{r.streak ?? ''}</td>}<td className="td text-center">{check(r)}</td></tr></>)}
-            </tbody></table>
-          </div>
-        );
-      })}</div>
+    <div className="space-y-4">
+      <PageHeader title="Standings" meta={q.data ? `${scope}: ${q.data.official} rows from official conference tables, ${q.data.computed} computed from results` : scope}>
+        <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v === 'd1' ? null : v, conference: null })} options={DIV_OPTIONS} />}</Field>
+        <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[240px]" />}</Field>
+      </PageHeader>
+      <details className="text-xs text-chalk-400">
+        <summary className="cursor-pointer text-chalk-300">How these tables are checked</summary>
+        <p className="mt-2 max-w-3xl leading-relaxed"><Badge tone="teal">Official</Badge> tables are read from the conference's own standings page: rank, points and records exactly as published. <Badge tone="gray">Computed</Badge> tables come from our stored results (3 points for a win, 1 for a tie). Each official row is then compared with the record we compute from our own game list: <b className="text-win">Verified</b> means both records match; <b className="text-chalk-300">Source behind</b> means every result the conference lists is in our record and we hold games it has not posted yet; <b className="text-note">Differs</b> lists the two records.</p>
+      </details>
+      {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
+      {q.isPending && <div className="grid gap-4 lg:grid-cols-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="space-y-2"><Skeleton className="h-6 w-40" /><Skeleton className="h-56" /></div>)}</div>}
+      {q.data && !q.data.rows.length && <EmptyState title={`No standings for ${scope} yet`} body={admin ? 'Run compute-standings from the Jobs page.' : 'Conference play has not started, or the tables have not been collected yet.'} />}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {shown.map(([conf, g]) => {
+          const rows = g.rows;
+          const official = rows[0]?.source === 'conference';
+          const pods = rows.some((r) => r.pod);
+          const hasGfga = rows.some((r) => r.conf_gf != null);
+          const hasStreak = rows.some((r) => r.streak);
+          return (
+            <section key={conf} className="card" aria-labelledby={`conf-${g.id}`}>
+              <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                <h2 id={`conf-${g.id}`} className="display text-lg">{conf}</h2>
+                {official
+                  ? <a className="badge bg-pitch-400/15 text-pitch-300 hover:bg-pitch-400/25" href={rows[0].source_url} target="_blank" rel="noreferrer">Official table <ExternalLink size={11} aria-hidden /><span className="sr-only">(opens the conference site)</span></a>
+                  : <Badge tone="gray" title="Computed from stored results, 3 points for a win, 1 for a tie">Computed</Badge>}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full border-separate border-spacing-0 text-sm">
+                  <caption className="sr-only">{conf} standings, {scope}</caption>
+                  <thead><tr>
+                    <th scope="col" className="th w-8 text-right">#</th><th scope="col" className="th">Team</th><th scope="col" className="th text-right" title="Conference record">Conf</th><th scope="col" className="th text-right" title="Conference points">Pts</th>
+                    {hasGfga && <th scope="col" className="th hidden text-right sm:table-cell" title="Conference goals for and against">GF-GA</th>}
+                    <th scope="col" className="th text-right">Overall</th>{hasStreak && <th scope="col" className="th hidden sm:table-cell" title="Current streak">Streak</th>}<th scope="col" className="th"><span className="sr-only">Check</span></th>
+                  </tr></thead>
+                  <tbody className="[&>tr:hover>td]:bg-field-800">
+                    {rows.map((r, i) => {
+                      const v = verify(r);
+                      return (
+                        <Fragment key={r.program_id}>
+                          {pods && r.pod && (i === 0 || rows[i - 1].pod !== r.pod) && <tr><th scope="rowgroup" colSpan={8} className="td bg-field-900 text-2xs font-medium text-chalk-500">{r.pod}</th></tr>}
+                          <tr>
+                            <td className="td num text-chalk-500">{r.rank ?? ''}</td>
+                            <td className="td"><Link className="flex items-center gap-2 font-medium hover:text-pitch-300" to={href(`/teams/${r.program_id}`)}><TeamLogo src={r.college_programs?.college_schools?.logo_svg_url} name={r.college_programs?.name} size={18} /><span className="truncate">{r.college_programs?.name}</span></Link></td>
+                            <td className="td num">{fmt.rec(r.conf_w, r.conf_l, r.conf_t)}</td><td className="td num">{r.conf_pts ?? ''}</td>
+                            {hasGfga && <td className="td num hidden sm:table-cell">{r.conf_gf != null ? `${r.conf_gf}-${r.conf_ga}` : ''}</td>}
+                            <td className="td num">{fmt.rec(r.overall_w, r.overall_l, r.overall_t)}</td>{hasStreak && <td className="td hidden sm:table-cell">{r.streak ?? ''}</td>}
+                            <td className="td text-center">{official && <VerifiedMark compact state={v.state} details={v.details} />}</td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
