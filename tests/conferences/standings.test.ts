@@ -56,6 +56,19 @@ describe('sidearm conference standings', () => {
     expect(sdsu.gf).toBe(29); expect(sdsu.ga).toBe(8); expect(sdsu.confGf).toBe(0);
     expect(sdsu.overallPct).toBeCloseTo(0.688);
   });
+  it('does not read a PF-PA goals column as the overall record (SCIAC)', () => {
+    const st = parseSidearmStandings(fixture('conferences/sciac-women-2026.html'));
+    const rows = st.pods[0]!.rows;
+    const chapman = rows.find((r) => /Chapman/.test(r.school))!;
+    expect(chapman.conf).toEqual({ w: 1, l: 0, t: 0 });
+    expect(chapman.overall).toEqual({ w: 1, l: 2, t: 1 });
+    expect(chapman.confGf).toBe(2); expect(chapman.confGa).toBe(0);
+    expect(chapman.gf).toBe(2); expect(chapman.ga).toBe(3);
+    expect(chapman.streak).toBe('W1');
+    const cal = rows.find((r) => /California Lutheran/.test(r.school))!;
+    expect(cal.overall).toEqual({ w: 3, l: 1, t: 2 });
+    expect(cal.conf).toEqual({ w: 0, l: 0, t: 1 });
+  });
   it('helpers', () => {
     expect(parseRecord('3-1-2')).toEqual({ w: 3, l: 1, t: 2 });
     expect(parseRecord('4-2')).toEqual({ w: 4, l: 2, t: 0 });

@@ -58,6 +58,14 @@ registerJob('weekly', async (ctx) => {
   await step(ctx, 'verify-membership', { season });
   await step(ctx, 'detect-sites', { season, only_unknown: true });
   await step(ctx, 'refresh-rankings', { season });
+  // Every program's schedule and box scores once a week, whatever NCAA.com listed: games NCAA.com never carried
+  // (UT Tyler's conference games in September) only reach us through the school's own schedule, and the nightly
+  // sync is limited to programs NCAA.com saw play in the last two days.
+  await step(ctx, 'sync-site', { season, stages: ['schedule', 'boxscores'] });
+  await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
+  await step(ctx, 'resolve-orphans', { season });
+  await step(ctx, 'reconcile-games', { season, all: true });
+  await step(ctx, 'compute-aggregates', { season });
   await step(ctx, 'compute-standings', { season });
   await step(ctx, 'sync-site', { season, stages: ['bios'] });
   await step(ctx, 'pq-health', {});

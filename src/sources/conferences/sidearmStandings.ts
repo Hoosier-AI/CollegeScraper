@@ -53,7 +53,10 @@ function classify(header: string): Kind {
   const h = header.toLowerCase().replace(/\./g, '').trim();
   if (!h || /^(rank|pos|#)$/.test(h)) return 'rank';
   if (/^(school|team|member|institution)/.test(h)) return 'school';
-  if (/gf|goals? (for|against)|g\/g/.test(h) && !/pct/.test(h)) return 'gfga';
+  // Games played and "last ten" columns hold plain numbers or W-L-T strings that are not records.
+  if (/^(conf(erence)? )?gp$|^games( played)?$|^l\d+$|^last \d+/.test(h)) return 'other';
+  // Goals for/against, also printed as PF-PA (points for/against) on some conference sites.
+  if ((/gf|goals? (for|against)|g\/g/.test(h) || /^(conf(erence)? )?(pf-pa|pf\/pa|pf|pa|gf-ga|gf\/ga|ga)$/.test(h)) && !/pct/.test(h)) return 'gfga';
   if (/^(overall|all|record|ovr|ovrl)$/.test(h) || /^overall (record|w-l(-t)?)$/.test(h)) return 'overall';
   if (/^(c ?pts?|conf(erence)? ?(pts|points)|div(ision)?\.? ?points|league pts|pts?|points|cpt)$/.test(h)) return 'pts';
   if (/^c ?pct|^conf(erence)? ?pct|^league pct/.test(h)) return 'confpct';
