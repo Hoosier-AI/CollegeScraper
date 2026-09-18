@@ -49,14 +49,14 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
       // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
       // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
       const ensure = async (t: typeof g.home): Promise<string | null> => {
-        const name = t.short || t.full || t.seo || '';
+        const name = (t.short || t.full || t.seo || '').trim();
         // Teams NCAA.com lists without a school page (NAIA, junior colleges) get a synthetic slug from their name.
         const seo = t.seo || (isCleanOpponentName(name) ? opponentSeo(name) : null);
         if (!seo) return null;
         const hit = bySeo.get(`${seo}|${gender}`);
         if (hit) return hit;
         await upsertSchools(db, [{ seo, name }]);
-        const prog = await upsertProgram(db, { school_seo: seo, gender, name, short_name: t.short ?? name, name6: t.char6 ?? null });
+        const prog = await upsertProgram(db, { school_seo: seo, gender, name, short_name: (t.short ?? name).trim(), name6: t.char6 ?? null });
         await upsertProgramSeasons(db, [{ program_id: prog.id, season, division, conference_id: null, ncaa_member: false, member_source: 'scoreboard' } as any]);
         bySeo.set(`${seo}|${gender}`, prog.id);
         ctx.inc('programs_created_from_scoreboard');

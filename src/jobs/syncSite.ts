@@ -6,6 +6,7 @@ import { adapterFor } from '../sources/sites/detect.js';
 import { listPrograms, listProgramSeasons, listSchools, listGames, writeRoster, writeCoaches, writeSchedule, writeSiteSeasonStats, writeBoxScore, writeHonors, statLineCandidates, markProgramSeason, mergeBoxscoreOnly, reorientGame, type ProgramRow, type SchoolRow } from '../db/repos.js';
 import { selectAll, kvGet } from '../db/client.js';
 import { currentSeason, inSeason } from './seasons.js';
+import { swapBoxSides } from '../normalize/boxScore.js';
 import { setMembership, setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, isExhibitionName, matchAmongMembers, type AliasIndex } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import type { SiteContext } from '../model.js';
@@ -140,17 +141,19 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
       if (done.has(b.gameId)) { ctx.inc('boxscores_skipped'); continue; }
       if (await ctx.cancelled()) return;
       try {
-        const box = await adapter.boxScore(fetcher, site, b.url, { date: b.date });
-        const game = games.find((g) => g.id === b.gameId);
         // Box scores name the home and visiting teams explicitly, so they beat a schedule's home/away stamp. They do
         // not beat NCAA.com: a school's box score sometimes lists its own team first whatever the venue, and flipping
         // an NCAA-linked fixture here would undo the orientation the scoreboard sweep just set (Spalding at Aurora).
-        if (game?.home_program_id && game.away_program_id && !game.ncaa_contest_id) {
+        // For a linked game the box itself is turned round instead, so each side's stats and score land on the right
+        // program (Marietta 3 at Piedmont 2 was stored as a Marietta loss when the box was paired positionally).
+        let box = await adapter.boxScore(fetcher, site, b.url, { date: b.date });
+        const game = games.find((g) => g.id === b.gameId);
+        if (game?.home_program_id && game.away_program_id) {
           const sides = [{ id: game.home_program_id, names: namesOf(game.home_program_id) }, { id: game.away_program_id, names: namesOf(game.away_program_id) }];
           const bh = matchAmongMembers(box.home.name, sides), ba = matchAmongMembers(box.away.name, sides);
-          if ((bh === game.away_program_id && ba !== game.away_program_id) || (ba === game.home_program_id && bh !== game.home_program_id)) {
-            ctx.inc(await reorientGame(db, game) ? 'boxscore_orientation_fixed' : 'boxscore_orientation_conflicts');
-          }
+          const swapped = (bh === game.away_program_id && ba !== game.away_program_id) || (ba === game.home_program_id && bh !== game.home_program_id);
+          if (swapped && game.ncaa_contest_id) { box = swapBoxSides(box); ctx.inc('boxscore_sides_swapped'); }
+          else if (swapped) ctx.inc(await reorientGame(db, game) ? 'boxscore_orientation_fixed' : 'boxscore_orientation_conflicts');
         }
         const homeId = game?.home_program_id ?? null, awayId = game?.away_program_id ?? null;
         for (const pid of [homeId, awayId]) if (pid && pid !== p.id && !candMap.has(pid)) candMap.set(pid, await statLineCandidates(db, pid, season));

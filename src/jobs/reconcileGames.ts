@@ -4,7 +4,7 @@ import { selectAll, kvSet } from '../db/client.js';
 import { updateGame, listProgramSeasons } from '../db/repos.js';
 import { currentSeason } from './seasons.js';
 
-interface G { id: string; status: string; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; source_of_truth: string | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }
+interface G { id: string; status: string; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; ncaa_contest_id?: number | null; source_of_truth: string | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }
 interface TS { game_id: string; program_id: string; source: string; is_home: boolean; goals: number | null; shots: number | null; yellow_cards: number | null }
 interface PS { game_id: string; program_id: string; source: string; goals: number | null; participated: boolean }
 
@@ -40,7 +40,7 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     for (let i = 0; i < pre.length; i += 100) await db.from('college_games').delete().in('id', pre.slice(i, i + 100).map((g) => g.id));
     ctx.inc('preseason_exhibitions_deleted', pre.length);
   }
-  let games = await selectAll<G>(db, 'college_games', 'id,status,home_program_id,away_program_id,home_score,away_score,source_of_truth,site_fetched_at,ncaa_fetched_at,conference_game,postseason,tournament',
+  let games = await selectAll<G>(db, 'college_games', 'id,status,home_program_id,away_program_id,home_score,away_score,source_of_truth,site_fetched_at,ncaa_fetched_at,conference_game,postseason,tournament,ncaa_contest_id',
     (q) => { q = q.eq('season', season).eq('status', 'final'); return ctx.params.all ? q : q.or(`source_of_truth.is.null,site_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()},ncaa_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()}`); });
   if (programIds) games = games.filter((g) => (g.home_program_id && programIds!.includes(g.home_program_id)) || (g.away_program_id && programIds!.includes(g.away_program_id)));
   const ids = games.map((g) => g.id);
@@ -62,6 +62,31 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   }
   const byGame = new Map<string, { site: TS[]; ncaa: TS[] }>();
   for (const t of team) { const e = byGame.get(t.game_id) ?? { site: [], ncaa: [] }; (t.source === 'site' ? e.site : e.ncaa).push(t); byGame.set(t.game_id, e); }
+  // A school's box score paired positionally with an NCAA-linked fixture put each side's stats on the other program
+  // (the school listed itself first). The game's score is NCAA.com's; when the site rows fit it only the other way
+  // round, move the site rows (team, player lines, event sides) across.
+  for (const g of games) {
+    if (!g.ncaa_contest_id || g.home_score == null || g.away_score == null || g.home_score === g.away_score || !g.home_program_id || !g.away_program_id) continue;
+    const e = byGame.get(g.id); if (!e || e.site.length !== 2) continue;
+    const sh = e.site.find((t) => t.program_id === g.home_program_id), sa = e.site.find((t) => t.program_id === g.away_program_id);
+    if (!sh || !sa || sh.goals == null || sa.goals == null) continue;
+    if (sh.goals === g.home_score && sa.goals === g.away_score) continue;
+    if (sh.goals !== g.away_score || sa.goals !== g.home_score) continue;
+    // Swap via a placeholder so the (game_id, program_id, source) key never collides mid-way.
+    const tmp = '00000000-0000-0000-0000-000000000000';
+    for (const table of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events'] as const) {
+      await db.from(table).update({ program_id: tmp }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.home_program_id);
+      await db.from(table).update({ program_id: g.home_program_id }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.away_program_id);
+      await db.from(table).update({ program_id: g.away_program_id }).eq('game_id', g.id).eq('source', 'site').eq('program_id', tmp);
+    }
+    await db.from('college_game_team_stats').update({ is_home: true }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.home_program_id);
+    await db.from('college_game_team_stats').update({ is_home: false }).eq('game_id', g.id).eq('source', 'site').eq('program_id', g.away_program_id);
+    // Running scores inside the events are printed home-first by the box; swap them the same way.
+    const ev = await selectAll<{ id: number; home_score: number | null; away_score: number | null }>(db, 'college_game_events', 'id,home_score,away_score', (q) => q.eq('game_id', g.id).eq('source', 'site').not('home_score', 'is', null));
+    for (const x of ev) await db.from('college_game_events').update({ home_score: x.away_score, away_score: x.home_score }).eq('id', x.id);
+    [sh.program_id, sa.program_id] = [sa.program_id, sh.program_id]; sh.is_home = false; sa.is_home = true;
+    ctx.inc('site_box_sides_swapped');
+  }
   const goalsBy = new Map<string, number>();
   for (const p of players) { const k = `${p.game_id}|${p.program_id}|${p.source}`; goalsBy.set(k, (goalsBy.get(k) ?? 0) + (p.goals ?? 0)); }
 
