@@ -69,6 +69,17 @@ describe('sidearm conference standings', () => {
     expect(cal.overall).toEqual({ w: 3, l: 1, t: 2 });
     expect(cal.conf).toEqual({ w: 0, l: 0, t: 1 });
   });
+  it('skips the division-record columns on a pod table (Conference Carolinas: DPts, Div, DPct before Conf)', () => {
+    const st = parseSidearmStandings(fixture('conferences/conference-carolinas-msoc-2026.html'));
+    const rows = st.pods.flatMap((p) => p.rows);
+    const ferrum = rows.find((r) => /Ferrum/.test(r.school))!;
+    expect(ferrum.conf).toEqual({ w: 2, l: 0, t: 1 });
+    expect(ferrum.overall).toEqual({ w: 3, l: 0, t: 2 });
+    expect(ferrum.confPts).toBe(6);
+    const chowan = rows.find((r) => /Chowan/.test(r.school))!;
+    expect(chowan.conf).toEqual({ w: 2, l: 1, t: 0 });
+    expect(chowan.gf).toBe(19); expect(chowan.ga).toBe(9);
+  });
   it('helpers', () => {
     expect(parseRecord('3-1-2')).toEqual({ w: 3, l: 1, t: 2 });
     expect(parseRecord('4-2')).toEqual({ w: 4, l: 2, t: 0 });
