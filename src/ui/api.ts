@@ -1,15 +1,35 @@
-// JSON API behind the stats viewer. Every route needs the trigger secret; reads use the service role.
-import type { FastifyInstance } from 'fastify';
+// JSON API behind the stats viewer. Reads are public (this is what the site itself renders); enqueueing work,
+// cancelling runs and the crawl-health pages need the trigger secret. Queries run with the service role.
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
 import * as q from './queries.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
-export function registerUiApi(app: FastifyInstance, authorized: (h: string | undefined) => boolean): void {
+export interface UiApiOptions {
+  /** True when the request carries the admin trigger secret. */
+  authorized: (h: string | undefined) => boolean;
+  /**
+   * Rate-limits a request that is not from an admin, replying 429 itself when over the limit.
+   * Returning false means the reply has already been sent.
+   */
+  limitAnonymous?: (req: FastifyRequest, reply: FastifyReply) => boolean;
+}
+
+export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: string | undefined) => boolean)): void {
+  const { authorized, limitAnonymous } = typeof opts === 'function' ? { authorized: opts, limitAnonymous: undefined } : opts;
+  // Admin-only paths: anything that starts work or cancels it, plus the crawl-health surfaces.
+  const adminOnly = (req: FastifyRequest): boolean =>
+    req.method !== 'GET' || req.url.startsWith('/api/quality') || /^\/api\/runs(\/|\?|$)/.test(req.url);
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
-    if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
+    if (adminOnly(req)) {
+      if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
+      return;
+    }
+    if (authorized(req.headers.authorization)) return;
+    if (limitAnonymous && !limitAnonymous(req, reply)) return reply;
   });
   const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1990 && n < 2100 ? n : null; };
   const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);

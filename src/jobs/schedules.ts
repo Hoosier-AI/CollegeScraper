@@ -25,15 +25,26 @@ registerJob('hourly', async (ctx) => {
   await step(ctx, 'compute-aggregates', { season, transfers: false });
 });
 
-/** Nightly: corrections + rosters/bios/season stats for programs that played in the last week, full aggregates, transfers. */
+/**
+ * Nightly: corrections, then rosters / schedules / season stats / box scores for programs that played in the last
+ * two days, orphan resolution, aggregates, standings verification and the polls. Player bios are weekly: in season
+ * almost every program plays within a week, so a 7-day window with bios re-fetched ~39,000 pages and took 19 hours.
+ */
 registerJob('nightly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
   await step(ctx, 'fetch-games-ncaa', { season, recent_days: 2, refetch: true });
-  await step(ctx, 'sync-site', { season, only_recent_days: 7, stages: ['roster', 'schedule', 'stats', 'boxscores', 'bios'] });
+  await step(ctx, 'sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'] });
   await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: true });
+  await step(ctx, 'compute-standings', { season });
+  await step(ctx, 'refresh-rankings', { season, categories: false });
+});
+
+/** Every three hours in season: re-read the conference standings pages so the verification never trails the games by more than that. */
+registerJob('standings', async (ctx) => {
+  const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'compute-standings', { season });
 });
 
@@ -45,6 +56,7 @@ registerJob('weekly', async (ctx) => {
   await step(ctx, 'detect-sites', { season, only_unknown: true });
   await step(ctx, 'refresh-rankings', { season });
   await step(ctx, 'compute-standings', { season });
+  await step(ctx, 'sync-site', { season, stages: ['bios'] });
   await step(ctx, 'pq-health', {});
 });
 

@@ -1,4 +1,4 @@
-# College Soccer API (v1)
+# Plaibook Stats API (v1)
 
 Read-only HTTP API over the NCAA soccer catalog this service maintains: every D1, D2 and D3 program (men and
 women), rosters, players, games with box scores, season stats, official conference standings and the United
@@ -6,32 +6,44 @@ Soccer Coaches polls. It is the surface Plaibook (or any other consumer) integra
 direct database access.
 
 Base URL (hosted): `https://plaibook-college-scraper.onrender.com`  
-Machine description: `GET /v1/openapi.json` (no key needed).  
+Browsable docs: `/docs` on the same host. Machine description: `GET /v1/openapi.json`.  
 Season = fall calendar year (`2026`). Gender = `m` | `w`. Division = `d1` | `d2` | `d3`.
 
-## Authentication
+## Authentication — none needed
 
-Every `/v1` route needs an API key, sent either way:
+Every route answers anonymous requests:
+
+```bash
+curl "https://plaibook-college-scraper.onrender.com/v1/search?q=duke&gender=m"
+```
+
+Anonymous callers get `API_ANON_RATE_LIMIT_PER_MIN` requests a minute (default 60), counted per client IP,
+and keyless responses may be read from any origin — browser code can call them directly.
+
+A **named key** raises the limit to `API_RATE_LIMIT_PER_MIN` (default 600) and is accepted only from the
+origins in `CORS_ORIGINS`. Send it either way:
 
 ```
 Authorization: Bearer <key>
 X-Api-Key: <key>
 ```
 
-Keys are named and configured on the service as `COLLEGE_API_KEYS="plaibook:<key>,other:<key>"`. The admin
-trigger secret also works but is meant for the viewer and job routes only. Limits are per key:
-`API_RATE_LIMIT_PER_MIN` requests per minute (default 600); over the limit you get `429` with `Retry-After`.
-Every response carries `X-RateLimit-Remaining`. Browser calls are allowed only from `CORS_ORIGINS`.
+Keys are configured on the service as `COLLEGE_API_KEYS="plaibook:<key>,other:<key>"`; ask for one at the
+address in `GET /v1/meta`. The admin trigger secret also authenticates, but it is meant for the admin
+console and the job routes. A key that is *wrong* is rejected with `401` — send no key at all to fall back
+to the free tier.
 
-Errors are JSON: `{ "error": "unauthorized" | "bad_request" | "rate_limited" | "not_found", "message": "…" }`.
-Successful reads carry `Cache-Control: private, max-age=60`; the data changes at most every 30 minutes in
-season (hourly job) and nightly.
+Every response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`; over the limit you get `429` with
+`Retry-After`. Errors are JSON:
+`{ "error": "unauthorized" | "bad_request" | "rate_limited" | "not_found", "message": "…" }`.
+Successful keyless reads carry `Cache-Control: public, max-age=60` (keyed reads: `private`); the data changes
+at most every 30 minutes in season (hourly job) and nightly.
 
 ## Endpoints
 
 | Route | What it returns |
 |---|---|
-| `GET /v1/meta` | `seasons[]`, `currentSeason`, `genders`, `divisions`, `conferences[]` (id, ncaa_seo, name, division), `last_completed_runs` (job → finished_at) |
+| `GET /v1/meta` | `seasons[]`, `currentSeason`, `genders`, `divisions`, `conferences[]` (id, ncaa_seo, name, division), `last_completed_runs` (job → finished_at), `player_stats[]` / `team_stats[]` (the stat dictionary below), `limits` (requests per minute, anonymous and keyed), `contact` |
 | `GET /v1/status?season=` | Recent crawl runs with counters and errors, `record_checks` (counts per verification field), member programs, games and finals stored |
 | `GET /v1/search?q=&gender=&limit=` | `programs[]` and `players[]` matching a name (trigram similarity), best first |
 | `GET /v1/programs?season=&gender=&division=&conference=&q=&members=all` | One row per program: school (logo, host, platform), conference, `member` (NCAA membership), `record` (computed W-L-T, GF, GA), `official` (NCAA.com W-L-T), sync timestamps, game/box-score counts. NCAA members only unless `members=all` |
@@ -89,12 +101,14 @@ Plaibook needs two environment variables: `COLLEGE_API_URL` (the base URL) and `
 ## Examples
 
 ```bash
-K=…your key…
 H=https://plaibook-college-scraper.onrender.com
-curl -H "X-Api-Key: $K" "$H/v1/search?q=duke&gender=m"
-curl -H "X-Api-Key: $K" "$H/v1/standings?season=2026&gender=m&division=d1"
-curl -H "X-Api-Key: $K" "$H/v1/leaders?season=2026&gender=w&division=d1&stat=goals&limit=10"
-curl -H "X-Api-Key: $K" "$H/v1/rankings?season=2026&gender=m&division=d1"
+curl "$H/v1/search?q=duke&gender=m"
+curl "$H/v1/standings?season=2026&gender=m&division=d1"
+curl "$H/v1/leaders?season=2026&gender=w&division=d1&stat=goals&limit=10"
+curl "$H/v1/rankings?season=2026&gender=m&division=d1"
+
+# With a key, for a higher limit:
+curl -H "X-Api-Key: $K" "$H/v1/programs?season=2026&gender=m&division=d1"
 ```
 
 ## Versioning

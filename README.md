@@ -1,141 +1,88 @@
-# Plaibook College Scraper
+# Plaibook Stats
 
-Collects NCAA college soccer (D1/D2/D3, men's and women's) team and player data into the Plaibook
-Supabase database. Two open sources, both stored per game:
+Every NCAA soccer program — Division I, II and III, men's and women's — with rosters, box scores, season
+stats, official conference standings and the United Soccer Coaches polls. It is a public website and a
+read API over the same data.
 
-1. **Each program's own athletics site** (Sidearm Sports ≈ 85 % of programs, PrestoSports ≈ 10 %):
-   rosters with bios and headshots, coaches, schedules with attendance and venue, cumulative season
-   stats (including per-player minutes), and full per-game box scores with play-by-play.
-2. **NCAA.com** JSON/GraphQL (the same feeds the open-source `henrygd/ncaa-api` proxies): every game in
-   every division with box scores and play-by-play, plus stat leaderboards, standings and the United
-   Soccer Coaches poll. Used as the complete-coverage cross-check and as the fallback when a school's
-   site cannot be parsed.
+**Site:** https://plaibook-college-scraper.onrender.com  ·  **API docs:** `/docs`  ·  **Spec:** `/v1/openapi.json`
 
-`stats.ncaa.org` is never crawled (robots.txt disallows all crawlers and it sits behind Akamai).
+## Use the API
 
-## Layout
+No key, no signup:
 
-```
-src/config.ts            env (zod) + crawler User-Agent
-src/model.ts             canonical types every adapter maps into
-src/http/                polite HTTP client (1 req/s per host, ETag cache, retries, robots.txt)
-src/sources/ncaa/        NCAA.com scoreboard, GraphQL game docs, schools index, leaderboards, polls
-src/sources/sites/       athletics-site adapters: sidearm/, presto/, detect.ts
-src/normalize/           names, class years, positions, heights, hometowns, clocks, team identity
-src/identity/            player identity resolution, transfers, game matching
-src/db/                  supabase client, repos (upserts), fetch cache
-src/jobs/                durable jobs (runner + each crawl step), schedules
-src/server.ts            Render web service: /health, /jobs/enqueue, /jobs/runs, worker loop
-src/cli.ts               same jobs from the command line + `smoke`
-fixtures/                recorded real payloads used by the tests
-scripts/sanity.sql       post-crawl data checks
+```bash
+curl "https://plaibook-college-scraper.onrender.com/v1/search?q=duke&gender=m"
+curl "https://plaibook-college-scraper.onrender.com/v1/standings?season=2026&gender=m&division=d1"
+curl "https://plaibook-college-scraper.onrender.com/v1/leaders?season=2026&gender=w&stat=goals&limit=10"
 ```
 
-## Running
+Anonymous callers get 60 requests a minute per IP and may call from any origin. A named key raises that to
+600 — ask for one at the address in `GET /v1/meta`. Full reference: [docs/API.md](docs/API.md), or `/docs`
+in the browser, which renders the routes from the live spec and lets you run them.
 
-```
+| Route | What it returns |
+|---|---|
+| `/v1/search` | Programs and players by name |
+| `/v1/programs`, `/v1/programs/{id}` | The team list, and one team with roster, games, standing and rankings |
+| `/v1/players/{id}` | Career, per-season stats, splits, ranks, honors, game log |
+| `/v1/games/{id}` | Box score from both sources, player lines, events |
+| `/v1/leaders` | Player or team leaderboards over ~50 stats |
+| `/v1/standings`, `/v1/rankings` | Official conference tables with verification, and every poll of the season |
+| `/v1/meta`, `/v1/status` | Seasons, conferences, the stat dictionary, limits; crawl health and counts |
+
+`/v1` is stable: fields get added, never renamed or removed.
+
+## Where the data comes from
+
+Each program's own athletics site is the primary source — rosters with bios, schedules, cumulative season
+stats and full box scores. NCAA.com is stored alongside it as the complete-coverage cross-check, so every
+game has a second opinion, and `source_of_truth` says which one the aggregates were built from. Conference
+standings come from each conference's official table and are compared row by row with the record computed
+from our stored results; where they disagree, `checks[]` says so. `stats.ncaa.org` is never crawled.
+
+Details, and every source quirk worth knowing: [docs/INTERNALS.md](docs/INTERNALS.md).
+
+## Run it yourself
+
+```bash
 cp .env.example .env            # fill SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
 npm install
 npm test                        # offline, fixture-based
-npm run cli -- --help
-npm run smoke -- --program duke --gender m --season 2025
-npm run cli -- backfill --season 2025
-npm run dev                     # http server + worker
+npm run build                   # server + site
+npm run dev                     # server, worker and site on :8080
 ```
 
-Writes to a non-local Supabase are refused unless `COLLEGE_ALLOW_PROD=1`.
+The database schema lives in the Plaibook repo (`plaibook/supabase/migrations/120_college_soccer.sql` and
+later); writes to a non-local Supabase are refused unless `COLLEGE_ALLOW_PROD=1`. To collect data:
 
-The database schema lives in the Plaibook repo: `plaibook/supabase/migrations/120_college_soccer.sql`
-(apply with `npm run db:push` there). Plaibook reads the data through `college_*` ops on `/api/league`
-(see `plaibook/docs/college-soccer-data.md`).
+```bash
+npm run cli -- --help
+npm run smoke -- --program duke --gender m --season 2025
+npm run cli -- backfill --season 2026
+npm run dev:ui                  # vite on :5174 with hot reload, proxying /api to :8080
+```
+
+## The site
+
+A Vite + React + Tailwind app (`ui/`) served by the same Fastify process. Public pages: **Teams** (click a
+program for its roster, results and season stats), **Team**, **Game** (school box score against NCAA.com side
+by side, plus events), **Player**, **Leaders**, **Standings** (official conference tables with a ✓ when they
+equal our computed records), **Rankings** (every USC poll of the season with movement, plus NCAA.com category
+ranks), and **API** (the docs).
+
+`/admin` takes `COLLEGE_TRIGGER_SECRET` and adds the operator surfaces: **Jobs** (enqueue and watch crawl
+runs), **Quality** (sanity checks), per-team **Sync**, and the crawl columns — which site platform a school
+runs, box-score counts, last-synced times, raw source payloads. Nothing on the public pages depends on it.
 
 ## Deployment
 
-`render.yaml` defines one always-on web service (runs the worker) and three cron jobs that only
-enqueue work (`hourly` in season, `nightly`, `weekly`). Jobs are durable rows in `college_crawl_runs`;
-a restart resumes from the queue and every fetch is cached in `college_source_fetches`.
+`render.yaml` defines one always-on Docker web service that serves the site and the API and runs the crawl
+worker; with `SCHEDULER_ENABLED=1` it enqueues its own hourly, nightly and weekly jobs. Environment variables
+are listed in [.env.example](.env.example); `scripts/render-deploy.mjs` creates or updates the service through
+the Render API.
 
-## Source notes (verified 2026-09-11/12)
+## Integrating from Plaibook
 
-- NCAA.com's `data.ncaa.com` scoreboard feed for the 2025 D1 men's season stopped carrying games after
-  early November (conference and NCAA tournament dates return 404). School sites cover those games, which
-  is why the site box score is the truth source whenever it validates; NCAA.com fills in games the site
-  cannot parse. Tournament brackets via the NCAA GraphQL bracket endpoint are a Phase 2 item.
-- NCAA.com "shots" differ systematically from the school stat crew's shot totals (NCAA counts fewer);
-  goals, cards and saves agree. Disagreement counters therefore ignore shots.
-- Sidearm box scores embed the whole game in `__NUXT_DATA__` (devalue format); PrestoSports box scores
-  need `?view=plays` and sometimes answer HTTP 202 with an empty body on first request (the HTTP client retries).
-- PrestoSports hosts return 403 to any User-Agent containing "bot". The crawler therefore sends a browser-compatible
-  UA with a `PlaibookCollege/1.0 (+https://plaibook.soccer)` suffix and the contact email in a `From:` header on every request.
-- PrestoSports box scores publish minutes only for goalkeepers and do not mark starters; the aggregate RPC
-  borrows minutes / starter flags per player from the NCAA.com line for the same game when the truth source
-  lacks them. NCAA.com prints full legal names in capitals ("JARAN LILLEHOLT KLEVBERG"), so player matching
-  also accepts same jersey + same first name, and `mergeBoxscoreOnly` folds placeholder identities into the
-  roster identity after every roster sync.
-- About half of D1 Sidearm tenants still run the older Sidearm template: box scores are captioned HTML tables
-  (`boxScoreHtml.ts`) and the roster JSON API returns 404/204 while the page embeds the roster object in its
-  script (`rosterEmbedded.ts`); both are automatic fallbacks in the Sidearm adapter.
-- Some Presto rosters print the class as a bare digit (1-5); `parseClassYear` maps those.
-- Team-name matching keeps "College" and "State" significant (Boston College vs Boston U., NC State vs
-  North Carolina, San Diego State vs San Diego); ambiguous aliases resolve to nothing rather than to a guess.
-  Curated spellings live in `data/team-aliases.json`; initialisms (UNCG, HCU, CCSU) and NCAA six-letter codes
-  are weak keys that only win when nothing else matches (`src/normalize/aliasIndex.ts`).
-- **Home/away orientation**: school schedules are the weakest signal (older Sidearm tenants mark away games with a
-  separate `<span class="sidearm-schedule-game-away">at</span>`). NCAA.com's scoreboard is authoritative when a
-  contest exists (`sweep-scoreboard` flips reversed fixtures and takes NCAA's final score); otherwise the box score's
-  own home/visitor names decide (`sync-site`). A flipped game loses all stored lines and is refetched from both
-  sources (`reorientGame`), because lines written under the wrong orientation belong to the other program.
-- **Conference games** are derived, not scraped: both programs in the same conference for the season and not a
-  postseason/tournament game (`reconcile-games`). Site "conference" markers were wrong often enough to break standings.
-- **Membership** (`verify-membership`): NCAA.com's "Won-Lost-Tied Percentage" team leaderboard lists every
-  member of a division with its official overall record (D1 men = 210 teams in 2026). Programs that appear on
-  scoreboards without a conference and are absent from the leaderboard (NAIA, Canadian, club sides) are kept
-  as opponents but flagged `ncaa_member = false` and hidden from team lists, leaders and standings. The
-  official record is stored on `college_program_seasons.official_w/l/t` and compared with our computed record.
-- **Standings** (`compute-standings`): NCAA.com's standings page is empty for soccer in 2026, so the official
-  source is each conference's own website. Sidearm conference sites serve `standings.aspx?path=msoc|wsoc` as a
-  server-rendered `sidearm-standings-table` (rank order, conference W-L-T, points, pct, overall, GF-GA, home/away,
-  streak; pods such as "East Division" are kept). The registry `data/conference-sites.json` (verified with
-  `scripts/find-conference-sites.mjs`) covers ~75% of conferences; the rest (Big Ten, Big 12, SEC, SoCon,
-  PrestoSports conference sites…) fall back to standings computed from our stored results (3-1-0 points).
-  Every official row is compared with our computed conference and overall records
-  (`college_standings_checks`); an empty check table means the stored games are complete.
-- **Rankings** (`refresh-rankings`): unitedsoccercoaches.org publishes every poll of the season on one page
-  per list (D1/D2/D3 × men/women) — pre-season and weekly polls with previous rank, first-place votes, points,
-  record and "also receiving votes" — all of which are stored per `week_of`. The D1 lists are cross-checked
-  rank-by-rank against ncaa.com's copy. NCAA.com stat-category leaderboards (team and individual, ids differ
-  per gender and are discovered from the landing page) provide national ranks per stat, linked to
-  `player_season_id` where the name matches the roster.
-- **Richer aggregates** (migration 122): per-player splits (home/away/neutral, conference/non-conference,
-  vs USC-ranked opponents), goals by half, minutes and shots per goal, PK %, individual clean sheets, division
-  ranks and percentiles (players with ≥30% of team minutes; keepers with ≥180 minutes); per-team home/away and
-  first/second-half goals, shots per goal, points per game with division/conference ranks, record vs ranked
-  teams, last-5 goals.
-
-## Public API (`/v1`) — what Plaibook connects to
-
-Read-only, key-authenticated HTTP API over the whole catalog: `docs/API.md` (endpoints, auth, limits, field
-dictionary) and `docs/plaibook-client.mjs` (a drop-in for Plaibook's `api/_lib/college.mjs` with the same op
-names). Keys: `COLLEGE_API_KEYS="plaibook:<key>"`; spec at `GET /v1/openapi.json`. Plaibook needs only
-`COLLEGE_API_URL` and `COLLEGE_API_KEY` on its side.
-
-## Stats viewer UI (`ui/`)
-
-A Vite + React + Tailwind app served by the same Fastify server (built into `ui/dist`, SPA fallback).
-Sign in with `COLLEGE_TRIGGER_SECRET`. Pages: Teams (click a program → its stats; **Sync** pulls that
-program's roster, schedule, season stats, box scores and bios from its athletics site plus NCAA.com box
-scores and recomputes aggregates), Team, Game (site vs NCAA side by side, events, raw payloads), Player,
-Leaders (division/conference ranks and percentiles, NCAA members only by default), Standings (official
-conference tables with a ✓ when they equal our computed records), Rankings (every USC poll of the season with
-movement, plus NCAA.com category ranks), Jobs (enqueue + watch runs), Quality (sanity checks incl.
-standings-vs-computed, NCAA-record-vs-computed, unresolved names, non-member programs).
-
-```
-npm run dev            # server + worker on :8080 (serves ui/dist if built)
-npm run dev:ui         # vite on :5174 proxying /api to :8080 (hot reload)
-npm run build          # server + ui
-```
-
-For a new season: run `discover-teams` and `detect-sites` once (Jobs page or CLI), then sync teams on
-demand. Seasons from 2025 use the NCAA GraphQL scoreboard (the old casablanca JSON feed ended with 2024 data;
-2025 still serves it but 2026 does not).
+Plaibook calls this service over HTTP rather than reading the database.
+[docs/plaibook-client.mjs](docs/plaibook-client.mjs) is a drop-in for `api/_lib/college.mjs` with the same op
+names, and [docs/PLAIBOOK_HANDOFF.md](docs/PLAIBOOK_HANDOFF.md) has the wiring steps.

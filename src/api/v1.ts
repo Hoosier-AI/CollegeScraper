@@ -1,20 +1,26 @@
-// Public read API for consumers such as Plaibook: /v1/* behind named API keys, per-key rate limits, CORS for the
-// configured origins, and short private caching. Every route maps onto the same query helpers the viewer uses.
+// Public read API: /v1/* is open to anyone. Callers with no credentials get the free tier, limited per client IP
+// and callable from any origin; a named key from COLLEGE_API_KEYS raises the limit and is restricted to the
+// configured browser origins. Every route maps onto the same query helpers the viewer uses.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb, selectAll } from '../db/client.js';
 import * as q from '../ui/queries.js';
 import { openapiSpec } from './openapi.js';
-import { bearerOf, type ApiPrincipal, type RateLimiter } from './auth.js';
+import { anonPrincipal, bearerOf, type ApiPrincipal, type RateLimiter } from './auth.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface PublicApiOptions {
   authenticate: (token: string | null) => ApiPrincipal | null;
+  /** Limiter for admin and named keys. */
   limiter: RateLimiter;
+  /** Limiter for the keyless free tier, bucketed per client IP. */
+  anonLimiter: RateLimiter;
   corsOrigins: string[];
   /** Base URL advertised in the OpenAPI document. */
   publicUrl?: string;
+  /** Address published in /v1/meta for people who need a higher limit. */
+  contact?: string;
 }
 
 const seasonOf = (v: unknown): number | null => { const n = Number(v); return Number.isInteger(n) && n > 1990 && n < 2100 ? n : null; };
@@ -23,31 +29,59 @@ const bad = (reply: FastifyReply, message: string) => reply.code(400).send({ err
 
 export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions): void {
   const origins = new Set(opts.corsOrigins.map((o) => o.replace(/\/+$/, '')));
-  const cors = (req: FastifyRequest, reply: FastifyReply) => {
+  // Keyless responses are public data, so any origin may read them. A request that carries a key is only
+  // answered for the configured origins, so a leaked key cannot be replayed from someone else's page.
+  const cors = (req: FastifyRequest, reply: FastifyReply, credentialed: boolean) => {
     const origin = String(req.headers.origin ?? '').replace(/\/+$/, '');
-    if (origin && (origins.has('*') || origins.has(origin))) {
-      reply.header('Access-Control-Allow-Origin', origins.has('*') ? '*' : origin);
-      reply.header('Vary', 'Origin');
-      reply.header('Access-Control-Allow-Headers', 'Authorization, X-Api-Key, Content-Type');
-      reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-      reply.header('Access-Control-Max-Age', '600');
-    }
+    if (!origin) return;
+    const allow = !credentialed || origins.has('*') ? '*' : origins.has(origin) ? origin : null;
+    if (!allow) return;
+    reply.header('Access-Control-Allow-Origin', allow);
+    reply.header('Vary', 'Origin');
+    reply.header('Access-Control-Allow-Headers', 'Authorization, X-Api-Key, Content-Type');
+    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    reply.header('Access-Control-Max-Age', '600');
   };
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/v1/')) return;
-    cors(req, reply);
+    const token = bearerOf(req.headers as never);
+    // A preflight never carries the key itself, so ask whether the real request intends to send one.
+    const credentialed = req.method === 'OPTIONS'
+      ? /authorization|x-api-key/i.test(String(req.headers['access-control-request-headers'] ?? ''))
+      : !!token;
+    cors(req, reply, credentialed);
     if (req.method === 'OPTIONS') return reply.code(204).send();
     if (req.url.startsWith('/v1/openapi.json')) return;
-    const principal = opts.authenticate(bearerOf(req.headers as never));
-    if (!principal) return reply.code(401).send({ error: 'unauthorized', message: 'Send Authorization: Bearer <api key> or X-Api-Key.' });
-    const r = opts.limiter.take(principal.name);
+    let principal: ApiPrincipal;
+    if (token) {
+      const named = opts.authenticate(token);
+      if (!named) return reply.code(401).send({ error: 'unauthorized', message: 'That API key is not valid. Send no key at all to use the free tier.' });
+      principal = named;
+    } else {
+      principal = anonPrincipal(req.ip);
+    }
+    const limiter = principal.kind === 'anon' ? opts.anonLimiter : opts.limiter;
+    const r = limiter.take(principal.name);
+    reply.header('X-RateLimit-Limit', String(limiter.max));
     reply.header('X-RateLimit-Remaining', String(r.remaining));
-    if (!r.ok) { reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000))); return reply.code(429).send({ error: 'rate_limited', message: 'Too many requests for this key.', retry_after_seconds: Math.ceil(r.resetMs / 1000) }); }
+    if (!r.ok) {
+      reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000)));
+      return reply.code(429).send({
+        error: 'rate_limited',
+        message: principal.kind === 'anon'
+          ? `The free tier allows ${limiter.max} requests per minute per IP. An API key raises the limit.`
+          : 'Too many requests for this key.',
+        retry_after_seconds: Math.ceil(r.resetMs / 1000),
+      });
+    }
     (req as FastifyRequest & { principal?: ApiPrincipal }).principal = principal;
   });
   app.addHook('onSend', async (req, reply, payload) => {
-    if (req.url.startsWith('/v1/') && req.method === 'GET' && reply.statusCode === 200 && !reply.getHeader('Cache-Control')) reply.header('Cache-Control', 'private, max-age=60');
+    if (req.url.startsWith('/v1/') && req.method === 'GET' && reply.statusCode === 200 && !reply.getHeader('Cache-Control')) {
+      const principal = (req as FastifyRequest & { principal?: ApiPrincipal }).principal;
+      reply.header('Cache-Control', principal && principal.kind !== 'anon' ? 'private, max-age=60' : 'public, max-age=60');
+    }
     return payload;
   });
 
@@ -58,7 +92,16 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     const [meta, runs] = await Promise.all([q.meta(db), selectAll<any>(db, 'college_crawl_runs', 'job,status,started_at,finished_at', (x) => x.eq('status', 'done').order('finished_at', { ascending: false }).limit(40))]);
     const last: Record<string, string> = {};
     for (const r of runs) if (!last[r.job]) last[r.job] = r.finished_at;
-    return { ...meta, last_completed_runs: last, generated_at: new Date().toISOString() };
+    return {
+      ...meta,
+      last_completed_runs: last,
+      // The docs page reads its stat dictionary and limits from here so there is only one copy of either.
+      player_stats: q.PLAYER_STATS,
+      team_stats: q.TEAM_STATS,
+      limits: { anon_per_min: opts.anonLimiter.max, key_per_min: opts.limiter.max },
+      contact: opts.contact ?? null,
+      generated_at: new Date().toISOString(),
+    };
   });
 
   // Crawl health without the viewer's full quality pass (that scans every game and takes minutes): recent runs,

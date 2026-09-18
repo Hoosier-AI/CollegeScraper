@@ -1,15 +1,17 @@
-# College Stats demo — walkthrough
+# Plaibook Stats demo — walkthrough
 
-**URL:** https://plaibook-college-scraper.onrender.com  **Sign-in:** the trigger secret (ask Evan)
+**URL:** https://plaibook-college-scraper.onrender.com — the stats pages need no sign-in.
+**Admin console** (`/admin`, for steps 7 and 8 and the Sync buttons): the trigger secret (ask Evan).
 
 What it is: a live database of NCAA college soccer (D1/D2/D3, men's and women's, 2026 season) built by
-crawling each program's own athletics site plus NCAA.com, with a viewer to inspect every stat before it goes
-into Plaibook.
+crawling each program's own athletics site plus NCAA.com — a public site, a read API anyone can call
+without a key, and an admin console to inspect every stat before it goes into Plaibook.
 
 ## Suggested 10-minute tour
 
-1. **Teams** — every program the crawler knows for 2026 with division, conference, site platform, record and
-   how much is stored. Search "Duke". Notice the **Sync** button: any team can be pulled on demand in about a minute.
+0. **Home** — live coverage counts and a search box over every program and player, straight from `/v1`.
+1. **Teams** — every program for 2026 with division, conference, record and goals. Search "Duke". Signed in as
+   admin the table also shows the crawl columns and a **Sync** button: any team can be pulled on demand in about a minute.
 2. **Duke (team page)** — record and splits, goals / shots / corners per game, clean sheets, attendance, form.
    Roster tab: every player with GP, GS, minutes, goals, assists, shots, SOG %, conversion, cards, per-90 toggle,
    goalkeeper GAA / save %. Amber cells would mean our computed number differs from the school's own table; there are none.
@@ -23,9 +25,11 @@ into Plaibook.
    stored games; conferences without a server-rendered site are computed and labelled so.
    **Rankings** — every United Soccer Coaches poll of the season (pre-season → latest) with movement, first-place
    votes and records, verified against ncaa.com's copy; plus NCAA.com national ranks per stat category.
-7. **Quality** — the automated checks that keep the data honest (score reconciliation, minutes, source disagreements,
+7. **Quality** (admin) — the automated checks that keep the data honest (score reconciliation, minutes, source disagreements,
    official standings vs our records, NCAA.com's official W-L-T vs ours, unmatched names, non-NCAA opponents).
-8. **Jobs** — the crawl queue: what ran, how long, counters, errors.
+8. **Jobs** (admin) — the crawl queue: what ran, how long, counters, errors.
+9. **API** (`/docs`) — the same data as an open HTTP API: paste the curl, or run any route from the page
+   itself. No key required; a named key only raises the rate limit.
 
 ## Talking points
 

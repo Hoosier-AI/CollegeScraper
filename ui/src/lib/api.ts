@@ -1,13 +1,37 @@
-// Thin fetch wrapper: attaches the trigger secret from localStorage and unwraps JSON.
+// Thin fetch wrapper: unwraps JSON and, when an admin secret has been stored, attaches it.
+// The read routes are public, so most of the site works with no token at all.
+import { useEffect, useState } from 'react';
+
 const KEY = 'college-ui-token';
+const listeners = new Set<() => void>();
+const emit = () => { for (const fn of listeners) fn(); };
+
 export const getToken = () => { try { return localStorage.getItem(KEY) ?? ''; } catch { return ''; } };
-export const setToken = (t: string) => { try { localStorage.setItem(KEY, t); } catch { /* ignore */ } };
-export const clearToken = () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } };
+export const setToken = (t: string) => { try { localStorage.setItem(KEY, t); } catch { /* ignore */ } emit(); };
+export const clearToken = () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } emit(); };
+export const isAdmin = () => !!getToken();
+
+/** Re-renders when the admin secret is stored or cleared, so admin-only controls appear and vanish live. */
+export function useAdmin(): boolean {
+  const [on, setOn] = useState(isAdmin);
+  useEffect(() => {
+    const fn = () => setOn(isAdmin());
+    listeners.add(fn);
+    window.addEventListener('storage', fn); // another tab signed in or out
+    return () => { listeners.delete(fn); window.removeEventListener('storage', fn); };
+  }, []);
+  return on;
+}
 
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}`, ...(init.headers ?? {}) } });
+  const token = getToken();
+  const send = (bearer: string) => fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}), ...(init.headers ?? {}) } });
+  let res = await send(token);
+  // A stored secret that the server no longer accepts would otherwise break the public pages too, because
+  // /v1 rejects a wrong key where it would have served an anonymous caller. Drop it and try again as a visitor.
+  if (res.status === 401 && token) { clearToken(); res = await send(''); }
   if (res.status === 401) { throw new ApiError(401, 'unauthorized'); }
   const text = await res.text();
   let body: any = null;

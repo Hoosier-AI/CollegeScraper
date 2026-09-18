@@ -8,7 +8,7 @@ import { registerAllJobs } from './jobs/index.js';
 import { startScheduler } from './jobs/scheduler.js';
 import { registerUiApi } from './ui/api.js';
 import { registerPublicApi } from './api/v1.js';
-import { makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
+import { anonPrincipal, makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -17,7 +17,9 @@ import { log } from './log.js';
 
 const cfg = loadConfig();
 registerAllJobs();
-const app = Fastify({ logger: false });
+// trustProxy: Render terminates TLS in front of us, so without it req.ip is the proxy for every caller and
+// the whole free tier would share one rate-limit bucket.
+const app = Fastify({ logger: false, trustProxy: true });
 
 function authorized(header: string | undefined): boolean {
   const secret = cfg.COLLEGE_TRIGGER_SECRET;
@@ -28,17 +30,37 @@ function authorized(header: string | undefined): boolean {
   return timingSafeEqual(Buffer.from(got), Buffer.from(expected));
 }
 
-registerUiApi(app, authorized);
+// One limiter for the keyless free tier (per client IP), one for named keys and the admin secret, and a
+// roomier one for the site's own reads: a single page view costs several /api calls and a whole office can
+// share one address, so browsing must not run into the API's budget. It is still metered, so /api cannot be
+// used to sidestep the /v1 limit.
+const anonLimiter = new RateLimiter(cfg.API_ANON_RATE_LIMIT_PER_MIN);
+const keyLimiter = new RateLimiter(cfg.API_RATE_LIMIT_PER_MIN);
+const siteLimiter = new RateLimiter(cfg.API_ANON_RATE_LIMIT_PER_MIN * 5);
 
-// Public read API for Plaibook and other consumers: named keys, per-key limits, CORS for the configured origins.
+// The site's read routes are public; enqueueing work, cancelling runs and the crawl-health pages are not.
+registerUiApi(app, {
+  authorized,
+  limitAnonymous: (req, reply) => {
+    const r = siteLimiter.take(anonPrincipal(req.ip).name);
+    reply.header('X-RateLimit-Limit', String(siteLimiter.max));
+    reply.header('X-RateLimit-Remaining', String(r.remaining));
+    if (!r.ok) { reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000))); reply.code(429).send({ error: 'rate_limited', retry_after_seconds: Math.ceil(r.resetMs / 1000) }); return false; }
+    return true;
+  },
+});
+
+// Public read API: open to anyone at the free-tier limit, higher for named keys.
 const apiKeys = parseApiKeys(cfg.COLLEGE_API_KEYS);
 registerPublicApi(app, {
   authenticate: makeAuthenticator({ adminSecret: cfg.COLLEGE_TRIGGER_SECRET ?? null, keys: apiKeys }),
-  limiter: new RateLimiter(cfg.API_RATE_LIMIT_PER_MIN),
+  limiter: keyLimiter,
+  anonLimiter,
   corsOrigins: cfg.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
   publicUrl: cfg.PUBLIC_URL,
+  contact: cfg.contactEmail,
 });
-log.info({ keys: apiKeys.map((k) => k.name) }, 'public api keys loaded');
+log.info({ keys: apiKeys.map((k) => k.name), anonPerMin: cfg.API_ANON_RATE_LIMIT_PER_MIN }, 'public api keys loaded');
 
 // Built stats viewer (ui/dist) with SPA fallback; API and health routes are registered above it.
 const uiDist = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'dist');

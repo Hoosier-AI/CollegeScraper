@@ -1,0 +1,7 @@
+# Plaibook Stats — the stats pages are public; the admin console and the job routes are not.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /jobs
+Disallow: /quality
+Disallow: /api/

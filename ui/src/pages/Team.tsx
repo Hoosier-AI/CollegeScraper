@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, qs, fmt } from '../lib/api';
+import { api, qs, fmt, useAdmin } from '../lib/api';
 import { useFilters, useKeepQuery } from '../lib/filters';
 import { Badge, DataTable, DiffCell, ErrorBox, Section, SourceBadge, Spinner, Stat, Tabs, TeamLogo, type Column } from '../components/ui';
 import { RunProgress } from '../components/RunProgress';
@@ -11,6 +11,7 @@ type Tab = 'roster' | 'games' | 'coaches' | 'honors' | 'rankings';
 export default function Team() {
   const { id = '' } = useParams();
   const f = useFilters();
+  const admin = useAdmin();
   const keep = useKeepQuery();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('roster');
@@ -67,9 +68,9 @@ export default function Team() {
     { key: 'gkrec', label: 'GK W-L-T', value: (r) => gk(r) ? r.stats?.gk_wins : null, render: (r) => gk(r) && r.stats ? fmt.rec(r.stats.gk_wins, r.stats.gk_losses, r.stats.gk_ties) : '' },
     { key: 'clean_sheets', label: 'CS', num: true, value: (r) => gk(r) ? r.stats?.clean_sheets : null, render: (r) => gk(r) ? fmt.num(r.stats?.clean_sheets) : '', title: 'Individual clean sheets (≥45 min, 0 conceded)' },
     { key: 'pct_save_pct', label: 'SV% pctl', num: true, value: (r) => gk(r) ? r.stats?.pct_save_pct : null, render: (r) => gk(r) ? fmt.pct(r.stats?.pct_save_pct) : '', title: 'Percentile among division keepers with ≥180 minutes' },
-    { key: 'source', label: 'Src', value: (r) => r.source, render: (r) => <Badge tone={r.source === 'boxscore_only' ? 'amber' : 'gray'} title={`identity confidence ${r.confidence}`}>{r.source.replace('site_', '')}</Badge> },
     { key: 'honors', label: 'Honors', num: true, value: (r) => r.honors.length },
   ];
+  if (admin) rosterCols.push({ key: 'source', label: 'Src', value: (r) => r.source, render: (r) => <Badge tone={r.source === 'boxscore_only' ? 'amber' : 'gray'} title={`identity confidence ${r.confidence}`}>{r.source.replace('site_', '')}</Badge> });
   void p90;
   const gameCols: Column<any>[] = [
     { key: 'game_date', label: 'Date', sticky: true, render: (g) => fmt.date(g.game_date) },
@@ -101,14 +102,14 @@ export default function Team() {
             {t.season?.official_w != null && <span title="Official overall record on NCAA.com's Won-Lost-Tied leaderboard" className={s && fmt.rec(s.w, s.l, s.t) !== fmt.rec(t.season.official_w, t.season.official_l, t.season.official_t) ? 'rounded bg-amber-500/20 px-1 text-amber-200' : 'text-emerald-300'}>NCAA {fmt.rec(t.season.official_w, t.season.official_l, t.season.official_t)}{s && fmt.rec(s.w, s.l, s.t) === fmt.rec(t.season.official_w, t.season.official_l, t.season.official_t) ? ' ✓' : ''}</span>}
             {(() => { const real = (t.standingsChecks ?? []).filter((c: any) => !String(c.field).endsWith('_lag')); return real.length > 0 && <span className="text-amber-300" title={real.map((c: any) => `${c.field}: official ${c.official} vs ours ${c.computed}`).join('\n')}>{real.length} record mismatch{real.length > 1 ? 'es' : ''}</span>; })()}
           </div>
-          <div className="mt-1 text-xs text-ink-500">roster {fmt.ago(t.season?.roster_synced_at)} · schedule {fmt.ago(t.season?.schedule_synced_at)} · stats {fmt.ago(t.season?.stats_synced_at)} · box scores {fmt.ago(t.season?.boxscores_synced_at)}{t.season?.site_parse_failures ? ` · ${t.season.site_parse_failures} parse failures` : ''}</div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          {admin && <div className="mt-1 text-xs text-ink-500">roster {fmt.ago(t.season?.roster_synced_at)} · schedule {fmt.ago(t.season?.schedule_synced_at)} · stats {fmt.ago(t.season?.stats_synced_at)} · box scores {fmt.ago(t.season?.boxscores_synced_at)}{t.season?.site_parse_failures ? ` · ${t.season.site_parse_failures} parse failures` : ''}</div>}
+          {admin && <div className="mt-2 flex flex-wrap items-center gap-2">
             {runId ? <RunProgress runId={runId} onDone={() => { setRunId(null); refreshAll(); }} /> : <>
               <button className="btn-primary" onClick={() => sync.mutate(false)} disabled={sync.isPending}>Sync now</button>
               <button className="btn-ghost" onClick={() => sync.mutate(true)} disabled={sync.isPending} title="Ignore the fetch cache and re-download everything">Force re-sync</button>
             </>}
             {t.runs?.[0] && !runId && <span className="text-xs text-ink-500">last run: {t.runs[0].job} {t.runs[0].status} {fmt.ago(t.runs[0].finished_at ?? t.runs[0].started_at)}</span>}
-          </div>
+          </div>}
         </div>
         {s && <div className="ml-auto grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           <Stat label="Record" value={fmt.rec(s.w, s.l, s.t)} sub={`conf ${fmt.rec(s.conf_w, s.conf_l, s.conf_t)}`} />
@@ -123,7 +124,7 @@ export default function Team() {
           <Stat label="Shots per goal · SOG%" value={`${fmt.num(s.shots_per_goal, 1)} · ${fmt.pct(s.sog_pct)}`} sub={`PK ${s.pk_goals ?? 0}/${s.pk_att ?? 0} · attack ${fmt.pct(s.div_pct_gf_pg)} pctl · defence ${fmt.pct(s.div_pct_ga_pg)} pctl`} />
           <Stat label="vs ranked · last 5" value={fmt.rec(s.vs_ranked_w, s.vs_ranked_l, s.vs_ranked_t)} sub={`last 5: ${s.last5_gf ?? '–'} GF, ${s.last5_ga ?? '–'} GA`} />
         </div>}
-        {!s && <div className="ml-auto text-sm text-ink-500">No aggregates yet — press Sync now.</div>}
+        {!s && <div className="ml-auto text-sm text-ink-500">No season stats stored for this team yet.{admin && ' Press Sync now.'}</div>}
       </div>
 
       <Tabs tabs={[{ id: 'roster', label: 'Roster & season stats', count: roster.data?.length }, { id: 'games', label: 'Games', count: games.data?.length }, { id: 'rankings', label: 'Standings & rankings', count: (t.uscHistory?.length ?? 0) + (t.categories?.length ?? 0) }, { id: 'coaches', label: 'Coaches', count: t.coaches?.length }, { id: 'honors', label: 'Honors', count: honors.length }]} value={tab} onChange={setTab} />
@@ -137,13 +138,13 @@ export default function Team() {
       {tab === 'games' && (games.isLoading ? <Spinner /> : <DataTable rows={games.data ?? []} columns={gameCols} rowKey={(g) => g.id} rowHref={(g) => keep(`/games/${g.id}`)} dense empty="No games yet." />)}
       {tab === 'rankings' && <div className="grid gap-4 lg:grid-cols-3">
         <Section title={`Conference table${t.standing?.source === 'conference' ? ' (official)' : t.standing ? ' (computed)' : ''}`}>
-          {t.conferenceTable?.length ? <table className="w-full text-sm"><thead><tr><th className="th">#</th><th className="th">Team</th><th className="th text-right">Conf</th><th className="th text-right">Pts</th></tr></thead><tbody>{t.conferenceTable.map((r: any) => <tr key={r.program_id} className={r.program_id === id ? 'bg-teal-500/10' : ''}><td className="td">{r.rank}</td><td className="td"><Link className="hover:text-teal-400" to={keep(`/teams/${r.program_id}`)}>{r.college_programs?.name}</Link></td><td className="td num">{fmt.rec(r.conf_w, r.conf_l, r.conf_t)}</td><td className="td num">{r.conf_pts ?? ''}</td></tr>)}</tbody></table> : <p className="text-sm text-ink-500">No standings yet — run compute-standings.</p>}
+          {t.conferenceTable?.length ? <table className="w-full text-sm"><thead><tr><th className="th">#</th><th className="th">Team</th><th className="th text-right">Conf</th><th className="th text-right">Pts</th></tr></thead><tbody>{t.conferenceTable.map((r: any) => <tr key={r.program_id} className={r.program_id === id ? 'bg-teal-500/10' : ''}><td className="td">{r.rank}</td><td className="td"><Link className="hover:text-teal-400" to={keep(`/teams/${r.program_id}`)}>{r.college_programs?.name}</Link></td><td className="td num">{fmt.rec(r.conf_w, r.conf_l, r.conf_t)}</td><td className="td num">{r.conf_pts ?? ''}</td></tr>)}</tbody></table> : <p className="text-sm text-ink-500">No conference table stored yet.{admin && ' Run compute-standings.'}</p>}
         </Section>
         <Section title="United Soccer Coaches poll">
           {t.uscHistory?.length ? <table className="w-full text-sm"><thead><tr><th className="th">Poll</th><th className="th text-right">Rank</th><th className="th text-right">Prev</th><th className="th text-right">Points</th><th className="th">Record</th></tr></thead><tbody>{t.uscHistory.map((r: any) => <tr key={r.week_of}><td className="td">{r.label} <span className="text-xs text-ink-500">{fmt.date(r.week_of)}</span></td><td className="td num">{r.rank}</td><td className="td num">{r.previous_rank ?? 'NR'}</td><td className="td num">{r.value}</td><td className="td">{r.record}</td></tr>)}</tbody></table> : <p className="text-sm text-ink-500">Not ranked this season.</p>}
         </Section>
         <Section title="NCAA.com national ranks (team categories)">
-          {t.categories?.length ? <table className="w-full text-sm"><thead><tr><th className="th">Category</th><th className="th text-right">Rank</th><th className="th text-right">Value</th></tr></thead><tbody>{t.categories.map((r: any) => <tr key={r.category}><td className="td">{r.category}</td><td className="td num">{r.rank}</td><td className="td num">{fmt.num(r.value, Number(r.value) % 1 ? 2 : 0)}</td></tr>)}</tbody></table> : <p className="text-sm text-ink-500">No category ranks stored — run refresh-rankings.</p>}
+          {t.categories?.length ? <table className="w-full text-sm"><thead><tr><th className="th">Category</th><th className="th text-right">Rank</th><th className="th text-right">Value</th></tr></thead><tbody>{t.categories.map((r: any) => <tr key={r.category}><td className="td">{r.category}</td><td className="td num">{r.rank}</td><td className="td num">{fmt.num(r.value, Number(r.value) % 1 ? 2 : 0)}</td></tr>)}</tbody></table> : <p className="text-sm text-ink-500">No national category ranks stored yet.{admin && ' Run refresh-rankings.'}</p>}
         </Section>
       </div>}
       {tab === 'coaches' && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{(t.coaches ?? []).map((c: any) => <div key={c.college_coaches?.id} className="card flex items-center gap-3"><TeamLogo src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={40} /><div><div className="font-semibold">{c.college_coaches?.name}</div><div className="text-xs text-ink-400">{c.title}{c.is_head && ' · head'}</div></div></div>)}{!t.coaches?.length && <p className="text-sm text-ink-500">No coaches stored.</p>}</div>}

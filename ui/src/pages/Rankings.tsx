@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, qs, fmt } from '../lib/api';
+import { api, qs, fmt, useAdmin } from '../lib/api';
 import { useFilters, useKeepQuery } from '../lib/filters';
 import { Badge, DataTable, ErrorBox, Spinner, TeamLogo, type Column } from '../components/ui';
 
 export default function Rankings() {
+  const admin = useAdmin();
   const f = useFilters(); const keep = useKeepQuery();
   const [division, setDivision] = useState('d1');
   const [poll, setPoll] = useState('');
@@ -40,7 +41,7 @@ export default function Rankings() {
       </div>
       {usc && <p className="text-xs text-ink-500">Source: unitedsoccercoaches.org (every poll of the season). {check && (check.mismatches?.length ? <span className="text-amber-300">ncaa.com's copy differs: {check.mismatches.join(', ')}</span> : <span className="text-emerald-300">✓ matches ncaa.com's copy ({check.ncaa_week ?? 'latest'})</span>)}</p>}
       {q.isLoading && <Spinner />}{q.error && <ErrorBox error={q.error} />}
-      {q.data && (top.length ? <DataTable rows={top} columns={cols} rowKey={(r) => String(r.id)} defaultSort={{ key: 'rank', dir: 'asc' }} dense /> : <p className="text-sm text-ink-500">No rankings stored — run refresh-rankings from the Jobs page.</p>)}
+      {q.data && (top.length ? <DataTable rows={top} columns={cols} rowKey={(r) => String(r.id)} defaultSort={{ key: 'rank', dir: 'asc' }} dense /> : <p className="text-sm text-ink-500">No rankings for this poll yet.{admin && ' Run refresh-rankings from the Jobs page.'}</p>)}
       {rv.length > 0 && <p className="text-sm text-ink-400"><b className="text-ink-200">Also receiving votes:</b> {rv.map((r, i) => <span key={r.id}>{i > 0 && ', '}{r.college_programs ? <Link className="hover:text-teal-400" to={keep(`/teams/${r.college_programs.id}`)}>{r.college_programs.name}</Link> : r.subject_name} ({r.value})</span>)}</p>}
     </div>
   );

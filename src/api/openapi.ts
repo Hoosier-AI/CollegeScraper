@@ -6,25 +6,30 @@ const season = { name: 'season', in: 'query', required: true, schema: { type: 'i
 const gender = { name: 'gender', in: 'query', schema: { type: 'string', enum: ['m', 'w'] } };
 const division = { name: 'division', in: 'query', schema: { type: 'string', enum: ['d1', 'd2', 'd3'] } };
 const conference = { name: 'conference', in: 'query', schema: uuid, description: 'college_conferences.id' };
-const ok = (description: string) => ({ 200: { description, content: { 'application/json': { schema: { type: 'object' } } } }, 401: { $ref: '#/components/responses/Unauthorized' }, 429: { $ref: '#/components/responses/RateLimited' } });
+const ok = (description: string) => ({ 200: { description, content: { 'application/json': { schema: { type: 'object' } } } }, 400: { $ref: '#/components/responses/BadRequest' }, 401: { $ref: '#/components/responses/Unauthorized' }, 429: { $ref: '#/components/responses/RateLimited' } });
 
 export function openapiSpec(serverUrl: string): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Plaibook College Soccer API',
+      title: 'Plaibook Stats API',
       version: '1.0.0',
-      description: 'Read-only NCAA soccer data (D1/D2/D3, men and women): programs, rosters, players, games, season stats, standings and rankings. Data is crawled from each school\'s athletics site, NCAA.com, conference websites and unitedsoccercoaches.org. All /v1 routes need an API key: `Authorization: Bearer <key>` or `X-Api-Key: <key>`.',
+      description: 'Read-only NCAA soccer data (D1/D2/D3, men and women): programs, rosters, players, games, season stats, standings and rankings. Data is crawled from each school\'s athletics site, NCAA.com, conference websites and unitedsoccercoaches.org.\n\n**No API key is required.** Every route answers anonymous requests at the free-tier limit (per client IP, see `limits` in /v1/meta), and keyless responses are readable from any origin. A named key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` — raises the limit and is restricted to the origins configured on the service.',
     },
     servers: [{ url: serverUrl }],
     components: {
-      securitySchemes: { apiKey: { type: 'http', scheme: 'bearer' } },
+      securitySchemes: {
+        apiKey: { type: 'http', scheme: 'bearer', description: 'Optional: a named key raises the rate limit.' },
+        apiKeyHeader: { type: 'apiKey', in: 'header', name: 'X-Api-Key', description: 'Optional: same key, sent as a header.' },
+      },
       responses: {
-        Unauthorized: { description: 'Missing or invalid API key.' },
-        RateLimited: { description: 'Per-key request limit exceeded; see Retry-After and X-RateLimit-* headers.' },
+        BadRequest: { description: 'A parameter is missing or malformed.' },
+        Unauthorized: { description: 'A key was sent and it is not valid. Sending no key at all uses the free tier.' },
+        RateLimited: { description: 'Request limit exceeded; see Retry-After and X-RateLimit-* headers.' },
       },
     },
-    security: [{ apiKey: [] }],
+    // {} first: no credentials is a supported way to call every route.
+    security: [{}, { apiKey: [] }, { apiKeyHeader: [] }],
     paths: {
       '/v1/meta': { get: { summary: 'Seasons, conferences and data freshness', responses: ok('Seasons, current season, divisions, conferences and last successful crawl runs.') } },
       '/v1/status': { get: { summary: 'Crawl health', responses: ok('Recent crawl runs, record-check counts, member programs and games/finals stored.') } },

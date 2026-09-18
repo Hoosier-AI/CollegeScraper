@@ -1,11 +1,12 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, fmt } from '../lib/api';
+import { api, fmt, useAdmin } from '../lib/api';
 import { useKeepQuery } from '../lib/filters';
 import { Badge, DataTable, DiffCell, ErrorBox, JsonViewer, Section, Spinner, Stat, TeamLogo, type Column } from '../components/ui';
 
 export default function Player() {
   const { id = '' } = useParams();
+  const admin = useAdmin();
   const keep = useKeepQuery();
   const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`) });
   if (q.isLoading) return <Spinner />;
@@ -43,7 +44,7 @@ export default function Player() {
         <div className="min-w-[240px]">
           <h1 className="text-2xl font-black">{p.display_name}{p.suppress && <Badge tone="red">suppressed</Badge>}</h1>
           <div className="text-sm text-ink-400">{latest ? <>#{latest.jersey ?? '–'} · {latest.position ?? latest.position_raw ?? '–'} · {latest.class_raw ?? '–'}{latest.is_redshirt ? ' (RS)' : ''} · {latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}-${Math.round(latest.height_cm / 2.54 % 12)}` : '–'}{latest.weight_lb ? ` · ${latest.weight_lb} lb` : ''}</> : 'no season row'}</div>
-          <div className="mt-1 text-sm text-ink-400">Hometown: {latest?.hometown_raw ?? '–'} <span className="text-ink-500">({[p.hometown_city, p.hometown_region, p.hometown_country].filter(Boolean).join(', ') || 'unparsed'})</span></div>
+          <div className="mt-1 text-sm text-ink-400">Hometown: {latest?.hometown_raw ?? '–'}{admin && <span className="text-ink-500"> ({[p.hometown_city, p.hometown_region, p.hometown_country].filter(Boolean).join(', ') || 'unparsed'})</span>}</div>
           <div className="text-sm text-ink-400">High school: {latest?.high_school ?? p.high_school ?? '–'} · Previous school: {latest?.previous_school ?? '–'} · Major: {latest?.major ?? '–'}</div>
           <div className="mt-1 flex gap-2 text-xs">{(latest?.bio_url ?? p.bio_url) && <a className="text-teal-400 hover:underline" href={latest?.bio_url ?? p.bio_url} target="_blank" rel="noreferrer">school bio</a>}</div>
         </div>
@@ -61,7 +62,7 @@ export default function Player() {
       {transfers.length > 0 && <Section title="Transfers"><ul className="text-sm">{transfers.map((t: any) => <li key={t.id}>{t.from_season} → {t.to_season}: confidence {t.confidence} ({t.evidence?.rule})</li>)}</ul></Section>}
       <Section title={`Honors (${honors.length})`}>{honors.length ? <ul className="list-disc space-y-1 pl-5 text-sm">{honors.map((h: any) => <li key={h.id}>{h.text}{h.source_url && <a className="ml-2 text-xs text-teal-400" href={h.source_url} target="_blank" rel="noreferrer">source</a>}</li>)}</ul> : <p className="text-sm text-ink-500">None extracted.</p>}</Section>
       <Section title={`Game log (${gameLog.length})`}><DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} dense /></Section>
-      <JsonViewer title="identity row" value={p} />
+      {admin && <JsonViewer title="identity row" value={p} />}
     </div>
   );
 }

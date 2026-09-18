@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { api, fmt } from '../lib/api';
+import { api, fmt, useAdmin } from '../lib/api';
 import { useKeepQuery } from '../lib/filters';
 import { Badge, DataTable, ErrorBox, JsonViewer, Section, SourceBadge, Spinner, Tabs, TeamLogo, type Column } from '../components/ui';
 
@@ -11,6 +11,7 @@ const EVENT_ICON: Record<string, string> = { goal: '⚽', shot: '🎯', save: '�
 
 export default function Game() {
   const { id = '' } = useParams();
+  const admin = useAdmin();
   const keep = useKeepQuery();
   const [src, setSrc] = useState<Src | 'diff'>('diff');
   const [evSrc, setEvSrc] = useState<Src | null>(null);
@@ -58,7 +59,7 @@ export default function Game() {
           <div className="ml-auto flex flex-wrap items-center gap-2 text-sm text-ink-400">
             <Badge>{g.status}</Badge>{g.overtime && <Badge tone="amber">OT</Badge>}{g.shootout && <Badge tone="amber">PK</Badge>}{g.neutral_site && <Badge>neutral</Badge>}{g.conference_game && <Badge>conf</Badge>}{g.postseason && <Badge tone="teal">postseason</Badge>}
             <span>truth <SourceBadge source={truth} /></span>
-            <button className="btn-ghost" onClick={() => refetch.mutate()} disabled={refetch.isPending}>{refetch.isSuccess ? 'Queued' : 'Re-fetch'}</button>
+            {admin && <button className="btn-ghost" onClick={() => refetch.mutate()} disabled={refetch.isPending}>{refetch.isSuccess ? 'Queued' : 'Re-fetch'}</button>}
           </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-400">
@@ -68,7 +69,8 @@ export default function Game() {
           {Object.entries(g.site_game_refs ?? {}).map(([host, url]) => (url ? <a key={host} className="text-teal-400 hover:underline" href={String(url)} target="_blank" rel="noreferrer">{host}</a> : null))}
         </div>
       </div>
-      <Tabs tabs={[{ id: 'stats', label: 'Team stats' }, { id: 'players', label: 'Player stats', count: players.length }, { id: 'events', label: 'Events', count: events.length }, { id: 'raw', label: 'Raw' }]} value={tab} onChange={setTab} />
+      {/* The raw source payloads stay an operator view; the public API still serves them at /v1/games/{id}?include=raw. */}
+      <Tabs tabs={[{ id: 'stats', label: 'Team stats' }, { id: 'players', label: 'Player stats', count: players.length }, { id: 'events', label: 'Events', count: events.length }, ...(admin ? [{ id: 'raw' as const, label: 'Raw' }] : [])]} value={tab} onChange={setTab} />
       {tab === 'stats' && (
         <Section title="Team stats" right={<div className="flex gap-1">{(['diff', 'site', 'ncaa'] as const).map((s) => <button key={s} className={`btn-ghost !py-0.5 ${src === s ? 'border-teal-400 text-teal-400' : ''}`} onClick={() => setSrc(s)}>{s === 'diff' ? 'site / ncaa' : s}</button>)}</div>}>
           {sources.length === 0 ? <p className="text-sm text-ink-500">No box score stored for this game.</p> : (

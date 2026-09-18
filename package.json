@@ -2,7 +2,7 @@
   "name": "plaibook-college-scraper",
   "version": "0.1.0",
   "private": true,
-  "description": "NCAA college soccer team + player data collector for Plaibook (school athletics sites + NCAA.com).",
+  "description": "Plaibook Stats: NCAA college soccer data (school athletics sites + NCAA.com) — public site and read API.",
   "type": "module",
   "engines": {
     "node": ">=22"

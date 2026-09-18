@@ -13,6 +13,9 @@ import Standings from './pages/Standings';
 import Rankings from './pages/Rankings';
 import Jobs from './pages/Jobs';
 import Quality from './pages/Quality';
+import Home from './pages/Home';
+import Docs from './pages/Docs';
+import Admin, { RequireAdmin } from './pages/Admin';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } } });
 
@@ -20,7 +23,7 @@ const router = createBrowserRouter([
   {
     path: '/', element: <App />,
     children: [
-      { index: true, element: <Teams /> },
+      { index: true, element: <Home /> },
       { path: 'teams', element: <Teams /> },
       { path: 'teams/:id', element: <Team /> },
       { path: 'games/:id', element: <Game /> },
@@ -28,8 +31,10 @@ const router = createBrowserRouter([
       { path: 'leaders', element: <Leaders /> },
       { path: 'standings', element: <Standings /> },
       { path: 'rankings', element: <Rankings /> },
-      { path: 'jobs', element: <Jobs /> },
-      { path: 'quality', element: <Quality /> },
+      { path: 'docs', element: <Docs /> },
+      { path: 'admin', element: <Admin /> },
+      { path: 'jobs', element: <RequireAdmin><Jobs /></RequireAdmin> },
+      { path: 'quality', element: <RequireAdmin><Quality /></RequireAdmin> },
     ],
   },
 ]);

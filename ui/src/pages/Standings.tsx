@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, qs, fmt } from '../lib/api';
+import { api, qs, fmt, useAdmin } from '../lib/api';
 import { useFilters, useKeepQuery } from '../lib/filters';
 import { Badge, ErrorBox, Spinner, TeamLogo } from '../components/ui';
 
 export default function Standings() {
+  const admin = useAdmin();
   const f = useFilters(); const keep = useKeepQuery();
   const [division, setDivision] = useState('d1');
   const q = useQuery({ queryKey: ['standings', f.season, f.gender, division], queryFn: () => api<{ source: string; official: number; computed: number; rows: any[] }>(`/api/standings${qs({ season: f.season, gender: f.gender, division })}`) });
@@ -25,7 +26,7 @@ export default function Standings() {
       <div className="flex flex-wrap items-center gap-2"><h1 className="text-xl font-black">Standings</h1><select className="input" value={division} onChange={(e) => setDivision(e.target.value)}><option value="d1">D1</option><option value="d2">D2</option><option value="d3">D3</option></select>
         {q.data && <span className="text-xs text-ink-500">{q.data.official} rows from conference websites · {q.data.computed} computed from stored games</span>}</div>
       {q.isLoading && <Spinner />}{q.error && <ErrorBox error={q.error} />}
-      {q.data && !q.data.rows.length && <p className="text-sm text-ink-500">No standings yet — run compute-standings from the Jobs page.</p>}
+      {q.data && !q.data.rows.length && <p className="text-sm text-ink-500">No standings stored for this division yet.{admin && ' Run compute-standings from the Jobs page.'}</p>}
       <p className="text-xs text-ink-500"><Badge tone="teal">official</Badge> = the conference's own standings page (rank, points and records as published). <Badge tone="gray">computed</Badge> = derived from our stored results (3 pts win, 1 tie). ✓ means the official conference and overall records equal our computed records; ✓… means every result the conference lists is in our record and we hold extra games it has not posted; ≠ lists a real difference on hover.</p>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[...groups.entries()].map(([conf, rows]) => {
         const official = rows[0]?.source === 'conference';

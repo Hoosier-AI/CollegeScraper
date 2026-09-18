@@ -17,6 +17,8 @@ const schema = z.object({
   COLLEGE_API_KEYS: z.string().default(''),
   CORS_ORIGINS: z.string().default(''),
   API_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(600),
+  // The free tier: /v1 answers without any key, limited per client IP.
+  API_ANON_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
   PUBLIC_URL: z.string().url().optional(),
 });
 
@@ -41,6 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     COLLEGE_API_KEYS: env.COLLEGE_API_KEYS,
     CORS_ORIGINS: env.CORS_ORIGINS,
     API_RATE_LIMIT_PER_MIN: env.API_RATE_LIMIT_PER_MIN,
+    API_ANON_RATE_LIMIT_PER_MIN: env.API_ANON_RATE_LIMIT_PER_MIN,
     PUBLIC_URL: env.PUBLIC_URL || undefined,
   });
   const cfg: Config = {

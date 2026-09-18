@@ -18,15 +18,22 @@ describe.skipIf(!local)('viewer api (local supabase)', () => {
     const { registerAllJobs } = await import('../../src/jobs/index.js');
     registerAllJobs();
     app = Fastify();
-    registerUiApi(app, (h) => h === `Bearer ${secret}`);
+    registerUiApi(app, { authorized: (h) => h === `Bearer ${secret}` });
     await app.ready();
   });
   afterAll(async () => { await app?.close(); });
   const get = (path: string, auth = true) => app.inject({ method: 'GET', url: path, headers: auth ? { authorization: `Bearer ${secret}` } : {} });
 
-  it('rejects missing or wrong secrets', async () => {
-    expect((await get('/api/meta', false)).statusCode).toBe(401);
-    expect((await app.inject({ method: 'GET', url: '/api/meta', headers: { authorization: 'Bearer nope' } })).statusCode).toBe(401);
+  it('serves reads to the public but keeps admin routes behind the secret', async () => {
+    // The site renders these for anyone, so they must answer with no credentials at all.
+    expect((await get('/api/meta', false)).statusCode).toBe(200);
+    expect((await get('/api/programs?season=2025&gender=m', false)).statusCode).toBe(200);
+    // Crawl health and anything that starts or cancels work stays private.
+    expect((await get('/api/quality?season=2025', false)).statusCode).toBe(401);
+    expect((await get('/api/runs', false)).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/runs', headers: { authorization: 'Bearer nope' } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'POST', url: '/api/jobs/enqueue', payload: { job: 'sync-program' } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'POST', url: '/api/programs/00000000-0000-0000-0000-000000000000/sync' })).statusCode).toBe(401);
   });
   it('serves meta and programs', async () => {
     const meta = (await get('/api/meta')).json();

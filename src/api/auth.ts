@@ -1,9 +1,11 @@
-// Authentication for the public read API: named API keys (COLLEGE_API_KEYS="plaibook:xxxx,other:yyyy") for
-// consumers such as Plaibook, plus the admin trigger secret for the internal viewer and job routes.
-// Every comparison is constant-time. A small in-memory sliding-window limiter caps requests per key per minute.
+// Authentication for the public read API. Three kinds of caller:
+//   - admin: the trigger secret (COLLEGE_TRIGGER_SECRET), used by the viewer's own job routes;
+//   - key:   a named key from COLLEGE_API_KEYS ("plaibook:xxxx,partner:yyyy"), for heavy consumers;
+//   - anon:  no credentials at all — the free tier, bucketed by client IP.
+// Every comparison is constant-time. A small in-memory sliding-window limiter caps requests per principal.
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-export interface ApiPrincipal { kind: 'admin' | 'key'; name: string }
+export interface ApiPrincipal { kind: 'admin' | 'key' | 'anon'; name: string }
 
 export interface ApiKey { name: string; key: string }
 
@@ -40,18 +42,37 @@ export function makeAuthenticator(opts: { adminSecret?: string | null; keys: Api
   };
 }
 
-/** Sliding-window limiter: at most `limit` hits per `windowMs` per principal name. */
+/** The anonymous free tier: one bucket per client IP. */
+export function anonPrincipal(ip: string | undefined | null): ApiPrincipal {
+  return { kind: 'anon', name: `ip:${ip || 'unknown'}` };
+}
+
+/**
+ * Sliding-window limiter: at most `limit` hits per `windowMs` per principal name.
+ * Anonymous callers are keyed by IP, so the map is swept once per window to drop cold buckets;
+ * without that it would grow with every distinct address that ever called us.
+ */
 export class RateLimiter {
   private hits = new Map<string, number[]>();
+  private sweptAt = 0;
   constructor(private limit: number, private windowMs = 60_000) {}
   /** Returns { ok, remaining, resetMs }. */
   take(name: string, now = Date.now()): { ok: boolean; remaining: number; resetMs: number } {
     const cutoff = now - this.windowMs;
+    if (now - this.sweptAt > this.windowMs) this.sweep(cutoff, now);
     const list = (this.hits.get(name) ?? []).filter((t) => t > cutoff);
     const ok = list.length < this.limit;
     if (ok) list.push(now);
     this.hits.set(name, list);
     const oldest = list[0] ?? now;
     return { ok, remaining: Math.max(0, this.limit - list.length), resetMs: Math.max(0, oldest + this.windowMs - now) };
+  }
+  /** Requests allowed per window (advertised as X-RateLimit-Limit). */
+  get max(): number { return this.limit; }
+  /** Buckets currently held — exposed for tests. */
+  get size(): number { return this.hits.size; }
+  private sweep(cutoff: number, now: number): void {
+    for (const [name, list] of this.hits) if (!list.some((t) => t > cutoff)) this.hits.delete(name);
+    this.sweptAt = now;
   }
 }

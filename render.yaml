@@ -1,5 +1,6 @@
-# Render blueprint: one always-on web service. It serves the stats viewer + API, runs the crawl
-# worker, and (SCHEDULER_ENABLED=1) enqueues the hourly / nightly / weekly jobs itself.
+# Render blueprint: one always-on web service. It serves the public site (Plaibook Stats) and the /v1
+# API, runs the crawl worker, and (SCHEDULER_ENABLED=1) enqueues the hourly / nightly / weekly jobs itself.
+# COLLEGE_TRIGGER_SECRET gates only the admin console (/admin, Jobs, Quality) and the job routes.
 services:
   - type: web
     name: plaibook-college-scraper
@@ -28,6 +29,9 @@ services:
         value: https://www.plaibook.soccer,https://plaibook.soccer
       - key: API_RATE_LIMIT_PER_MIN
         value: "600"
+      # The keyless free tier, per client IP.
+      - key: API_ANON_RATE_LIMIT_PER_MIN
+        value: "60"
       - key: PUBLIC_URL
         value: https://plaibook-college-scraper.onrender.com
       - key: LOG_LEVEL

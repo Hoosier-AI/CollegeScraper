@@ -1,39 +1,60 @@
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, ApiError, getToken, setToken, clearToken } from './lib/api';
+import { api, ApiError, clearToken, useAdmin } from './lib/api';
 import { FiltersProvider } from './lib/filters';
+import { Logo } from './components/Brand';
 
-const NAV = [
-  ['/teams', 'Teams'], ['/leaders', 'Leaders'], ['/standings', 'Standings'], ['/rankings', 'Rankings'], ['/jobs', 'Jobs'], ['/quality', 'Quality'],
-] as const;
+// Everyone sees these. Jobs and Quality are appended once an admin secret is stored.
+const NAV = [['/teams', 'Teams'], ['/leaders', 'Leaders'], ['/standings', 'Standings'], ['/rankings', 'Rankings'], ['/docs', 'API']] as const;
+const ADMIN_NAV = [['/jobs', 'Jobs'], ['/quality', 'Quality']] as const;
+
+// The season/gender selects only mean something on the data pages.
+const FILTERLESS = ['/', '/docs', '/admin'];
 
 export default function App() {
-  const [token, setTok] = useState(getToken());
-  const health = useQuery({ queryKey: ['meta', token], queryFn: () => api<{ seasons: number[] }>('/api/meta'), enabled: !!token, retry: false });
-  const unauthorized = health.error instanceof ApiError && health.error.status === 401;
-  useEffect(() => { if (unauthorized) { clearToken(); setTok(''); } }, [unauthorized]);
-  if (!token) return <Login onToken={(t) => { setToken(t); setTok(t); }} />;
+  const admin = useAdmin();
+  const { pathname } = useLocation();
+  // /api/meta is public now, so probe an admin-only route to notice a secret that has been rotated away.
+  const check = useQuery({ queryKey: ['admin-check'], queryFn: () => api('/api/runs?limit=1'), enabled: admin, retry: false, staleTime: 5 * 60_000 });
+  const rejected = check.error instanceof ApiError && check.error.status === 401;
+  useEffect(() => { if (rejected) clearToken(); }, [rejected]);
+
+  const nav = admin ? [...NAV, ...ADMIN_NAV] : NAV;
   return (
     <FiltersProvider>
       <div className="min-h-screen">
         <header className="sticky top-0 z-20 border-b border-navy-700 bg-navy-950/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
-            <span className="text-lg font-black tracking-tight text-teal-400">College Stats</span>
+            <Link to="/" className="shrink-0"><Logo /></Link>
             <nav className="flex gap-1 overflow-x-auto">
-              {NAV.map(([to, label]) => (
+              {nav.map(([to, label]) => (
                 <NavLink key={to} to={to} className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-semibold ${isActive ? 'bg-navy-800 text-ink-100' : 'text-ink-400 hover:text-ink-100'}`}>{label}</NavLink>
               ))}
             </nav>
-            <GlobalFilters />
-            <button className="btn-ghost ml-auto" onClick={() => { clearToken(); setTok(''); }}>Sign out</button>
+            {!FILTERLESS.includes(pathname) && <GlobalFilters />}
+            {admin && <button className="btn-ghost ml-auto" onClick={() => clearToken()}>Sign out</button>}
           </div>
         </header>
         <main className="mx-auto max-w-[1500px] px-4 py-4">
           <Outlet />
         </main>
+        <Footer />
       </div>
     </FiltersProvider>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="mx-auto mt-8 max-w-[1500px] border-t border-navy-800 px-4 py-6 text-sm text-ink-500">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span>Plaibook Stats — NCAA soccer data from each school's athletics site, NCAA.com, conference sites and United Soccer Coaches.</span>
+        <Link to="/docs" className="ml-auto text-teal-400 hover:text-teal-300">API docs</Link>
+        <a href="/v1/openapi.json" className="text-teal-400 hover:text-teal-300">OpenAPI</a>
+        <Link to="/admin" className="hover:text-ink-300">Admin</Link>
+      </div>
+    </footer>
   );
 }
 
@@ -51,30 +72,6 @@ function GlobalFilters() {
       <select className="input" value={gender} onChange={(e) => set('gender', e.target.value)}>
         <option value="m">Men</option><option value="w">Women</option>
       </select>
-    </div>
-  );
-}
-
-function Login({ onToken }: { onToken: (t: string) => void }) {
-  const [v, setV] = useState('');
-  const [err, setErr] = useState<string | null>(null);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const r = await fetch('/api/meta', { headers: { Authorization: `Bearer ${v.trim()}` } });
-      if (!r.ok) throw new Error(r.status === 401 ? 'That secret was rejected.' : `Server error ${r.status}`);
-      onToken(v.trim());
-    } catch (e2) { setErr(e2 instanceof Error ? e2.message : String(e2)); }
-  };
-  return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <form onSubmit={submit} className="card w-full max-w-sm space-y-3">
-        <h1 className="text-xl font-black text-teal-400">College Stats Viewer</h1>
-        <p className="text-sm text-ink-400">Enter the scraper's trigger secret (COLLEGE_TRIGGER_SECRET).</p>
-        <input className="input w-full" type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="secret" autoFocus />
-        {err && <p className="text-sm text-red-400">{err}</p>}
-        <button className="btn-primary w-full justify-center" type="submit">Sign in</button>
-      </form>
     </div>
   );
 }
