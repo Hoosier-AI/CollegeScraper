@@ -37,7 +37,7 @@ export default function Rankings() {
   const setWeek = (w: string | null) => patch({ week: w && w !== weeks[0]?.week_of ? w : null });
   const team = (r: any) => r.college_programs
     ? <Link className="flex items-center gap-2 font-medium hover:text-pitch-300" to={href(`/teams/${r.college_programs.id}`)}><TeamLogo src={r.college_programs.college_schools?.logo_svg_url} name={r.college_programs.name} size={20} />{r.college_programs.name}</Link>
-    : <span className="text-chalk-400">{r.subject_name} <Badge tone="amber">unmatched</Badge></span>;
+    : <span className="text-chalk-200">{String(r.subject_name).split('|').pop()}{admin && <Badge tone="amber" className="ml-1">unmatched</Badge>}</span>;
   const isPlayerPoll = !usc && rows[0]?.player_season_id !== undefined;
   const cols: Column<any>[] = usc ? [
     { key: 'name', label: 'Team', primary: true, value: (r) => r.rank, render: (r) => <span className="flex items-center gap-3"><span className="display w-6 text-right text-base text-chalk-100 tnum">{r.rank}</span>{team(r)}</span> },
@@ -47,7 +47,7 @@ export default function Rankings() {
     { key: 'value', label: 'Points', num: true },
   ] : [
     { key: 'name', label: isPlayerPoll ? 'Player' : 'Team', primary: true, value: (r) => r.rank,
-      render: (r) => <span className="flex items-center gap-3"><span className="display w-6 text-right text-base text-chalk-100 tnum">{r.rank}</span>{r.college_player_seasons ? <span className="font-medium">{r.college_player_seasons.college_players?.display_name}</span> : r.player_season_id === undefined ? team(r) : <span>{String(r.subject_name).split('|')[1]} <Badge tone="amber">unmatched</Badge></span>}</span> },
+      render: (r) => <span className="flex items-center gap-3"><span className="display w-6 text-right text-base text-chalk-100 tnum">{r.rank}</span>{r.college_player_seasons ? <span className="font-medium">{r.college_player_seasons.college_players?.display_name}</span> : r.player_season_id === undefined ? team(r) : <span className="font-medium text-chalk-200">{String(r.subject_name).split('|')[1]}{admin && <Badge tone="amber" className="ml-1">unlinked</Badge>}</span>}</span> },
     ...(isPlayerPoll ? [{ key: 'team', label: 'Team', value: (r: any) => r.college_programs?.name, render: (r: any) => r.college_programs ? team(r) : String(r.subject_name).split('|').pop() } as Column<any>] : []),
     { key: 'value', label: 'Value', num: true, render: (r) => fmt.num(r.value, Number(r.value) % 1 ? 2 : 0) },
   ];
