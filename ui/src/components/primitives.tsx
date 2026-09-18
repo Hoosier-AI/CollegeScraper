@@ -173,13 +173,13 @@ export function FormPips({ form, size = 'md', label = 'Form' }: { form: string |
   );
 }
 
-export function ResultBadge({ result, us, them, ot, pk }: { result: 'W' | 'L' | 'T' | null; us?: number | null; them?: number | null; ot?: boolean | null; pk?: boolean | null }) {
+export function ResultBadge({ result, us, them, ot, pk, forfeit }: { result: 'W' | 'L' | 'T' | null; us?: number | null; them?: number | null; ot?: boolean | null; pk?: boolean | null; forfeit?: boolean | null }) {
   if (!result) return <span className="text-chalk-500">–</span>;
   return (
     <span className="inline-flex items-center gap-1.5 tnum">
       <span className={`inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold ${PIP[result]}`}>{result}</span>
-      {us != null && <span className="font-medium text-chalk-100">{us}–{them}</span>}
-      {(ot || pk) && <span className="text-2xs text-chalk-500">{pk ? 'PK' : 'OT'}</span>}
+      {forfeit ? <span className="text-2xs text-chalk-400" title="Forfeit: counted in the conference table only">Forfeit</span> : us != null && <span className="font-medium text-chalk-100">{us}–{them}</span>}
+      {!forfeit && (ot || pk) && <span className="text-2xs text-chalk-500">{pk ? 'PK' : 'OT'}</span>}
     </span>
   );
 }

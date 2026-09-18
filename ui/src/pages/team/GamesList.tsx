@@ -12,7 +12,7 @@ export function GamesList({ games, id, loading, href }: { games: any[]; id: stri
   const cols: Column<any>[] = [
     { key: 'game_date', label: 'Date', primary: true, render: (g) => fmt.weekday(g.game_date) },
     { key: 'opp', label: 'Opponent', value: (g) => sideOf(g, id).opp, render: (g) => { const s = sideOf(g, id); return <span className="flex items-center gap-2"><TeamLogo src={s.oppLogo} name={s.opp} size={20} /><span className="text-chalk-500">{s.where}</span> {s.oppId ? <Link className="hover:text-pitch-300" to={href(`/teams/${s.oppId}`)}>{s.opp ?? 'TBD'}</Link> : (s.opp ?? 'TBD')}</span>; } },
-    { key: 'result', label: 'Result', value: (g) => { const s = sideOf(g, id); return s.result ? (s.us ?? 0) - (s.them ?? 0) : null; }, render: (g) => { const s = sideOf(g, id); return s.result ? <ResultBadge result={s.result} us={s.us} them={s.them} ot={g.overtime} pk={g.shootout} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>; } },
+    { key: 'result', label: 'Result', value: (g) => { const s = sideOf(g, id); return s.result ? (s.us ?? 0) - (s.them ?? 0) : null; }, render: (g) => { const s = sideOf(g, id); return s.result ? <ResultBadge result={s.result} us={s.us} them={s.them} ot={g.overtime} pk={g.shootout} forfeit={g.forfeit} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>; } },
     { key: 'conference_game', label: 'Conf', title: 'Conference game', value: (g) => (g.conference_game ? 1 : 0), render: (g) => (g.conference_game ? 'Conf' : '') },
     { key: 'venue', label: 'Venue', priority: 2, wrap: true, value: (g) => g.venue_name ? `${g.venue_name}${g.venue_city ? `, ${g.venue_city}` : ''}` : '' },
     { key: 'attendance', label: 'Att', title: 'Attendance', num: true, priority: 2 },
@@ -38,7 +38,7 @@ export function GamesList({ games, id, loading, href }: { games: any[]; id: stri
                 <span className="w-16 shrink-0 text-xs text-chalk-500">{fmt.day(g.game_date)}</span>
                 <TeamLogo src={s.oppLogo} name={s.opp} size={24} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-chalk-100">{s.where} {s.opp ?? 'TBD'}</span><span className="block truncate text-xs text-chalk-500">{g.conference_game ? 'Conference' : g.neutral_site ? 'Neutral site' : s.home ? 'Home' : 'Away'}{g.venue_name ? `, ${g.venue_name}` : ''}</span></span>
-                {s.result ? <ResultBadge result={s.result} us={s.us} them={s.them} ot={g.overtime} pk={g.shootout} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>}
+                {s.result ? <ResultBadge result={s.result} us={s.us} them={s.them} ot={g.overtime} pk={g.shootout} forfeit={g.forfeit} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>}
               </Link>
             </li>
           );

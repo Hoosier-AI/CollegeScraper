@@ -11,7 +11,7 @@ export function normalizeResult<T extends ResultLike | null>(r: T): T {
   return r;
 }
 
-export interface GameResult { date: string; gf: number; ga: number; conf: boolean }
+export interface GameResult { date: string; gf: number; ga: number; conf: boolean; /** counts in the conference table only */ forfeit?: boolean }
 export interface Wlt { w: number; l: number; t: number }
 
 export function recordOf(games: GameResult[]): Wlt {
@@ -30,7 +30,8 @@ export const wltString = (r: { w: number | null; l: number | null; t: number | n
  * against lower divisions or non-NCAA opponents). 'mismatch' = it lists a result we do not have, which is our problem.
  */
 export function compareRecord(games: GameResult[], official: { w: number | null; l: number | null; t: number | null }, confOnly: boolean): { status: 'ok' | 'lag' | 'mismatch'; ours: Wlt } {
-  const list = games.filter((g) => !confOnly || g.conf).sort((a, b) => a.date.localeCompare(b.date));
+  // A forfeit is recorded in the conference table but not in overall records (nor on NCAA.com).
+  const list = games.filter((g) => (confOnly ? g.conf : !g.forfeit)).sort((a, b) => a.date.localeCompare(b.date));
   const ours = recordOf(list);
   const off = { w: official.w ?? 0, l: official.l ?? 0, t: official.t ?? 0 };
   if (wltString(ours) === wltString(off)) return { status: 'ok', ours };

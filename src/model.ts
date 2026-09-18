@@ -56,7 +56,8 @@ export interface ScheduleEntry {
   isExhibition: boolean;
   tournament: string | null;
   state: GameState;
-  result: { status: 'W' | 'L' | 'T'; teamScore: number; opponentScore: number } | null;
+  /** A forfeit carries a nominal 1-0 score; it counts in the conference table only. */
+  result: { status: 'W' | 'L' | 'T'; teamScore: number; opponentScore: number; forfeit?: boolean } | null;
   /** Absolute URL of the school's box score for this game, when linked. */
   boxScoreUrl: string | null;
   siteGameId: string | null;

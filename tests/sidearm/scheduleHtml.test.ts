@@ -82,3 +82,20 @@ describe('legacy template side markers', () => {
     expect(sides.has('A')).toBe(true);
   });
 });
+
+describe('forfeits', () => {
+  const utt: SiteContext = { host: 'uttylerpatriots.com', baseUrl: 'https://uttylerpatriots.com', gender: 'w', season: 2026, sportSlug: 'womens-soccer', sportId: null, teamSlug: null };
+  const entries = parseScheduleHtml(fixture('sidearm/uttyler-wsoc-schedule-2026-legacy.html'), utt);
+  it('reads "W, - Forfeit in conference standings only" as a final forfeit win', () => {
+    const g = entries.find((e) => e.date === '2026-09-09')!;
+    expect(g.opponentName).toBe('Eastern New Mexico');
+    expect(g.state).toBe('final');
+    expect(g.result).toEqual({ status: 'W', teamScore: 1, opponentScore: 0, forfeit: true });
+    expect(g.homeAway).toBe('A');
+  });
+  it('leaves ordinary results without the flag', () => {
+    const g = entries.find((e) => e.date === '2026-08-27')!;
+    expect(g.result).toMatchObject({ status: 'L', teamScore: 1, opponentScore: 2 });
+    expect(g.result?.forfeit).toBeUndefined();
+  });
+});

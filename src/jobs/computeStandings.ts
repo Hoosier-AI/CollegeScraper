@@ -76,12 +76,12 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
   const scopeIds = seasons.filter((x) => (!onlyDivision || x.division === onlyDivision) && genders.includes(programById.get(x.program_id)?.gender as Gender) && (!onlyConf || conferences.find((c) => c.id === x.conference_id)?.ncaa_seo === onlyConf)).map((x) => x.program_id);
   await writeStandingsChecks(db, season, scopeIds, []);
   // Every final with both programs and a score, per program, for record verification (independent of aggregates).
-  const finals = await selectAll<{ game_date: string; home_program_id: string; away_program_id: string; home_score: number; away_score: number; conference_game: boolean }>(db, 'college_games', 'game_date,home_program_id,away_program_id,home_score,away_score,conference_game',
+  const finals = await selectAll<{ game_date: string; home_program_id: string; away_program_id: string; home_score: number; away_score: number; conference_game: boolean; forfeit: boolean }>(db, 'college_games', 'game_date,home_program_id,away_program_id,home_score,away_score,conference_game,forfeit',
     (q) => q.eq('season', season).eq('status', 'final').not('home_program_id', 'is', null).not('away_program_id', 'is', null).not('home_score', 'is', null).not('away_score', 'is', null));
   const gamesOf = new Map<string, GameResult[]>();
   for (const g of finals) {
-    gamesOf.set(g.home_program_id, [...(gamesOf.get(g.home_program_id) ?? []), { date: g.game_date, gf: g.home_score, ga: g.away_score, conf: g.conference_game }]);
-    gamesOf.set(g.away_program_id, [...(gamesOf.get(g.away_program_id) ?? []), { date: g.game_date, gf: g.away_score, ga: g.home_score, conf: g.conference_game }]);
+    gamesOf.set(g.home_program_id, [...(gamesOf.get(g.home_program_id) ?? []), { date: g.game_date, gf: g.home_score, ga: g.away_score, conf: g.conference_game, forfeit: g.forfeit }]);
+    gamesOf.set(g.away_program_id, [...(gamesOf.get(g.away_program_id) ?? []), { date: g.game_date, gf: g.away_score, ga: g.home_score, conf: g.conference_game, forfeit: g.forfeit }]);
   }
   const dupList = Object.values((await kvGet<Record<string, { gender: string; date: string; home: string | null; away: string | null; homeScore: number | null; awayScore: number | null }>>(db, `ncaa_duplicate_contests:${season}`)) ?? {});
   const verify = (checks: StandingsCheck[], pid: string, field: string, official: { w: number | null; l: number | null; t: number | null } | null, confOnly: boolean) => {

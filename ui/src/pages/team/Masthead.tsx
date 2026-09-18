@@ -94,7 +94,7 @@ function GameStrip({ label, g, id, href }: { label: string; g: any; id: string; 
         <div className="truncate text-sm font-medium text-chalk-100">{side.where} {side.opp ?? 'TBD'}</div>
         <div className="truncate text-xs text-chalk-500">{g.venue_name ? `${g.venue_name}${g.venue_city ? `, ${g.venue_city}` : ''}` : g.neutral_site ? 'Neutral site' : side.home ? 'Home' : 'Away'}{g.conference_game ? ', conference' : ''}</div>
       </div>
-      {side.result ? <ResultBadge result={side.result} us={side.us} them={side.them} ot={g.overtime} pk={g.shootout} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>}
+      {side.result ? <ResultBadge result={side.result} us={side.us} them={side.them} ot={g.overtime} pk={g.shootout} forfeit={g.forfeit} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>}
     </Link>
   );
 }

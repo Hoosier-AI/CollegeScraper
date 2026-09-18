@@ -27,7 +27,7 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
   const d1Member = new Set(d1Seasons.filter((x) => x.division === 'd1' && (x as { ncaa_member?: boolean }).ncaa_member !== false).map((x) => x.program_id));
   const covered = new Set(openRows.filter((g) => g.ncaa_contest_id && g.division === 'd1').map((g) => `${g.gender}|${g.game_date}`));
   const finalsUnlinked = await selectAll<{ id: string; gender: string; game_date: string; home_program_id: string | null; away_program_id: string | null }>(db, 'college_games', 'id,gender,game_date,home_program_id,away_program_id',
-    (q) => q.eq('season', season).eq('status', 'final').is('ncaa_contest_id', null));
+    (q) => q.eq('season', season).eq('status', 'final').is('ncaa_contest_id', null).eq('forfeit', false));
   // Games against a team outside NCAA membership (NAIA, junior colleges) are counted in official records even when
   // NCAA.com's scoreboard does not list them, so only D1-vs-D1 finals are removed this way.
   const bothD1 = (g: { home_program_id: string | null; away_program_id: string | null }) => !!g.home_program_id && !!g.away_program_id && d1Member.has(g.home_program_id) && d1Member.has(g.away_program_id);

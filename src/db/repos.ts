@@ -22,7 +22,7 @@ export interface ProgramSeasonRow { program_id: string; season: number; division
 export interface GameRow {
   id: string; season: number; game_date: string; gender: Gender; division: Division | null; home_program_id: string | null; away_program_id: string | null;
   home_name: string | null; away_name: string | null; home_score: number | null; away_score: number | null; status: string; ncaa_contest_id: number | null;
-  site_game_refs: Record<string, string>; source_of_truth: 'site' | 'ncaa' | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; detail_attempts: number;
+  site_game_refs: Record<string, string>; source_of_truth: 'site' | 'ncaa' | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; detail_attempts: number; forfeit?: boolean;
 }
 
 // ---------- schools / programs ----------
@@ -417,6 +417,7 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
       const patch: Record<string, unknown> = { site_game_refs: { ...(game.site_game_refs ?? {}), ...(e.boxScoreUrl ? refs : {}) } };
       if (game.status !== 'final' && status) patch.status = status;
       if (game.home_score == null && homeScore != null) { patch.home_score = homeScore; patch.away_score = awayScore; }
+      if (e.result?.forfeit && !game.forfeit) patch.forfeit = true;
       if (e.homeAway === 'N') patch.neutral_site = true;
       if (e.attendance != null) patch.attendance = e.attendance;
       await updateGame(db, game.id, patch);
@@ -425,7 +426,7 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
       game = await insertGame(db, {
         season: input.season, game_date: e.date, gender: input.gender, division: input.division,
         home_program_id: home, away_program_id: away, home_name: isHome ? null : e.opponentName, away_name: isHome ? e.opponentName : null,
-        home_score: homeScore, away_score: awayScore, status: status ?? 'scheduled', neutral_site: e.homeAway === 'N',
+        home_score: homeScore, away_score: awayScore, status: status ?? 'scheduled', neutral_site: e.homeAway === 'N', forfeit: !!e.result?.forfeit,
         tournament: e.tournament, attendance: e.attendance, site_game_refs: e.boxScoreUrl ? refs : {},
       });
       input.existing.push(game);

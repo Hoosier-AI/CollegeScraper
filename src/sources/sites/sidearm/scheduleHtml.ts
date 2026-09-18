@@ -37,9 +37,13 @@ function opponentIdFromHref(href: string | undefined): string | null {
 
 function parseScore(raw: string | null): ScheduleEntry['result'] {
   if (!raw) return null;
-  const m = raw.replace(/\s+/g, ' ').match(/\b([WLT])\b[,\s]*(\d+)\s*-\s*(\d+)/i);
-  if (!m) return null;
-  return normalizeResult({ status: m[1]!.toUpperCase() as 'W' | 'L' | 'T', teamScore: Number(m[2]), opponentScore: Number(m[3]) });
+  const text = raw.replace(/\s+/g, ' ');
+  const m = text.match(/\b([WLT])\b[,\s]*(\d+)\s*-\s*(\d+)/i);
+  if (m) return normalizeResult({ status: m[1]!.toUpperCase() as 'W' | 'L' | 'T', teamScore: Number(m[2]), opponentScore: Number(m[3]) });
+  // "W, - Forfeit in conference standings only": a result with no score. Recorded 1-0 to the winner and flagged.
+  const f = /forfeit/i.test(text) ? text.match(/(?:^|\s)([WLT])\b/i) : null;
+  if (f) { const st = f[1]!.toUpperCase() as 'W' | 'L' | 'T'; return { status: st, teamScore: st === 'W' ? 1 : 0, opponentScore: st === 'L' ? 1 : 0, forfeit: true }; }
+  return null;
 }
 
 function homeAwayFromStamp(stamp: string | null, neutralHint: boolean): 'H' | 'A' | 'N' {
