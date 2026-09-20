@@ -10,6 +10,7 @@ import './refreshRankings.js';
 import './verifyMembership.js';
 import './computeStandings.js';
 import './resolveOrphans.js';
+import './liveScoreboard.js';
 import './schedules.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

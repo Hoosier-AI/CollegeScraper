@@ -26,7 +26,7 @@ function paramsFrom(opts: Record<string, unknown>): Record<string, unknown> {
   return p;
 }
 
-for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-games-ncaa', 'sync-site', 'reconcile-games', 'compute-aggregates', 'refresh-rankings', 'verify-membership', 'compute-standings', 'resolve-orphans', 'pq-health', 'backfill', 'sync-program', 'hourly', 'standings', 'nightly', 'weekly']) {
+for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-games-ncaa', 'sync-site', 'reconcile-games', 'compute-aggregates', 'refresh-rankings', 'verify-membership', 'compute-standings', 'resolve-orphans', 'live', 'pq-health', 'backfill', 'sync-program', 'hourly', 'standings', 'nightly', 'weekly']) {
   common(program.command(job).description(`run the ${job} job inline`))
     .option('--stages <list>', 'sync-site: comma list of roster,schedule,stats,boxscores,bios')
     .option('--days <all|recent>', 'sweep-scoreboard: date range')

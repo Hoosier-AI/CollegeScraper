@@ -101,6 +101,8 @@ export interface ScoreboardGame {
   state: GameState;
   currentPeriod: string | null;
   contestClock: string | null;
+  /** "FINAL", "FINAL (OT)", "FINAL (2OT)" … as NCAA.com prints it. */
+  finalMessage: string | null;
   title: string | null;
   bracketRound: string | null;
   home: ScoreboardTeam;
@@ -184,6 +186,7 @@ export function parseScoreboard(json: unknown, ctx: { gender: Gender; division: 
       state: mapGameState(game.gameState),
       currentPeriod: game.currentPeriod || null,
       contestClock: game.contestClock || null,
+      finalMessage: game.finalMessage || null,
       title: game.title || null,
       bracketRound: game.bracketRound || null,
       home: mapTeam(game.home),

@@ -85,11 +85,12 @@ async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise
 }
 
 /** Worker loop: claim → execute → repeat; idles when the queue is empty. */
-export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: AbortSignal } = {}): Promise<void> {
+export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: AbortSignal; jobs?: string[]; exclude?: string[] } = {}): Promise<void> {
   const idleMs = opts.idleMs ?? 15_000;
-  log.info({ jobs: jobNames() }, 'worker started');
+  log.info({ jobs: opts.jobs ?? jobNames(), exclude: opts.exclude }, 'worker started');
   while (!opts.signal?.aborted) {
-    const { data, error } = await db.rpc('college_claim_run', { p_stale_minutes: 10 });
+    // Lanes: a loop may claim only some jobs (the live scoreboard) or everything but those (the crawl).
+    const { data, error } = await db.rpc('college_claim_run', { p_stale_minutes: 10, p_jobs: opts.jobs ?? null, p_exclude: opts.exclude ?? null });
     if (error) { log.error({ err: error.message }, 'claim failed'); await sleep(idleMs); continue; }
     const run = Array.isArray(data) ? data[0] : data;
     if (!run) { await sleep(idleMs); continue; }

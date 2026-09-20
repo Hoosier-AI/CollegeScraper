@@ -46,7 +46,7 @@ export function parseGqlScoreboard(doc: unknown, gender: Gender, division: Divis
     out.push({
       contestId: String(c.contestId), gameId: null, url: `https://www.ncaa.com${c.url ?? `/game/${c.contestId}`}`, gender, division, date,
       startTimeEpoch: epoch, startTime: c.startTime ?? null, gameStateRaw: c.gameState ?? null, state: mapGameState(state),
-      currentPeriod: c.currentPeriod ?? null, contestClock: c.contestClock ?? null, title: `${away.nameShort ?? ''} ${home.nameShort ?? ''}`.trim() || null,
+      currentPeriod: c.currentPeriod ?? null, contestClock: c.contestClock ?? null, finalMessage: c.finalMessage ?? null, title: `${away.nameShort ?? ''} ${home.nameShort ?? ''}`.trim() || null,
       bracketRound: c.roundDescription || (c.roundNumber != null ? String(c.roundNumber) : null),
       home: team(home), away: team(away),
     });

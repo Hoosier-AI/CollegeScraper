@@ -19,5 +19,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 123_college_wmt_platform.sql | `wmt` site platform | yes |
 | 124_college_forfeits.sql | forfeits | yes |
 | 125_search_players_best_first.sql | player search ranks by similarity | yes (2026-09-20) |
+| 126_college_live_matches.sql | live period/clock, schedule view with kickoff + conferences, worker lanes | yes (2026-09-20) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

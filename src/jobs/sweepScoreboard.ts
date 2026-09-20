@@ -8,7 +8,7 @@ import { log } from '../log.js';
 import { listPrograms, listGames, upsertGameByNcaa, updateGame, reorientGame, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { findGame } from '../identity/gameMatch.js';
 import { isCleanOpponentName, opponentSeo } from '../normalize/aliasIndex.js';
-import { currentSeason, eachDate } from './seasons.js';
+import { currentSeason, eachDate, eastern } from './seasons.js';
 import type { Division, Gender } from '../model.js';
 
 /** params: { season?, gender?, division?, days?: 'all'|'recent', force? } */
@@ -44,7 +44,8 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     if (!dayGames.length) { ctx.inc('days_missing'); continue; }
     // NCAA.com leaves some finished games marked 'pre' while still counting them in its records: a past date with
     // both scores is final (Presbyterian 1 @ Wofford 0, 2026-09-06).
-    const played = (x: typeof dayGames[number]) => x.state === 'final' || (x.home.score != null && x.away.score != null && x.date < new Date().toISOString().slice(0, 10));
+    // Judged against the Eastern date: from 20:00 ET every Eastern-today game is already "yesterday" in UTC.
+    const played = (x: typeof dayGames[number]) => x.state === 'final' || (x.home.score != null && x.away.score != null && x.date < eastern().date);
     for (const g of dayGames) {
       // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
       // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
@@ -98,8 +99,8 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         if (!existing.home_program_id && homeId) patch.home_program_id = homeId;
         if (!existing.away_program_id && awayId) patch.away_program_id = awayId;
         if (existing.status !== 'final') {
-          if (played(g)) { patch.status = 'final'; patch.home_score = g.home.score; patch.away_score = g.away.score; }
-          else if (g.state === 'live') patch.status = 'live';
+          if (played(g)) { Object.assign(patch, { status: 'final', home_score: g.home.score, away_score: g.away.score, live_period: 'FINAL', live_clock: null }); }
+          else if (g.state === 'live') Object.assign(patch, { status: 'live', home_score: g.home.score, away_score: g.away.score, live_period: g.currentPeriod, live_clock: g.contestClock, live_updated_at: new Date().toISOString() });
         }
         if (existing.home_score == null && g.home.score != null && played(g)) { patch.home_score = g.home.score; patch.away_score = g.away.score; }
         await updateGame(db, existing.id, patch);

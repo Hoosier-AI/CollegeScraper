@@ -105,6 +105,8 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   const controller = new AbortController();
   process.on('SIGTERM', () => controller.abort());
   process.on('SIGINT', () => controller.abort());
-  workerLoop(getDb(), { signal: controller.signal }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  // Two lanes: the crawl (minutes to hours per run) and the live scoreboard (seconds, every three minutes in season).
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live'] }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000 }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });
