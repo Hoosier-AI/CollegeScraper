@@ -52,8 +52,7 @@ npm run build                   # server + site
 npm run dev                     # server, worker and site on :8080
 ```
 
-The database schema lives in the Plaibook repo (`plaibook/supabase/migrations/120_college_soccer.sql` and
-later); writes to a non-local Supabase are refused unless `COLLEGE_ALLOW_PROD=1`. To collect data:
+The database schema lives in `supabase/migrations/` (see its README for how it is applied); writes to a non-local Supabase are refused unless `COLLEGE_ALLOW_PROD=1`. To collect data:
 
 ```bash
 npm run cli -- --help

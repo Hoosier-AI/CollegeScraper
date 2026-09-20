@@ -116,12 +116,13 @@ export async function game(db: Db, id: string) {
   const [header, team, players, events, raw] = await Promise.all([
     db.from('college_games').select('officials,duration_min,site_game_refs,site_fetched_at,ncaa_fetched_at,detail_attempts,start_epoch').eq('id', id).maybeSingle(),
     selectAll<any>(db, 'college_game_team_stats', '*', (q) => q.eq('game_id', id)),
-    selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id)', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
+    selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id,college_players(suppress))', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
     selectAll<any>(db, 'college_game_events', '*', (q) => q.eq('game_id', id).order('period').order('seq')),
     selectAll<any>(db, 'college_game_raw', 'source,payload,fetched_at', (q) => q.eq('game_id', id)),
   ]);
   // Box-score lines link to the player page through their roster identity.
-  const lines = players.map((p) => ({ ...p, player_id: p.college_player_seasons?.player_id ?? null, college_player_seasons: undefined }));
+  // `suppress` rides along so the public API can withhold the name; the admin viewer shows it as is.
+  const lines = players.map((p) => ({ ...p, player_id: p.college_player_seasons?.player_id ?? null, suppress: !!p.college_player_seasons?.college_players?.suppress, college_player_seasons: undefined }));
   return { game: { ...g, ...(header.data ?? {}) }, team, players: lines, events, raw };
 }
 
@@ -213,7 +214,7 @@ export async function rankings(db: Db, o: { season: number; gender?: string; div
   const weekRows = polls.filter((p) => p.poll === poll);
   const weeks = [...new Map(weekRows.map((p) => [p.week_of, { week_of: p.week_of, label: p.poll === 'usc' ? String(p.label ?? '').replace(/ \(RV\)$/, '') : p.week_of }])).values()].sort((a, b) => b.week_of.localeCompare(a.week_of));
   const week = o.week_of && weeks.some((w) => w.week_of === o.week_of) ? o.week_of : weeks[0]?.week_of;
-  const rows = poll && week ? await selectAll<any>(db, 'college_rankings', '*,college_programs(id,name,school_seo,college_schools(logo_svg_url)),college_player_seasons(id,player_id,college_players(display_name))', (q) => { q = q.eq('season', o.season).eq('poll', poll).eq('week_of', week).order('rank'); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; }) : [];
+  const rows = poll && week ? await selectAll<any>(db, 'college_rankings', '*,college_programs(id,name,school_seo,college_schools(logo_svg_url)),college_player_seasons(id,player_id,college_players(display_name,suppress))', (q) => { q = q.eq('season', o.season).eq('poll', poll).eq('week_of', week).order('rank'); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; }) : [];
   const [uscUnresolved, uscCheck] = await Promise.all([kvGet<any>(db, `usc:unresolved:${o.season}`), kvGet<any>(db, `usc:ncaa_check:${o.season}`)]);
   return { polls: pollNames.map((p) => ({ poll: p, label: labelOf(p) })), poll, weeks, week, rows, unresolved: uscUnresolved?.by_list ?? {}, ncaaCheck: uscCheck?.lists ?? {} };
 }

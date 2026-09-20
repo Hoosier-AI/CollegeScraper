@@ -26,8 +26,8 @@ To rotate: change `COLLEGE_API_KEYS` on the Render service (`plaibook:<new key>`
    The `ctx` argument (caller JWT) is accepted and ignored: the API key authenticates the server-to-server call.
 3. `tests/college.test.mjs`: point the fake fetcher at `${COLLEGE_API_URL}/v1/...` paths instead of `/rest/v1/`
    tables, and keep the "no service key ever leaves the process" assertion (the API key goes in `X-Api-Key`).
-4. Migrations 122 and 123 in `plaibook/supabase/migrations` are no longer needed for the read path. Leave them
-   unapplied or delete them; the `college_*` tables that migration 120 created in Plaibook's project stay empty.
+4. Migrations 122-124 moved out of `plaibook/supabase/migrations` into this repo's `supabase/migrations/` (they are
+   this service's schema and must never be applied to Plaibook's project); the `college_*` tables that migration 120 created in Plaibook's project stay empty.
    (`owner_operations_snapshot` from migration 124 reads `college_crawl_runs` in Plaibook's own project, which is
    empty; point that tile at `GET /v1/status` when the owner console is next touched.)
 
@@ -56,5 +56,5 @@ existing live consumer and exercises `college_search` and `college_team` end to 
   NCAA.com; `*_lag` means the source has not posted a game yet, not an error.
 - Refresh: every 30 minutes in season (new results + box scores), nightly (rosters, schedules, standings pages,
   polls), weekly (membership, site detection).
-- Player profiles can be suppressed on request (`college_players.suppress`); suppressed players 404 on `/v1/players/:id`, are absent from search, and are left out of the roster routes (`/v1/programs/:id`, `/v1/programs/:id/roster`). Their box-score lines inside `/v1/games/:id` still carry a name: not redacted yet.
+- Player profiles can be suppressed on request (`college_players.suppress`); suppressed players 404 on `/v1/players/:id`, are absent from search, and are left out of the roster routes (`/v1/programs/:id`, `/v1/programs/:id/roster`) and of individual national rankings. In `/v1/games/:id` their box-score line keeps its numbers (team totals depend on them) but loses the name and ids (`withheld: true`), plays that name them lose their text, and `include=raw` is not served for that game.
 - Logos and headshots are hot-linked URLs, never stored.

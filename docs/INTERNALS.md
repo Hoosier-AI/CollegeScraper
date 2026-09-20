@@ -112,8 +112,8 @@ Seasons from 2025 use the NCAA GraphQL scoreboard; the old casablanca JSON feed 
 
 ## Database
 
-The schema lives in the Plaibook repo: `plaibook/supabase/migrations/120_college_soccer.sql` plus 122 (richer
-aggregates, standings v2), 123 (WMT) — apply with `npm run db:push` there. Writes to a non-local Supabase are
+The schema lives in `supabase/migrations/` in this repo (120 base, 122 aggregates and standings v2, 123 WMT, 124
+forfeits, 125 player search), applied by hand as SQL to the `college-stats-demo` project; see the README there. Writes to a non-local Supabase are
 refused unless `COLLEGE_ALLOW_PROD=1` (`assertWritable` in `src/config.ts`).
 
 `scripts/sanity.sql` holds post-crawl data checks; the admin console's Quality page runs the same checks live.

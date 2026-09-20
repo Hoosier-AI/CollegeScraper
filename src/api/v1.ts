@@ -32,6 +32,29 @@ const bad = (reply: FastifyReply, message: string) => reply.code(400).send({ err
 export function visibleRoster<T extends { player?: { suppress?: boolean | null } | null }>(rows: T[]): T[] {
   return rows.filter((r) => !r.player?.suppress);
 }
+/**
+ * A game with a suppressed player still adds up: the line keeps its numbers (team totals depend on them) but loses the
+ * name and every id that leads to the person, and plays that name them lose their text. The raw source payload names
+ * everyone, so it is not served for such a game.
+ */
+export function redactGame<T extends { players?: any[]; events?: any[]; raw?: unknown }>(r: T): T {
+  const lines = r.players ?? [];
+  const hidden = new Set(lines.filter((p) => p.suppress && p.player_season_id).map((p) => p.player_season_id));
+  const anyHidden = lines.some((p) => p.suppress);
+  const players = lines.map(({ suppress, ...p }) => (suppress ? { ...p, first_name: null, last_name: null, player_id: null, player_season_id: null, source_key: null, withheld: true } : p));
+  if (!anyHidden) return { ...r, players };
+  const events = (r.events ?? []).map((e) => {
+    const who = hidden.has(e.player_season_id); const helper = hidden.has(e.assist_player_season_id);
+    if (!who && !helper) return e;
+    return { ...e, play_text: null, ...(who ? { player_season_id: null, player_name_raw: null } : {}), ...(helper ? { assist_player_season_id: null, assist_name_raw: null } : {}), withheld: true };
+  });
+  return { ...r, players, events, raw: undefined };
+}
+/** An individual national ranking never names a suppressed player (leaderboards already leave them out). */
+export function visibleRankings<T extends { college_player_seasons?: { college_players?: { suppress?: boolean | null } | null } | null }>(rows: T[]): T[] {
+  return rows.filter((x) => !x.college_player_seasons?.college_players?.suppress)
+    .map((x) => (x.college_player_seasons?.college_players ? { ...x, college_player_seasons: { ...x.college_player_seasons, college_players: { ...x.college_player_seasons.college_players, suppress: undefined } } } : x));
+}
 /** Search rows gain school_name ("Duke") and school_long_name ("Duke University"). */
 export function withSchoolNames<T extends { school_seo?: string | null }>(programs: T[], schools: Array<{ seo: string; name: string | null; long_name: string | null }>) {
   const bySeo = new Map(schools.map((s) => [s.seo, s]));
@@ -197,8 +220,9 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
 
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/v1/games/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return bad(reply, 'id must be a uuid');
-    const r = await q.game(getDb(), req.params.id);
-    if (!r) return reply.code(404).send({ error: 'not_found' });
+    const found = await q.game(getDb(), req.params.id);
+    if (!found) return reply.code(404).send({ error: 'not_found' });
+    const r = redactGame(found);
     if (!(str(req.query.include) ?? '').split(',').includes('raw')) return { ...r, raw: undefined };
     return r;
   });
@@ -230,6 +254,7 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
   app.get<{ Querystring: Record<string, string> }>('/v1/rankings', async (req, reply) => {
     const season = seasonOf(req.query.season); if (!season) return bad(reply, 'season required');
     if (req.query.week_of && !DATE.test(req.query.week_of)) return bad(reply, 'week_of must be YYYY-MM-DD');
-    return q.rankings(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division), poll: str(req.query.poll), week_of: str(req.query.week_of) });
+    const r = await q.rankings(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division), poll: str(req.query.poll), week_of: str(req.query.week_of) });
+    return { ...r, rows: visibleRankings(r.rows ?? []) };
   });
 }
