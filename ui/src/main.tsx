@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useLocation, useParams } from 'react-router-dom';
 import './index.css';
 import App from './App';
 import { NotFound, RouteError } from './components/shell';
@@ -11,10 +11,11 @@ import { RequireAdmin } from './pages/Admin';
 const Home = lazy(() => import('./pages/Home'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Team = lazy(() => import('./pages/Team'));
-const Game = lazy(() => import('./pages/Game'));
+const Match = lazy(() => import('./pages/Match'));
+const Matches = lazy(() => import('./pages/Matches'));
+const Conferences = lazy(() => import('./pages/Conferences'));
+const Conference = lazy(() => import('./pages/Conference'));
 const Player = lazy(() => import('./pages/Player'));
-const Leaders = lazy(() => import('./pages/Leaders'));
-const Standings = lazy(() => import('./pages/Standings'));
 const Rankings = lazy(() => import('./pages/Rankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Docs = lazy(() => import('./pages/Docs'));
@@ -31,6 +32,13 @@ window.addEventListener('vite:preloadError', (e) => {
   window.location.reload();
 });
 
+/** A moved page: the query string (season, gender, tab…) travels along. */
+function Redirect({ to, extra }: { to: (params: Record<string, string | undefined>) => string; extra?: string }) {
+  const params = useParams(); const { search } = useLocation();
+  const qs = [search.replace(/^\?/, ''), extra].filter(Boolean).join('&');
+  return <Navigate to={`${to(params)}${qs ? `?${qs}` : ''}`} replace />;
+}
+
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } } });
 
 const router = createBrowserRouter([
@@ -43,10 +51,15 @@ const router = createBrowserRouter([
           { index: true, element: <Home /> },
           { path: 'teams', element: <Teams /> },
           { path: 'teams/:id', element: <Team /> },
-          { path: 'games/:id', element: <Game /> },
+          { path: 'matches', element: <Matches /> },
+          { path: 'matches/:id', element: <Match /> },
+          { path: 'conferences', element: <Conferences /> },
+          { path: 'conferences/:id', element: <Conference /> },
+          // Old addresses keep working.
+          { path: 'games/:id', element: <Redirect to={(p) => `/matches/${p.id}`} /> },
+          { path: 'standings', element: <Redirect to={() => '/rankings'} /> },
+          { path: 'leaders', element: <Redirect to={() => '/rankings'} extra="view=leaders" /> },
           { path: 'players/:id', element: <Player /> },
-          { path: 'leaders', element: <Leaders /> },
-          { path: 'standings', element: <Standings /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
           { path: 'docs', element: <Docs /> },

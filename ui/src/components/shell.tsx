@@ -2,7 +2,7 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useRef } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { BarChart3, ListOrdered, Search, Shield, Trophy, Users } from 'lucide-react';
+import { CalendarDays, Layers, Search, Shield, Trophy, Users } from 'lucide-react';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
@@ -11,10 +11,10 @@ import { SearchBox } from './SearchBox';
 import { SegmentedControl, Select } from './primitives';
 
 export const NAV = [
+  { to: '/matches', label: 'Matches', icon: CalendarDays },
   { to: '/teams', label: 'Teams', icon: Users },
-  { to: '/leaders', label: 'Leaders', icon: BarChart3 },
-  { to: '/standings', label: 'Standings', icon: ListOrdered },
   { to: '/rankings', label: 'Rankings', icon: Trophy },
+  { to: '/conferences', label: 'Conferences', icon: Layers },
 ] as const;
 const ADMIN_NAV = [{ to: '/jobs', label: 'Jobs' }, { to: '/quality', label: 'Quality' }] as const;
 // The season/gender controls only mean something on the data pages.

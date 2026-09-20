@@ -6,6 +6,8 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import { api, fmt, qs } from '../lib/api';
 import { SearchBox } from '../components/SearchBox';
 import { Skeleton, TeamLogo } from '../components/primitives';
+import { MatchRow } from '../components/match/MatchRow';
+import { todayEastern, longDay } from '../lib/dates';
 
 interface Meta { seasons: number[]; currentSeason: number; conferences: { id: string }[]; last_completed_runs: Record<string, string>; limits?: { anon_per_min: number; key_per_min: number } }
 interface Status { season: number; programs: number; games: number; finals: number }
@@ -26,6 +28,8 @@ export default function Home() {
         </p>
       </section>
 
+      <TodayModule />
+
       <section className="grid gap-8 lg:grid-cols-[1fr_360px]">
         <div>
           <h2 className="text-base font-semibold text-chalk-100">This week's poll</h2>
@@ -45,8 +49,8 @@ export default function Home() {
                   <div className="mb-2 text-xs font-medium text-chalk-500">{g === 'm' ? "Men's" : "Women's"}</div>
                   <div className="flex flex-col gap-1">
                     {['d1', 'd2', 'd3'].map((d) => <Link key={d} className="chip justify-between" to={`/teams?gender=${g}&division=${d}`}>Division {d === 'd1' ? 'I' : d === 'd2' ? 'II' : 'III'}<span className="text-chalk-500">teams</span></Link>)}
-                    <Link className="chip justify-between" to={`/standings?gender=${g}`}>Standings</Link>
-                    <Link className="chip justify-between" to={`/leaders?gender=${g}`}>Leaders</Link>
+                    <Link className="chip justify-between" to={`/rankings?gender=${g}`}>Standings</Link>
+                    <Link className="chip justify-between" to={`/rankings?gender=${g}&view=leaders`}>Leaders</Link>
                   </div>
                 </div>
               ))}
@@ -89,5 +93,23 @@ function PollTop({ gender, season }: { gender: 'm' | 'w'; season: number | undef
         })}
       </ol>
     </div>
+  );
+}
+
+/** Today's matches at a glance: live ones first, then the next kickoffs. */
+function TodayModule() {
+  const today = todayEastern();
+  const q = useQuery({ queryKey: ['home-today', today], queryFn: () => api<any>(`/api/matches${qs({ date: today, division: 'd1' })}`), refetchInterval: (x) => ((x.state.data?.live ?? 0) > 0 ? 60_000 : false) });
+  const games: any[] = q.data?.games ?? [];
+  const shown = [...games.filter((g) => g.status === 'live'), ...games.filter((g) => g.status === 'scheduled'), ...games.filter((g) => g.status === 'final')].slice(0, 6);
+  return (
+    <section>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold text-chalk-100">Today, Division I</h2>
+        <Link className="text-sm text-pitch-400 hover:text-pitch-300" to="/matches">All matches</Link>
+      </div>
+      <p className="mb-3 text-sm text-chalk-400">{q.data ? (games.length ? `${games.length} matches on ${longDay(today)}${q.data.live ? `, ${q.data.live} live now` : ''}.` : `No Division I matches on ${longDay(today)}.`) : <Skeleton className="inline-block h-4 w-64 align-middle" />}</p>
+      {shown.length > 0 && <div className="frame divide-y divide-field-700">{shown.map((g) => <MatchRow key={g.id} g={g} dense />)}</div>}
+    </section>
   );
 }

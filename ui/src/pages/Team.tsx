@@ -34,7 +34,7 @@ export default function Team() {
   const tabHref = (x: Tab) => href(`/teams/${id}`, { tab: x === 'roster' ? null : x });
   const tabs = [
     { id: 'roster' as Tab, label: 'Roster', count: roster.data?.length },
-    { id: 'games' as Tab, label: 'Games', count: games.data?.length },
+    { id: 'games' as Tab, label: 'Matches', count: games.data?.length },
     { id: 'season' as Tab, label: 'Season profile' },
     { id: 'coaches' as Tab, label: 'Coaches', count: t.coaches?.length },
     { id: 'honors' as Tab, label: 'Honors', count: honors.length || undefined },

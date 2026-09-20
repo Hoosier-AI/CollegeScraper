@@ -50,7 +50,7 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
             <p className="mt-2 text-sm text-chalk-300">{genderLabel(p.gender)} soccer, {conf ? `${conf}, ` : ''}{divisionLabel(t.season?.division)}, {season}</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
               {usc && <span className="inline-flex items-center gap-1 rounded bg-note/15 px-1.5 py-0.5 text-note tnum" title={`United Soccer Coaches ${usc.label}, ${fmt.date(usc.week_of)}`}>No. {usc.rank}{move != null && move !== 0 && <span className={`inline-flex items-center ${move > 0 ? 'text-win' : 'text-loss'}`}>{move > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(move)}</span>}<span className="text-note/70">coaches poll</span></span>}
-              {t.standing && <span className="inline-flex items-center gap-1.5 tnum"><Link to={href('/standings', { division: t.season?.division, conference: t.season?.conference_id })} className="text-chalk-200 hover:text-pitch-300">{fmt.ordinal(t.standing.rank)} of {t.conferenceTable?.length ?? '–'} in the {conf}{t.standing.pod ? ` (${t.standing.pod})` : ''}, {fmt.rec(t.standing.conf_w, t.standing.conf_l, t.standing.conf_t)}</Link>{t.standing.source === 'conference' && <VerifiedMark compact state={confCheck.state} details={confCheck.details} />}</span>}
+              {t.standing && <span className="inline-flex items-center gap-1.5 tnum"><Link to={href('/conferences/' + t.season?.conference_id)} className="text-chalk-200 hover:text-pitch-300">{fmt.ordinal(t.standing.rank)} of {t.conferenceTable?.length ?? '–'} in the {conf}{t.standing.pod ? ` (${t.standing.pod})` : ''}, {fmt.rec(t.standing.conf_w, t.standing.conf_l, t.standing.conf_t)}</Link>{t.standing.source === 'conference' && <VerifiedMark compact state={confCheck.state} details={confCheck.details} />}</span>}
               {ncaaRec && <span className="inline-flex items-center gap-1.5 text-chalk-300 tnum" title={t.season?.official_record_at ? `NCAA.com's record as of ${fmt.agoWords(t.season.official_record_at)}` : undefined}>NCAA.com {ncaaRec}<VerifiedMark state={ncaaCheck.state} details={ncaaCheck.details} /></span>}
               {t.season && t.season.ncaa_member === false && <Badge tone="amber">Not an NCAA member</Badge>}
               {school?.athletics_host && <a className="inline-flex items-center gap-1 text-chalk-400 hover:text-pitch-300" href={`https://${school.athletics_host}`} target="_blank" rel="noreferrer">{school.athletics_host}<ExternalLink size={12} aria-hidden /><span className="sr-only">(opens the school's site)</span></a>}
@@ -62,16 +62,16 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
           <div className="flex shrink-0 flex-wrap items-end gap-x-8 gap-y-4 lg:justify-end">
             <Figure big label="Record" value={fmt.rec(s.w, s.l, s.t)} sub={`${fmt.rec(s.conf_w, s.conf_l, s.conf_t)} in conference`} />
             <div>
-              <FormPips form={s.form_last5} label="Last five, oldest first" />
-              <div className="mt-1 text-xs text-chalk-500">Last five{s.streak ? `, ${streakWords(s.streak)}` : ''}</div>
+              <FormPips form={[...(s.form_last5 ?? '')].reverse().join('')} label="Last five, latest on the right" />
+              <div className="mt-1 text-xs text-chalk-500">Last five, latest on the right{s.streak ? `; ${streakWords(s.streak)}` : ''}</div>
             </div>
           </div>
         ) : <p className="text-sm text-chalk-500">No results stored for this season yet.</p>}
       </div>
       {(last || next) && (
         <div className="grid border-t border-field-700 sm:grid-cols-2">
-          {last ? <GameStrip label="Last game" g={last} id={id} href={href} /> : <div className="p-4 text-sm text-chalk-500">No games played yet.</div>}
-          {next ? <GameStrip label="Next game" g={next} id={id} href={href} /> : <div className="border-t border-field-700 p-4 text-sm text-chalk-500 sm:border-l sm:border-t-0">No games scheduled.</div>}
+          {last ? <GameStrip label="Last match" g={last} id={id} href={href} /> : <div className="p-4 text-sm text-chalk-500">No matches played yet.</div>}
+          {next ? <GameStrip label="Next match" g={next} id={id} href={href} /> : <div className="border-t border-field-700 p-4 text-sm text-chalk-500 sm:border-l sm:border-t-0">No matches scheduled.</div>}
         </div>
       )}
     </header>
@@ -89,7 +89,7 @@ function streakWords(streak: string) {
 function GameStrip({ label, g, id, href }: { label: string; g: any; id: string; href: (p: string) => string }) {
   const side = sideOf(g, id);
   return (
-    <Link to={href(`/games/${g.id}`)} className="flex items-center gap-3 p-4 transition-colors duration-150 hover:bg-field-800 sm:[&:nth-child(2)]:border-l sm:[&:nth-child(2)]:border-field-700 max-sm:[&:nth-child(2)]:border-t max-sm:[&:nth-child(2)]:border-field-700">
+    <Link to={href(`/matches/${g.id}`)} className="flex items-center gap-3 p-4 transition-colors duration-150 hover:bg-field-800 sm:[&:nth-child(2)]:border-l sm:[&:nth-child(2)]:border-field-700 max-sm:[&:nth-child(2)]:border-t max-sm:[&:nth-child(2)]:border-field-700">
       <div className="w-20 shrink-0 text-xs text-chalk-500">{label}<div className="text-chalk-300">{fmt.weekday(g.game_date)}</div></div>
       <TeamLogo src={side.oppLogo} name={side.opp} size={28} />
       <div className="min-w-0 flex-1">

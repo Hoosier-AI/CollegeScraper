@@ -25,16 +25,16 @@ export function GamesList({ games, id, loading, href }: { games: any[]; id: stri
     { key: 'truth', label: 'Source', priority: 3, value: (g) => g.source_of_truth, render: (g) => <SourceBadge source={g.source_of_truth} /> },
     { key: 'sources', label: 'Have', priority: 3, render: (g) => <span className="flex gap-1">{g.team_stats?.some((t: any) => t.source === 'site') && <Badge tone="teal">site</Badge>}{g.team_stats?.some((t: any) => t.source === 'ncaa') && <Badge tone="blue">ncaa</Badge>}</span> },
   );
-  if (!loading && !games.length) return <EmptyState title="No games yet" body="The schedule has not been collected, or the season has not started." />;
+  if (!loading && !games.length) return <EmptyState title="No matches yet" body="The schedule has not been collected, or the season has not started." />;
   return (
     <>
-      <ol className="frame divide-y divide-field-700 md:hidden" aria-label="Games">
+      <ol className="frame divide-y divide-field-700 md:hidden" aria-label="Matches">
         {loading && [0, 1, 2, 3].map((i) => <li key={i} className="p-3"><span className="skeleton block h-10" /></li>)}
         {sorted.map((g) => {
           const s = sideOf(g, id);
           return (
             <li key={g.id}>
-              <Link to={href(`/games/${g.id}`)} className="flex items-center gap-3 p-3 hover:bg-field-800">
+              <Link to={href(`/matches/${g.id}`)} className="flex items-center gap-3 p-3 hover:bg-field-800">
                 <span className="w-16 shrink-0 text-xs text-chalk-500">{fmt.day(g.game_date)}</span>
                 <TeamLogo src={s.oppLogo} name={s.opp} size={24} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-chalk-100">{s.where} {s.opp ?? 'TBD'}</span><span className="block truncate text-xs text-chalk-500">{g.conference_game ? 'Conference' : g.neutral_site ? 'Neutral site' : s.home ? 'Home' : 'Away'}{g.venue_name ? `, ${g.venue_name}` : ''}</span></span>
@@ -45,7 +45,7 @@ export function GamesList({ games, id, loading, href }: { games: any[]; id: stri
         })}
       </ol>
       <div className="hidden md:block">
-        <DataTable rows={sorted} columns={cols} rowKey={(g) => g.id} caption="Games" rowHref={(g) => href(`/games/${g.id}`)} loading={loading} dense defaultSort={{ key: 'game_date', dir: 'asc' }} />
+        <DataTable rows={sorted} columns={cols} rowKey={(g) => g.id} caption="Matches" rowHref={(g) => href(`/matches/${g.id}`)} loading={loading} dense defaultSort={{ key: 'game_date', dir: 'asc' }} />
       </div>
     </>
   );

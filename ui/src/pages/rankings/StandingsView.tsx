@@ -2,10 +2,10 @@ import { Fragment, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
-import { api, qs, fmt, useAdmin } from '../lib/api';
-import { useFilters, useHref, genderLabel, divisionLabel } from '../lib/filters';
-import { useUrlPatch, useUrlState } from '../lib/urlState';
-import { Badge, EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Select, Skeleton, TeamLogo, VerifiedMark, type VerifyState } from '../components/primitives';
+import { api, qs, fmt, useAdmin } from '../../lib/api';
+import { useFilters, useHref, genderLabel, divisionLabel } from '../../lib/filters';
+import { useUrlPatch, useUrlState } from '../../lib/urlState';
+import { Badge, EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Select, Skeleton, TeamLogo, VerifiedMark, type VerifyState } from '../../components/primitives';
 
 const DIV_OPTIONS = [{ value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
 
@@ -19,14 +19,17 @@ function verify(r: any): { state: VerifyState; details?: { field: string; offici
   return { state: 'ok' };
 }
 
-export default function Standings() {
+export function StandingsView(props: { conference?: string; embedded?: boolean } = {}) {
   const admin = useAdmin();
   const f = useFilters();
   const href = useHref();
   const patch = useUrlPatch();
-  const [division] = useUrlState('division', 'd1', { allow: ['d1', 'd2', 'd3'] });
-  const [conference, setConference] = useUrlState('conference');
-  const q = useQuery({ queryKey: ['standings', f.season, f.gender, division], queryFn: () => api<{ source: string; official: number; computed: number; rows: any[] }>(`/api/standings${qs({ season: f.season, gender: f.gender, division })}`) });
+  const [divisionParam] = useUrlState('division', 'd1', { allow: ['d1', 'd2', 'd3'] });
+  const [conferenceParam, setConference] = useUrlState('conference');
+  // Inside a conference page the conference is fixed and the division comes with it.
+  const conference = props.conference ?? conferenceParam;
+  const division = props.conference ? '' : divisionParam;
+  const q = useQuery({ queryKey: ['standings', f.season, f.gender, division, props.conference ?? ''], queryFn: () => api<{ source: string; official: number; computed: number; rows: any[] }>(`/api/standings${qs({ season: f.season, gender: f.gender, division, conference: props.conference })}`) });
   const groups = useMemo(() => {
     const m = new Map<string, { id: string; rows: any[] }>();
     for (const r of q.data?.rows ?? []) { const k = r.college_conferences?.name ?? 'No conference'; const g: { id: string; rows: any[] } = m.get(k) ?? { id: String(r.conference_id ?? r.college_conferences?.id ?? k), rows: [] }; g.rows.push(r); m.set(k, g); }
@@ -34,13 +37,13 @@ export default function Standings() {
   }, [q.data]);
   const confOptions = [{ value: '', label: 'All conferences' }, ...groups.map(([name, g]) => ({ value: g.id, label: name }))];
   const shown = conference ? groups.filter(([, g]) => g.id === conference) : groups;
-  const scope = `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
+  const scope = props.conference ? `${genderLabel(f.gender)}, ${f.season}` : `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
   return (
     <div className="space-y-4">
-      <PageHeader title="Standings" meta={q.data ? `${scope}: ${q.data.official} rows from official conference tables, ${q.data.computed} computed from results` : scope}>
+      {!props.embedded && <PageHeader as="h2" title="Standings" meta={q.data ? `${scope}: ${q.data.official} rows from official conference tables, ${q.data.computed} computed from results` : scope}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v === 'd1' ? null : v, conference: null })} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[240px]" />}</Field>
-      </PageHeader>
+      </PageHeader>}
       <details className="text-xs text-chalk-400">
         <summary className="cursor-pointer text-chalk-300">How these tables are checked</summary>
         <p className="mt-2 max-w-3xl leading-relaxed"><Badge tone="teal">Official</Badge> tables are read from the conference's own standings page: rank, points and records exactly as published. <Badge tone="gray">Computed</Badge> tables come from our stored results (3 points for a win, 1 for a tie). Each official row is then compared with the record we compute from our own game list: <b className="text-win">Verified</b> means both records match; <b className="text-chalk-300">Source behind</b> means every result the conference lists is in our record and we hold games it has not posted yet; <b className="text-note">Differs</b> lists the two records.</p>
@@ -48,7 +51,7 @@ export default function Standings() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <div className="grid gap-4 lg:grid-cols-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="space-y-2"><Skeleton className="h-6 w-40" /><Skeleton className="h-56" /></div>)}</div>}
       {q.data && !q.data.rows.length && <EmptyState title={`No standings for ${scope} yet`} body={admin ? 'Run compute-standings from the Jobs page.' : 'Conference play has not started, or the tables have not been collected yet.'} />}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={props.conference ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-2'}>
         {shown.map(([conf, g]) => {
           const rows = g.rows;
           const official = rows[0]?.source === 'conference';

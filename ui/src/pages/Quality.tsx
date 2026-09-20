@@ -21,7 +21,7 @@ export default function Quality() {
             <span><span className="block font-semibold text-chalk-100">{c.title}</span><span className="mt-1 block text-xs text-chalk-400">{c.description}</span></span>
             <Badge tone={c.count ? 'amber' : 'green'}>{c.count}</Badge>
           </button>
-          {open === c.id && c.sample.length > 0 && <ul id={`q-${c.id}`} className="max-h-72 space-y-1 overflow-auto border-t border-field-700 p-3 text-xs text-chalk-300">{c.sample.map((s: any, i: number) => <li key={i}>{s.id ? <Link className="text-pitch-400 hover:text-pitch-300" to={href(`/games/${s.id}`)}>{s.game}</Link> : null} {JSON.stringify({ ...s, game: undefined, id: undefined })}</li>)}</ul>}
+          {open === c.id && c.sample.length > 0 && <ul id={`q-${c.id}`} className="max-h-72 space-y-1 overflow-auto border-t border-field-700 p-3 text-xs text-chalk-300">{c.sample.map((s: any, i: number) => <li key={i}>{s.id ? <Link className="text-pitch-400 hover:text-pitch-300" to={href(`/matches/${s.id}`)}>{s.game}</Link> : null} {JSON.stringify({ ...s, game: undefined, id: undefined })}</li>)}</ul>}
         </div>
       ))}</div>
     </div>

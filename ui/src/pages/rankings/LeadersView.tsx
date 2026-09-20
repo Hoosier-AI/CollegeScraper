@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, qs, fmt } from '../lib/api';
-import { useFilters, useHref, genderLabel, divisionLabel } from '../lib/filters';
-import { useUrlNumber, useUrlPatch, useUrlState, useUrlText } from '../lib/urlState';
-import { statDef, statGroups } from '../lib/statNames';
-import { DataTable, type Column } from '../components/DataTable';
-import { Chip, EmptyState, ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select, TeamLogo } from '../components/primitives';
+import { api, qs, fmt } from '../../lib/api';
+import { useFilters, useHref, genderLabel, divisionLabel } from '../../lib/filters';
+import { useUrlNumber, useUrlPatch, useUrlState, useUrlText } from '../../lib/urlState';
+import { statDef, statGroups } from '../../lib/statNames';
+import { DataTable, type Column } from '../../components/DataTable';
+import { Chip, EmptyState, ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select, TeamLogo } from '../../components/primitives';
 
 const PAGE = 100;
 const DIV_OPTIONS = [{ value: '', label: 'All' }, { value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
@@ -24,7 +24,7 @@ const TEAM_SUPPORT: Record<string, string[]> = {
   default: ['gp', 'gf', 'ga', 'gd', 'ppg', 'shots_pg'],
 };
 
-export default function Leaders() {
+export function LeadersView(props: { conference?: string; embedded?: boolean } = {}) {
   const f = useFilters();
   const href = useHref();
   const patch = useUrlPatch();
@@ -32,7 +32,8 @@ export default function Leaders() {
   const isTeam = kind === 'team';
   const [stat, setStat] = useUrlState('stat', isTeam ? 'w' : 'goals');
   const [division, setDivision] = useUrlState('division', '', { allow: ['d1', 'd2', 'd3'] });
-  const [conference, setConference] = useUrlState('conference');
+  const [conferenceParam, setConference] = useUrlState('conference');
+  const conference = props.conference ?? conferenceParam;
   const [minMin, setMinMin] = useUrlNumber('min', 0, { min: 0, max: 5000 });
   const [page, setPage] = useUrlNumber('page', 0, { min: 0, replace: true, resetPage: false });
   const search = useUrlText('q');
@@ -76,11 +77,11 @@ export default function Leaders() {
   const pager = <Pager page={page} pageSize={PAGE} total={total} onPage={setPage} busy={busy} noun={isTeam ? 'teams' : 'players'} />;
   return (
     <div className="space-y-4">
-      <PageHeader title="Leaders" meta={`${def.label}, ${scope}`}>
+      <PageHeader as="h2" title={props.embedded ? 'Leaders' : 'Leaders'} meta={`${def.label}, ${scope}`}>
         <Field label="Show">{() => <SegmentedControl label="Players or teams" size="sm" value={kind as 'player' | 'team'} onChange={(v) => patch({ kind: v === 'player' ? null : v, stat: null, min: null })} options={[{ value: 'player', label: 'Players' }, { value: 'team', label: 'Teams' }]} />}</Field>
         <Field label="Stat">{(id) => <Select id={id} value={stat} onChange={setStat} options={statOptions} className="max-w-[240px]" />}</Field>
-        <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v || null, conference: null })} options={DIV_OPTIONS} />}</Field>
-        <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[200px]" />}</Field>
+        {!props.conference && <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v || null, conference: null })} options={DIV_OPTIONS} />}</Field>}
+        {!props.conference && <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[200px]" />}</Field>}
         <Field label={isTeam ? 'Find team' : 'Find player or team'}>{(id) => <input id={id} type="search" className="input w-44" placeholder="Name" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
       {!isTeam && (

@@ -24,7 +24,7 @@ export default function Player() {
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const p = q.data?.player;
-  if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/leaders">Browse leaders</Link>} />;
+  if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/rankings?view=leaders">Browse leaders</Link>} />;
   const seasons: any[] = q.data.seasons ?? [], honors: any[] = q.data.honors ?? [], career = q.data.career, transfers: any[] = q.data.transfers ?? [], gameLog: any[] = q.data.gameLog ?? [];
   const latest = seasons[0];
   const st = latest?.stats;
@@ -102,7 +102,7 @@ export default function Player() {
       {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => <li key={t.id} className="px-3 py-2">{t.from_season} to {t.to_season}{admin && <span className="text-chalk-500"> (confidence {t.confidence}, {t.evidence?.rule})</span>}</li>)}</ul></Section>}
       {honors.length > 0 && <Section title="Honors"><ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any) => <li key={h.id} className="flex items-center gap-2 px-3 py-2"><span>{h.text}</span>{h.source_url && <a className="ml-auto inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={h.source_url} target="_blank" rel="noreferrer">source <ExternalLink size={11} aria-hidden /></a>}</li>)}</ul></Section>}
       <Section title="Game log">
-        <DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} caption="Game by game" rowHref={(r) => href(`/games/${r.game.id}`)} dense defaultSort={{ key: 'date', dir: 'desc' }} empty={<EmptyState title="No box scores yet" body="Game-by-game lines appear once box scores are collected." />} />
+        <DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} caption="Game by game" rowHref={(r) => href(`/matches/${r.game.id}`)} dense defaultSort={{ key: 'date', dir: 'desc' }} empty={<EmptyState title="No box scores yet" body="Game-by-game lines appear once box scores are collected." />} />
       </Section>
       {admin && <JsonViewer title="Identity row" value={p} />}
     </div>

@@ -17,11 +17,12 @@ export function SourceBadge({ source }: { source: 'site' | 'ncaa' | null | undef
 }
 
 /** Page title row: title on the left, controls on the right, both wrapping on narrow screens. */
-export function PageHeader({ title, meta, children }: { title: ReactNode; meta?: ReactNode; children?: ReactNode }) {
+export function PageHeader({ title, meta, children, as = 'h1' }: { title: ReactNode; meta?: ReactNode; children?: ReactNode; as?: 'h1' | 'h2' }) {
+  const H = as;
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
-        <h1 className="display text-2xl text-chalk-100 sm:text-3xl">{title}</h1>
+        <H className={`display text-chalk-100 ${as === 'h1' ? 'text-2xl sm:text-3xl' : 'text-xl sm:text-2xl'}`}>{title}</H>
         {meta && <p className="mt-1 text-sm text-chalk-400">{meta}</p>}
       </div>
       {children && <div className="flex flex-wrap items-end gap-2">{children}</div>}
