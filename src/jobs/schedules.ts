@@ -45,6 +45,9 @@ registerJob('nightly', async (ctx) => {
 /** Every three hours in season: re-read the conference standings pages so the verification never trails the games by more than that. */
 registerJob('standings', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
+  // NCAA.com's W-L-T leaderboard is the "official record" shown next to every team; refreshing it only weekly left
+  // almost every team looking like it differed by the weekend.
+  await step(ctx, 'verify-membership', { season });
   await step(ctx, 'compute-standings', { season });
   // The United Soccer Coaches polls come out on Tuesday afternoons (ET); six poll pages are cheap, so every run
   // re-reads them and a new poll is live within three hours instead of waiting for the nightly.

@@ -22,18 +22,25 @@ export interface ProgramFilter { season: number; gender?: string; division?: str
 
 export async function programs(db: Db, f: ProgramFilter) {
   // No `in (...)` id lists: PostgREST URLs blow past 8 KB with 300 UUIDs. Filter by season/gender and join in JS.
-  const seasons = await selectAll<any>(db, 'college_program_seasons', 'program_id,season,division,conference_id,roster_synced_at,schedule_synced_at,stats_synced_at,boxscores_synced_at,site_parse_failures,ncaa_member,member_source,official_w,official_l,official_t',
+  const seasons = await selectAll<any>(db, 'college_program_seasons', 'program_id,season,division,conference_id,roster_synced_at,schedule_synced_at,stats_synced_at,boxscores_synced_at,site_parse_failures,ncaa_member,member_source,official_w,official_l,official_t,official_record_at',
     (q) => { q = q.eq('season', f.season); if (f.division) q = q.eq('division', f.division); if (f.conference) q = q.eq('conference_id', f.conference); if (f.members !== false) q = q.eq('ncaa_member', true); return q; });
   if (!seasons.length) return [];
   const bySeason = new Map(seasons.map((s) => [s.program_id, s]));
   const progs = (await selectAll<any>(db, 'college_programs', 'id,name,short_name,gender,school_seo,site_status,site_sport_slug,college_schools(seo,name,logo_svg_url,athletics_host,site_platform)',
     (q) => (f.gender ? q.eq('gender', f.gender) : q))).filter((p) => bySeason.has(p.id));
-  const [stats, games, confRows] = await Promise.all([
+  const [stats, games, confRows, checks] = await Promise.all([
     selectAll<any>(db, 'college_team_season_stats', 'program_id,gp,w,l,t,gf,ga,computed_at', (q) => q.eq('season', f.season)),
     selectAll<any>(db, 'college_games', 'id,home_program_id,away_program_id,status,source_of_truth,site_fetched_at,ncaa_fetched_at', (q) => (f.gender ? q.eq('season', f.season).eq('gender', f.gender) : q.eq('season', f.season))),
     selectAll<any>(db, 'college_conferences', 'id,name,ncaa_seo'),
+    selectAll<any>(db, 'college_standings_checks', 'program_id,field,official,computed', (q) => q.eq('season', f.season).in('field', ['ncaa_record', 'ncaa_record_lag', 'ncaa_record_ncaa_duplicate'])),
   ]);
   const confs = new Map(confRows.map((c) => [c.id, c]));
+  // How our record compares with NCAA.com's leaderboard record: a stale leaderboard is "behind", not a difference.
+  const ncaaCheck = new Map<string, { state: 'mismatch' | 'lag'; official: string; ours: string }>();
+  for (const c of checks) {
+    const state = c.field === 'ncaa_record' ? 'mismatch' : 'lag';
+    if (state === 'mismatch' || !ncaaCheck.has(c.program_id)) ncaaCheck.set(c.program_id, { state, official: c.official, ours: c.computed });
+  }
   const byStats = new Map(stats.map((s) => [s.program_id, s]));
   const gameAgg = new Map<string, { games: number; finals: number; site: number; ncaa: number; truth: number }>();
   for (const g of games) for (const pid of [g.home_program_id, g.away_program_id]) {
@@ -48,7 +55,8 @@ export async function programs(db: Db, f: ProgramFilter) {
     .map((p) => {
       const s = bySeason.get(p.id); const st = byStats.get(p.id); const c = s?.conference_id ? confs.get(s.conference_id) : null;
       return { id: p.id, name: p.name, gender: p.gender, school_seo: p.school_seo, site_status: p.site_status, school: p.college_schools, division: s?.division, conference: c ?? null,
-        member: s?.ncaa_member !== false, member_source: s?.member_source ?? null, official: s?.official_w != null ? { w: s.official_w, l: s.official_l, t: s.official_t } : null,
+        member: s?.ncaa_member !== false, member_source: s?.member_source ?? null, official: s?.official_w != null ? { w: s.official_w, l: s.official_l, t: s.official_t, at: s.official_record_at ?? null } : null,
+        ncaa_check: ncaaCheck.get(p.id) ?? null,
         synced: { roster: s?.roster_synced_at, schedule: s?.schedule_synced_at, stats: s?.stats_synced_at, boxscores: s?.boxscores_synced_at, failures: s?.site_parse_failures ?? 0 },
         record: st ? { gp: st.gp, w: st.w, l: st.l, t: st.t, gf: st.gf, ga: st.ga, computed_at: st.computed_at } : null,
         games: gameAgg.get(p.id) ?? { games: 0, finals: 0, site: 0, ncaa: 0, truth: 0 } };

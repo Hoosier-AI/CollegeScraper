@@ -7,7 +7,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import { Badge, EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Select, TeamLogo, VerifiedMark } from '../components/primitives';
 import { RunProgress } from '../components/RunProgress';
 
-interface ProgramRow { id: string; name: string; gender: string; school_seo: string; site_status: string; division?: string; conference: { id?: string; name: string } | null; member: boolean; member_source: string | null; official: { w: number; l: number; t: number } | null; school: { logo_svg_url?: string; athletics_host?: string; site_platform?: string } | null; synced: { roster?: string; boxscores?: string; failures: number }; record: { gp: number; w: number; l: number; t: number; gf: number; ga: number } | null; games: { games: number; finals: number; site: number; ncaa: number; truth: number } }
+interface ProgramRow { id: string; name: string; gender: string; school_seo: string; site_status: string; division?: string; conference: { id?: string; name: string } | null; member: boolean; member_source: string | null; official: { w: number; l: number; t: number; at?: string | null } | null; ncaa_check: { state: 'mismatch' | 'lag'; official: string; ours: string } | null; school: { logo_svg_url?: string; athletics_host?: string; site_platform?: string } | null; synced: { roster?: string; boxscores?: string; failures: number }; record: { gp: number; w: number; l: number; t: number; gf: number; ga: number } | null; games: { games: number; finals: number; site: number; ncaa: number; truth: number } }
 
 const DIV_OPTIONS = [{ value: '', label: 'All' }, { value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
 
@@ -38,7 +38,13 @@ export default function Teams() {
     { key: 'conference', label: 'Conference', value: (p) => p.conference?.name ?? '', priority: 2 },
     { key: 'record', label: 'W-L-T', title: 'Wins, losses, ties from stored results', value: (p) => p.record?.w ?? null, render: (p) => {
       const ours = fmt.rec(p.record?.w, p.record?.l, p.record?.t); const off = p.official ? fmt.rec(p.official.w, p.official.l, p.official.t) : null;
-      return <span className="inline-flex items-center gap-2 tnum">{ours}{off && p.record && <VerifiedMark compact state={off === ours ? 'ok' : 'mismatch'} details={off === ours ? undefined : [{ field: 'overall record', official: off, ours }]} />}</span>;
+      if (!off || !p.record) return <span className="tnum">{ours}</span>;
+      // Same record: verified. Otherwise the standings check says whether NCAA.com is merely behind or really differs;
+      // without a check yet, a leaderboard that lists no result we lack is treated as behind.
+      const o = p.official!; const r = p.record;
+      const behind = o.w <= r.w && o.l <= r.l && o.t <= r.t;
+      const state = off === ours ? 'ok' : p.ncaa_check?.state ?? (behind ? 'lag' : 'mismatch');
+      return <span className="inline-flex items-center gap-2 tnum">{ours}<VerifiedMark compact state={state} details={state === 'ok' ? undefined : [{ field: `NCAA.com record${p.official?.at ? ` (${fmt.agoWords(p.official.at)})` : ''}`, official: off, ours }]} /></span>;
     } },
     { key: 'gf', label: 'GF', title: 'Goals for', num: true, value: (p) => p.record?.gf ?? null, priority: 2 },
     { key: 'ga', label: 'GA', title: 'Goals against', num: true, value: (p) => p.record?.ga ?? null, priority: 2 },
