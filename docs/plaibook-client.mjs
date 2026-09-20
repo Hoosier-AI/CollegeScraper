@@ -6,14 +6,15 @@
 //   const out = await college.run('college_team', { program_id, season }, ctx);
 //
 // Never throws: bad input, an unknown op, a network failure or any non-2xx answer come back as
-// { unavailable: true, note }. Successful answers are { source: 'college', fetchedAt, ...body }.
+// { unavailable: true, note }. Successful answers are { source: 'college', fetchedAt, ...body }; a route that
+// answers with a JSON array (/v1/programs) comes back as { source, fetchedAt, rows }.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const unavailable = (note) => ({ unavailable: true, note });
 
 const ROUTES = {
   college_search:    (a) => ['/v1/search', { q: a.q, gender: a.gender, limit: a.limit }],
-  college_team:      (a) => UUID.test(a.program_id ?? '') ? [`/v1/programs/${a.program_id}`, { season: a.season }] : null,
+  college_team:      (a) => UUID.test(a.program_id ?? '') ? [`/v1/programs/${a.program_id}`, { season: a.season, include: a.include }] : null,
   college_player:    (a) => UUID.test(a.player_id ?? '') ? [`/v1/players/${a.player_id}`, {}] : null,
   college_game:      (a) => UUID.test(a.game_id ?? '') ? [`/v1/games/${a.game_id}`, {}] : null,
   college_leaders:   (a) => ['/v1/leaders', { season: a.season, gender: a.gender, division: a.division, conference: a.conference_id, kind: a.kind, stat: a.stat, min_minutes: a.min_minutes, limit: a.limit, offset: a.offset, q: a.q }],
@@ -40,7 +41,11 @@ export function createCollegeApi({ baseUrl, apiKey, fetcher = fetch, timeoutMs =
       const r = await fetcher(url, { headers: { 'X-Api-Key': apiKey, Accept: 'application/json' }, signal: AbortSignal.timeout(timeoutMs) });
       const body = await r.json().catch(() => null);
       if (!r.ok) return unavailable(body?.message || body?.error || `College API ${r.status}`);
-      return { source: 'college', fetchedAt: new Date(now()).toISOString(), ...body };
+      // A 200 that is not JSON (a proxy error page, a cold-start splash) is not an empty success.
+      if (body === null || typeof body !== 'object') return unavailable('College API returned an unreadable response.');
+      const stamp = { source: 'college', fetchedAt: new Date(now()).toISOString() };
+      // Spreading an array would turn it into { "0": …, "1": … }.
+      return Array.isArray(body) ? { ...stamp, rows: body } : { ...stamp, ...body };
     } catch (err) {
       return unavailable(`College API unreachable: ${err?.message || err}`);
     }

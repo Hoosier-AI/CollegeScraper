@@ -215,7 +215,12 @@ export async function rankings(db: Db, o: { season: number; gender?: string; div
 }
 
 export async function runs(db: Db, limit = 50) {
-  return selectAll<any>(db, 'college_crawl_runs', '*', (q) => q.order('created_at', { ascending: false }).limit(limit), limit);
+  // A plain bounded read, not selectAll: selectAll pages with .range() until a page comes back short, and a
+  // .limit() equal to the page size never produces a short page, so this used to walk the whole table
+  // (/v1/status answered with every crawl run ever recorded: 281 rows, 294 KB, growing with each scrape).
+  const { data, error } = await db.from('college_crawl_runs').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (error) throw new Error(`select college_crawl_runs failed: ${error.message}`);
+  return (data ?? []) as any[];
 }
 
 export async function run(db: Db, id: string) {

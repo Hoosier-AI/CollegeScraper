@@ -37,6 +37,9 @@ export async function upsertChunked<T extends Record<string, unknown>>(db: Db, t
 }
 
 /** Select all rows matching a filter, paging past PostgREST's 1000-row default. */
+// Reads EVERY matching row, a page at a time. Never bound it with .limit() inside `apply`: .range() sets the
+// offset and a later .limit() only replaces the page length, so the loop keeps paging to the end of the table.
+// For "the newest N rows" use a plain query.
 export async function selectAll<T>(db: Db, table: string, columns: string, apply?: (q: any) => any, pageSize = 1000): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; ; from += pageSize) {

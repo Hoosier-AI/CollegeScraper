@@ -56,5 +56,5 @@ existing live consumer and exercises `college_search` and `college_team` end to 
   NCAA.com; `*_lag` means the source has not posted a game yet, not an error.
 - Refresh: every 30 minutes in season (new results + box scores), nightly (rosters, schedules, standings pages,
   polls), weekly (membership, site detection).
-- Player profiles can be suppressed on request (`college_players.suppress`); suppressed players 404.
+- Player profiles can be suppressed on request (`college_players.suppress`); suppressed players 404 on `/v1/players/:id`, are absent from search, and are left out of the roster routes (`/v1/programs/:id`, `/v1/programs/:id/roster`). Their box-score lines inside `/v1/games/:id` still carry a name: not redacted yet.
 - Logos and headshots are hot-linked URLs, never stored.

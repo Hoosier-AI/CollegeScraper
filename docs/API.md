@@ -35,7 +35,9 @@ to the free tier.
 
 Every response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`; over the limit you get `429` with
 `Retry-After`. Errors are JSON:
-`{ "error": "unauthorized" | "bad_request" | "rate_limited" | "not_found", "message": "…" }`.
+`{ "error": "unauthorized" | "bad_request" | "rate_limited" | "not_found", "message": "…" }`
+(`message` is absent on a plain 404). An unexpected failure is the server default instead:
+`{ "statusCode": 500, "error": "Internal Server Error", "message": "…" }`, so read `message` and do not rely on `error` being one of the four codes.
 Successful keyless reads carry `Cache-Control: public, max-age=60` (keyed reads: `private`); the data changes
 at most every 30 minutes in season (hourly job) and nightly.
 
@@ -45,7 +47,7 @@ at most every 30 minutes in season (hourly job) and nightly.
 |---|---|
 | `GET /v1/meta` | `seasons[]`, `currentSeason`, `genders`, `divisions`, `conferences[]` (id, ncaa_seo, name, division), `last_completed_runs` (job → finished_at), `player_stats[]` / `team_stats[]` (the stat dictionary below), `limits` (requests per minute, anonymous and keyed), `contact` |
 | `GET /v1/status?season=` | Recent crawl runs with counters and errors, `record_checks` (counts per verification field), member programs, games and finals stored |
-| `GET /v1/search?q=&gender=&limit=` | `programs[]` and `players[]` matching a name (trigram similarity), best first |
+| `GET /v1/search?q=&gender=&limit=` | `programs[]` and `players[]` matching a name (trigram similarity), best first. Program rows carry `school_name` ("Duke") and `school_long_name` ("Duke University") |
 | `GET /v1/programs?season=&gender=&division=&conference=&q=&members=all` | One row per program: school (logo, host, platform), conference, `member` (NCAA membership), `record` (computed W-L-T, GF, GA), `official` (NCAA.com W-L-T), sync timestamps, game/box-score counts. NCAA members only unless `members=all` |
 | `GET /v1/programs/{id}?season=&include=roster,games` | The team page in one call: `program`, `season` row (division, conference, `ncaa_member`, `official_w/l/t`), `coaches`, `teamStats`, `standing`, `standingsChecks`, `conferenceTable`, `usc` (latest poll entry) + `uscHistory`, `categories` (NCAA.com national ranks), `roster[]`, `games[]` |
 | `GET /v1/programs/{id}/roster?season=` | Players with `stats` (computed season stats), `site` (the school's own cumulative table), `splits` (home/away/neutral/conf/nonconf/vs_ranked), `honors[]` |

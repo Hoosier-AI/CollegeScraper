@@ -27,6 +27,17 @@ const seasonOf = (v: unknown): number | null => { const n = Number(v); return Nu
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 const bad = (reply: FastifyReply, message: string) => reply.code(400).send({ error: 'bad_request', message });
 
+/** A suppressed player (a takedown request) is 404 on /v1/players/:id and absent from search; the roster routes
+ *  must agree. Filtered here, not in queries.roster, which the admin viewer shares and needs unfiltered. */
+export function visibleRoster<T extends { player?: { suppress?: boolean | null } | null }>(rows: T[]): T[] {
+  return rows.filter((r) => !r.player?.suppress);
+}
+/** Search rows gain school_name ("Duke") and school_long_name ("Duke University"). */
+export function withSchoolNames<T extends { school_seo?: string | null }>(programs: T[], schools: Array<{ seo: string; name: string | null; long_name: string | null }>) {
+  const bySeo = new Map(schools.map((s) => [s.seo, s]));
+  return programs.map((p) => { const s = p.school_seo ? bySeo.get(p.school_seo) : undefined; return { ...p, school_name: s?.name ?? null, school_long_name: s?.long_name ?? s?.name ?? null }; });
+}
+
 export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions): void {
   const origins = new Set(opts.corsOrigins.map((o) => o.replace(/\/+$/, '')));
   // Keyless responses are public data, so any origin may read them. A request that carries a key is only
@@ -139,7 +150,12 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     ]);
     if (programs.error) throw new Error(programs.error.message);
     if (players.error) throw new Error(players.error.message);
-    return { q: query, programs: programs.data ?? [], players: players.data ?? [] };
+    // The search RPC returns the program and its school's slug only; a picker needs the school's name.
+    const found = (programs.data ?? []) as any[];
+    const seos = [...new Set(found.map((p) => p.school_seo).filter(Boolean))];
+    const schools = seos.length ? await db.from('college_schools').select('seo,name,long_name').in('seo', seos) : { data: [], error: null };
+    if (schools.error) throw new Error(schools.error.message);
+    return { q: query, programs: withSchoolNames(found, (schools.data ?? []) as any[]), players: players.data ?? [] };
   });
 
   app.get<{ Querystring: Record<string, string> }>('/v1/programs', async (req, reply) => {
@@ -158,12 +174,12 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
       include.has('games') ? q.programGames(db, req.params.id, season) : Promise.resolve(undefined),
     ]);
     if (!team) return reply.code(404).send({ error: 'not_found' });
-    return { ...team, season_year: season, roster, games };
+    return { ...team, season_year: season, roster: roster && visibleRoster(roster), games };
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/v1/programs/:id/roster', async (req, reply) => {
     if (!UUID.test(req.params.id)) return bad(reply, 'id must be a uuid');
     const season = seasonOf(req.query.season); if (!season) return bad(reply, 'season required');
-    return q.roster(getDb(), req.params.id, season);
+    return visibleRoster(await q.roster(getDb(), req.params.id, season));
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/v1/programs/:id/games', async (req, reply) => {
     if (!UUID.test(req.params.id)) return bad(reply, 'id must be a uuid');
