@@ -175,7 +175,11 @@ export async function leaders(db: Db, o: LeadersFilter) {
     if (term) q = team ? q.ilike('program_name', `%${term}%`) : q.or(`display_name.ilike.%${term}%,program_name.ilike.%${term}%`);
     return q;
   };
-  const { data, error, count } = await filtered(db.from(view).select('*', { count: 'exact' })).order(stat, { ascending: ASC.has(stat) }).range(offset, offset + limit - 1);
+  // A unique tiebreaker is what makes offset paging sound. Ordered by the stat alone, tied rows (dozens of players on
+  // 6 goals) came back in a different order on each request: paging 60 rows by 5 returned 46 distinct players, 14
+  // twice and 14 never.
+  const tiebreak = team ? 'program_id' : 'player_season_id';
+  const { data, error, count } = await filtered(db.from(view).select('*', { count: 'exact' })).order(stat, { ascending: ASC.has(stat) }).order(tiebreak, { ascending: true }).range(offset, offset + limit - 1);
   if (error) {
     // An offset past the end is an empty page, not an error (PostgREST answers 416).
     if (/range not satisfiable/i.test(error.message)) {

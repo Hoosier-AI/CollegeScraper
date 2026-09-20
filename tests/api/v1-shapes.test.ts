@@ -1,7 +1,7 @@
 // Shape guarantees of the public API that need no database.
 import { describe, it, expect } from 'vitest';
 import { visibleRoster, withSchoolNames } from '../../src/api/v1.js';
-import { runs } from '../../src/ui/queries.js';
+import { runs, leaders } from '../../src/ui/queries.js';
 import { createCollegeApi } from '../../docs/plaibook-client.mjs';
 
 describe('/v1 shapes', () => {
@@ -25,6 +25,18 @@ describe('/v1 shapes', () => {
     expect(out[0]).toMatchObject({ school_name: 'Duke', school_long_name: 'Duke University' });
     expect(out[1]).toMatchObject({ school_name: null, school_long_name: null });
     expect(out[2]).toMatchObject({ school_name: 'North Carolina', school_long_name: 'North Carolina' });
+  });
+});
+
+describe('leaders paging', () => {
+  // Records every builder call; .range() resolves the query.
+  const fakeDb = () => { const calls: any[] = []; const chain: any = new Proxy({}, { get: (_t, m: string) => (...a: any[]) => { calls.push([m, ...a]); return m === 'range' ? Promise.resolve({ data: [], error: null, count: 0 }) : chain; } }); return { db: { from: () => chain } as any, calls }; };
+  it('orders by the stat, then by a unique key, so tied rows page without repeats or gaps', async () => {
+    const p = fakeDb(); await leaders(p.db, { season: 2026, stat: 'goals', limit: 5, offset: 5 } as any);
+    expect(p.calls.filter((c) => c[0] === 'order').map((c) => c[1])).toEqual(['goals', 'player_season_id']);
+    expect(p.calls.find((c) => c[0] === 'range')).toEqual(['range', 5, 9]);
+    const t = fakeDb(); await leaders(t.db, { season: 2026, kind: 'team', stat: 'gf_pg' } as any);
+    expect(t.calls.filter((c) => c[0] === 'order').map((c) => c[1])).toEqual(['gf_pg', 'program_id']);
   });
 });
 
