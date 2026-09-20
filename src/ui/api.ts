@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
 import * as q from './queries.js';
+import { eastern } from '../jobs/seasons.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -92,9 +93,31 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const page = await q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all' });
     return { stats: req.query.kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS, ...page };
   });
+  app.get<{ Querystring: Record<string, string> }>('/api/matches', async (req, reply) => {
+    const date = str(req.query.date) ?? eastern().date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.code(400).send({ error: 'date must be YYYY-MM-DD' });
+    if (req.query.conference && !UUID.test(req.query.conference)) return reply.code(400).send({ error: 'conference must be a uuid' });
+    if (req.query.status && !['scheduled', 'live', 'final', 'postponed', 'cancelled'].includes(req.query.status)) return reply.code(400).send({ error: 'bad status' });
+    return q.gamesByDate(getDb(), { date, days: req.query.days, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), status: str(req.query.status), only: str(req.query.only) });
+  });
+  app.get<{ Params: { id: string } }>('/api/matches/:id/preview', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const r = await q.matchPreview(getDb(), req.params.id);
+    return r ?? reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/conferences', async (req, reply) => {
+    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    return q.conferences(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division) });
+  });
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/conferences/:id', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const r = await q.conference(getDb(), req.params.id, { season: s, gender: req.query.gender === 'w' ? 'w' : 'm' });
+    return r ?? reply.code(404).send({ error: 'not found' });
+  });
   app.get<{ Querystring: Record<string, string> }>('/api/standings', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    return q.standings(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division) });
+    return q.standings(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference) });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/rankings', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

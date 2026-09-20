@@ -6,6 +6,10 @@ import { getDb, selectAll } from '../db/client.js';
 import * as q from '../ui/queries.js';
 import { openapiSpec } from './openapi.js';
 import { anonPrincipal, bearerOf, type ApiPrincipal, type RateLimiter } from './auth.js';
+import { eastern } from '../jobs/seasons.js';
+
+/** Live responses are cached for 15 s; the scope follows the caller as the default header does. */
+const cacheScope = (req: FastifyRequest) => { const p = (req as FastifyRequest & { principal?: ApiPrincipal }).principal; return p && p.kind !== 'anon' ? 'private' : 'public'; };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,6 +53,15 @@ export function redactGame<T extends { players?: any[]; events?: any[]; raw?: un
     return { ...e, play_text: null, ...(who ? { player_season_id: null, player_name_raw: null } : {}), ...(helper ? { assist_player_season_id: null, assist_name_raw: null } : {}), withheld: true };
   });
   return { ...r, players, events, raw: undefined };
+}
+/** A match preview withholds suppressed players the way a box score does: numbers stay, names and ids go. */
+export function redactPreview<T extends { sides: Record<string, any> }>(r: T): T {
+  const line = ({ suppress, ...l }: any) => (suppress ? { ...l, name: null, player_id: null, player_season_id: null, withheld: true } : l);
+  const lineup = (lu: any) => (lu ? { ...lu, starters: lu.starters.map(line), subs: lu.subs.map(line), dnp: lu.dnp.map(line), keeper: lu.keeper ? line(lu.keeper) : null } : lu);
+  const leader = (x: any) => (x && !x.suppress ? (({ suppress, ...rest }) => rest)(x) : null);
+  const sides: Record<string, any> = {};
+  for (const [k, v] of Object.entries(r.sides)) sides[k] = v ? { ...v, lineup: lineup(v.lineup), last_lineup: lineup(v.last_lineup), leaders: { scorers: v.leaders.scorers.map(leader).filter(Boolean), assists: v.leaders.assists.map(leader).filter(Boolean), keeper: leader(v.leaders.keeper) } } : v;
+  return { ...r, sides };
 }
 /** An individual national ranking never names a suppressed player (leaderboards already leave them out). */
 export function visibleRankings<T extends { college_player_seasons?: { college_players?: { suppress?: boolean | null } | null } | null }>(rows: T[]): T[] {
@@ -236,10 +249,37 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     return { kind, stats: allowed, ...page };
   });
 
+  app.get<{ Querystring: Record<string, string> }>('/v1/matches', async (req, reply) => {
+    const date = str(req.query.date) ?? eastern().date;
+    if (!DATE.test(date)) return bad(reply, 'date must be YYYY-MM-DD');
+    if (req.query.conference && !UUID.test(req.query.conference)) return bad(reply, 'conference must be a uuid');
+    if (req.query.status && !['scheduled', 'live', 'final', 'postponed', 'cancelled'].includes(req.query.status)) return bad(reply, 'status must be scheduled, live, final, postponed or cancelled');
+    const r = await q.gamesByDate(getDb(), { date, days: req.query.days, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), status: str(req.query.status), only: str(req.query.only) });
+    if (r.live > 0) reply.header('Cache-Control', `${cacheScope(req)}, max-age=15`);
+    return r;
+  });
+  app.get<{ Params: { id: string } }>('/v1/matches/:id/preview', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return bad(reply, 'id must be a uuid');
+    const r = await q.matchPreview(getDb(), req.params.id);
+    if (!r) return reply.code(404).send({ error: 'not_found' });
+    if (r.game.status === 'live') reply.header('Cache-Control', `${cacheScope(req)}, max-age=15`);
+    return redactPreview(r);
+  });
+  app.get<{ Querystring: Record<string, string> }>('/v1/conferences', async (req, reply) => {
+    const season = seasonOf(req.query.season); if (!season) return bad(reply, 'season required');
+    return { season, conferences: await q.conferences(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division) }) };
+  });
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/v1/conferences/:id', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return bad(reply, 'id must be a uuid');
+    const season = seasonOf(req.query.season); if (!season) return bad(reply, 'season required');
+    const r = await q.conference(getDb(), req.params.id, { season, gender: req.query.gender === 'w' ? 'w' : 'm' });
+    if (!r) return reply.code(404).send({ error: 'not_found' });
+    return r;
+  });
   app.get<{ Querystring: Record<string, string> }>('/v1/standings', async (req, reply) => {
     const season = seasonOf(req.query.season); if (!season) return bad(reply, 'season required');
-    const r = await q.standings(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division) });
     const conf = str(req.query.conference);
+    const r = await q.standings(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division), conference: conf });
     const groups = new Map<string, { conference: unknown; source: string; source_url: string | null; rows: any[] }>();
     for (const row of r.rows) {
       if (conf && row.conference_id !== conf) continue;
