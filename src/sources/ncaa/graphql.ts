@@ -139,7 +139,10 @@ export interface FetchGameDocsOptions {
   skipGamecenter?: boolean;
   /** Treat scoring-summary / team-stats / gamecenter failures as missing docs instead of throwing. Default true. */
   tolerateOptional?: boolean;
+  /** Only these documents (default all five); the live lane asks for boxscore and pbp alone. */
+  docs?: NcaaDoc[];
 }
+export type NcaaDoc = 'boxscore' | 'pbp' | 'scoring' | 'teamStats' | 'gamecenter';
 
 /** Fetch the four game documents (+ gamecenter) through either transport. */
 export async function fetchGameDocs(transport: NcaaGameTransport, contestId: string, opts: FetchGameDocsOptions = {}): Promise<NcaaGameDocs> {
@@ -147,12 +150,13 @@ export async function fetchGameDocs(transport: NcaaGameTransport, contestId: str
   const optional = async <T>(fn: () => Promise<T>): Promise<T | null> => {
     try { return await fn(); } catch (err) { if (tolerate) return null; throw err; }
   };
+  const want = new Set<NcaaDoc>(opts.docs ?? ['boxscore', 'pbp', 'scoring', 'teamStats', 'gamecenter']);
   const [boxscore, pbp, scoring, teamStats, gamecenter] = await Promise.all([
     transport.boxscore(contestId),
-    optional(() => transport.playByPlay(contestId)),
-    optional(() => transport.scoringSummary(contestId)),
-    optional(() => transport.teamStats(contestId)),
-    opts.skipGamecenter ? Promise.resolve(null) : optional(() => transport.gamecenter(contestId)),
+    want.has('pbp') ? optional(() => transport.playByPlay(contestId)) : Promise.resolve(null),
+    want.has('scoring') ? optional(() => transport.scoringSummary(contestId)) : Promise.resolve(null),
+    want.has('teamStats') ? optional(() => transport.teamStats(contestId)) : Promise.resolve(null),
+    opts.skipGamecenter || !want.has('gamecenter') ? Promise.resolve(null) : optional(() => transport.gamecenter(contestId)),
   ]);
   return { boxscore, pbp, scoring, teamStats, gamecenter };
 }

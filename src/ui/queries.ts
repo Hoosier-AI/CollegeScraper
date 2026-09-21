@@ -117,7 +117,7 @@ export async function game(db: Db, id: string) {
   if (error) throw new Error(error.message);
   if (!g) return null;
   const [header, team, players, events, raw] = await Promise.all([
-    db.from('college_games').select('officials,duration_min,site_game_refs,site_fetched_at,ncaa_fetched_at,detail_attempts,start_epoch').eq('id', id).maybeSingle(),
+    db.from('college_games').select('officials,duration_min,site_game_refs,site_fetched_at,ncaa_fetched_at,live_stats_at,detail_attempts,start_epoch').eq('id', id).maybeSingle(),
     selectAll<any>(db, 'college_game_team_stats', '*', (q) => q.eq('game_id', id)),
     selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id,college_players(suppress))', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
     selectAll<any>(db, 'college_game_events', '*', (q) => q.eq('game_id', id).order('period').order('seq')),
@@ -126,7 +126,10 @@ export async function game(db: Db, id: string) {
   // Box-score lines link to the player page through their roster identity.
   // `suppress` rides along so the public API can withhold the name; the admin viewer shows it as is.
   const lines = players.map((p) => ({ ...p, player_id: p.college_player_seasons?.player_id ?? null, suppress: !!p.college_player_seasons?.college_players?.suppress, college_player_seasons: undefined }));
-  return { game: { ...g, ...(header.data ?? {}) }, team, players: lines, events, raw };
+  const h = header.data ?? {};
+  // While a match is live its ncaa rows are a snapshot of NCAA.com's in-game feed, replaced by the final box score.
+  const provisional = g.status === 'live' && !!(h as any).live_stats_at;
+  return { game: { ...g, ...h }, stats: { provisional, live_stats_at: (h as any).live_stats_at ?? null }, team, players: lines, events, raw };
 }
 
 export async function player(db: Db, id: string) {

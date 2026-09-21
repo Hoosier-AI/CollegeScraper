@@ -8,7 +8,7 @@ Plaibook's tracked `124_owner_console_v5.sql`. `120_college_soccer.sql` is a cop
 is part of that project's applied history.
 
 **How they are applied.** By hand, as SQL, in order: the Supabase SQL editor, or the management endpoint
-`POST https://api.supabase.com/v1/projects/nogtyfqgmpfslbrlcacl/database/query`. This project has no
+`POST https://api.supabase.com/v1/projects/nogtyfqgmpfslbrlcacl/database/query`, or psql through the pooler (`aws-0-us-west-2.pooler.supabase.com`, user `postgres.nogtyfqgmpfslbrlcacl`, password `DEMO_DB_PASSWORD` in `.env`). This project has no
 `supabase_migrations.schema_migrations` table, so the numbers are only an order, and `supabase db push` is not used.
 Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 
@@ -20,5 +20,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 124_college_forfeits.sql | forfeits | yes |
 | 125_search_players_best_first.sql | player search ranks by similarity | yes (2026-09-20) |
 | 126_college_live_matches.sql | live period/clock, schedule view with kickoff + conferences, worker lanes | yes (2026-09-20) |
+| 127_college_console_live.sql | `live_stats_at` (provisional live box scores), quality snapshots, API keys + usage, per-host fetch stats | yes (2026-09-21) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

@@ -22,7 +22,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   const { authorized, limitAnonymous } = typeof opts === 'function' ? { authorized: opts, limitAnonymous: undefined } : opts;
   // Admin-only paths: anything that starts work or cancels it, plus the crawl-health surfaces.
   const adminOnly = (req: FastifyRequest): boolean =>
-    req.method !== 'GET' || req.url.startsWith('/api/quality') || /^\/api\/runs(\/|\?|$)/.test(req.url);
+    req.method !== 'GET' || req.url.startsWith('/api/quality') || req.url.startsWith('/api/console') || /^\/api\/runs(\/|\?|$)/.test(req.url);
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
     if (adminOnly(req)) {

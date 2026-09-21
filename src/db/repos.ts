@@ -23,7 +23,7 @@ export interface ProgramSeasonRow { program_id: string; season: number; division
 export interface GameRow {
   id: string; season: number; game_date: string; gender: Gender; division: Division | null; home_program_id: string | null; away_program_id: string | null;
   home_name: string | null; away_name: string | null; home_score: number | null; away_score: number | null; status: string; ncaa_contest_id: number | null;
-  site_game_refs: Record<string, string>; source_of_truth: 'site' | 'ncaa' | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; detail_attempts: number; forfeit?: boolean;
+  site_game_refs: Record<string, string>; source_of_truth: 'site' | 'ncaa' | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; live_stats_at?: string | null; detail_attempts: number; forfeit?: boolean;
 }
 
 // ---------- schools / programs ----------
@@ -240,6 +240,24 @@ export interface BoxScoreWrite {
   season: number;
   /** create boxscore_only player_seasons for unmatched lines (site source = tenant's own team only) */
   createMissing: boolean;
+  /** An in-game snapshot from NCAA.com's live feed: rows are stored, but the header only gets `live_stats_at`
+   * (never `ncaa_fetched_at`, status or scores), so the final fetch still happens and replaces them. */
+  provisional?: boolean;
+  /** Delete this source's team and player rows first (a final replacing provisional rows whose keys may differ). */
+  replace?: boolean;
+}
+
+/** The game-header columns one box score write sets. Pure, so the provisional/final rules are testable. */
+export function boxScoreHeaderPatch(box: BoxScore, source: 'site' | 'ncaa', opts: { provisional?: boolean }, now = new Date().toISOString()): Record<string, unknown> {
+  if (opts.provisional) return { live_stats_at: now };
+  const patch: Record<string, unknown> = { [source === 'site' ? 'site_fetched_at' : 'ncaa_fetched_at']: now };
+  if (source === 'ncaa') patch.live_stats_at = null;
+  if (box.status === 'final') Object.assign(patch, { status: 'final', home_score: box.home.score, away_score: box.away.score, overtime: box.overtime, shootout: box.shootout });
+  if (source === 'site') {
+    Object.assign(patch, { attendance: box.attendance, venue_name: box.venueName, venue_city: box.venueCity, duration_min: box.durationMin,
+      officials: box.officials.length ? box.officials : null, neutral_site: box.neutral, postseason: box.postseason, tournament: box.tournament });
+  }
+  return patch;
 }
 
 export interface BoxScoreWriteResult { teamRows: number; playerRows: number; events: number; unmatched: number; createdPlayers: number; valid: boolean; problems: string[] }
@@ -273,7 +291,7 @@ export async function writeBoxScore(db: Db, w: BoxScoreWrite): Promise<BoxScoreW
       let psId: string | null = null;
       const m = matchStatLine(p, cands);
       if (m) psId = m.playerSeasonId;
-      else if (w.createMissing && (p.firstName || p.lastName)) {
+      else if (w.createMissing && !w.provisional && (p.firstName || p.lastName)) {
         psId = await createBoxscoreOnlyPlayer(db, programId, w.season, p);
         cands.push({ playerSeasonId: psId, nameKey: nameKey(p.firstName, p.lastName), firstName: p.firstName, lastName: p.lastName, jersey: p.jersey });
         createdPlayers += 1;
@@ -293,6 +311,10 @@ export async function writeBoxScore(db: Db, w: BoxScoreWrite): Promise<BoxScoreW
   const byKey = new Map<string, Record<string, unknown>>();
   for (const r of playerRows) { const k = `${r.program_id}|${r.source_key}`; const prev = byKey.get(k); if (!prev || Number(r.minutes ?? 0) > Number(prev.minutes ?? 0)) byKey.set(k, r); }
   if (byKey.size !== playerRows.length) problems.push(`${playerRows.length - byKey.size} duplicate player keys collapsed`);
+  if (w.replace) {
+    await db.from('college_game_team_stats').delete().eq('game_id', gameId).eq('source', source);
+    await db.from('college_game_player_stats').delete().eq('game_id', gameId).eq('source', source);
+  }
   if (teamRows.length) await upsertChunked(db, 'college_game_team_stats', teamRows, { onConflict: 'game_id,program_id,source' });
   if (byKey.size) await upsertChunked(db, 'college_game_player_stats', [...byKey.values()], { onConflict: 'game_id,program_id,source,source_key' });
 
@@ -315,17 +337,7 @@ export async function writeBoxScore(db: Db, w: BoxScoreWrite): Promise<BoxScoreW
   if (eventRows.length) await upsertChunked(db, 'college_game_events', eventRows, { onConflict: 'game_id,source,period,seq' });
   await db.from('college_game_raw').upsert({ game_id: gameId, source, payload: stripRaw(box), fetched_at: new Date().toISOString() }, { onConflict: 'game_id,source' });
 
-  const headerPatch: Record<string, unknown> = {
-    [source === 'site' ? 'site_fetched_at' : 'ncaa_fetched_at']: new Date().toISOString(),
-  };
-  if (box.status === 'final') {
-    Object.assign(headerPatch, { status: 'final', home_score: box.home.score, away_score: box.away.score, overtime: box.overtime, shootout: box.shootout });
-  }
-  if (source === 'site') {
-    Object.assign(headerPatch, { attendance: box.attendance, venue_name: box.venueName, venue_city: box.venueCity, duration_min: box.durationMin,
-      officials: box.officials.length ? box.officials : null, neutral_site: box.neutral, postseason: box.postseason, tournament: box.tournament });
-  }
-  await updateGame(db, gameId, headerPatch);
+  await updateGame(db, gameId, boxScoreHeaderPatch(box, source, { provisional: w.provisional }));
 
   const valid = teamRows.length === 2 && problems.length === 0 && box.status === 'final';
   return { teamRows: teamRows.length, playerRows: playerRows.length, events: eventRows.length, unmatched, createdPlayers, valid, problems };

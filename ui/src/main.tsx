@@ -18,8 +18,7 @@ const Rankings = lazy(() => import('./pages/Rankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Docs = lazy(() => import('./pages/Docs'));
 const Admin = lazy(() => import('./pages/Admin'));
-const Jobs = lazy(() => import('./pages/Jobs'));
-const Quality = lazy(() => import('./pages/Quality'));
+const Console = lazy(() => import('./pages/Console'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
 window.addEventListener('vite:preloadError', (e) => {
@@ -63,8 +62,9 @@ const router = createBrowserRouter([
           { path: 'search', element: <SearchPage /> },
           { path: 'docs', element: <Docs /> },
           { path: 'admin', element: <Admin /> },
-          { path: 'jobs', element: <RequireAdmin><Jobs /></RequireAdmin> },
-          { path: 'quality', element: <RequireAdmin><Quality /></RequireAdmin> },
+          { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
+          { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
+          { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
           { path: '*', element: <NotFound /> },
         ],
       },

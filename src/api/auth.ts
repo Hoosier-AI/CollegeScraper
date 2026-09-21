@@ -33,11 +33,14 @@ export function bearerOf(headers: { authorization?: string | string[]; 'x-api-ke
   return x ? String(x).trim() : null;
 }
 
-export function makeAuthenticator(opts: { adminSecret?: string | null; keys: ApiKey[] }): (token: string | null) => ApiPrincipal | null {
+/** `lookup` is the database key store (console-created keys), consulted after the env keys. */
+export function makeAuthenticator(opts: { adminSecret?: string | null; keys: ApiKey[]; lookup?: (token: string) => string | null }): (token: string | null) => ApiPrincipal | null {
   return (token) => {
     if (!token) return null;
     if (opts.adminSecret && same(token, opts.adminSecret)) return { kind: 'admin', name: 'admin' };
     for (const k of opts.keys) if (same(token, k.key)) return { kind: 'key', name: k.name };
+    const stored = opts.lookup?.(token);
+    if (stored) return { kind: 'key', name: stored };
     return null;
   };
 }

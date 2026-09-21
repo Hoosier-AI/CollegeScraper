@@ -1,6 +1,8 @@
 // Durable job runner: runs live in college_crawl_runs; the worker claims queued rows, heartbeats,
 // and records counters. Jobs are registered by name; a job receives a context with a counters bag.
-import type { Db } from '../db/client.js';
+import { hostname } from 'node:os';
+import { kvSet, type Db } from '../db/client.js';
+import { KV, crawlPaused } from '../ops/settings.js';
 import { log } from '../log.js';
 
 export interface JobContext {
@@ -17,6 +19,20 @@ export interface JobContext {
 }
 
 export type JobFn = (ctx: JobContext) => Promise<void>;
+
+/** One parameter a job accepts, enough for the console to draw a form for it. */
+export interface ParamSpec { name: string; type: 'number' | 'string' | 'boolean' | 'enum' | 'string[]' | 'json'; label: string; help?: string; default?: unknown; options?: string[]; required?: boolean }
+export interface JobMeta {
+  description: string;
+  /** Which worker lane runs it: everything but the live scoreboard is 'crawl'. */
+  lane: 'crawl' | 'live';
+  /** A composite of other jobs (hourly, nightly…). */
+  composite?: boolean;
+  params: ParamSpec[];
+  /** Long or wide-reaching: the console asks before enqueueing. */
+  dangerous?: boolean;
+}
+export interface JobCatalogueEntry extends JobMeta { name: string }
 
 const registry = new Map<string, JobFn>();
 
@@ -84,11 +100,25 @@ async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise
   return ctx.counters;
 }
 
-/** Worker loop: claim → execute → repeat; idles when the queue is empty. */
-export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: AbortSignal; jobs?: string[]; exclude?: string[] } = {}): Promise<void> {
+export interface WorkerHeartbeat { at: string; pid: number; host: string; run_id: string | null; job: string | null; started_at: string }
+
+/** Worker loop: claim → execute → repeat; idles when the queue is empty. A named lane writes a heartbeat to
+ * college_kv every 30 s (the console and /health read it) and the crawl lane honours the pause flag. */
+export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: AbortSignal; jobs?: string[]; exclude?: string[]; lane?: string } = {}): Promise<void> {
   const idleMs = opts.idleMs ?? 15_000;
-  log.info({ jobs: opts.jobs ?? jobNames(), exclude: opts.exclude }, 'worker started');
+  log.info({ lane: opts.lane, jobs: opts.jobs ?? jobNames(), exclude: opts.exclude }, 'worker started');
+  const startedAt = new Date().toISOString();
+  let current: { run_id: string; job: string } | null = null;
+  const beat = async () => {
+    if (!opts.lane) return;
+    const hb: WorkerHeartbeat = { at: new Date().toISOString(), pid: process.pid, host: hostname(), run_id: current?.run_id ?? null, job: current?.job ?? null, started_at: startedAt };
+    await kvSet(db, KV.heartbeat(opts.lane, hostname()), hb).catch((err) => log.warn({ err: String(err) }, 'heartbeat write failed'));
+  };
+  await beat();
+  const beatTimer = setInterval(() => { void beat(); }, 30_000);
+  opts.signal?.addEventListener('abort', () => clearInterval(beatTimer));
   while (!opts.signal?.aborted) {
+    if (opts.lane === 'crawl' && (await crawlPaused(db))) { await sleep(idleMs); continue; }
     // Lanes: a loop may claim only some jobs (the live scoreboard) or everything but those (the crawl).
     const { data, error } = await db.rpc('college_claim_run', { p_stale_minutes: 10, p_jobs: opts.jobs ?? null, p_exclude: opts.exclude ?? null });
     if (error) { log.error({ err: error.message }, 'claim failed'); await sleep(idleMs); continue; }
@@ -100,8 +130,11 @@ export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: Abort
       continue;
     }
     const ctx = makeContext(db, run.id, run.params ?? {});
+    current = { run_id: run.id, job: run.job }; await beat();
     try { await execute(db, ctx, run.job, fn); } catch { /* recorded */ }
+    current = null;
   }
+  clearInterval(beatTimer);
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

@@ -58,11 +58,16 @@ export class HttpError extends Error {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+export interface HostStats { requests: number; errors: number; status429: number; lastError: string | null; lastErrorAt: string | null }
+export interface HttpStats { requests: number; cacheHits: number; notModified: number; errors: number; status429: number; robotsBlocked: number; byHost: Map<string, HostStats> }
+
 export class HttpClient implements Fetcher {
   private hostQueues = new Map<string, PQueue>();
   private global: PQueue;
   private opts: Required<Omit<HttpClientOptions, 'cache' | 'robots' | 'contactEmail'>> & Pick<HttpClientOptions, 'cache' | 'robots' | 'contactEmail'>;
-  public stats = { requests: 0, cacheHits: 0, notModified: 0, errors: 0 };
+  /** Process-wide counters (one client per process): totals plus a per-host breakdown the console shows. */
+  public stats: HttpStats = { requests: 0, cacheHits: 0, notModified: 0, errors: 0, status429: 0, robotsBlocked: 0, byHost: new Map() };
+  private hostStat(host: string): HostStats { let h = this.stats.byHost.get(host); if (!h) { h = { requests: 0, errors: 0, status429: 0, lastError: null, lastErrorAt: null }; this.stats.byHost.set(host, h); } return h; }
 
   constructor(options: HttpClientOptions) {
     this.opts = {
@@ -88,8 +93,10 @@ export class HttpClient implements Fetcher {
     return q;
   }
 
-  /** `freshMs` per call overrides the client default: a stored body younger than that is served without a request. */
-  async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number } = {}): Promise<HttpResponseLike> {
+  /** `freshMs` per call overrides the client default: a stored body younger than that is served without a request.
+   * `priority` orders waiting work on the shared per-host queue (higher first); the live lane uses it so a scoreboard
+   * tick is never stuck behind a long crawl on the same host. */
+  async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number } = {}): Promise<HttpResponseLike> {
     const host = new URL(url).host;
     const cached = o.skipCache ? null : await this.opts.cache?.get(url);
     const freshMs = o.freshMs ?? this.opts.freshMs;
@@ -98,9 +105,11 @@ export class HttpClient implements Fetcher {
       return { status: cached.record.status, url, text: cached.body, notModified: true };
     }
     if (this.opts.robots && !(await this.opts.robots.allowed(url))) {
+      this.stats.robotsBlocked += 1;
       throw new HttpError(999, url, `robots.txt disallows ${url}`);
     }
-    return this.global.add(() => this.queueFor(host).add(() => this.fetchWithRetry(url, host, o.accept, cached ?? null, o.attempts))) as Promise<HttpResponseLike>;
+    const priority = o.priority ?? 0;
+    return this.global.add(() => this.queueFor(host).add(() => this.fetchWithRetry(url, host, o.accept, cached ?? null, o.attempts), { priority }), { priority }) as Promise<HttpResponseLike>;
   }
 
   private async fetchWithRetry(url: string, host: string, accept: string | undefined, cached: { record: FetchRecord; body: string | null } | null, maxAttempts = this.opts.maxAttempts): Promise<HttpResponseLike> {
@@ -109,6 +118,7 @@ export class HttpClient implements Fetcher {
     while (attempt < maxAttempts) {
       attempt += 1;
       this.stats.requests += 1;
+      const hs = this.hostStat(host); hs.requests += 1;
       const headers: Record<string, string> = {
         'user-agent': this.opts.userAgent,
         accept: accept ?? 'text/html,application/json;q=0.9,*/*;q=0.8',
@@ -122,7 +132,7 @@ export class HttpClient implements Fetcher {
         res = await this.opts.fetchImpl(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(this.opts.timeoutMs) });
       } catch (err) {
         lastErr = err;
-        this.stats.errors += 1;
+        this.stats.errors += 1; hs.errors += 1; hs.lastError = err instanceof Error ? err.message : String(err); hs.lastErrorAt = new Date().toISOString();
         await this.backoff(attempt, null);
         continue;
       }
@@ -136,7 +146,8 @@ export class HttpClient implements Fetcher {
       const transient = res.status === 429 || res.status >= 500 || (res.status === 202 && text.trim().length === 0);
       if (transient) {
         lastErr = new HttpError(res.status, url);
-        this.stats.errors += 1;
+        this.stats.errors += 1; hs.errors += 1; hs.lastError = `HTTP ${res.status}`; hs.lastErrorAt = new Date().toISOString();
+        if (res.status === 429) { this.stats.status429 += 1; hs.status429 += 1; }
         await this.backoff(attempt, res.headers.get('retry-after'));
         continue;
       }

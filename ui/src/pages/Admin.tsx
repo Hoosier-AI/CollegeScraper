@@ -1,24 +1,13 @@
 // The internal console's front door. The stats pages are public; this is only for the crawl operator.
 import { useState, type ReactNode } from 'react';
-import { Link, Navigate, useLocation } from 'react-router-dom';
-import { clearToken, setToken, useAdmin } from '../lib/api';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { setToken, useAdmin } from '../lib/api';
 import { Logo } from '../components/Brand';
 
 export default function Admin() {
   const admin = useAdmin();
-  if (admin) {
-    return (
-      <div className="card mx-auto max-w-sm space-y-3 p-4">
-        <h1 className="text-xl display text-chalk-100">Admin</h1>
-        <p className="text-sm text-chalk-400">Signed in. Jobs and Quality are in the nav.</p>
-        <div className="flex gap-2">
-          <Link className="btn-primary" to="/jobs">Jobs</Link>
-          <Link className="btn-ghost" to="/quality">Quality</Link>
-          <button className="btn-ghost ml-auto" onClick={() => clearToken()}>Sign out</button>
-        </div>
-      </div>
-    );
-  }
+  const { state } = useLocation() as { state?: { from?: string } };
+  if (admin) return <Navigate to={state?.from && state.from !== '/admin' ? state.from : '/console'} replace />;
   return <Login />;
 }
 
@@ -26,6 +15,8 @@ function Login() {
   const [v, setV] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
+  const { state } = useLocation() as { state?: { from?: string } };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -34,6 +25,7 @@ function Login() {
       const r = await fetch('/api/runs?limit=1', { headers: { Authorization: `Bearer ${v.trim()}` } });
       if (!r.ok) throw new Error(r.status === 401 ? 'That secret was rejected.' : `Server error ${r.status}`);
       setToken(v.trim());
+      navigate(state?.from && state.from !== '/admin' ? state.from : '/console', { replace: true });
     } catch (e2) { setErr(e2 instanceof Error ? e2.message : String(e2)); } finally { setBusy(false); }
   };
   return (

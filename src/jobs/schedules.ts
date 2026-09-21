@@ -40,6 +40,8 @@ registerJob('nightly', async (ctx) => {
   await step(ctx, 'compute-aggregates', { season, transfers: true });
   await step(ctx, 'compute-standings', { season });
   await step(ctx, 'refresh-rankings', { season, categories: false });
+  await step(ctx, 'quality', { season });
+  await step(ctx, 'ops-retention', {});
 });
 
 /** Every three hours in season: re-read the conference standings pages so the verification never trails the games by more than that. */

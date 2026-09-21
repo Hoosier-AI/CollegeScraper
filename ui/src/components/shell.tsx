@@ -2,7 +2,7 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useRef } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { CalendarDays, Search, Shield, Trophy, Users } from 'lucide-react';
+import { CalendarDays, Gauge, Search, Shield, Trophy, Users } from 'lucide-react';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
@@ -15,9 +15,9 @@ export const NAV = [
   { to: '/teams', label: 'Teams', icon: Users },
   { to: '/rankings', label: 'Rankings', icon: Trophy },
 ] as const;
-const ADMIN_NAV = [{ to: '/jobs', label: 'Jobs' }, { to: '/quality', label: 'Quality' }] as const;
+const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
 // The season/gender controls only mean something on the data pages.
-const FILTERLESS = ['/', '/docs', '/admin', '/search'];
+const FILTERLESS = ['/', '/docs', '/admin', '/search', '/console'];
 
 export function TopBar() {
   const admin = useAdmin();
@@ -41,10 +41,12 @@ export function TopBar() {
 }
 
 export function BottomBar() {
+  const admin = useAdmin();
+  const items = [...NAV, { to: '/search', label: 'Search', icon: Search }, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <div className="grid grid-cols-4">
-        {[...NAV, { to: '/search', label: 'Search', icon: Search }].map((n) => (
+      <div className={`grid ${items.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        {items.map((n) => (
           <NavLink key={n.to} to={n.to} className={({ isActive }) => `flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-2xs font-medium ${isActive ? 'text-pitch-300' : 'text-chalk-400'}`}>
             {({ isActive }) => <><n.icon size={20} aria-hidden strokeWidth={isActive ? 2.25 : 1.75} /><span>{n.label}</span></>}
           </NavLink>

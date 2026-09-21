@@ -1,6 +1,7 @@
 // Matchday: every game of a day, live first, with the date strip as the one loud element.
 import { useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useNow } from '../lib/hooks';
 import { api, qs } from '../lib/api';
 import { useFilters, genderLabel, divisionLabel } from '../lib/filters';
 import { useUrlPatch, useUrlState } from '../lib/urlState';
@@ -20,7 +21,6 @@ const GROUPS: { key: string; label: string; statuses: string[] }[] = [
 interface MatchesResponse { from: string; to: string; season: number; live: number; games: (MatchLike & { division: string | null })[]; generated_at: string }
 
 /** Re-renders every 15 s so "updated N s ago" stays honest. */
-function useNow(ms = 15_000) { const [now, setNow] = useState(Date.now()); useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t); }, [ms]); return now; }
 
 export default function Matches() {
   const f = useFilters();
@@ -36,7 +36,7 @@ export default function Matches() {
     queryKey: ['matches', date, f.gender, division, conference, only],
     queryFn: () => api<MatchesResponse>(`/api/matches${qs({ date, gender: f.gender, division, conference, only })}`),
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => ((query.state.data?.live ?? 0) > 0 ? 60_000 : false),
+    refetchInterval: (query) => ((query.state.data?.live ?? 0) > 0 ? 30_000 : false),
   });
   // A week's look-ahead so an empty day can say when the next matches are and the strip can show counts.
   const week = useQuery({ queryKey: ['matches-week', date, f.gender, division, conference], queryFn: () => api<MatchesResponse>(`/api/matches${qs({ date: shiftIso(date, -3), days: 7, gender: f.gender, division, conference })}`), staleTime: 120_000 });
@@ -87,7 +87,7 @@ export default function Matches() {
           );
         })}
       </div>
-      {q.data && <p className="text-xs text-chalk-500">Scores update every 3 minutes while matches are in play. Kickoffs are shown in your local time.</p>}
+      {q.data && <p className="text-xs text-chalk-500">Scores update every minute while matches are in play. Kickoffs are shown in your local time.</p>}
     </div>
   );
 }

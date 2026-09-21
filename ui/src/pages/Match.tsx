@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { api, fmt, useAdmin } from '../lib/api';
 import { useHref } from '../lib/filters';
+import { agoShort, useNow } from '../lib/hooks';
 import { useUrlState } from '../lib/urlState';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
@@ -26,18 +27,22 @@ export default function Match() {
   const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PLAYER_PRESETS.map((p) => p.id) });
   const [view, setView] = useUrlState('view', 'pitch', { replace: true, resetPage: false, allow: ['pitch', 'list'] });
   const isLive = (q: any) => q.state.data?.game?.status === 'live';
-  const box = useQuery({ queryKey: ['game', id], queryFn: () => api<any>(`/api/games/${id}`), refetchInterval: (q) => (isLive(q) ? 60_000 : false) });
-  const preview = useQuery({ queryKey: ['preview', id], queryFn: () => api<any>(`/api/matches/${id}/preview`), refetchInterval: (q) => (isLive(q) ? 60_000 : false) });
+  // While live: the scoreboard tick is every minute and the stats snapshot every couple of minutes, so 30 s keeps
+  // the page within a tick of the source without hammering the API.
+  const box = useQuery({ queryKey: ['game', id], queryFn: () => api<any>(`/api/games/${id}`), refetchInterval: (q) => (isLive(q) ? 30_000 : false) });
+  const preview = useQuery({ queryKey: ['preview', id], queryFn: () => api<any>(`/api/matches/${id}/preview`), refetchInterval: (q) => (isLive(q) ? 30_000 : false) });
+  const now = useNow(5_000);
   const refetch = useMutation({ mutationFn: () => api(`/api/games/${id}/refetch`, { method: 'POST' }) });
   if (preview.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-44" /><Skeleton className="h-10 w-96" /><Skeleton className="h-64" /></div>;
   if (preview.error) return <ErrorBox error={preview.error} retry={() => preview.refetch()} />;
   if (!preview.data?.game) return <EmptyState title="No such match" body="The link may be out of date." />;
   const p = preview.data; const g = p.game; const sides = p.sides;
   const played = g.status === 'final' || g.status === 'live';
-  // A live match rarely has its box score yet, so it opens on head-to-head; a final opens on the summary.
-  const defaultTab: Tab = g.status === 'final' ? 'summary' : g.status === 'live' ? 'h2h' : 'preview';
-  const tab: Tab = (tabParam as Tab) || defaultTab;
   const team: any[] = box.data?.team ?? [], players: any[] = box.data?.players ?? [], events: any[] = box.data?.events ?? [], raw: any[] = box.data?.raw ?? [];
+  const provisional: boolean = !!box.data?.stats?.provisional;
+  // A final opens on the summary; a live match too once its live snapshot has arrived, else on head-to-head.
+  const defaultTab: Tab = g.status === 'final' ? 'summary' : g.status === 'live' ? (box.isPending || players.length ? 'summary' : 'h2h') : 'preview';
+  const tab: Tab = (tabParam as Tab) || defaultTab;
   const truth: Src | null = box.data?.game?.source_of_truth ?? g.source_of_truth ?? null;
   const sources: Src[] = (['site', 'ncaa'] as Src[]).filter((s) => team.some((t) => t.source === s));
   const statSrc: Src | null = src === 'site' || src === 'ncaa' ? (src as Src) : truth ?? sources[0] ?? null;
@@ -78,14 +83,28 @@ export default function Match() {
         {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
         {g.ncaa_contest_id && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={`https://www.ncaa.com/game/${g.ncaa_contest_id}`} target="_blank" rel="noreferrer">NCAA.com <ExternalLink size={12} aria-hidden /></a>}
         {Object.entries(box.data?.game?.site_game_refs ?? {}).map(([host, url]) => (url ? <a key={host} className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={String(url)} target="_blank" rel="noreferrer">{host} <ExternalLink size={12} aria-hidden /></a> : null))}
-        {g.status === 'live' && <span>Live scores update every 3 minutes.</span>}
+        {g.status === 'live' && (
+          <span className="inline-flex items-center gap-1.5 font-medium text-win"><span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />Live{(g.live?.period ?? g.live_period) ? ` · ${g.live?.period ?? g.live_period}${(g.live?.clock ?? g.live_clock) ? ` ${g.live?.clock ?? g.live_clock}` : ''}` : ''}{(g.live?.updated_at ?? g.live_updated_at) ? ` · score updated ${agoShort(g.live?.updated_at ?? g.live_updated_at, now)}` : ''}{provisional && box.data?.stats?.live_stats_at ? ` · stats ${agoShort(box.data.stats.live_stats_at, now)}` : ''}</span>
+        )}
         {admin && <button className="btn-ghost btn-sm" onClick={() => refetch.mutate()} disabled={refetch.isPending || refetch.isSuccess}>{refetch.isSuccess ? 'Re-fetch queued' : 'Re-fetch'}</button>}
       </div>
       <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => href(`/matches/${id}`, { tab: x === defaultTab ? null : x })} />
 
       {tab === 'summary' && (
         <div className="space-y-6">
+          {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of NCAA.com's in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
+          {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}
           <Section title="Key events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
+          {g.status === 'live' && players.length > 0 && (
+            <Section title="Match stats so far">
+              <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />
+            </Section>
+          )}
+          {g.status === 'live' && players.length > 0 && (
+            <Section title="On the pitch">
+              <div className="grid gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
+            </Section>
+          )}
           {periodLines && (
             <Section title="By period">
               <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Score by period</caption>

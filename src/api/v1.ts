@@ -25,6 +25,8 @@ export interface PublicApiOptions {
   publicUrl?: string;
   /** Address published in /v1/meta for people who need a higher limit. */
   contact?: string;
+  /** Called once per authenticated-or-anonymous request, after the rate limit decision (usage metering). */
+  onRequest?: (principal: ApiPrincipal, limited: boolean) => void;
 }
 
 const seasonOf = (v: unknown): number | null => { const n = Number(v); return Number.isInteger(n) && n > 1990 && n < 2100 ? n : null; };
@@ -112,6 +114,7 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     const r = limiter.take(principal.name);
     reply.header('X-RateLimit-Limit', String(limiter.max));
     reply.header('X-RateLimit-Remaining', String(r.remaining));
+    opts.onRequest?.(principal, !r.ok);
     if (!r.ok) {
       reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000)));
       return reply.code(429).send({
@@ -236,6 +239,7 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     const found = await q.game(getDb(), req.params.id);
     if (!found) return reply.code(404).send({ error: 'not_found' });
     const r = redactGame(found);
+    if (found.game.status === 'live') reply.header('Cache-Control', `${cacheScope(req)}, max-age=15`);
     if (!(str(req.query.include) ?? '').split(',').includes('raw')) return { ...r, raw: undefined };
     return r;
   });

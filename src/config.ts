@@ -20,6 +20,9 @@ const schema = z.object({
   // The free tier: /v1 answers without any key, limited per client IP.
   API_ANON_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
   PUBLIC_URL: z.string().url().optional(),
+  // The console's Deploy tab (status, deploy, restart, env editing) — only when both are set on the service.
+  RENDER_API_KEY: z.string().min(1).optional(),
+  RENDER_SERVICE_ID: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof schema> & { userAgent: string; contactEmail: string };
@@ -45,6 +48,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     API_RATE_LIMIT_PER_MIN: env.API_RATE_LIMIT_PER_MIN,
     API_ANON_RATE_LIMIT_PER_MIN: env.API_ANON_RATE_LIMIT_PER_MIN,
     PUBLIC_URL: env.PUBLIC_URL || undefined,
+    RENDER_API_KEY: env.RENDER_API_KEY || undefined,
+    RENDER_SERVICE_ID: env.RENDER_SERVICE_ID || undefined,
   });
   const cfg: Config = {
     ...parsed,

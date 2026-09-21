@@ -39,7 +39,8 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
     games = games.filter((g) => (g.home_program_id && ids.has(g.home_program_id)) || (g.away_program_id && ids.has(g.away_program_id)));
   }
   // Only games that should have a final box score: past dates, not already fetched (unless refetch), attempts < 3 for non-final.
-  games = games.filter((g) => g.game_date <= today && (ctx.params.refetch || !g.ncaa_fetched_at) && (g.status !== 'postponed' && g.status !== 'cancelled'));
+  // Games the live job is following are its business until they end (it enqueues this job with contest_ids then).
+  games = games.filter((g) => g.game_date <= today && (ctx.params.refetch || !g.ncaa_fetched_at) && (g.status !== 'postponed' && g.status !== 'cancelled') && (ctx.params.contest_ids || g.status !== 'live'));
   if (ctx.params.limit) games = games.slice(0, Number(ctx.params.limit));
   ctx.inc('games_selected', games.length);
   const candCache = new Map<string, Awaited<ReturnType<typeof statLineCandidates>>>();
@@ -49,11 +50,13 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
       const docs = await fetchGameDocs(transport, String(g.ncaa_contest_id));
       const box = parseNcaaBoxScore(docs, String(g.ncaa_contest_id), g.gender, (g.division ?? 'd1') as 'd1' | 'd2' | 'd3', g.game_date);
       if (box.status !== 'final') {
-        await updateGame(db, g.id, { detail_attempts: (g.detail_attempts ?? 0) + 1, ncaa_fetched_at: new Date().toISOString(), status: box.status === 'live' ? 'live' : g.status, ...(g.detail_attempts >= 2 && daysAgo(g.game_date) > 3 ? { status: 'postponed' } : {}) });
+        // A same-day game that is not over yet is not "fetched": stamping it would hide the final box until a refetch.
+        const stamp = g.game_date < today ? { ncaa_fetched_at: new Date().toISOString() } : {};
+        await updateGame(db, g.id, { detail_attempts: (g.detail_attempts ?? 0) + 1, ...stamp, status: box.status === 'live' ? 'live' : g.status, ...(g.detail_attempts >= 2 && daysAgo(g.game_date) > 3 ? { status: 'postponed' } : {}) });
         ctx.inc('not_final'); continue;
       }
       for (const pid of [g.home_program_id, g.away_program_id]) if (pid && !candCache.has(pid)) candCache.set(pid, await statLineCandidates(db, pid, season));
-      const r = await writeBoxScore(db, { gameId: g.id, source: 'ncaa', homeProgramId: g.home_program_id, awayProgramId: g.away_program_id, box, candidates: candCache, season, createMissing: true });
+      const r = await writeBoxScore(db, { gameId: g.id, source: 'ncaa', homeProgramId: g.home_program_id, awayProgramId: g.away_program_id, box, candidates: candCache, season, createMissing: true, replace: !!g.live_stats_at });
       ctx.inc('boxscores'); ctx.inc('player_rows', r.playerRows); ctx.inc('events', r.events); ctx.inc('boxscore_only_players', r.createdPlayers);
       if (!r.valid) ctx.inc('invalid');
     } catch (err) {

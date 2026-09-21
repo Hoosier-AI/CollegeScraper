@@ -207,7 +207,7 @@ export interface HttpResponseLike {
 }
 
 export interface Fetcher {
-  get(url: string, opts?: { accept?: string; skipCache?: boolean; attempts?: number }): Promise<HttpResponseLike>;
+  get(url: string, opts?: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number }): Promise<HttpResponseLike>;
 }
 
 export interface SiteAdapter {
