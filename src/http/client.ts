@@ -88,10 +88,12 @@ export class HttpClient implements Fetcher {
     return q;
   }
 
-  async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number } = {}): Promise<HttpResponseLike> {
+  /** `freshMs` per call overrides the client default: a stored body younger than that is served without a request. */
+  async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number } = {}): Promise<HttpResponseLike> {
     const host = new URL(url).host;
     const cached = o.skipCache ? null : await this.opts.cache?.get(url);
-    if (cached?.body != null && this.opts.freshMs > 0 && Date.now() - Date.parse(cached.record.fetchedAt) < this.opts.freshMs) {
+    const freshMs = o.freshMs ?? this.opts.freshMs;
+    if (cached?.body != null && freshMs > 0 && Date.now() - Date.parse(cached.record.fetchedAt) < freshMs) {
       this.stats.cacheHits += 1;
       return { status: cached.record.status, url, text: cached.body, notModified: true };
     }

@@ -45,3 +45,21 @@ describe('legacy Sidearm box score (captioned tables)', () => {
     expect(box.date).toBe('2026-08-14');
   });
 });
+
+describe('legacy Sidearm box score without a MIN column', () => {
+  // Albright, Arcadia, Hartwick and others print "Pos # Player SH SOG G A" with no minutes; every listed player
+  // appeared, and the field players used to be dropped as short rows, leaving keeper-only lineups.
+  const html = fixture('sidearm/albright-w-boxscore-legacy-8114.html');
+  const b = parseLegacyBoxScore(html, 'https://albrightathletics.com/sports/womens-soccer/stats/2026/delaware-valley/boxscore/8114', { ...ctx, host: 'albrightathletics.com', baseUrl: 'https://albrightathletics.com' }, { date: '2026-09-14' });
+  it('keeps every field player and the starter marks', () => {
+    expect(b.home).toMatchObject({ name: 'Albright', score: 1 });
+    expect(b.away).toMatchObject({ name: 'Delaware Valley', score: 0 });
+    expect(b.home.players).toHaveLength(19);
+    expect(b.home.players.filter((p) => p.starter)).toHaveLength(11);
+    expect(b.away.players.filter((p) => p.starter)).toHaveLength(11);
+    expect(b.home.players.every((p) => p.participated)).toBe(true);
+    expect(b.home.players.filter((p) => !p.isGoalie).every((p) => p.minutes == null)).toBe(true);
+    expect(b.home.players.find((p) => p.lastName === 'Kunkle')).toMatchObject({ isGoalie: true, starter: true, gkMinutes: 90, saves: 5, minutes: 90 });
+    expect(b.home.players.filter((p) => p.goals).map((p) => p.lastName)).toEqual(['Hogue-Pellerin']);
+  });
+});

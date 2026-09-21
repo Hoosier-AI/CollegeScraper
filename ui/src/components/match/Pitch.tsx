@@ -4,11 +4,20 @@
 import { Link } from 'react-router-dom';
 import { useHref } from '../../lib/filters';
 import { PlayerAvatar } from '../primitives';
+import { LineupChip, type SideLineup } from './parts';
 
 type Band = 'gk' | 'd' | 'x' | 'm' | 'f';
 const BAND: [Band, RegExp][] = [['gk', /^(GK|G|K)$/i], ['d', /^(D|DEF|CB|LB|RB|WB|FB|B)$/i], ['m', /^(M|MF|MID|CM|DM|AM|CDM|CAM|LM|RM|W|WM)$/i], ['f', /^(F|FW|FWD|ST|CF|A|ATT)$/i]];
-// Distance of each band from the goal line, as a fraction of the half.
-const DEPTH: Record<Band, number> = { gk: 0.08, d: 0.3, x: 0.45, m: 0.58, f: 0.84 };
+const ORDER: Band[] = ['gk', 'd', 'x', 'm', 'f'];
+// The keeper stands near the goal line; the outfield rows present are spread evenly up to the halfway line, so a
+// side with an extra row of unrecognised positions still has room between rows.
+const depths = (present: Band[]): Map<Band, number> => {
+  const out = new Map<Band, number>();
+  const outfield = ORDER.filter((b) => b !== 'gk' && present.includes(b));
+  if (present.includes('gk')) out.set('gk', 0.08);
+  outfield.forEach((b, i) => out.set(b, outfield.length === 1 ? 0.58 : 0.3 + (0.56 * i) / (outfield.length - 1)));
+  return out;
+};
 
 function bandOf(l: any): Band {
   if (l.is_goalie) return 'gk';
@@ -25,23 +34,24 @@ export function placeStarters(starters: any[]): { line: any; x: number; y: numbe
   const gk = rows.get('gk') ?? [];
   if (gk.length > 1) { rows.set('gk', gk.slice(0, 1)); rows.set('d', [...gk.slice(1), ...(rows.get('d') ?? [])]); }
   const out: { line: any; x: number; y: number }[] = [];
+  const DEPTH = depths([...rows.keys()]);
   for (const [b, list] of rows) {
     const sorted = [...list].sort((a, c) => (a.jersey ?? 99) - (c.jersey ?? 99));
     // A very wide row (7+) is split in two staggered lines so tokens do not overlap.
     const chunks = sorted.length >= 7 ? [sorted.slice(0, Math.ceil(sorted.length / 2)), sorted.slice(Math.ceil(sorted.length / 2))] : [sorted];
-    chunks.forEach((chunk, ci) => chunk.forEach((line, i) => out.push({ line, x: (i + 1) / (chunk.length + 1), y: DEPTH[b] + (chunks.length > 1 ? (ci ? 0.08 : -0.08) : 0) })));
+    chunks.forEach((chunk, ci) => chunk.forEach((line, i) => out.push({ line, x: (i + 1) / (chunk.length + 1), y: (DEPTH.get(b) ?? 0.58) + (chunks.length > 1 ? (ci ? 0.11 : -0.11) : 0) })));
   }
   return out;
 }
 
-function Token({ line, x, y, top, crest, crestSeo }: { line: any; x: number; y: number; top: boolean; crest?: string | null; crestSeo?: string | null }) {
+function Token({ line, x, y, top, crest, crestSeo, past }: { line: any; x: number; y: number; top: boolean; crest?: string | null; crestSeo?: string | null; past?: boolean }) {
   const href = useHref();
   const last = String(line.name ?? '').trim().split(/\s+/).slice(-1)[0] ?? '';
   const marks = [line.goals ? { t: `${line.goals} G`, c: 'bg-win text-field-950' } : null, line.assists ? { t: `${line.assists} A`, c: 'bg-chalk-200 text-field-950' } : null, line.rc ? { t: 'RC', c: 'bg-loss text-field-950' } : line.yc ? { t: 'YC', c: 'bg-note text-field-950' } : null].filter(Boolean) as { t: string; c: string }[];
   const body = (
     <>
       <span className="relative block">
-        <PlayerAvatar src={line.headshot_url} name={line.name} size={40} crest={crest} crestSeo={crestSeo} />
+        <PlayerAvatar src={line.headshot_url} name={line.name} size={40} crest={crest} crestSeo={crestSeo} ring={past ? 'past' : undefined} />
         <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-[10px] font-semibold text-chalk-100 tnum shadow" aria-hidden>{line.jersey ?? ''}</span>
         {marks.length > 0 && <span className="absolute -left-1 -top-1 flex flex-col gap-0.5" aria-hidden>{marks.map((m) => <span key={m.t} className={`rounded px-1 text-[9px] font-semibold leading-3 ${m.c}`}>{m.t}</span>)}</span>}
       </span>
@@ -49,17 +59,21 @@ function Token({ line, x, y, top, crest, crestSeo }: { line: any; x: number; y: 
     </>
   );
   const style = { left: `${x * 100}%`, top: `${(top ? y / 2 : 1 - y / 2) * 100}%` };
-  const cls = 'absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2';
+  const cls = `absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2 ${past ? 'opacity-75' : ''}`;
   const label = `${line.jersey ?? ''} ${line.name}${marks.length ? `, ${marks.map((m) => m.t).join(', ')}` : ''}`;
   return line.player_id ? <Link to={href(`/players/${line.player_id}`)} className={cls} style={style} aria-label={label}>{body}</Link> : <span className={cls} style={style} aria-label={label}>{body}</span>;
 }
 
-export function Pitch({ home, away, homeName, awayName, homeCrest, awayCrest }: { home: any | null; away: any | null; homeName: string | null; awayName: string | null; homeCrest?: { src?: string | null; seo?: string | null }; awayCrest?: { src?: string | null; seo?: string | null } }) {
-  const hs = home ? placeStarters(home.starters) : [];
-  const as = away ? placeStarters(away.starters) : [];
+export function Pitch({ home, away, homeName, awayName }: { home: SideLineup; away: SideLineup; homeName: string | null; awayName: string | null }) {
+  // Only a lineup with starters is drawn; a box score that lists who played without marking starters keeps its
+  // half empty (the list beside the pitch carries the players) rather than guessing an XI.
+  const drawn = (s: SideLineup) => (s.lineup && (s.status === 'match' || s.status === 'past') ? placeStarters(s.lineup.starters) : []);
+  const hs = drawn(home), as = drawn(away);
+  const halfNote = (s: SideLineup) => (s.status === 'none' ? 'No lineup yet' : s.status === 'no_starters' ? 'Starters not marked in the box score' : null);
+  const label = (s: SideLineup) => (s.status === 'past' ? 'past lineup' : s.status === 'match' ? 'starting XI' : 'no lineup');
   return (
     <figure className="mx-auto w-full max-w-md">
-      <div className="relative w-full overflow-hidden rounded-xl border border-field-700" style={{ aspectRatio: '68 / 105', background: '#123b26' }} role="img" aria-label={`Starting lineups: ${awayName ?? 'away'} at the top, ${homeName ?? 'home'} at the bottom`}>
+      <div className="relative w-full overflow-hidden rounded-xl border border-field-700" style={{ aspectRatio: '68 / 105', background: '#123b26' }} role="img" aria-label={`${awayName ?? 'Away'} (${label(away)}) at the top, ${homeName ?? 'home'} (${label(home)}) at the bottom`}>
         <svg viewBox="0 0 68 105" className="absolute inset-0 h-full w-full" aria-hidden>
           <g fill="none" stroke="#2c6b46" strokeWidth="0.6">
             <rect x="1" y="1" width="66" height="103" />
@@ -72,11 +86,12 @@ export function Pitch({ home, away, homeName, awayName, homeCrest, awayCrest }: 
           </g>
           {[8, 20, 32, 44, 56, 68, 80, 92].map((y) => <rect key={y} x="1" y={y} width="66" height="6" fill="#ffffff" opacity="0.025" />)}
         </svg>
-        <span className="absolute left-2 top-2 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{awayName ?? 'Away'}</span>
-        <span className="absolute bottom-2 left-2 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{homeName ?? 'Home'}</span>
-        {as.map((p) => <Token key={`a-${p.line.jersey}-${p.line.name}`} line={p.line} x={p.x} y={p.y} top crest={awayCrest?.src} crestSeo={awayCrest?.seo} />)}
-        {hs.map((p) => <Token key={`h-${p.line.jersey}-${p.line.name}`} line={p.line} x={p.x} y={p.y} top={false} crest={homeCrest?.src} crestSeo={homeCrest?.seo} />)}
-        {!home && !away && <span className="absolute inset-0 flex items-center justify-center text-sm text-chalk-200">No lineups yet</span>}
+        <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{awayName ?? 'Away'}<LineupChip status={away.status} past={away.past} compact /></span>
+        <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{homeName ?? 'Home'}<LineupChip status={home.status} past={home.past} compact /></span>
+        {as.map((p) => <Token key={`a-${p.line.jersey}-${p.line.name}`} line={p.line} x={p.x} y={p.y} top crest={away.crest} crestSeo={away.crestSeo} past={away.status === 'past'} />)}
+        {hs.map((p) => <Token key={`h-${p.line.jersey}-${p.line.name}`} line={p.line} x={p.x} y={p.y} top={false} crest={home.crest} crestSeo={home.crestSeo} past={home.status === 'past'} />)}
+        {halfNote(away) && <span className="absolute inset-x-0 top-0 flex h-1/2 items-center justify-center px-6 text-center text-sm text-chalk-200">{halfNote(away)}</span>}
+        {halfNote(home) && <span className="absolute inset-x-0 bottom-0 flex h-1/2 items-center justify-center px-6 text-center text-sm text-chalk-200">{halfNote(home)}</span>}
       </div>
     </figure>
   );

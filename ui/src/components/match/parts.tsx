@@ -85,27 +85,47 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
 
 const POS_GROUPS: [string, RegExp][] = [['Goalkeeper', /^(GK|G)$/i], ['Defenders', /^(D|DEF|CB|LB|RB)$/i], ['Midfielders', /^(M|MF|MID|CM|DM|AM)$/i], ['Forwards', /^(F|FW|FWD|ST|W)$/i]];
 
-function Line({ l }: { l: any }) {
+/** What a side's lineup on this page is: this match's XI, this match's players with no starters marked, a past
+ * match's XI carried over, or nothing. `past` carries the earlier match it came from. */
+export type LineupStatus = 'match' | 'no_starters' | 'past' | 'none';
+export interface SideLineup { lineup: any | null; status: LineupStatus; past?: { opponent: string | null; game_date: string } | null; crest?: string | null; crestSeo?: string | null }
+
+/** The status chip shown beside a side's name, on the pitch and above the list. */
+export function LineupChip({ status, past, compact }: { status: LineupStatus; past?: { opponent: string | null; game_date: string } | null; compact?: boolean }) {
+  if (status === 'match') return <span className="inline-flex items-center rounded bg-pitch-500/20 px-1.5 py-0.5 text-2xs font-medium text-pitch-300">Starting XI</span>;
+  if (status === 'past') return <span className="inline-flex items-center rounded bg-note/20 px-1.5 py-0.5 text-2xs font-medium text-note">{compact ? 'Past lineup' : `Past lineup · vs ${past?.opponent ?? '?'}, ${past ? fmt.day(past.game_date) : ''}`}</span>;
+  if (status === 'no_starters') return <span className="inline-flex items-center rounded bg-field-700 px-1.5 py-0.5 text-2xs font-medium text-chalk-300">Starters not marked</span>;
+  return <span className="inline-flex items-center rounded bg-field-700 px-1.5 py-0.5 text-2xs font-medium text-chalk-400">No lineup yet</span>;
+}
+
+function Line({ l, crest, crestSeo, past }: { l: any; crest?: string | null; crestSeo?: string | null; past?: boolean }) {
   const href = useHref();
   const glyphs = [l.goals ? `${l.goals} G` : null, l.assists ? `${l.assists} A` : null, l.yc ? `${l.yc} YC` : null, l.rc ? `${l.rc} RC` : null, l.is_goalie && l.saves != null ? `${l.saves} SV` : null].filter(Boolean).join(', ');
   return (
     <li className="flex items-center gap-2 px-3 py-1.5 text-sm">
+      <PlayerAvatar src={l.headshot_url} name={l.name} size={26} crest={crest} crestSeo={crestSeo} ring={past ? 'past' : undefined} />
       <span className="w-6 text-right text-xs text-chalk-500 tnum">{l.jersey ?? ''}</span>
       {l.player_id ? <Link to={href(`/players/${l.player_id}`)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{l.name}</Link> : <span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{l.name}</span>}
+      {l.position && <span className="hidden text-2xs text-chalk-500 sm:inline">{l.position}</span>}
       {glyphs && <span className="text-xs text-chalk-300 tnum">{glyphs}</span>}
       <span className="w-10 text-right text-xs text-chalk-500 tnum">{l.minutes != null ? `${l.minutes}′` : ''}</span>
     </li>
   );
 }
 
-export function LineupColumn({ title, lineup, note, benchOnly }: { title: string; lineup: any; note?: string; benchOnly?: boolean }) {
-  if (!lineup) return <div className="space-y-2"><h3 className="text-sm font-semibold text-chalk-100">{title}</h3><EmptyState title="No lineup yet" body="Lineups arrive with the box score." /></div>;
+export function LineupColumn({ title, side, benchOnly }: { title: string; side: SideLineup; benchOnly?: boolean }) {
+  const { lineup, status, past, crest, crestSeo } = side;
+  const head = <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-chalk-100">{title}<LineupChip status={status} past={past} /></h3>;
+  if (!lineup) return <div className="space-y-2">{head}<EmptyState title="No lineup yet" body={status === 'none' ? 'Lineups arrive with the box score.' : ''} /></div>;
+  const row = (l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} crest={crest} crestSeo={crestSeo} past={status === 'past'} />;
   if (benchOnly) return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-chalk-100">{title}{note && <span className="ml-2 text-xs font-normal text-chalk-500">{note}</span>}</h3>
+      {head}
       <div className="frame divide-y divide-field-700">
-        <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Substitutes used</div>{lineup.subs.length ? <ul>{lineup.subs.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul> : <p className="px-3 pb-2 text-sm text-chalk-500">None</p>}</div>
-        {lineup.dnp.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Did not play</div><ul>{lineup.dnp.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul></div>}
+        {status === 'no_starters'
+          ? <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Played</div><ul>{lineup.subs.map(row)}</ul></div>
+          : <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Substitutes used</div>{lineup.subs.length ? <ul>{lineup.subs.map(row)}</ul> : <p className="px-3 pb-2 text-sm text-chalk-500">None</p>}</div>}
+        {lineup.dnp.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Did not play</div><ul>{lineup.dnp.map(row)}</ul></div>}
       </div>
     </div>
   );
@@ -114,13 +134,13 @@ export function LineupColumn({ title, lineup, note, benchOnly }: { title: string
   const rest = lineup.starters.filter((l: any) => !placed.has(l));
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-chalk-100">{title}{note && <span className="ml-2 text-xs font-normal text-chalk-500">{note}</span>}</h3>
+      {head}
       <div className="frame divide-y divide-field-700">
         {[...groups, { label: 'Starters', rows: rest }].filter((g) => g.rows.length).map((g) => (
-          <div key={g.label}><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">{g.label}</div><ul>{g.rows.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul></div>
+          <div key={g.label}><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">{g.label}</div><ul>{g.rows.map(row)}</ul></div>
         ))}
-        {lineup.subs.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Substitutes used</div><ul>{lineup.subs.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul></div>}
-        {lineup.dnp.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Did not play</div><ul>{lineup.dnp.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul></div>}
+        {lineup.subs.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">{status === 'no_starters' ? 'Played' : 'Substitutes used'}</div><ul>{lineup.subs.map(row)}</ul></div>}
+        {lineup.dnp.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Did not play</div><ul>{lineup.dnp.map(row)}</ul></div>}
       </div>
     </div>
   );

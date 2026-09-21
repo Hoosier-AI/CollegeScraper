@@ -54,6 +54,18 @@ export function findWmtStaff(root: unknown): Record<string, unknown>[] {
   return [];
 }
 
+/** A WMT photo object: `url` is the full-size imgproxy render; `srcset` lists smaller renders ("… 480w, … 768w"). */
+function photoUrl(v: unknown): string | null {
+  if (!isObj(v)) return null;
+  const srcset = str(v.srcset);
+  if (srcset) {
+    const candidates = srcset.split(',').map((e) => e.trim().split(/\s+/)).filter((e) => e[0]).map((e) => ({ url: e[0]!, w: parseInt(e[1] ?? '', 10) || Infinity }));
+    const smallest = candidates.filter((c) => c.w >= 240).sort((a, b) => a.w - b.w)[0] ?? candidates.sort((a, b) => a.w - b.w)[0];
+    if (smallest) return smallest.url;
+  }
+  return str(v.url);
+}
+
 function toPlayer(rec: Record<string, unknown>, rosterUrl: string): RosterPlayer | null {
   const p = isObj(rec.player) ? rec.player : {};
   const firstName = cleanName(str(p.first_name) ?? '');
@@ -78,7 +90,8 @@ function toPlayer(rec: Record<string, unknown>, rosterUrl: string): RosterPlayer
     previousSchool: str(p.previous_school),
     major: str(p.major),
     isCaptain: rec.is_captain === true,
-    headshotUrl: null,
+    // The roster entry's photo is this season's headshot; the player's own photo is an older one.
+    headshotUrl: photoUrl(rec.photo) ?? photoUrl(p.photo) ?? photoUrl(p.master_photo),
     bioUrl: slug ? `${rosterUrl.replace(/\/roster.*$/, '/roster')}/${slug}` : null,
   };
 }
@@ -87,7 +100,7 @@ function toCoach(rec: Record<string, unknown>): Coach | null {
   const name = cleanName([str(rec.first_name), str(rec.last_name)].filter(Boolean).join(' '));
   if (!name) return null;
   const title = str(rec.position);
-  return { name, title, isHead: /head coach/i.test(title ?? ''), headshotUrl: null };
+  return { name, title, isHead: /head coach/i.test(title ?? ''), headshotUrl: photoUrl(rec.photo) ?? photoUrl(isObj(rec.staff_member) ? rec.staff_member.photo : null) };
 }
 
 export function parseWmtRoster(html: string, sourceUrl: string): Roster {

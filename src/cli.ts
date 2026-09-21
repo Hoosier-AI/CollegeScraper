@@ -36,6 +36,7 @@ for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-
     .option('--platforms <list>', 'detect-sites: re-probe only schools with these platforms (comma list)')
     .option('--program-status <list>', 'detect-sites: only programs whose site status is in this comma list (unknown,failed,not_found)')
     .option('--only-never-synced', 'sync-site: only programs whose roster was never synced')
+    .option('--reparse', 'sync-site: re-read every box score from the stored fetch bodies (after a parser fix), no new requests')
     .option('--skip-categories', 'refresh-rankings: polls only, no NCAA.com category ranks')
     .action(async (opts) => {
       const p = paramsFrom(opts);
@@ -47,6 +48,7 @@ for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-
       if (opts.platforms) p.platforms = String(opts.platforms).split(',');
       if (opts.programStatus) p.program_status = String(opts.programStatus).split(',');
       if (opts.onlyNeverSynced) p.only_never_synced = true;
+      if (opts.reparse) p.reparse = true;
       if (opts.skipCategories) p.categories = false;
       const counters = await runInline(getDb(), job, p);
       console.log(JSON.stringify(counters, null, 2));

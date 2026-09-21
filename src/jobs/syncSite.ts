@@ -9,13 +9,13 @@ import { currentSeason, inSeason } from './seasons.js';
 import { swapBoxSides } from '../normalize/boxScore.js';
 import { setMembership, setKnownConferences, buildAliasIndex, makeResolver, isPlaceholderOpponent, isExhibitionName, matchAmongMembers, type AliasIndex } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
-import type { SiteContext } from '../model.js';
+import type { Fetcher, SiteContext } from '../model.js';
 import { log } from '../log.js';
 
 type Stage = 'roster' | 'schedule' | 'stats' | 'boxscores' | 'bios';
 const ALL_STAGES: Stage[] = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
-/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean } */
+/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean } */
 /** gender_division → first NCAA-listed contest date of the season (written by reconcile-games). */
 let seasonOpeners: Record<string, string> = {};
 
@@ -130,9 +130,12 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
   }
 
   if (stages.has('boxscores')) {
-    // Skip games whose site box score was already stored unless forced.
+    // Skip games whose site box score was already stored unless forced. `reparse` re-reads every box score from the
+    // stored fetch bodies (a parser fix applied to pages already crawled) without asking the school again.
+    const reparse = !!ctx.params.reparse;
+    const boxFetcher: Fetcher = reparse ? { get: (u, o) => fetcher.get(u, { ...o, freshMs: 400 * 86400_000 }) } : fetcher;
     const done = new Set<string>();
-    if (!ctx.params.force && boxScoreUrls.length) {
+    if (!ctx.params.force && !reparse && boxScoreUrls.length) {
       const rows = await selectAll<{ id: string; site_fetched_at: string | null }>(db, 'college_games', 'id,site_fetched_at', (q) => q.in('id', boxScoreUrls.map((b) => b.gameId)));
       for (const r of rows) if (r.site_fetched_at) done.add(r.id);
     }
@@ -146,7 +149,7 @@ async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>,
         // an NCAA-linked fixture here would undo the orientation the scoreboard sweep just set (Spalding at Aurora).
         // For a linked game the box itself is turned round instead, so each side's stats and score land on the right
         // program (Marietta 3 at Piedmont 2 was stored as a Marietta loss when the box was paired positionally).
-        let box = await adapter.boxScore(fetcher, site, b.url, { date: b.date });
+        let box = await adapter.boxScore(boxFetcher, site, b.url, { date: b.date });
         const game = games.find((g) => g.id === b.gameId);
         if (game?.home_program_id && game.away_program_id) {
           const sides = [{ id: game.home_program_id, names: namesOf(game.home_program_id) }, { id: game.away_program_id, names: namesOf(game.away_program_id) }];

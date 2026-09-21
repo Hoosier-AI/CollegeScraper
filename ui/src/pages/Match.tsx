@@ -7,7 +7,7 @@ import { useHref } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
-import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline } from '../components/match/parts';
+import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
 import { Pitch } from '../components/match/Pitch';
 
 type Src = 'site' | 'ncaa';
@@ -43,11 +43,22 @@ export default function Match() {
   const statSrc: Src | null = src === 'site' || src === 'ncaa' ? (src as Src) : truth ?? sources[0] ?? null;
   const teamRow = (pid: string | null, s: Src | null) => (s ? team.find((t) => t.program_id === pid && t.source === s) ?? null : null);
   const evSource = truth ?? (events.some((e) => e.source === 'site') ? 'site' : 'ncaa');
+  // Each side's lineup is this match's own, or explicitly a past one; the API never swaps one for the other.
+  const sideLineup = (side: 'home' | 'away'): SideLineup => {
+    const s = sides[side]; const t = g[side];
+    const status: SideLineup['status'] = s?.lineup_status ?? (s?.lineup ? (s.lineup.starters?.length ? 'match' : 'no_starters') : s?.last_lineup ? 'past' : 'none');
+    return { lineup: status === 'past' ? s.last_lineup : s?.lineup ?? null, status, past: status === 'past' ? { opponent: s.last_lineup.opponent ?? null, game_date: s.last_lineup.game_date } : null, crest: t.logo, crestSeo: t.seo };
+  };
+  const homeLu = sideLineup('home'), awayLu = sideLineup('away');
+  const bothPast = homeLu.status !== 'match' && homeLu.status !== 'no_starters' && awayLu.status !== 'match' && awayLu.status !== 'no_starters' && (homeLu.status === 'past' || awayLu.status === 'past');
+  const pastSides = [homeLu.status === 'past' ? g.home.name : null, awayLu.status === 'past' ? g.away.name : null].filter(Boolean) as string[];
+  const noStarterSides = [homeLu.status === 'no_starters' ? g.home.name : null, awayLu.status === 'no_starters' ? g.away.name : null].filter(Boolean) as string[];
+  const pastNote = (lu: SideLineup, name: string | null) => (lu.status === 'past' && lu.past ? `${name}'s lineup from their last match (vs ${lu.past.opponent ?? '?'}, ${fmt.day(lu.past.game_date)})` : null);
   const tabs = [
-    ...(played ? [{ id: 'summary' as Tab, label: 'Summary' }, { id: 'lineups' as Tab, label: 'Lineups' }, { id: 'stats' as Tab, label: 'Stats' }] : []),
+    ...(played ? [{ id: 'summary' as Tab, label: 'Summary' }, { id: 'lineups' as Tab, label: bothPast ? 'Past lineups' : 'Lineups' }, { id: 'stats' as Tab, label: 'Stats' }] : []),
     { id: 'h2h' as Tab, label: 'Head-to-head' },
     { id: 'preview' as Tab, label: played ? 'Key players' : 'Preview' },
-    ...(played ? [] : [{ id: 'lineups' as Tab, label: 'Last lineups' }]),
+    ...(played ? [] : [{ id: 'lineups' as Tab, label: 'Past lineups' }]),
     ...(admin ? [{ id: 'raw' as Tab, label: 'Raw' }] : []),
   ];
   const pcols: Column<any>[] = [
@@ -89,24 +100,31 @@ export default function Match() {
 
       {tab === 'lineups' && (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {!played ? <Note>The match has not kicked off; these are each side's lineups from their last match.</Note> : <Note>Rows follow the box score's positions; players in a row are spread evenly, not placed by role.</Note>}
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              {pastSides.length > 0 && (
+                <Note tone="warn">
+                  {played ? `Lineup not published yet for ${pastSides.join(' and ')}.` : 'The match has not kicked off, so no lineup is out yet.'}{' '}
+                  Showing {[pastNote(homeLu, g.home.name), pastNote(awayLu, g.away.name)].filter(Boolean).join(' and ')}.
+                </Note>
+              )}
+              {noStarterSides.length > 0 && <Note>The box score does not mark starters for {noStarterSides.join(' or ')}; the players who appeared are listed.</Note>}
+              {pastSides.length === 0 && noStarterSides.length === 0 && (homeLu.status === 'match' || awayLu.status === 'match') && <Note>Starting lineups from this match's box score. Rows follow its positions; players in a row are spread evenly, not placed by role.</Note>}
+              {homeLu.status === 'none' && awayLu.status === 'none' && <Note>No lineup for this match yet. Lineups arrive with the box score.</Note>}
+            </div>
             <SegmentedControl label="Lineup view" size="sm" value={view as 'pitch' | 'list'} onChange={setView} options={[{ value: 'pitch', label: 'Pitch' }, { value: 'list', label: 'List' }]} />
           </div>
-          {(() => {
-            const lu = (side: 'home' | 'away') => { const s = sides[side]; return { lineup: s?.lineup ?? s?.last_lineup ?? null, note: s && !s.lineup && s.last_lineup ? `vs ${s.last_lineup.opponent ?? '?'}, ${fmt.day(s.last_lineup.game_date)}` : undefined }; };
-            const h = lu('home'), a = lu('away');
-            if (view === 'list') return <div className="grid gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} lineup={h.lineup} note={h.note} /><LineupColumn title={g.away.name ?? 'Away'} lineup={a.lineup} note={a.note} /></div>;
-            return (
+          {view === 'list'
+            ? <div className="grid gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
+            : (
               <div className="grid gap-6 lg:grid-cols-[minmax(0,28rem)_1fr]">
-                <Pitch home={h.lineup} away={a.lineup} homeName={g.home.name} awayName={g.away.name} homeCrest={{ src: g.home.logo, seo: g.home.seo }} awayCrest={{ src: g.away.logo, seo: g.away.seo }} />
+                <Pitch home={homeLu} away={awayLu} homeName={g.home.name} awayName={g.away.name} />
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
-                  <LineupColumn title={g.home.name ?? 'Home'} lineup={h.lineup} note={h.note} benchOnly />
-                  <LineupColumn title={g.away.name ?? 'Away'} lineup={a.lineup} note={a.note} benchOnly />
+                  <LineupColumn title={g.home.name ?? 'Home'} side={homeLu} benchOnly />
+                  <LineupColumn title={g.away.name ?? 'Away'} side={awayLu} benchOnly />
                 </div>
               </div>
-            );
-          })()}
+            )}
           {played && players.length > 0 && (
             <Section title="Full player stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
               {[g.home.program_id, g.away.program_id].map((pid) => (

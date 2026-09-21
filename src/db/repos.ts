@@ -7,6 +7,7 @@ import { parseClassYear } from '../normalize/classYear.js';
 import { normalizePosition } from '../normalize/position.js';
 import { heightToCm } from '../normalize/height.js';
 import { parseHometown } from '../normalize/hometown.js';
+import { cleanHeadshotUrl } from '../normalize/headshots.js';
 import { matchStatLine, resolveRoster, type KnownPlayerSeason, type StatLineCandidate } from '../identity/resolver.js';
 import { log } from '../log.js';
 
@@ -108,7 +109,7 @@ export async function writeRoster(db: Db, programId: string, season: number, hos
     const identity = {
       first_name: cleanName(p.firstName), last_name: cleanName(p.lastName), display_name: displayName(p.firstName, p.lastName), name_key: key,
       hometown_city: home.city, hometown_region: home.region, hometown_country: home.country, high_school: p.highSchool,
-      headshot_url: p.headshotUrl, bio_url: p.bioUrl,
+      headshot_url: cleanHeadshotUrl(p.headshotUrl), bio_url: p.bioUrl,
     };
     if (!playerId) {
       const { data, error } = await db.from('college_players').insert({ ...identity, site_player_ids: host && p.sitePlayerId ? { [host]: p.sitePlayerId } : {} }).select('id').single();
@@ -130,7 +131,7 @@ export async function writeRoster(db: Db, programId: string, season: number, hos
       player_id: playerId, program_id: programId, season, jersey: p.jersey, position: normalizePosition(p.positionRaw), position_raw: p.positionRaw,
       class_year: cls.year, class_raw: cls.raw, is_redshirt: cls.redshirt, is_grad: cls.grad, height_cm: heightToCm(p.heightRaw), weight_lb: p.weightLb,
       hometown_raw: p.hometownRaw, high_school: p.highSchool, previous_school: p.previousSchool, major: p.major, is_captain: p.isCaptain,
-      headshot_url: p.headshotUrl, bio_url: p.bioUrl, source, confidence: r.playerId ? r.confidence : 1,
+      headshot_url: cleanHeadshotUrl(p.headshotUrl), bio_url: p.bioUrl, source, confidence: r.playerId ? r.confidence : 1,
     };
     const { data, error } = await db.from('college_player_seasons').upsert(row, { onConflict: 'player_id,season,program_id' }).select('id').single();
     if (error) throw new Error(`upsert player_season ${key}: ${error.message}`);
@@ -148,7 +149,7 @@ export async function writeCoaches(db: Db, programId: string, season: number, co
     const { data: existing } = await db.from('college_coaches').select('id').eq('name_key', key).limit(1).maybeSingle();
     let coachId = existing?.id as string | undefined;
     if (!coachId) {
-      const { data, error } = await db.from('college_coaches').insert({ name: cleanName(c.name), name_key: key, headshot_url: c.headshotUrl }).select('id').single();
+      const { data, error } = await db.from('college_coaches').insert({ name: cleanName(c.name), name_key: key, headshot_url: cleanHeadshotUrl(c.headshotUrl) }).select('id').single();
       if (error) { log.warn({ coach: c.name, err: error.message }, 'coach insert failed'); continue; }
       coachId = data.id as string;
     }

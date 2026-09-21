@@ -50,17 +50,20 @@ export function TeamLogo({ src, name, seo, size = 24, fallback = 'initials', chi
   return <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden ${chip ? 'rounded bg-white' : ''}`} style={{ width: size, height: size, padding: chip ? Math.max(1, Math.round(size / 12)) : 0 }}><img src={url} alt="" width={size} height={size} className="h-full w-full object-contain" onError={() => setBroken(url)} loading="lazy" /></span>;
 }
 
-/** PrestoSports photos sit behind a bot challenge and cannot be hotlinked; showing them would leave broken images. */
-export const hotlinkable = (url: string | null | undefined): boolean => !!url && !/prestosports\.com|\/sports\/[a-z]+\/\d{4}-\d{2}\/photos\//i.test(url);
+/** PrestoSports photos (any `/sports/…` path, or its CDN) sit behind a bot challenge and cannot be hotlinked; placeholders
+ * (spacer.gif, default-headshot) would render as blanks. Same rule as src/normalize/headshots.ts. */
+export const hotlinkable = (url: string | null | undefined): boolean => !!url && !/spacer\.gif|default[-_]?headshot|no[-_]?photo|silhouette|\/images\/setup\/|\/images\/logos\/|\.gif(\?|$)/i.test(url) && !/prestosports\.com|^https?:\/\/[^/]+\/sports\//i.test(url);
 
-/** A player's photo in a circle, or initials on the team's chip when there is no usable photo. */
-export function PlayerAvatar({ src, name, size = 24, crest, crestSeo }: { src?: string | null; name?: string | null; size?: number; crest?: string | null; crestSeo?: string | null }) {
+/** A player's photo in a circle, or the team's crest, or initials when there is no usable photo. `ring="past"` marks a
+ * lineup carried over from an earlier match. */
+export function PlayerAvatar({ src, name, size = 24, crest, crestSeo, ring }: { src?: string | null; name?: string | null; size?: number; crest?: string | null; crestSeo?: string | null; ring?: 'past' }) {
   const [broken, setBroken] = useState(false);
   const usable = hotlinkable(src) && !broken;
-  if (usable) return <img src={src!} alt="" width={size} height={size} className="shrink-0 rounded-full bg-field-800 object-cover" style={{ width: size, height: size }} onError={() => setBroken(true)} loading="lazy" />;
-  if (crest || crestSeo) return <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}><TeamLogo src={crest} seo={crestSeo} name={name} size={size} /></span>;
+  const ringCls = ring === 'past' ? 'outline outline-2 outline-dashed outline-note/80 outline-offset-1' : '';
+  if (usable) return <img src={src!} alt="" width={size} height={size} className={`shrink-0 rounded-full bg-field-800 object-cover ${ringCls}`} style={{ width: size, height: size }} onError={() => setBroken(true)} loading="lazy" />;
+  if (crest || crestSeo) return <span className={`relative inline-flex shrink-0 rounded ${ringCls}`} style={{ width: size, height: size }}><TeamLogo src={crest} seo={crestSeo} name={name} size={size} /></span>;
   const initials = (name ?? '').split(/\s+/).filter(Boolean).map((w) => w[0]!.toUpperCase()).slice(0, 2).join('') || '?';
-  return <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full bg-field-800 font-medium text-chalk-400" style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size / 2.6)) }}>{initials}</span>;
+  return <span aria-hidden className={`inline-flex shrink-0 items-center justify-center rounded-full bg-field-800 font-medium text-chalk-400 ${ringCls}`} style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size / 2.6)) }}>{initials}</span>;
 }
 
 /* ---------- state ---------- */
@@ -238,7 +241,9 @@ export function Figure({ label, value, sub, big }: { label: string; value: React
   );
 }
 
-export function Note({ children }: { children: ReactNode }) {
+/** `warn` is for a caveat the reader must not miss, such as a lineup that is not this match's. */
+export function Note({ children, tone }: { children: ReactNode; tone?: 'warn' }) {
+  if (tone === 'warn') return <p className="flex items-start gap-2 rounded-md border border-note/40 bg-note/10 px-3 py-2 text-sm text-chalk-100" role="status"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-note" aria-hidden /><span>{children}</span></p>;
   return <p className="flex items-start gap-2 text-xs text-chalk-400"><Info size={14} className="mt-0.5 shrink-0" /><span>{children}</span></p>;
 }
 

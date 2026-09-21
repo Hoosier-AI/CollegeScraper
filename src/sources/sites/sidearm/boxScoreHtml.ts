@@ -87,16 +87,20 @@ export function parseLegacyBoxScore(html: string, url: string, ctx: SiteContext,
     t.periodLines.sort((a, b) => a.period - b.period);
   }
 
-  // Player tables: "<Team> - Player Stats" then "<Team> - Goalie Statistics".
+  // Player tables: "<Team> - Player Stats" then "<Team> - Goalie Statistics". The columns are
+  // "Pos # Player SH SOG G A" with or without a trailing "MIN" (Albright, Arcadia and others omit it); the table only
+  // lists players who appeared, under "Starters" and "Substitutes" group rows.
   const players: Record<'home' | 'away', PlayerStatLine[]> = { home: [], away: [] };
   for (const t of tabs.filter((x) => /player stats/i.test(x.caption))) {
     const side = sideOf(t.caption.replace(/\s*-\s*player stats.*$/i, ''));
     if (!side) continue;
+    const hasMinutes = /^min/i.test(t.rows[0]?.[7] ?? '');
     let starter = false;
     for (const r of t.rows.slice(1)) {
       if (r.length === 1) { starter = /starter/i.test(r[0]!); continue; }
-      if (r.length < 8) continue;
-      const [pos, num, name, sh, sog, g, a, min] = r as [string, string, string, string, string, string, string, string];
+      if (r.length < 7) continue;
+      const [pos, num, name, sh, sog, g, a] = r as [string, string, string, string, string, string, string];
+      const min = hasMinutes ? r[7] ?? '' : '';
       const cleanName = collapse(name.replace(/^\d+\s+/, ''));
       if (!cleanName || /^totals?$/i.test(cleanName) || /^team$/i.test(cleanName)) continue;
       const { firstName, lastName } = splitName(cleanName);
@@ -106,7 +110,7 @@ export function parseLegacyBoxScore(html: string, url: string, ctx: SiteContext,
       line.shots = int(sh); line.sog = int(sog); line.goals = int(g); line.assists = int(a); line.minutes = int(min);
       line.points = line.goals != null || line.assists != null ? (line.goals ?? 0) * 2 + (line.assists ?? 0) : null;
       line.shotsOffTarget = line.shots != null && line.sog != null ? line.shots - line.sog : null;
-      line.participated = (line.minutes ?? 0) > 0 || starter;
+      line.participated = !hasMinutes || (line.minutes ?? 0) > 0 || starter;
       line.isGoalie = /^gk/i.test(pos);
       players[side].push(line);
     }

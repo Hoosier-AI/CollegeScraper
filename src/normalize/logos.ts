@@ -4,8 +4,7 @@ export const ncaaLogoUrl = (seo: string | null | undefined): string | null => (s
 /** A stored logo, else NCAA's by slug, else nothing. */
 export const logoSrc = (src: string | null | undefined, seo?: string | null): string | null => src || ncaaLogoUrl(seo);
 
-/** PrestoSports photos redirect to a CDN behind a bot challenge that refuses hotlinks; showing them yields broken images. */
-export const hotlinkable = (url: string | null | undefined): boolean => !!url && !/prestosports\.com|\/sports\/[a-z]+\/\d{4}-\d{2}\/photos\//i.test(url);
+export { hotlinkable } from './headshots.js';
 
 /** Team category rows only (individual rows carry a player id or a three-part subject), best rank per label. */
 export function teamCategories<T extends { label?: string | null; poll: string; rank: number; value: unknown; week_of: string; player_season_id?: string | null; subject_name?: string | null }>(rows: T[]): { category: string; rank: number; value: unknown; week_of: string }[] {

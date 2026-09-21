@@ -20,6 +20,11 @@ describe('wmt roster', () => {
     expect(roster.players.every((p) => p.firstName && p.lastName)).toBe(true);
     expect(roster.players.filter((p) => p.jersey != null).length).toBeGreaterThan(20);
   });
+  it('reads headshots from the roster photo, smallest useful render first', () => {
+    expect(roster.players.every((p) => p.headshotUrl?.startsWith('https://virginiasports.com/imgproxy/'))).toBe(true);
+    const gk = roster.players.find((p) => p.lastName === 'Tunks')!;
+    expect(gk.headshotUrl).toMatch(/rs:fit:480:/);
+  });
   it('reads the staff list', () => {
     expect(roster.coaches.length).toBeGreaterThanOrEqual(1);
     expect(roster.coaches.every((c) => c.name)).toBe(true);

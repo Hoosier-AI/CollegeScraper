@@ -3,6 +3,7 @@ import type { Db } from '../db/client.js';
 import { selectAll, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
 import { teamCategories } from '../normalize/logos.js';
+import { cleanHeadshotUrl } from '../normalize/headshots.js';
 
 export const PLAYER_STATS = ['goals', 'assists', 'points', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
 export const TEAM_STATS = ['w', 'l', 't', 'gp', 'ppg', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'gf_home', 'gf_away', 'ga_home', 'ga_away', 'gf_1h', 'gf_2h', 'ga_1h', 'ga_2h', 'shots', 'sog', 'shots_pg', 'sog_pg', 'sog_pct', 'shots_per_goal', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'pk_goals', 'pk_att', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t', 'vs_ranked_w', 'vs_ranked_l', 'vs_ranked_t', 'last5_gf', 'last5_ga', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'div_pct_gf_pg', 'div_pct_ga_pg', 'div_pct_shots_pg'];
@@ -390,10 +391,12 @@ export async function gamesByDate(db: Db, f: MatchesFilter) {
 
 export interface LineupLine { player_id: string | null; player_season_id: string | null; headshot_url: string | null; name: string; jersey: number | null; position: string | null; minutes: number | null; goals: number | null; assists: number | null; shots: number | null; yc: number | null; rc: number | null; is_goalie: boolean; saves: number | null; goals_allowed: number | null; starter: boolean; participated: boolean; suppress: boolean }
 export interface Lineup { source: 'site' | 'ncaa'; starters: LineupLine[]; subs: LineupLine[]; dnp: LineupLine[]; keeper: LineupLine | null }
+/** match: this game's box score names starters · no_starters: its box score only lists who played · past: no box score yet, `last_lineup` is the side's latest · none: nothing to show */
+export type LineupStatus = 'match' | 'no_starters' | 'past' | 'none';
 
 const POS_ORDER: Record<string, number> = { GK: 0, G: 0, D: 1, DEF: 1, M: 2, MF: 2, MID: 2, F: 3, FW: 3, FWD: 3 };
 function buildLineup(lines: any[], source: 'site' | 'ncaa'): Lineup {
-  const map = (r: any): LineupLine => ({ player_id: r.college_player_seasons?.player_id ?? null, player_season_id: r.player_season_id ?? null, headshot_url: r.college_player_seasons?.headshot_url ?? null, name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(), jersey: r.jersey ?? null, position: r.position ?? null, minutes: r.minutes ?? null, goals: r.goals ?? null, assists: r.assists ?? null, shots: r.shots ?? null, yc: r.yellow_cards ?? null, rc: r.red_cards ?? null, is_goalie: !!r.is_goalie, saves: r.saves ?? null, goals_allowed: r.goals_allowed ?? null, starter: !!r.starter, participated: r.participated !== false, suppress: !!r.college_player_seasons?.college_players?.suppress });
+  const map = (r: any): LineupLine => ({ player_id: r.college_player_seasons?.player_id ?? null, player_season_id: r.player_season_id ?? null, headshot_url: cleanHeadshotUrl(r.college_player_seasons?.headshot_url), name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(), jersey: r.jersey ?? null, position: r.position ?? null, minutes: r.minutes ?? null, goals: r.goals ?? null, assists: r.assists ?? null, shots: r.shots ?? null, yc: r.yellow_cards ?? null, rc: r.red_cards ?? null, is_goalie: !!r.is_goalie, saves: r.saves ?? null, goals_allowed: r.goals_allowed ?? null, starter: !!r.starter, participated: r.participated !== false, suppress: !!r.college_player_seasons?.college_players?.suppress });
   const all = lines.map(map);
   const byPos = (a: LineupLine, b: LineupLine) => (POS_ORDER[(a.is_goalie ? 'GK' : a.position ?? '').toUpperCase()] ?? 4) - (POS_ORDER[(b.is_goalie ? 'GK' : b.position ?? '').toUpperCase()] ?? 4) || (a.jersey ?? 999) - (b.jersey ?? 999);
   const starters = all.filter((l) => l.starter).sort(byPos);
@@ -449,23 +452,27 @@ export async function matchPreview(db: Db, id: string) {
     const scorers = [...mine].sort((a, b) => (b.points ?? 0) - (a.points ?? 0) || (b.goals ?? 0) - (a.goals ?? 0)).filter((x) => (x.points ?? 0) > 0).slice(0, 5);
     const assists = [...mine].sort((a, b) => (b.assists ?? 0) - (a.assists ?? 0)).filter((x) => (x.assists ?? 0) > 0).slice(0, 3);
     const keeper = [...mine].filter((x) => (x.gk_minutes ?? 0) > 0).sort((a, b) => (b.gk_minutes ?? 0) - (a.gk_minutes ?? 0))[0] ?? null;
+    // This match's lineup comes from its own box score. When the box score names no starters (some stat crews
+    // only list who played) the lineup is still this match's; when there is no box score at all, the side's most
+    // recent lineup with starters is offered separately as `last_lineup`, never in `lineup`'s place.
     let lineup: Lineup | null = src ? buildLineup(lines.filter((l) => l.program_id === pid && l.source === src), src) : null;
     if (lineup && !lineup.starters.length && !lineup.subs.length) lineup = null;
     let last_lineup: (Lineup & { game_id: string; game_date: string; opponent: string | null }) | null = null;
     if (!lineup) {
-      const { data: lastG } = await db.from('college_v_schedule').select('id,game_date,source_of_truth,home_program_id,home_name,away_name').or(`home_program_id.eq.${pid},away_program_id.eq.${pid}`).eq('season', season).eq('status', 'final').not('source_of_truth', 'is', null).neq('id', id).order('game_date', { ascending: false }).limit(1);
-      const lg = lastG?.[0];
-      if (lg) {
+      const { data: lastGs } = await db.from('college_v_schedule').select('id,game_date,source_of_truth,home_program_id,home_name,away_name').or(`home_program_id.eq.${pid},away_program_id.eq.${pid}`).eq('season', season).eq('status', 'final').not('source_of_truth', 'is', null).neq('id', id).order('game_date', { ascending: false }).limit(3);
+      for (const lg of lastGs ?? []) {
         const ll = await selectAll<any>(db, 'college_game_player_stats', LINE_COLS, (q) => q.eq('game_id', lg.id).eq('program_id', pid).eq('source', lg.source_of_truth));
-        if (ll.length) last_lineup = { ...buildLineup(ll, lg.source_of_truth), game_id: lg.id, game_date: lg.game_date, opponent: lg.home_program_id === pid ? lg.away_name : lg.home_name };
+        const built = ll.length ? buildLineup(ll, lg.source_of_truth) : null;
+        if (built?.starters.length) { last_lineup = { ...built, game_id: lg.id, game_date: lg.game_date, opponent: lg.home_program_id === pid ? lg.away_name : lg.home_name }; break; }
       }
     }
+    const lineup_status: LineupStatus = lineup ? (lineup.starters.length ? 'match' : 'no_starters') : last_lineup ? 'past' : 'none';
     return {
       stats: st ? { ...st, form: { last5: formOldestFirst(st.form_last5), streak: st.streak ?? null } } : null,
       standing: sr ? { ...sr, of: sizes.get(`${sr.conference_id}|${sr.pod ?? ''}`) ?? null } : null,
       poll: ranks.get(pid) ?? null,
       leaders: { scorers, assists, keeper },
-      lineup, last_lineup,
+      lineup_status, lineup, last_lineup,
     };
   };
   const [home, away] = await Promise.all([sideOf(A), sideOf(B)]);
