@@ -51,7 +51,7 @@ export default function Overview() {
 
       <Section title="Schedule" right={<Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href('/console', { tab: 'jobs' })}>All jobs</Link>}>
         {!d.scheduler.enabled && <Note tone="warn">SCHEDULER_ENABLED is not 1 on this process: nothing runs on a timer here.</Note>}
-        <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Scheduled jobs</caption>
+        <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Scheduled jobs</caption>
           <thead><tr><th scope="col" className="th">Job</th><th scope="col" className="th">Cadence</th><th scope="col" className="th">Last fired</th><th scope="col" className="th">Next</th><th scope="col" className="th"></th></tr></thead>
           <tbody>{d.scheduler.entries.map((e) => (
             <tr key={e.job}>
@@ -62,7 +62,7 @@ export default function Overview() {
               <td className="td text-right"><button className="btn-ghost btn-sm" onClick={() => runNow.mutate(e.job)} disabled={runNow.isPending}>Run now</button></td>
             </tr>
           ))}</tbody>
-        </table>
+        </table></div>
         {d.scheduler.tick_at && <p className="mt-2 text-xs text-chalk-500">Scheduler ticked {agoShort(d.scheduler.tick_at, now)}.</p>}
       </Section>
 
@@ -80,7 +80,7 @@ export default function Overview() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Section title="Jobs, last outcome">
-          <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Last outcome per job</caption>
+          <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Last outcome per job</caption>
             <thead><tr><th scope="col" className="th">Job</th><th scope="col" className="th">Last success</th><th scope="col" className="th">Last failure</th></tr></thead>
             <tbody>{jobsSorted.map(([job, j]) => (
               <tr key={job}>
@@ -89,14 +89,14 @@ export default function Overview() {
                 <td className="td text-chalk-300">{j.last_failed?.finished_at ? <span className="text-loss" title={j.last_failed.error ?? ''}>{agoShort(j.last_failed.finished_at, now)}</span> : '—'}</td>
               </tr>
             ))}</tbody>
-          </table>
+          </table></div>
         </Section>
         <Section title="API traffic today" right={<Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href('/console', { tab: 'api' })}>Keys and usage</Link>}>
           {d.api_today.length === 0 ? <p className="text-sm text-chalk-500">No requests yet today.</p> : (
-            <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Requests today by caller</caption>
+            <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Requests today by caller</caption>
               <thead><tr><th scope="col" className="th">Caller</th><th scope="col" className="th text-right">Requests</th><th scope="col" className="th text-right">Rate limited</th></tr></thead>
               <tbody>{d.api_today.map((u) => <tr key={u.principal}><th scope="row" className="td text-left font-medium text-chalk-100">{u.principal}</th><td className="td num">{fmt.num(u.requests)}</td><td className={`td num ${u.limited ? 'text-note' : ''}`}>{fmt.num(u.limited)}</td></tr>)}</tbody>
-            </table>
+            </table></div>
           )}
         </Section>
       </div>

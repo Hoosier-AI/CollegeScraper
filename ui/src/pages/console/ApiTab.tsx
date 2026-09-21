@@ -59,7 +59,7 @@ export default function ApiTab() {
       </Section>
 
       <Section title="Keys">
-        <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">API keys</caption>
+        <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">API keys</caption>
           <thead><tr><th scope="col" className="th">Name</th><th scope="col" className="th">Source</th><th scope="col" className="th">Prefix</th><th scope="col" className="th">Created</th><th scope="col" className="th">Last used</th><th scope="col" className="th"></th></tr></thead>
           <tbody>{d.keys.map((k) => (
             <tr key={k.id ?? `env-${k.name}`} className={k.revoked_at ? 'opacity-50' : ''}>
@@ -71,7 +71,7 @@ export default function ApiTab() {
               <td className="td text-right">{k.source === 'db' && !k.revoked_at && <button className="btn-ghost btn-sm" onClick={() => setRevoking({ id: k.id!, name: k.name })}>Revoke</button>}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </table></div>
         <div className="mt-4 space-y-2">
           <h3 className="text-sm font-semibold text-chalk-100">Create a key</h3>
           <div className="flex flex-wrap items-end gap-3">
@@ -91,12 +91,12 @@ export default function ApiTab() {
 
       <Section title="Usage, last 7 days">
         {usageRows.length === 0 ? <p className="text-sm text-chalk-500">No requests recorded yet.</p> : (
-          <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Usage by caller</caption>
+          <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Usage by caller</caption>
             <thead><tr><th scope="col" className="th">Caller</th><th scope="col" className="th text-right">Today</th><th scope="col" className="th text-right">7 days</th><th scope="col" className="th text-right">Rate limited</th><th scope="col" className="th">Last seen</th></tr></thead>
             <tbody>{usageRows.map(([principal, c]) => (
               <tr key={principal}><th scope="row" className="td text-left font-medium text-chalk-100">{principal}</th><td className="td num">{fmt.num(c.today)}</td><td className="td num">{fmt.num(c.week)}</td><td className={`td num ${c.limited ? 'text-note' : ''}`}>{fmt.num(c.limited)}</td><td className="td text-chalk-400">{c.last ? agoShort(c.last, now) : '—'}</td></tr>
             ))}</tbody>
-          </table>
+          </table></div>
         )}
         <Note>anon = keyless /v1 calls; site = the stats site's own reads; admin = this console and scripts using the trigger secret.</Note>
       </Section>

@@ -38,17 +38,17 @@ export default function DeployTab() {
       </div>
 
       <Section title="Recent deploys">
-        <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Deploys</caption>
+        <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Deploys</caption>
           <thead><tr><th scope="col" className="th">Status</th><th scope="col" className="th">Started</th><th scope="col" className="th">Finished</th><th scope="col" className="th">Trigger</th><th scope="col" className="th">Commit</th></tr></thead>
           <tbody>{(d.deploys ?? []).map((x) => (
             <tr key={x.id}><td className="td"><Badge tone={deployTone(x.status)}>{x.status}</Badge></td><td className="td text-chalk-300">{fmt.dt(x.createdAt)}</td><td className="td text-chalk-300">{x.finishedAt ? fmt.dt(x.finishedAt) : '—'}</td><td className="td text-chalk-400">{x.trigger ?? ''}</td><td className="td text-chalk-400" style={{ whiteSpace: 'normal' }}>{x.commit?.id ? <span className="font-mono text-xs">{x.commit.id.slice(0, 7)}</span> : null} {x.commit?.message?.split('\n')[0]?.slice(0, 100)}</td></tr>
           ))}</tbody>
-        </table>
+        </table></div>
       </Section>
 
       <Section title="Environment">
         <Note tone="warn">Saving a variable makes Render redeploy the service (about two minutes). Database and console credentials can only be changed in the Render dashboard.</Note>
-        <table className="frame mt-3 w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Environment variables</caption>
+        <div className="overflow-x-auto"><table className="frame mt-3 w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Environment variables</caption>
           <thead><tr><th scope="col" className="th">Variable</th><th scope="col" className="th">Value</th><th scope="col" className="th"></th></tr></thead>
           <tbody>{(d.env ?? []).map((v) => (
             <tr key={v.key}>
@@ -57,7 +57,7 @@ export default function DeployTab() {
               <td className="td text-right">{!v.protected && <><button className="btn-quiet btn-sm" onClick={() => { setEditKey(v.key); setEditVal(''); setRemove(null); }}>Edit</button><button className="btn-quiet btn-sm text-loss" onClick={() => { setRemove(v.key); setConfirm('env'); }}>Remove</button></>}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </table></div>
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <Field label="Variable">{(id) => <input id={id} className="input font-mono text-xs" value={editKey} onChange={(e) => setEditKey(e.target.value.toUpperCase())} placeholder="API_RATE_LIMIT_PER_MIN" />}</Field>
           <Field label="Value" hint="secrets are never shown back; type the full new value">{(id) => <input id={id} className="input w-72 font-mono text-xs" value={editVal} onChange={(e) => setEditVal(e.target.value)} />}</Field>

@@ -63,7 +63,7 @@ export default function JobsTab() {
         {sched.isPending ? <Skeleton className="h-24" /> : sched.error ? <ErrorBox error={sched.error} /> : (
           <>
             {sched.data!.paused && <Note tone="warn">The scheduler is paused (Settings). Entries below fire again when it is resumed.</Note>}
-            <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Schedule</caption>
+            <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Schedule</caption>
               <thead><tr><th scope="col" className="th">On</th><th scope="col" className="th">Job</th><th scope="col" className="th">Cadence</th><th scope="col" className="th">Last fired</th><th scope="col" className="th">Next</th><th scope="col" className="th"></th></tr></thead>
               <tbody>{sched.data!.entries.map((e) => (
                 <tr key={e.job}>
@@ -75,7 +75,7 @@ export default function JobsTab() {
                   <td className="td text-right"><button className="btn-ghost btn-sm" onClick={() => runNow.mutate(e.job)} disabled={runNow.isPending}>Run now</button></td>
                 </tr>
               ))}</tbody>
-            </table>
+            </table></div>
           </>
         )}
       </Section>
@@ -99,7 +99,7 @@ function RunDetail({ run, onRerun, onCancel, now }: { run: Run; onRerun: () => v
       <div><h3 className="mb-1 text-xs font-medium text-chalk-500">Parameters</h3><pre className="frame overflow-auto p-2 text-xs text-chalk-300">{JSON.stringify(run.params ?? {}, null, 1)}</pre></div>
       <div>
         <h3 className="mb-1 text-xs font-medium text-chalk-500">Counters</h3>
-        {counters.length ? <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Counters</caption><tbody>{counters.map(([k, v]) => <tr key={k}><th scope="row" className="td text-left font-normal text-chalk-300">{k}</th><td className="td num text-chalk-100">{typeof v === 'number' ? fmt.num(v) : String(v)}</td></tr>)}</tbody></table> : <p className="text-sm text-chalk-500">None yet.</p>}
+        {counters.length ? <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Counters</caption><tbody>{counters.map(([k, v]) => <tr key={k}><th scope="row" className="td text-left font-normal text-chalk-300">{k}</th><td className="td num text-chalk-100">{typeof v === 'number' ? fmt.num(v) : String(v)}</td></tr>)}</tbody></table></div> : <p className="text-sm text-chalk-500">None yet.</p>}
       </div>
       <JsonViewer title="Raw run row" value={run} />
     </div>
