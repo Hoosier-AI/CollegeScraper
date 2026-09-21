@@ -4,6 +4,7 @@
 import { registerJob, type JobContext } from './runner.js';
 import { quality } from '../ui/queries.js';
 import { currentSeason } from './seasons.js';
+import { KV } from '../ops/settings.js';
 
 registerJob('quality', async (ctx: JobContext) => {
   const season = Number(ctx.params.season ?? currentSeason());
@@ -28,4 +29,6 @@ registerJob('ops-retention', async (ctx: JobContext) => {
   await del('college_crawl_runs', (q) => q.in('status', ['done', 'failed', 'cancelled']).neq('job', 'live').lt('created_at', ago(RETENTION.runs_days)), 'runs_deleted');
   await del('college_api_usage', (q) => q.lt('day', ago(RETENTION.usage_days).slice(0, 10)), 'usage_deleted');
   await del('college_quality_snapshots', (q) => q.lt('taken_at', ago(RETENTION.snapshots_days)), 'snapshots_deleted');
+  // Render gives every deploy a new host name, so old pods leave heartbeat rows behind.
+  await del('college_kv', (q) => q.like('key', `${KV.heartbeatPrefix}%`).lt('updated_at', ago(1)), 'stale_heartbeats_deleted');
 });
