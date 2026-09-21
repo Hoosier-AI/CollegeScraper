@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, qs, fmt, useAdmin } from '../lib/api';
 import { useFilters, useHref } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
-import { Badge, EmptyState, ErrorBox, Figure, Section, Skeleton, TabsNav, TeamLogo } from '../components/primitives';
+import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, Section, Skeleton, TabsNav, TeamLogo } from '../components/primitives';
 import { RunProgress } from '../components/RunProgress';
 import { TeamMasthead } from './team/Masthead';
 import { RosterTable } from './team/RosterTable';
@@ -66,7 +66,7 @@ export default function Team() {
       {tab === 'games' && <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />}
       {tab === 'season' && <SeasonProfile t={t} id={id} href={href} admin={admin} />}
       {tab === 'coaches' && (t.coaches?.length
-        ? <ul className="frame divide-y divide-field-700">{t.coaches.map((c: any) => <li key={c.college_coaches?.id} className="flex items-center gap-3 px-3 py-2.5"><TeamLogo src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={36} /><div><div className="font-medium text-chalk-100">{c.college_coaches?.name}</div><div className="text-xs text-chalk-400">{c.title}{c.is_head && <Badge tone="teal" className="ml-2">Head coach</Badge>}</div></div></li>)}</ul>
+        ? <ul className="frame divide-y divide-field-700">{t.coaches.map((c: any) => <li key={c.college_coaches?.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={36} /><div><div className="font-medium text-chalk-100">{c.college_coaches?.name}</div><div className="text-xs text-chalk-400">{c.title}{c.is_head && <Badge tone="teal" className="ml-2">Head coach</Badge>}</div></div></li>)}</ul>
         : <EmptyState title="No coaches listed" body="The staff page has not been collected for this season." />)}
       {tab === 'honors' && (honors.length
         ? <ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any, i: number) => <li key={i} className="flex flex-wrap gap-x-2 px-3 py-2"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={`/players/${h.id}`}>{h.player}</Link><span className="text-chalk-300">{h.text}</span></li>)}</ul>
@@ -78,12 +78,12 @@ export default function Team() {
 /** The long tail of team numbers, plus the conference table and poll history, in one calm place. */
 function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: string, o?: Record<string, string | number | null | undefined>) => string; admin: boolean }) {
   const s = t.teamStats;
-  const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td hidden text-chalk-500 sm:table-cell">{note ?? ''}</td></tr>;
+  const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td !whitespace-normal text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td !whitespace-normal text-xs text-chalk-500">{note ?? ''}</td></tr>;
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr_1fr]">
       <Section title="Season in numbers">
         {s ? (
-          <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Season totals</caption><tbody>
+          <table className="frame w-full table-fixed border-separate border-spacing-0 text-sm"><caption className="sr-only">Season totals</caption><colgroup><col className="w-[38%]" /><col className="w-[22%]" /><col /></colgroup><tbody>
             {row('Home', fmt.rec(s.home_w, s.home_l, s.home_t), `${s.gf_home ?? '–'} for, ${s.ga_home ?? '–'} against`)}
             {row('Away', fmt.rec(s.away_w, s.away_l, s.away_t), `${s.gf_away ?? '–'} for, ${s.ga_away ?? '–'} against`)}
             {row('Neutral', fmt.rec(s.neutral_w, s.neutral_l, s.neutral_t))}
@@ -102,7 +102,7 @@ function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: s
           </tbody></table>
         ) : <EmptyState title="No season totals yet" />}
       </Section>
-      <Section title={`Conference table${t.standing?.source === 'conference' ? '' : t.standing ? ' (computed)' : ''}`}>
+      <Section title={`Conference table${t.standing?.source === 'conference' ? '' : t.standing ? ' (computed)' : ''}`} right={t.season?.conference_id ? <Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href('/rankings', { view: 'standings', conference: t.season.conference_id })}>Full conference</Link> : undefined}>
         {t.conferenceTable?.length ? (
           <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Conference table</caption>
             <thead><tr><th scope="col" className="th text-right">#</th><th scope="col" className="th">Team</th><th scope="col" className="th text-right">Conf</th><th scope="col" className="th text-right">Pts</th></tr></thead>
@@ -120,7 +120,15 @@ function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: s
           ) : <p className="text-sm text-chalk-500">Not ranked this season.</p>}
         </Section>
         <Section title="NCAA.com national ranks">
-          {t.categories?.length ? <ul className="flex flex-wrap gap-1.5">{t.categories.map((r: any) => <li key={r.category} className="chip"><span className="text-chalk-100 tnum">{fmt.ordinal(r.rank)}</span>{r.category}<span className="text-chalk-500 tnum">{fmt.num(r.value, Number(r.value) % 1 ? 2 : 0)}</span></li>)}</ul> : <p className="text-sm text-chalk-500">No national category ranks yet.</p>}
+          {t.categories?.length ? (
+            <details className="group frame" open>
+              <summary className="sr-only">Team categories</summary>
+              <table className="w-full table-fixed border-separate border-spacing-0 text-sm"><caption className="sr-only">National rank by team category</caption><colgroup><col className="w-14" /><col /><col className="w-16" /></colgroup>
+                <tbody>{t.categories.slice(0, 15).map((r: any) => <tr key={r.category}><td className="td num font-medium text-chalk-100">{fmt.ordinal(r.rank)}</td><td className="td !whitespace-normal text-chalk-300">{r.category}</td><td className="td num text-chalk-500">{fmt.num(r.value, Number(r.value) % 1 ? 2 : 0)}</td></tr>)}</tbody>
+              </table>
+              {t.categories.length > 15 && <p className="px-3 py-2 text-xs text-chalk-500">and {t.categories.length - 15} more categories</p>}
+            </details>
+          ) : <p className="text-sm text-chalk-500">No national category ranks yet.</p>}
         </Section>
       </div>
     </div>

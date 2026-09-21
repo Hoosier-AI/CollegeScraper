@@ -56,7 +56,7 @@ export function redactGame<T extends { players?: any[]; events?: any[]; raw?: un
 }
 /** A match preview withholds suppressed players the way a box score does: numbers stay, names and ids go. */
 export function redactPreview<T extends { sides: Record<string, any> }>(r: T): T {
-  const line = ({ suppress, ...l }: any) => (suppress ? { ...l, name: null, player_id: null, player_season_id: null, withheld: true } : l);
+  const line = ({ suppress, ...l }: any) => (suppress ? { ...l, name: null, player_id: null, player_season_id: null, headshot_url: null, withheld: true } : l);
   const lineup = (lu: any) => (lu ? { ...lu, starters: lu.starters.map(line), subs: lu.subs.map(line), dnp: lu.dnp.map(line), keeper: lu.keeper ? line(lu.keeper) : null } : lu);
   const leader = (x: any) => (x && !x.suppress ? (({ suppress, ...rest }) => rest)(x) : null);
   const sides: Record<string, any> = {};

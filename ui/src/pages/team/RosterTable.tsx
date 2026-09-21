@@ -3,7 +3,7 @@ import { Shield } from 'lucide-react';
 import { fmt, useAdmin } from '../../lib/api';
 import { useSortParam, useUrlState } from '../../lib/urlState';
 import { DataTable, type Column, type Preset } from '../../components/DataTable';
-import { Badge, EmptyState, Note, TeamLogo } from '../../components/primitives';
+import { PlayerAvatar, Badge, EmptyState, Note, TeamLogo } from '../../components/primitives';
 
 /** Highlights a computed value against the school's own cumulative table. */
 function Diff({ value, vs, digits = 0, tolerance = 0 }: { value: unknown; vs: unknown; digits?: number; tolerance?: number }) {
@@ -34,7 +34,7 @@ export function RosterTable({ rows, loading, playerHref }: { rows: any[]; loadin
   const p90 = (key: string, label: string, plain: string): Column<any> => ({ key, label: per90 ? `${plain}/90` : plain, title: per90 ? `${label} per 90 minutes` : label, num: true, priority: 3,
     value: (r) => per90 ? r.stats?.[`${key}_p90`] : r.stats?.[key], render: (r) => per90 ? n(r.stats?.[`${key}_p90`], 2) : <Diff value={r.stats?.[key]} vs={r.site?.[key]} /> });
   const cols: Column<any>[] = [
-    { key: 'name', label: 'Player', primary: true, value: (r) => r.player?.display_name, render: (r) => <span className="flex items-center gap-2"><TeamLogo src={r.headshot_url ?? r.player?.headshot_url} name={r.player?.display_name} size={22} fallback="blank" /><span>{r.player?.display_name}</span>{r.is_captain && <Badge tone="amber" title="Captain"><Shield size={10} aria-hidden />C</Badge>}</span> },
+    { key: 'name', label: 'Player', primary: true, value: (r) => r.player?.display_name, render: (r) => <span className="flex items-center gap-2"><PlayerAvatar src={r.headshot_url ?? r.player?.headshot_url} name={r.player?.display_name} size={22} /><span>{r.player?.display_name}</span>{r.is_captain && <Badge tone="amber" title="Captain"><Shield size={10} aria-hidden />C</Badge>}</span> },
     { key: 'jersey', label: '#', title: 'Jersey number', num: true, priority: 3, value: (r) => r.jersey, className: 'text-chalk-500' },
     { key: 'position', label: 'Pos', title: 'Position', priority: 3, value: (r) => r.position ?? r.position_raw },
     { key: 'class_raw', label: 'Class', priority: 3, value: (r) => r.class_raw },

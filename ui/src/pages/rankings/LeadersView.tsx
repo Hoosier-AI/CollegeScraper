@@ -6,7 +6,7 @@ import { useFilters, useHref, genderLabel, divisionLabel } from '../../lib/filte
 import { useUrlNumber, useUrlPatch, useUrlState, useUrlText } from '../../lib/urlState';
 import { statDef, statGroups } from '../../lib/statNames';
 import { DataTable, type Column } from '../../components/DataTable';
-import { Chip, EmptyState, ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select, TeamLogo } from '../../components/primitives';
+import { PlayerAvatar, Chip, EmptyState, ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select, TeamLogo } from '../../components/primitives';
 
 const PAGE = 100;
 const DIV_OPTIONS = [{ value: '', label: 'All' }, { value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
@@ -60,14 +60,14 @@ export function LeadersView(props: { conference?: string; embedded?: boolean } =
   const chosen: Column<any> = { key: stat, label: def.short, title: def.label, num: true, className: 'font-semibold text-pitch-300', render: (r) => def.pct ? fmt.pct(r[stat]) : fmt.num(r[stat], dec(stat)) };
   const rankCell = (i: number) => <span className="w-7 shrink-0 text-right text-chalk-500 tnum">{offset + i + 1}</span>;
   const playerCols: Column<any>[] = [
-    { key: 'display_name', label: 'Player', primary: true, render: (r, i) => <span className="flex items-center gap-2">{rankCell(i)}<TeamLogo src={r.headshot_url} name={r.display_name} size={22} fallback="blank" /><span>{r.display_name}</span></span> },
-    { key: 'program_name', label: 'Team', render: (r) => <Link className="flex items-center gap-2 hover:text-pitch-300" to={href(`/teams/${r.program_id}`)}><TeamLogo src={r.logo_svg_url} name={r.program_name} size={18} /><span className="max-w-[160px] truncate">{r.program_name}</span></Link> },
+    { key: 'display_name', label: 'Player', primary: true, render: (r, i) => <span className="flex items-center gap-2">{rankCell(i)}<PlayerAvatar src={r.headshot_url} name={r.display_name} size={22} /><span>{r.display_name}</span></span> },
+    { key: 'program_name', label: 'Team', render: (r) => <Link className="flex items-center gap-2 hover:text-pitch-300" to={href(`/teams/${r.program_id}`)}><TeamLogo src={r.logo_svg_url} seo={r.school_seo} name={r.program_name} size={18} /><span className="max-w-[160px] truncate">{r.program_name}</span></Link> },
     { key: 'conference_name', label: 'Conference', priority: 2 }, { key: 'position', label: 'Pos', title: 'Position' }, { key: 'class_raw', label: 'Class', priority: 2 },
     chosen,
     ...support.filter((k) => k !== stat).map(statCell),
   ];
   const teamCols: Column<any>[] = [
-    { key: 'program_name', label: 'Team', primary: true, render: (r, i) => <span className="flex items-center gap-2">{rankCell(i)}<TeamLogo src={r.logo_svg_url} name={r.program_name} size={20} /><span>{r.program_name}</span></span> },
+    { key: 'program_name', label: 'Team', primary: true, render: (r, i) => <span className="flex items-center gap-2">{rankCell(i)}<TeamLogo src={r.logo_svg_url} seo={r.school_seo} name={r.program_name} size={20} /><span>{r.program_name}</span></span> },
     { key: 'conference_name', label: 'Conference', priority: 2 }, { key: 'division', label: 'Div', render: (r) => String(r.division ?? '').toUpperCase() },
     { key: 'rec', label: 'W-L-T', render: (r) => fmt.rec(r.w, r.l, r.t) },
     chosen,

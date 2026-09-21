@@ -1,32 +1,31 @@
 // One conference: its table, this week's matches, members, leaders and ranked teams.
-import { Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
-import { api, qs, fmt } from '../lib/api';
-import { useFilters, useHref, genderLabel, divisionLabel } from '../lib/filters';
-import { useUrlState } from '../lib/urlState';
-import { DataTable, type Column } from '../components/DataTable';
-import { Chip, EmptyState, ErrorBox, FormPips, Skeleton, TabsNav, TeamLogo, VerifiedMark } from '../components/primitives';
-import { MatchRow } from '../components/match/MatchRow';
-import { StandingsView } from './rankings/StandingsView';
-import { longDay } from '../lib/dates';
+import { api, qs, fmt } from '../../lib/api';
+import { useFilters, useHref, genderLabel, divisionLabel } from '../../lib/filters';
+import { useUrlState } from '../../lib/urlState';
+import { DataTable, type Column } from '../../components/DataTable';
+import { Chip, EmptyState, ErrorBox, FormPips, Skeleton, TabsNav, TeamLogo, VerifiedMark } from '../../components/primitives';
+import { MatchRow } from '../../components/match/MatchRow';
+import { StandingsGrid } from './StandingsGrid';
+import { longDay } from '../../lib/dates';
 
 type Tab = 'table' | 'matches' | 'teams' | 'leaders' | 'polls';
 
-export default function Conference() {
-  const { id = '' } = useParams();
+export function ConferenceDetail({ id }: { id: string }) {
   const f = useFilters();
   const href = useHref();
   const [tab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'teams', 'leaders', 'polls'] });
   const q = useQuery({ queryKey: ['conference', id, f.season, f.gender], queryFn: () => api<any>(`/api/conferences/${id}${qs({ season: f.season, gender: f.gender })}`) });
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (!q.data?.conference) return <EmptyState title="No such conference" action={<Link className="btn-ghost btn-sm" to={href('/conferences')}>All conferences</Link>} />;
+  if (!q.data?.conference) return <EmptyState title="No such conference" action={<Link className="btn-ghost btn-sm" to={href('/rankings', { view: 'standings' })}>All conferences</Link>} />;
   const d = q.data; const c = d.conference;
   const official = d.standings.rows.find((r: any) => r.source === 'conference');
   const byDate = new Map<string, any[]>(); for (const g of d.this_week.games) byDate.set(g.game_date, [...(byDate.get(g.game_date) ?? []), g]);
   const memberCols: Column<any>[] = [
-    { key: 'name', label: 'Team', primary: true, render: (m) => <span className="flex items-center gap-2"><TeamLogo src={m.logo} name={m.name} size={22} />{m.name}{m.rank && <span className="text-2xs text-note">No. {m.rank}</span>}</span> },
+    { key: 'name', label: 'Team', primary: true, render: (m) => <span className="flex items-center gap-2"><TeamLogo src={m.logo} seo={m.seo} name={m.name} size={22} />{m.name}{m.rank && <span className="text-2xs text-note">No. {m.rank}</span>}</span> },
     { key: 'record', label: 'W-L-T', value: (m) => m.stats?.w ?? null, render: (m) => <span className="inline-flex items-center gap-2 tnum">{m.stats ? fmt.rec(m.stats.w, m.stats.l, m.stats.t) : '–'}{m.official && m.stats && <VerifiedMark compact state={fmt.rec(m.official.w, m.official.l, m.official.t) === fmt.rec(m.stats.w, m.stats.l, m.stats.t) ? 'ok' : (m.official.w <= m.stats.w && m.official.l <= m.stats.l && m.official.t <= m.stats.t ? 'lag' : 'mismatch')} />}</span> },
     { key: 'conf', label: 'Conf', value: (m) => m.stats?.conf_w ?? null, render: (m) => m.stats ? fmt.rec(m.stats.conf_w, m.stats.conf_l, m.stats.conf_t) : '–' },
     { key: 'form', label: 'Form', sortable: false, render: (m) => <FormPips form={m.stats?.form?.last5} size="sm" /> },
@@ -43,16 +42,16 @@ export default function Conference() {
   return (
     <div className="space-y-5">
       <header className="card p-4 sm:p-6">
-        <p className="text-xs text-chalk-500"><Link className="hover:text-chalk-300" to={href('/conferences', { division: c.division })}>Conferences</Link> / {divisionLabel(c.division)}</p>
-        <h1 className="display mt-1 text-3xl sm:text-4xl">{c.name}</h1>
+        <p className="text-xs text-chalk-500"><Link className="hover:text-chalk-300" to={href('/rankings', { view: 'standings', division: c.division })}>All conferences</Link> / {divisionLabel(c.division)}</p>
+        <h2 className="display mt-1 text-3xl sm:text-4xl">{c.name}</h2>
         <p className="mt-2 text-sm text-chalk-300">{d.members.length} {genderLabel(f.gender)} teams, {divisionLabel(c.division)}, {f.season}{d.ranked.length ? `, ${d.ranked.length} in the coaches poll` : ''}</p>
         <p className="mt-2 flex flex-wrap gap-2 text-xs">
           {official?.source_url && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={official.source_url} target="_blank" rel="noreferrer">Official standings <ExternalLink size={12} aria-hidden /></a>}
           {c.site_host && <a className="inline-flex items-center gap-1 text-chalk-400 hover:text-pitch-300" href={`https://${c.site_host}`} target="_blank" rel="noreferrer">{c.site_host} <ExternalLink size={12} aria-hidden /></a>}
         </p>
       </header>
-      <TabsNav label="Conference sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(`/conferences/${id}`, { tab: x === 'table' ? null : x })} />
-      {tab === 'table' && <StandingsView conference={id} embedded />}
+      <TabsNav label="Conference sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href('/rankings', { view: 'standings', conference: id, tab: x === 'table' ? null : x })} />
+      {tab === 'table' && <StandingsGrid conference={id} embedded />}
       {tab === 'matches' && (byDate.size ? [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, games]) => (
         <section key={date} className="space-y-2"><h2 className="text-sm font-semibold text-chalk-100">{longDay(date)}</h2><div className="frame divide-y divide-field-700">{games.map((g: any) => <MatchRow key={g.id} g={g} />)}</div></section>
       )) : <EmptyState title="No matches this week" body="Conference members have nothing scheduled Monday to Sunday." action={<Chip to={href('/matches', { conference: id })}>Browse matches</Chip>} />)}
@@ -66,7 +65,7 @@ export default function Conference() {
           <p className="text-xs text-chalk-500 md:col-span-2"><Link className="text-pitch-400 hover:text-pitch-300" to={href('/rankings', { view: 'leaders', conference: id, division: c.division })}>All leaders in the {c.short_name ?? c.name}</Link></p>
         </div>
       )}
-      {tab === 'polls' && (d.ranked.length ? <ol className="frame divide-y divide-field-700">{d.ranked.map((m: any) => <li key={m.id}><Link to={href(`/teams/${m.id}`)} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-field-800"><span className="display w-6 text-right text-lg tnum">{m.rank}</span><TeamLogo src={m.logo} name={m.name} size={22} /><span className="flex-1 font-medium text-chalk-100">{m.name}</span><span className="text-xs text-chalk-400 tnum">{m.stats ? fmt.rec(m.stats.w, m.stats.l, m.stats.t) : ''}</span></Link></li>)}</ol> : <EmptyState title="No members in the coaches poll this week" />)}
+      {tab === 'polls' && (d.ranked.length ? <ol className="frame divide-y divide-field-700">{d.ranked.map((m: any) => <li key={m.id}><Link to={href(`/teams/${m.id}`)} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-field-800"><span className="display w-6 text-right text-lg tnum">{m.rank}</span><TeamLogo src={m.logo} seo={m.seo} name={m.name} size={22} /><span className="flex-1 font-medium text-chalk-100">{m.name}</span><span className="text-xs text-chalk-400 tnum">{m.stats ? fmt.rec(m.stats.w, m.stats.l, m.stats.t) : ''}</span></Link></li>)}</ol> : <EmptyState title="No members in the coaches poll this week" />)}
     </div>
   );
 }

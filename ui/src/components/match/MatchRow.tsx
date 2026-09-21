@@ -6,8 +6,8 @@ import { Badge, TeamLogo } from '../primitives';
 
 export interface MatchLike {
   id: string; status: string; start_epoch: number | null; game_date: string; conference_game: boolean; tournament: string | null; neutral_site: boolean; forfeit: boolean; overtime: boolean; shootout: boolean; division: string | null;
-  home: { program_id: string | null; name: string | null; short_name?: string | null; logo: string | null; rank: number | null; score: number | null; conference?: { short: string | null; name: string } | null };
-  away: { program_id: string | null; name: string | null; short_name?: string | null; logo: string | null; rank: number | null; score: number | null; conference?: { short: string | null; name: string } | null };
+  home: { program_id: string | null; name: string | null; short_name?: string | null; seo?: string | null; logo: string | null; rank: number | null; score: number | null; conference?: { short: string | null; name: string } | null };
+  away: { program_id: string | null; name: string | null; short_name?: string | null; seo?: string | null; logo: string | null; rank: number | null; score: number | null; conference?: { short: string | null; name: string } | null };
   live: { period: string | null; clock: string | null } | null;
 }
 
@@ -25,7 +25,7 @@ export function liveMinute(live: { period: string | null; clock: string | null }
 function Side({ s, winner, loser }: { s: MatchLike['home']; winner: boolean; loser: boolean }) {
   return (
     <span className={`flex min-w-0 items-center gap-2 ${loser ? 'text-chalk-400' : 'text-chalk-100'}`}>
-      <TeamLogo src={s.logo} name={s.name} size={22} />
+      <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={22} />
       {s.rank && <span className="shrink-0 text-2xs text-chalk-500 tnum">No. {s.rank}</span>}
       <span className={`truncate ${winner ? 'font-semibold' : 'font-medium'}`}>{s.name ?? 'TBD'}</span>
     </span>

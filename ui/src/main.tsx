@@ -13,8 +13,6 @@ const Teams = lazy(() => import('./pages/Teams'));
 const Team = lazy(() => import('./pages/Team'));
 const Match = lazy(() => import('./pages/Match'));
 const Matches = lazy(() => import('./pages/Matches'));
-const Conferences = lazy(() => import('./pages/Conferences'));
-const Conference = lazy(() => import('./pages/Conference'));
 const Player = lazy(() => import('./pages/Player'));
 const Rankings = lazy(() => import('./pages/Rankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
@@ -33,9 +31,10 @@ window.addEventListener('vite:preloadError', (e) => {
 });
 
 /** A moved page: the query string (season, gender, tab…) travels along. */
-function Redirect({ to, extra }: { to: (params: Record<string, string | undefined>) => string; extra?: string }) {
+function Redirect({ to, extra, params: extraParams }: { to: (params: Record<string, string | undefined>) => string; extra?: string; params?: (p: Record<string, string | undefined>) => Record<string, string | undefined> }) {
   const params = useParams(); const { search } = useLocation();
-  const qs = [search.replace(/^\?/, ''), extra].filter(Boolean).join('&');
+  const more = extraParams ? Object.entries(extraParams(params)).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&') : '';
+  const qs = [search.replace(/^\?/, ''), extra, more].filter(Boolean).join('&');
   return <Navigate to={`${to(params)}${qs ? `?${qs}` : ''}`} replace />;
 }
 
@@ -53,8 +52,8 @@ const router = createBrowserRouter([
           { path: 'teams/:id', element: <Team /> },
           { path: 'matches', element: <Matches /> },
           { path: 'matches/:id', element: <Match /> },
-          { path: 'conferences', element: <Conferences /> },
-          { path: 'conferences/:id', element: <Conference /> },
+          { path: 'conferences', element: <Redirect to={() => '/rankings'} extra="view=standings" /> },
+          { path: 'conferences/:id', element: <Redirect to={() => '/rankings'} extra="view=standings" params={(p) => ({ conference: p.id })} /> },
           // Old addresses keep working.
           { path: 'games/:id', element: <Redirect to={(p) => `/matches/${p.id}`} /> },
           { path: 'standings', element: <Redirect to={() => '/rankings'} /> },

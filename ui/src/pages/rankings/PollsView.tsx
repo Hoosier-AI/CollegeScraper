@@ -36,7 +36,7 @@ export function PollsView(props: { conference?: string; embedded?: boolean } = {
   const latest = wi <= 0;
   const setWeek = (w: string | null) => patch({ week: w && w !== weeks[0]?.week_of ? w : null });
   const team = (r: any) => r.college_programs
-    ? <Link className="flex items-center gap-2 font-medium hover:text-pitch-300" to={href(`/teams/${r.college_programs.id}`)}><TeamLogo src={r.college_programs.college_schools?.logo_svg_url} name={r.college_programs.name} size={20} />{r.college_programs.name}</Link>
+    ? <Link className="flex items-center gap-2 font-medium hover:text-pitch-300" to={href(`/teams/${r.college_programs.id}`)}><TeamLogo src={r.college_programs.college_schools?.logo_svg_url} seo={r.college_programs.school_seo} name={r.college_programs.name} size={20} />{r.college_programs.name}</Link>
     : <span className="text-chalk-200">{String(r.subject_name).split('|').pop()}{admin && <Badge tone="amber" className="ml-1">unmatched</Badge>}</span>;
   const isPlayerPoll = !usc && rows[0]?.player_season_id !== undefined;
   const cols: Column<any>[] = usc ? [

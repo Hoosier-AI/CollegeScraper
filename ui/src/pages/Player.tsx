@@ -5,7 +5,7 @@ import { api, fmt, resultOf, useAdmin } from '../lib/api';
 import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
-import { Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TeamLogo } from '../components/primitives';
+import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TeamLogo } from '../components/primitives';
 
 const PRESETS: Preset[] = [
   { id: 'overview', label: 'Overview', columns: ['program', 'jersey', 'position', 'class_raw', 'gp', 'gs', 'minutes', 'goals', 'assists', 'points', 'shots', 'sog', 'shot_accuracy'] },
@@ -58,7 +58,7 @@ export default function Player() {
   return (
     <div className="space-y-6">
       <header className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-start sm:p-6">
-        <TeamLogo src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} />
+        <PlayerAvatar src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} />
         <div className="min-w-0 flex-1">
           <h1 className="display text-3xl leading-none sm:text-4xl">{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</h1>
           {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}

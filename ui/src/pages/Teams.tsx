@@ -33,7 +33,7 @@ export default function Teams() {
   const confOptions = useMemo(() => [{ value: '', label: 'All conferences' }, ...(meta.data?.conferences ?? []).filter((c) => !division || c.division === division).map((c) => ({ value: c.id, label: c.name }))], [meta.data, division]);
 
   const cols: Column<ProgramRow>[] = [
-    { key: 'name', label: 'Program', primary: true, render: (p) => <span className="flex items-center gap-2"><TeamLogo src={p.school?.logo_svg_url} name={p.name} size={22} /><span>{p.name}</span>{!p.member && <Badge tone="amber" title="Not an NCAA member: appears only as an opponent">non-NCAA</Badge>}</span> },
+    { key: 'name', label: 'Program', primary: true, render: (p) => <span className="flex items-center gap-2"><TeamLogo src={p.school?.logo_svg_url} seo={p.school_seo} name={p.name} size={22} /><span>{p.name}</span>{!p.member && <Badge tone="amber" title="Not an NCAA member: appears only as an opponent">non-NCAA</Badge>}</span> },
     { key: 'division', label: 'Div', value: (p) => p.division ?? '', render: (p) => (p.division ?? '').toUpperCase() },
     { key: 'conference', label: 'Conference', value: (p) => p.conference?.name ?? '', priority: 2 },
     { key: 'record', label: 'W-L-T', title: 'Wins, losses, ties from stored results', value: (p) => p.record?.w ?? null, render: (p) => {

@@ -32,7 +32,7 @@ export function PageHeader({ title, meta, children, as = 'h1' }: { title: ReactN
 
 export function Section({ title, children, right, id }: { title: ReactNode; children: ReactNode; right?: ReactNode; id?: string }) {
   return (
-    <section className="space-y-2" id={id}>
+    <section className="min-w-0 space-y-2" id={id}>
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-chalk-100">{title}</h2>{right}</div>
       {children}
     </section>
@@ -41,10 +41,26 @@ export function Section({ title, children, right, id }: { title: ReactNode; chil
 
 /* ---------- media ---------- */
 
-export function TeamLogo({ src, name, size = 24, fallback = 'initials' }: { src?: string | null; name?: string | null; size?: number; fallback?: 'initials' | 'blank' }) {
+const NCAA_LOGO = (seo: string) => `https://www.ncaa.com/sites/default/files/images/logos/schools/bgl/${seo}.svg`;
+/** A team crest on a light chip, so navy-on-transparent logos (Notre Dame, California) stay visible on the dark page. */
+export function TeamLogo({ src, name, seo, size = 24, fallback = 'initials', chip = true }: { src?: string | null; name?: string | null; seo?: string | null; size?: number; fallback?: 'initials' | 'blank'; chip?: boolean }) {
+  const [broken, setBroken] = useState<string | null>(null);
+  const url = src || (seo && !seo.startsWith('x-') ? NCAA_LOGO(seo) : null);
+  if (!url || broken === url) return <span aria-hidden className={`inline-flex shrink-0 items-center justify-center rounded text-2xs font-medium text-chalk-400 ${fallback === 'blank' ? '' : 'bg-field-800'}`} style={{ width: size, height: size }}>{fallback === 'blank' ? '' : (name ?? '?').slice(0, 2)}</span>;
+  return <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden ${chip ? 'rounded bg-white' : ''}`} style={{ width: size, height: size, padding: chip ? Math.max(1, Math.round(size / 12)) : 0 }}><img src={url} alt="" width={size} height={size} className="h-full w-full object-contain" onError={() => setBroken(url)} loading="lazy" /></span>;
+}
+
+/** PrestoSports photos sit behind a bot challenge and cannot be hotlinked; showing them would leave broken images. */
+export const hotlinkable = (url: string | null | undefined): boolean => !!url && !/prestosports\.com|\/sports\/[a-z]+\/\d{4}-\d{2}\/photos\//i.test(url);
+
+/** A player's photo in a circle, or initials on the team's chip when there is no usable photo. */
+export function PlayerAvatar({ src, name, size = 24, crest, crestSeo }: { src?: string | null; name?: string | null; size?: number; crest?: string | null; crestSeo?: string | null }) {
   const [broken, setBroken] = useState(false);
-  if (!src || broken) return <span aria-hidden className={`inline-flex shrink-0 items-center justify-center rounded text-2xs font-medium text-chalk-400 ${fallback === 'blank' ? '' : 'bg-field-800'}`} style={{ width: size, height: size }}>{fallback === 'blank' ? '' : (name ?? '?').slice(0, 2)}</span>;
-  return <img src={src} alt="" width={size} height={size} className="shrink-0 rounded bg-white/5 object-contain" style={{ width: size, height: size }} onError={() => setBroken(true)} loading="lazy" />;
+  const usable = hotlinkable(src) && !broken;
+  if (usable) return <img src={src!} alt="" width={size} height={size} className="shrink-0 rounded-full bg-field-800 object-cover" style={{ width: size, height: size }} onError={() => setBroken(true)} loading="lazy" />;
+  if (crest || crestSeo) return <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}><TeamLogo src={crest} seo={crestSeo} name={name} size={size} /></span>;
+  const initials = (name ?? '').split(/\s+/).filter(Boolean).map((w) => w[0]!.toUpperCase()).slice(0, 2).join('') || '?';
+  return <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full bg-field-800 font-medium text-chalk-400" style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size / 2.6)) }}>{initials}</span>;
 }
 
 /* ---------- state ---------- */

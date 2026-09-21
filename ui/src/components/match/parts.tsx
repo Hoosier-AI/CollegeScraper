@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowDownCircle, ArrowUpCircle, CircleDot, Hand, Square } from 'lucide-react';
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
-import { Badge, EmptyState, FormPips, ResultBadge, TeamLogo } from '../primitives';
+import { PlayerAvatar, Badge, EmptyState, FormPips, ResultBadge, TeamLogo } from '../primitives';
 import { liveMinute, MatchRow, type MatchLike } from './MatchRow';
 
 /* ---------- masthead ---------- */
@@ -16,7 +16,7 @@ export function MatchMasthead({ g, sides }: { g: any; sides?: any }) {
     const s = g[side]; const info = sides?.[side];
     return (
       <div className={`flex min-w-0 flex-col items-center gap-2 text-center ${side === 'home' ? 'sm:items-start sm:text-left' : 'sm:items-end sm:text-right'}`}>
-        <TeamLogo src={s.logo} name={s.name} size={64} />
+        <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={64} />
         <div className="min-w-0">
           {s.program_id ? <Link to={href(`/teams/${s.program_id}`)} className="display block text-xl leading-tight hover:text-pitch-300 sm:text-2xl">{s.name ?? 'TBD'}</Link> : <span className="display block text-xl sm:text-2xl">{s.name ?? 'TBD'}</span>}
           <div className="mt-1 text-xs text-chalk-400 tnum">
@@ -98,8 +98,17 @@ function Line({ l }: { l: any }) {
   );
 }
 
-export function LineupColumn({ title, lineup, note }: { title: string; lineup: any; note?: string }) {
+export function LineupColumn({ title, lineup, note, benchOnly }: { title: string; lineup: any; note?: string; benchOnly?: boolean }) {
   if (!lineup) return <div className="space-y-2"><h3 className="text-sm font-semibold text-chalk-100">{title}</h3><EmptyState title="No lineup yet" body="Lineups arrive with the box score." /></div>;
+  if (benchOnly) return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-chalk-100">{title}{note && <span className="ml-2 text-xs font-normal text-chalk-500">{note}</span>}</h3>
+      <div className="frame divide-y divide-field-700">
+        <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Substitutes used</div>{lineup.subs.length ? <ul>{lineup.subs.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul> : <p className="px-3 pb-2 text-sm text-chalk-500">None</p>}</div>
+        {lineup.dnp.length > 0 && <div><div className="px-3 pt-2 text-2xs font-medium text-chalk-500">Did not play</div><ul>{lineup.dnp.map((l: any) => <Line key={`${l.jersey}-${l.name}`} l={l} />)}</ul></div>}
+      </div>
+    </div>
+  );
   const groups = POS_GROUPS.map(([label, re]) => ({ label, rows: lineup.starters.filter((l: any) => (l.is_goalie && label === 'Goalkeeper') || (!l.is_goalie && re.test(l.position ?? ''))) }));
   const placed = new Set(groups.flatMap((g) => g.rows));
   const rest = lineup.starters.filter((l: any) => !placed.has(l));
@@ -196,7 +205,7 @@ function PlayerCard({ p, line }: { p: any; line: string }) {
   const href = useHref();
   return (
     <li className="flex items-center gap-2 px-3 py-1.5 text-sm">
-      <TeamLogo src={p.headshot_url} name={p.display_name} size={24} fallback="blank" />
+      <PlayerAvatar src={p.headshot_url} name={p.display_name} size={24} />
       <Link to={href(`/players/${p.player_id}`)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{p.display_name}</Link>
       <span className="text-xs text-chalk-500">{p.position ?? ''}</span>
       <span className="text-xs text-chalk-300 tnum">{line}</span>

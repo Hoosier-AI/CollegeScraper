@@ -2,6 +2,7 @@
 import type { Db } from '../db/client.js';
 import { selectAll, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
+import { teamCategories } from '../normalize/logos.js';
 
 export const PLAYER_STATS = ['goals', 'assists', 'points', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
 export const TEAM_STATS = ['w', 'l', 't', 'gp', 'ppg', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'gf_home', 'gf_away', 'ga_home', 'ga_away', 'gf_1h', 'gf_2h', 'ga_1h', 'ga_2h', 'shots', 'sog', 'shots_pg', 'sog_pg', 'sog_pct', 'shots_per_goal', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'pk_goals', 'pk_att', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t', 'vs_ranked_w', 'vs_ranked_l', 'vs_ranked_t', 'last5_gf', 'last5_ga', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'div_pct_gf_pg', 'div_pct_ga_pg', 'div_pct_shots_pg'];
@@ -74,7 +75,7 @@ export async function program(db: Db, id: string, season: number) {
     selectAll<any>(db, 'college_coach_seasons', 'title,is_head,college_coaches(id,name,headshot_url)', (q) => q.eq('program_id', id).eq('season', season)),
     db.from('college_team_season_stats').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
     db.from('college_standings').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
-    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false }).limit(200)),
+    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes,player_season_id,subject_name', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false }).limit(400)),
     selectAll<any>(db, 'college_crawl_runs', 'id,job,status,started_at,finished_at,counters,error,params', (q) => q.contains('params', { program: p.school_seo }).order('created_at', { ascending: false }).limit(5)),
     selectAll<any>(db, 'college_program_seasons', 'season', (q) => q.eq('program_id', id).order('season', { ascending: false })),
     selectAll<any>(db, 'college_standings_checks', '*', (q) => q.eq('program_id', id).eq('season', season)),
@@ -82,7 +83,7 @@ export async function program(db: Db, id: string, season: number) {
   // Conference table for the position badge (rank within the conference).
   const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(id,name,gender)', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).eq('college_programs.gender', p.gender).order('rank')) : [];
   const usc = rankings.filter((r) => r.poll === 'usc' && !String(r.label ?? '').includes('(RV)')).sort((a, b) => String(b.week_of).localeCompare(String(a.week_of)));
-  const categories = rankings.filter((r) => r.poll.startsWith('ncaa:')).map((r) => ({ category: r.label ?? r.poll, rank: r.rank, value: r.value, week_of: r.week_of })).sort((a, b) => a.rank - b.rank);
+  const categories = teamCategories(rankings);
   return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, standingsChecks: checks, conferenceTable: confRows, rankings, usc: usc[0] ?? null, uscHistory: usc, categories, runs, seasons: seasonsAvail.map((s) => s.season) };
 }
 
@@ -387,12 +388,12 @@ export async function gamesByDate(db: Db, f: MatchesFilter) {
   return { from, to, season, live: games.filter((g) => g.status === 'live').length, games, generated_at: new Date().toISOString() };
 }
 
-export interface LineupLine { player_id: string | null; player_season_id: string | null; name: string; jersey: number | null; position: string | null; minutes: number | null; goals: number | null; assists: number | null; shots: number | null; yc: number | null; rc: number | null; is_goalie: boolean; saves: number | null; goals_allowed: number | null; starter: boolean; participated: boolean; suppress: boolean }
+export interface LineupLine { player_id: string | null; player_season_id: string | null; headshot_url: string | null; name: string; jersey: number | null; position: string | null; minutes: number | null; goals: number | null; assists: number | null; shots: number | null; yc: number | null; rc: number | null; is_goalie: boolean; saves: number | null; goals_allowed: number | null; starter: boolean; participated: boolean; suppress: boolean }
 export interface Lineup { source: 'site' | 'ncaa'; starters: LineupLine[]; subs: LineupLine[]; dnp: LineupLine[]; keeper: LineupLine | null }
 
 const POS_ORDER: Record<string, number> = { GK: 0, G: 0, D: 1, DEF: 1, M: 2, MF: 2, MID: 2, F: 3, FW: 3, FWD: 3 };
 function buildLineup(lines: any[], source: 'site' | 'ncaa'): Lineup {
-  const map = (r: any): LineupLine => ({ player_id: r.college_player_seasons?.player_id ?? null, player_season_id: r.player_season_id ?? null, name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(), jersey: r.jersey ?? null, position: r.position ?? null, minutes: r.minutes ?? null, goals: r.goals ?? null, assists: r.assists ?? null, shots: r.shots ?? null, yc: r.yellow_cards ?? null, rc: r.red_cards ?? null, is_goalie: !!r.is_goalie, saves: r.saves ?? null, goals_allowed: r.goals_allowed ?? null, starter: !!r.starter, participated: r.participated !== false, suppress: !!r.college_player_seasons?.college_players?.suppress });
+  const map = (r: any): LineupLine => ({ player_id: r.college_player_seasons?.player_id ?? null, player_season_id: r.player_season_id ?? null, headshot_url: r.college_player_seasons?.headshot_url ?? null, name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(), jersey: r.jersey ?? null, position: r.position ?? null, minutes: r.minutes ?? null, goals: r.goals ?? null, assists: r.assists ?? null, shots: r.shots ?? null, yc: r.yellow_cards ?? null, rc: r.red_cards ?? null, is_goalie: !!r.is_goalie, saves: r.saves ?? null, goals_allowed: r.goals_allowed ?? null, starter: !!r.starter, participated: r.participated !== false, suppress: !!r.college_player_seasons?.college_players?.suppress });
   const all = lines.map(map);
   const byPos = (a: LineupLine, b: LineupLine) => (POS_ORDER[(a.is_goalie ? 'GK' : a.position ?? '').toUpperCase()] ?? 4) - (POS_ORDER[(b.is_goalie ? 'GK' : b.position ?? '').toUpperCase()] ?? 4) || (a.jersey ?? 999) - (b.jersey ?? 999);
   const starters = all.filter((l) => l.starter).sort(byPos);
@@ -402,7 +403,7 @@ function buildLineup(lines: any[], source: 'site' | 'ncaa'): Lineup {
   return { source, starters, subs, dnp, keeper };
 }
 
-const LINE_COLS = 'program_id,source,player_season_id,first_name,last_name,jersey,position,starter,participated,minutes,goals,assists,shots,yellow_cards,red_cards,is_goalie,saves,goals_allowed,college_player_seasons(player_id,college_players(suppress))';
+const LINE_COLS = 'program_id,source,player_season_id,first_name,last_name,jersey,position,starter,participated,minutes,goals,assists,shots,yellow_cards,red_cards,is_goalie,saves,goals_allowed,college_player_seasons(player_id,headshot_url,college_players(suppress))';
 
 /** Everything a coach wants around one match: head-to-head, form, standing, poll rank, key players, lineups. */
 export async function matchPreview(db: Db, id: string) {

@@ -8,6 +8,7 @@ import { useUrlState } from '../lib/urlState';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
 import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline } from '../components/match/parts';
+import { Pitch } from '../components/match/Pitch';
 
 type Src = 'site' | 'ncaa';
 type Tab = 'summary' | 'lineups' | 'stats' | 'h2h' | 'preview' | 'raw';
@@ -23,6 +24,7 @@ export default function Match() {
   const [tabParam] = useUrlState('tab', '', { allow: ['summary', 'lineups', 'stats', 'h2h', 'preview', 'raw'] });
   const [src, setSrc] = useUrlState('src', 'diff', { replace: true, resetPage: false, allow: ['diff', 'site', 'ncaa'] });
   const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PLAYER_PRESETS.map((p) => p.id) });
+  const [view, setView] = useUrlState('view', 'pitch', { replace: true, resetPage: false, allow: ['pitch', 'list'] });
   const isLive = (q: any) => q.state.data?.game?.status === 'live';
   const box = useQuery({ queryKey: ['game', id], queryFn: () => api<any>(`/api/games/${id}`), refetchInterval: (q) => (isLive(q) ? 60_000 : false) });
   const preview = useQuery({ queryKey: ['preview', id], queryFn: () => api<any>(`/api/matches/${id}/preview`), refetchInterval: (q) => (isLive(q) ? 60_000 : false) });
@@ -87,10 +89,24 @@ export default function Match() {
 
       {tab === 'lineups' && (
         <div className="space-y-6">
-          {!played && <Note>The match has not kicked off; these are each side's lineups from their last match.</Note>}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {(['home', 'away'] as const).map((side) => { const s = sides[side]; const lu = s?.lineup ?? s?.last_lineup; const last = s && !s.lineup && s.last_lineup; return <LineupColumn key={side} title={g[side].name ?? side} lineup={lu} note={last ? `vs ${last.opponent ?? '?'}, ${fmt.day(last.game_date)}` : undefined} />; })}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {!played ? <Note>The match has not kicked off; these are each side's lineups from their last match.</Note> : <Note>Rows follow the box score's positions; players in a row are spread evenly, not placed by role.</Note>}
+            <SegmentedControl label="Lineup view" size="sm" value={view as 'pitch' | 'list'} onChange={setView} options={[{ value: 'pitch', label: 'Pitch' }, { value: 'list', label: 'List' }]} />
           </div>
+          {(() => {
+            const lu = (side: 'home' | 'away') => { const s = sides[side]; return { lineup: s?.lineup ?? s?.last_lineup ?? null, note: s && !s.lineup && s.last_lineup ? `vs ${s.last_lineup.opponent ?? '?'}, ${fmt.day(s.last_lineup.game_date)}` : undefined }; };
+            const h = lu('home'), a = lu('away');
+            if (view === 'list') return <div className="grid gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} lineup={h.lineup} note={h.note} /><LineupColumn title={g.away.name ?? 'Away'} lineup={a.lineup} note={a.note} /></div>;
+            return (
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,28rem)_1fr]">
+                <Pitch home={h.lineup} away={a.lineup} homeName={g.home.name} awayName={g.away.name} homeCrest={{ src: g.home.logo, seo: g.home.seo }} awayCrest={{ src: g.away.logo, seo: g.away.seo }} />
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
+                  <LineupColumn title={g.home.name ?? 'Home'} lineup={h.lineup} note={h.note} benchOnly />
+                  <LineupColumn title={g.away.name ?? 'Away'} lineup={a.lineup} note={a.note} benchOnly />
+                </div>
+              </div>
+            );
+          })()}
           {played && players.length > 0 && (
             <Section title="Full player stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
               {[g.home.program_id, g.away.program_id].map((pid) => (
