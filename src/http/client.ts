@@ -96,7 +96,7 @@ export class HttpClient implements Fetcher {
   /** `freshMs` per call overrides the client default: a stored body younger than that is served without a request.
    * `priority` orders waiting work on the shared per-host queue (higher first); the live lane uses it so a scoreboard
    * tick is never stuck behind a long crawl on the same host. */
-  async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number } = {}): Promise<HttpResponseLike> {
+  async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number; noStore?: boolean; documentedApi?: boolean } = {}): Promise<HttpResponseLike> {
     const host = new URL(url).host;
     const cached = o.skipCache ? null : await this.opts.cache?.get(url);
     const freshMs = o.freshMs ?? this.opts.freshMs;
@@ -104,15 +104,17 @@ export class HttpClient implements Fetcher {
       this.stats.cacheHits += 1;
       return { status: cached.record.status, url, text: cached.body, notModified: true };
     }
-    if (this.opts.robots && !(await this.opts.robots.allowed(url))) {
+    // `documentedApi`: a public API whose owner documents programmatic use (api.weather.gov asks only for an
+    // identifying User-Agent); its robots.txt exists to keep search engines out and is not addressed to API clients.
+    if (this.opts.robots && !o.documentedApi && !(await this.opts.robots.allowed(url))) {
       this.stats.robotsBlocked += 1;
       throw new HttpError(999, url, `robots.txt disallows ${url}`);
     }
     const priority = o.priority ?? 0;
-    return this.global.add(() => this.queueFor(host).add(() => this.fetchWithRetry(url, host, o.accept, cached ?? null, o.attempts), { priority }), { priority }) as Promise<HttpResponseLike>;
+    return this.global.add(() => this.queueFor(host).add(() => this.fetchWithRetry(url, host, o.accept, cached ?? null, o.attempts, o.noStore), { priority }), { priority }) as Promise<HttpResponseLike>;
   }
 
-  private async fetchWithRetry(url: string, host: string, accept: string | undefined, cached: { record: FetchRecord; body: string | null } | null, maxAttempts = this.opts.maxAttempts): Promise<HttpResponseLike> {
+  private async fetchWithRetry(url: string, host: string, accept: string | undefined, cached: { record: FetchRecord; body: string | null } | null, maxAttempts = this.opts.maxAttempts, noStore = false): Promise<HttpResponseLike> {
     let attempt = 0;
     let lastErr: unknown = null;
     while (attempt < maxAttempts) {
@@ -159,7 +161,7 @@ export class HttpClient implements Fetcher {
         error: res.ok ? null : `HTTP ${res.status}`,
         attempts: attempt,
       };
-      await this.opts.cache?.put(record, res.ok ? text : null);
+      if (!noStore) await this.opts.cache?.put(record, res.ok ? text : null);
       if (!res.ok) throw new HttpError(res.status, url);
       return { status: res.status, url: res.url || url, text, notModified: false };
     }

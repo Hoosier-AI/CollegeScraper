@@ -1,10 +1,11 @@
 // Pieces of the match page: masthead, timeline, lineups, stat bars, head-to-head and the pre-match preview.
 import { Link } from 'react-router-dom';
-import { ArrowDownCircle, ArrowUpCircle, CircleDot, Hand, Square } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, CalendarClock, CircleDot, ExternalLink, Hand, MapPin, Square } from 'lucide-react';
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
 import { PlayerAvatar, Badge, EmptyState, FormPips, ResultBadge, TeamLogo } from '../primitives';
 import { liveMinute, MatchRow, type MatchLike } from './MatchRow';
+import { WeatherLine } from './Weather';
 
 /* ---------- masthead ---------- */
 
@@ -18,6 +19,7 @@ export function MatchMasthead({ g, sides }: { g: any; sides?: any }) {
       <div className={`flex min-w-0 flex-col items-center gap-2 text-center ${side === 'home' ? 'sm:items-start sm:text-left' : 'sm:items-end sm:text-right'}`}>
         <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={64} />
         <div className="min-w-0">
+          <span className={`mb-1 inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-medium ${side === 'home' ? 'bg-pitch-400/15 text-pitch-300' : 'bg-field-800 text-chalk-300'}`}>{side === 'home' ? (g.neutral_site ? 'Home (neutral site)' : 'Home') : 'Away'}</span>
           {s.program_id ? <Link to={href(`/teams/${s.program_id}`)} className="display block text-xl leading-tight hover:text-pitch-300 sm:text-2xl">{s.name ?? 'TBD'}</Link> : <span className="display block text-xl sm:text-2xl">{s.name ?? 'TBD'}</span>}
           <div className="mt-1 text-xs text-chalk-400 tnum">
             {s.rank && <span className="mr-2 text-note">No. {s.rank}</span>}
@@ -40,11 +42,23 @@ export function MatchMasthead({ g, sides }: { g: any; sides?: any }) {
         </div>
         {team('away')}
       </div>
-      <p className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-chalk-400 sm:justify-start">
-        <span>{fmt.weekday(g.game_date)}{g.start_epoch ? `, ${fmt.kickoffEt(g.start_epoch)}` : ''}</span>
-        {g.venue?.name && <span>{g.venue.name}{g.venue.city ? `, ${g.venue.city}` : ''}</span>}
-        {g.neutral_site && <Badge>Neutral site</Badge>}{g.conference_game && <Badge>Conference</Badge>}{g.tournament && <Badge tone="teal">{g.tournament}</Badge>}{g.postseason && <Badge tone="teal">Postseason</Badge>}
-      </p>
+      <div className="mt-5 grid gap-4 border-t border-field-700 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.3fr]">
+        <Fact icon={<MapPin size={18} aria-hidden />} label="Where">
+          {venueText(g) ? <>
+            <span className="text-chalk-100">{venueText(g)}</span>
+            <a className="ml-2 inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueText(g)!)}`} target="_blank" rel="noreferrer">Map <ExternalLink size={11} aria-hidden /></a>
+          </> : <span className="text-chalk-300">{g.neutral_site ? 'Neutral site, venue not published' : `${g.home.name ?? 'The home team'}'s home ground`}</span>}
+          <span className="block text-xs text-chalk-500">{g.neutral_site ? `Neutral site; ${g.home.name ?? 'home'} is the designated home team` : `${g.home.name ?? 'TBD'} at home, ${g.away.name ?? 'TBD'} travelling`}</span>
+        </Fact>
+        <Fact icon={<CalendarClock size={18} aria-hidden />} label="When">
+          <span className="text-chalk-100">{fmt.weekday(g.game_date)}{fmt.kickoff(g.start_epoch) ? `, ${fmt.kickoff(g.start_epoch)}` : ', time TBD'}</span>
+          {fmt.kickoffEt(g.start_epoch) && <span className="block text-xs text-chalk-500">{fmt.kickoffEt(g.start_epoch)}</span>}
+          <span className="mt-1 flex flex-wrap gap-1.5">{g.conference_game && <Badge>Conference</Badge>}{g.tournament && <Badge tone="teal">{g.tournament}</Badge>}{g.postseason && <Badge tone="teal">Postseason</Badge>}</span>
+        </Fact>
+        <Fact label="Weather">
+          {g.weather ? <WeatherLine w={g.weather} past={live || final} /> : <span className="text-sm text-chalk-500">{live || final || g.result_pending ? 'No forecast was recorded for this match.' : 'The forecast appears within a week of kickoff, once the ground is known.'}</span>}
+        </Fact>
+      </div>
     </header>
   );
 }
@@ -83,6 +97,18 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
 
 /** Stored names from before the parsers dropped placeholders ("0", "TEAM") still show as no person. */
 const personName = (raw: string | null | undefined): string | null => { const s = (raw ?? '').trim(); return /[a-z]/i.test(s) && !/^(the )?(team|tm|bench)$/i.test(s) ? s : null; };
+
+/** "Freeman Field at Koskinen Stadium, Durham, NC", or whichever part is known. */
+export const venueText = (g: { venue?: { name: string | null; city: string | null } | null }): string | null => [g.venue?.name, g.venue?.city].filter(Boolean).join(', ') || null;
+
+function Fact({ icon, label, children }: { icon?: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2.5">
+      {icon && <span className="mt-0.5 text-chalk-400">{icon}</span>}
+      <div className="min-w-0 text-sm"><div className="mb-0.5 text-2xs font-medium text-chalk-500">{label}</div>{children}</div>
+    </div>
+  );
+}
 
 /* ---------- lineups ---------- */
 

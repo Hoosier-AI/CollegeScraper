@@ -15,7 +15,7 @@ import { log } from '../log.js';
 type Stage = 'roster' | 'schedule' | 'stats' | 'boxscores' | 'bios';
 const ALL_STAGES: Stage[] = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
-/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean } */
+/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean, from_cache?: boolean } */
 /** gender_division → first NCAA-listed contest date of the season (written by reconcile-games). */
 let seasonOpeners: Record<string, string> = {};
 
@@ -23,7 +23,9 @@ export async function syncSite(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
   const stages = new Set<Stage>((ctx.params.stages as Stage[] | undefined) ?? ALL_STAGES);
-  const fetcher = makeFetcher(db, { freshMs: ctx.params.force ? 0 : 6 * 3600_000 });
+  // from_cache: re-read pages already downloaded in the last two weeks (a parser or mapping change applied to what
+  // was crawled), fetching only what is missing.
+  const fetcher = makeFetcher(db, { freshMs: ctx.params.force ? 0 : ctx.params.from_cache ? 14 * 86400_000 : 6 * 3600_000 });
   const onlySeo = typeof ctx.params.program === 'string' ? ctx.params.program : null;
   const schools = new Map((await listSchools(db)).map((s) => [s.seo, s]));
   const allPrograms = await listPrograms(db);

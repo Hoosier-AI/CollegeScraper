@@ -11,7 +11,7 @@ import { getFetcherStats } from '../jobs/fetcher.js';
 import { currentSeason } from '../jobs/seasons.js';
 import { loadConfig } from '../config.js';
 
-export const LANES = ['crawl', 'live'];
+export const LANES = ['crawl', 'live', 'aux'];
 
 const count = async (db: Db, table: string, apply: (x: any) => any): Promise<number> => {
   const { count: n, error } = await apply(db.from(table).select('*', { count: 'exact', head: true }));

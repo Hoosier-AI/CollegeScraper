@@ -66,6 +66,7 @@ export function parseResultItem(raw: unknown, ctx: SiteContext, prettyLinks?: Ma
     opponentSiteId: str(opponent['id']),
     homeAway: homeAwayOf(item),
     location: str(item['location']) ?? str(facility['title']),
+    facility: str(item['location']) ? str(facility['title']) : null,
     isConference: bool(item['isConference']),
     isExhibition,
     tournament: tournament && !isExhibition ? tournament : null,

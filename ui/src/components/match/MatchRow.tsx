@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
 import { Badge, TeamLogo } from '../primitives';
+import { WeatherMini, type MatchWeather } from './Weather';
 
 export interface MatchLike {
   id: string; status: string; start_epoch: number | null; game_date: string; conference_game: boolean; tournament: string | null; neutral_site: boolean; forfeit: boolean; overtime: boolean; shootout: boolean; division: string | null;
@@ -11,6 +12,8 @@ export interface MatchLike {
   live: { period: string | null; clock: string | null } | null;
   /** Its day is over (or kickoff was hours ago) and no result has come in. */
   result_pending?: boolean;
+  venue?: { name: string | null; city: string | null } | null;
+  weather?: MatchWeather | null;
 }
 
 /** "63′ 2H", "HT", "OT 4′" from NCAA's period + clock strings. */
@@ -24,12 +27,13 @@ export function liveMinute(live: { period: string | null; clock: string | null }
   return [minute, half].filter(Boolean).join(' ') || 'Live';
 }
 
-function Side({ s, winner, loser }: { s: MatchLike['home']; winner: boolean; loser: boolean }) {
+function Side({ s, winner, loser, home }: { s: MatchLike['home']; winner: boolean; loser: boolean; home?: boolean }) {
   return (
     <span className={`flex min-w-0 items-center gap-2 ${loser ? 'text-chalk-400' : 'text-chalk-100'}`}>
       <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={22} />
       {s.rank && <span className="shrink-0 text-2xs text-chalk-500 tnum">No. {s.rank}</span>}
       <span className={`truncate ${winner ? 'font-semibold' : 'font-medium'}`}>{s.name ?? 'TBD'}</span>
+      {home && <span className="shrink-0 text-2xs text-chalk-500">home</span>}
     </span>
   );
 }
@@ -51,10 +55,14 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
         <span className="block">{when}</span>
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-        <Side s={g.home} winner={homeWin} loser={awayWin} />
+        <Side s={g.home} winner={homeWin} loser={awayWin} home={!g.neutral_site} />
         <Side s={g.away} winner={awayWin} loser={homeWin} />
       </span>
-      {tag && <span className="hidden shrink-0 text-2xs text-chalk-500 sm:block">{tag}{g.neutral_site ? ', neutral' : ''}</span>}
+      <span className="hidden shrink-0 flex-col items-end gap-0.5 text-right text-2xs text-chalk-500 sm:flex">
+        {tag && <span>{tag}{g.neutral_site ? ', neutral' : ''}</span>}
+        {!tag && g.neutral_site && <span>Neutral site</span>}
+        {(g.venue?.city || (g.weather && !final)) && <span className="inline-flex items-center gap-2">{g.venue?.city && <span>{g.venue.city}</span>}{g.weather && !final && !live && <WeatherMini w={g.weather} />}</span>}
+      </span>
       <span className="flex shrink-0 flex-col items-end gap-1 text-sm tnum">
         {live || final ? <>
           <span className={homeWin ? 'font-semibold text-chalk-100' : awayWin ? 'text-chalk-400' : 'text-chalk-100'}>{hs ?? '–'}</span>

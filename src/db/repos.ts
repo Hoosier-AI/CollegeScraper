@@ -8,6 +8,7 @@ import { normalizePosition } from '../normalize/position.js';
 import { heightToCm } from '../normalize/height.js';
 import { parseHometown } from '../normalize/hometown.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
+import { cityLabel, parseVenue } from '../normalize/venue.js';
 import { matchStatLine, resolveRoster, type KnownPlayerSeason, type StatLineCandidate } from '../identity/resolver.js';
 import { log } from '../log.js';
 
@@ -24,6 +25,7 @@ export interface GameRow {
   id: string; season: number; game_date: string; gender: Gender; division: Division | null; home_program_id: string | null; away_program_id: string | null;
   home_name: string | null; away_name: string | null; home_score: number | null; away_score: number | null; status: string; ncaa_contest_id: number | null;
   site_game_refs: Record<string, string>; source_of_truth: 'site' | 'ncaa' | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; live_stats_at?: string | null; detail_attempts: number; forfeit?: boolean;
+  venue_name?: string | null; venue_city?: string | null; start_epoch?: number | null;
 }
 
 // ---------- schools / programs ----------
@@ -254,8 +256,12 @@ export function boxScoreHeaderPatch(box: BoxScore, source: 'site' | 'ncaa', opts
   if (source === 'ncaa') patch.live_stats_at = null;
   if (box.status === 'final') Object.assign(patch, { status: 'final', home_score: box.home.score, away_score: box.away.score, overtime: box.overtime, shootout: box.shootout });
   if (source === 'site') {
-    Object.assign(patch, { attendance: box.attendance, venue_name: box.venueName, venue_city: box.venueCity, duration_min: box.durationMin,
+    Object.assign(patch, { attendance: box.attendance, duration_min: box.durationMin,
       officials: box.officials.length ? box.officials : null, neutral_site: box.neutral, postseason: box.postseason, tournament: box.tournament });
+    // The box score's ground and city beat the schedule's, but a box score without them must not erase the schedule's.
+    const v = parseVenue(box.venueCity, box.venueName);
+    if (v.name) patch.venue_name = v.name;
+    if (cityLabel(v)) patch.venue_city = cityLabel(v);
   }
   return patch;
 }
@@ -444,8 +450,13 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
     const refs = { [input.host]: e.boxScoreUrl ?? '' };
     const homeScore = e.result ? (isHome ? e.result.teamScore : e.result.opponentScore) : null;
     const awayScore = e.result ? (isHome ? e.result.opponentScore : e.result.teamScore) : null;
+    // Where it is played, from the schedule; a box score's venue (written later) is the better source and is kept.
+    const venue = parseVenue(e.location, e.facility);
+    const venueCity = cityLabel(venue);
     if (game) {
       const patch: Record<string, unknown> = { site_game_refs: { ...(game.site_game_refs ?? {}), ...(e.boxScoreUrl ? refs : {}) } };
+      if (!game.venue_name && venue.name) patch.venue_name = venue.name;
+      if (venueCity && (!game.venue_city || (!/,/.test(game.venue_city) && /,/.test(venueCity)))) patch.venue_city = venueCity;
       const next = scheduleStatusPatch(game, status ?? null, homeScore != null);
       if (next) patch.status = next;
       if (game.home_score == null && homeScore != null) { patch.home_score = homeScore; patch.away_score = awayScore; }
@@ -462,6 +473,7 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
         home_program_id: home, away_program_id: away, home_name: isHome ? null : e.opponentName, away_name: isHome ? e.opponentName : null,
         home_score: homeScore, away_score: awayScore, status: status ?? 'scheduled', neutral_site: e.homeAway === 'N', forfeit: !!e.result?.forfeit,
         tournament: e.tournament, attendance: e.attendance, site_game_refs: e.boxScoreUrl ? refs : {},
+        venue_name: venue.name, venue_city: venueCity,
       });
       input.existing.push(game);
       created += 1;

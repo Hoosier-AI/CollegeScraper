@@ -21,5 +21,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 125_search_players_best_first.sql | player search ranks by similarity | yes (2026-09-20) |
 | 126_college_live_matches.sql | live period/clock, schedule view with kickoff + conferences, worker lanes | yes (2026-09-20) |
 | 127_college_console_live.sql | `live_stats_at` (provisional live box scores), quality snapshots, API keys + usage, per-host fetch stats | yes (2026-09-21) |
+| 128_college_weather.sql | `weather` / `weather_at` on games (NWS forecast at kickoff), schedule view carries them | yes (2026-09-24) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

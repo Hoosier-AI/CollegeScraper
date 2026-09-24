@@ -13,5 +13,6 @@ import './resolveOrphans.js';
 import './liveScoreboard.js';
 import './schedules.js';
 import './quality.js';
+import './weather.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

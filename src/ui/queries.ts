@@ -345,6 +345,8 @@ export interface MatchRow {
   result_pending: boolean;
   /** No kickoff time published (NCAA.com stores those at midnight Eastern). */
   kickoff_tbd: boolean;
+  /** NWS hourly forecast for the ground at kickoff (kept after kickoff), with when it was read. */
+  weather: (Record<string, unknown> & { read_at: string | null }) | null;
 }
 
 /** Midnight Eastern is how NCAA.com stores "time TBA"; nobody kicks off at 00:00. */
@@ -372,6 +374,7 @@ export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = 
     neutral_site: !!r.neutral_site, conference_game: !!r.conference_game, tournament: r.tournament ?? null, postseason: !!r.postseason,
     forfeit: !!r.forfeit, overtime: !!r.overtime, shootout: !!r.shootout, source_of_truth: r.source_of_truth ?? null, ncaa_contest_id: r.ncaa_contest_id ?? null,
     result_pending: resultPending, kickoff_tbd: tbd,
+    weather: r.weather ? { ...r.weather, read_at: r.weather_at ?? null } : null,
   };
 }
 

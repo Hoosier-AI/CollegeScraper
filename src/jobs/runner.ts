@@ -25,7 +25,7 @@ export interface ParamSpec { name: string; type: 'number' | 'string' | 'boolean'
 export interface JobMeta {
   description: string;
   /** Which worker lane runs it: everything but the live scoreboard is 'crawl'. */
-  lane: 'crawl' | 'live';
+  lane: 'crawl' | 'live' | 'aux';
   /** A composite of other jobs (hourly, nightly…). */
   composite?: boolean;
   params: ParamSpec[];

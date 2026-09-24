@@ -51,7 +51,10 @@ export interface ScheduleEntry {
   opponentName: string;
   opponentSiteId: string | null;
   homeAway: 'H' | 'A' | 'N';
+  /** What the schedule prints as the place: usually the city ("Durham, N.C."), sometimes the ground. */
   location: string | null;
+  /** The ground when the schedule gives it separately ("Freeman Field at Koskinen Stadium"). */
+  facility?: string | null;
   isConference: boolean;
   isExhibition: boolean;
   tournament: string | null;
@@ -207,7 +210,7 @@ export interface HttpResponseLike {
 }
 
 export interface Fetcher {
-  get(url: string, opts?: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number }): Promise<HttpResponseLike>;
+  get(url: string, opts?: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number; noStore?: boolean; documentedApi?: boolean }): Promise<HttpResponseLike>;
 }
 
 export interface SiteAdapter {

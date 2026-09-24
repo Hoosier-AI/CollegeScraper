@@ -31,6 +31,7 @@ const inSeason = (c: ScheduleClock) => c.month >= 8 && c.month <= 12;
 export const SCHEDULE: ScheduleEntry[] = [
   { job: 'live', label: 'Live scores and stats', cadence: 'every minute, 11:00–02:00 ET, Aug–Dec, while a game is unfinished', due: (c) => c.m % c.live.scoreboard_every_min === 0 && inLiveWindow(c.et), gate: async (db, now, season) => (await pendingLiveCount(db, season, liveDates(eastern(now)), Math.floor(now.getTime() / 1000))) > 0 },
   { job: 'hourly', label: 'Scores, box scores, aggregates', cadence: 'every 30 minutes, Aug–Dec', due: (c) => (c.m === 0 || c.m === 30) && inSeason(c) },
+  { job: 'weather', label: 'Weather at kickoff', cadence: 'hourly at :40, Aug–Dec', due: (c) => c.m === 40 && inSeason(c) },
   { job: 'standings', label: 'Standings, polls, record checks', cadence: 'every 3 hours at :15, Aug–Dec', due: (c) => c.m === 15 && c.h % 3 === 0 && inSeason(c) },
   { job: 'nightly', label: 'Nightly crawl', cadence: 'daily 08:15 UTC', due: (c) => c.h === 8 && c.m === 15 },
   { job: 'weekly', label: 'Weekly full re-sync', cadence: 'Tuesdays 15:00 UTC', due: (c) => c.dow === 2 && c.h === 15 && c.m === 0 },

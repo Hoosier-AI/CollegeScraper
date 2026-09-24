@@ -94,6 +94,7 @@ function parseNextgenCard($: CheerioAPI, cardEl: Element, ctx: SiteContext): Sch
     opponentSiteId: opponentIdFromHref(oppHistoryHref),
     homeAway: homeAwayFromStamp(stamp, /neutral/i.test(card.text()) && !/at|vs/.test(stamp ?? '')),
     location: location ?? facility,
+    facility: location ? facility : null,
     isConference,
     isExhibition,
     tournament,

@@ -99,8 +99,8 @@ app.get('/health', async (_req, reply) => {
   let dbOk = false;
   try { const { error } = await db.from('college_kv').select('key').limit(1); dbOk = !error; } catch { dbOk = false; }
   if (dbOk) dbLastOkAt = Date.now();
-  const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : { crawl: null, live: null };
-  const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: ['crawl', 'live'] });
+  const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : { crawl: null, live: null, aux: null };
+  const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: ['crawl', 'live', 'aux'] });
   reply.code(h.ok ? 200 : 503);
   return { ...h, jobs: jobNames().length, api: '/v1', time: new Date().toISOString() };
 });
@@ -111,8 +111,10 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   const controller = new AbortController();
   process.on('SIGTERM', () => controller.abort());
   process.on('SIGINT', () => controller.abort());
-  // Two lanes: the crawl (minutes to hours per run) and the live scoreboard (seconds, every three minutes in season).
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live'], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather'], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
+  // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['weather'], idleMs: 30_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });
