@@ -341,7 +341,18 @@ export interface MatchRow {
   home: MatchSide; away: MatchSide; live: { period: string | null; clock: string | null; updated_at: string | null } | null;
   venue: { name: string | null; city: string | null } | null; neutral_site: boolean; conference_game: boolean; tournament: string | null;
   postseason: boolean; forfeit: boolean; overtime: boolean; shootout: boolean; source_of_truth: string | null; ncaa_contest_id: number | null;
+  /** Not played as far as we know yet, but its day (Eastern) is over or kickoff was 4+ hours ago: the result has not come in. */
+  result_pending: boolean;
+  /** No kickoff time published (NCAA.com stores those at midnight Eastern). */
+  kickoff_tbd: boolean;
 }
+
+/** Midnight Eastern is how NCAA.com stores "time TBA"; nobody kicks off at 00:00. */
+export const kickoffTbd = (epoch: number | null | undefined): boolean => {
+  if (!epoch) return true;
+  const et = eastern(new Date(epoch * 1000));
+  return et.hour === 0 && et.minute === 0;
+};
 
 export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = Date.now()): MatchRow {
   const side = (p: 'home' | 'away'): MatchSide => ({
@@ -351,6 +362,8 @@ export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = 
   });
   const liveFresh = r.status === 'live' && r.live_updated_at && now - Date.parse(r.live_updated_at) < LIVE_STALE_MS;
   const status = r.status === 'live' && !liveFresh ? 'scheduled' : r.status;
+  const tbd = kickoffTbd(r.start_epoch);
+  const resultPending = status === 'scheduled' && (r.game_date < eastern(new Date(now)).date || (!tbd && now / 1000 - r.start_epoch > 4 * 3600));
   return {
     id: r.id, season: r.season, game_date: r.game_date, start_epoch: r.start_epoch ?? null, gender: r.gender, division: r.division, status,
     home: side('home'), away: side('away'),
@@ -358,13 +371,16 @@ export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = 
     venue: r.venue_name || r.venue_city ? { name: r.venue_name ?? null, city: r.venue_city ?? null } : null,
     neutral_site: !!r.neutral_site, conference_game: !!r.conference_game, tournament: r.tournament ?? null, postseason: !!r.postseason,
     forfeit: !!r.forfeit, overtime: !!r.overtime, shootout: !!r.shootout, source_of_truth: r.source_of_truth ?? null, ncaa_contest_id: r.ncaa_contest_id ?? null,
+    result_pending: resultPending, kickoff_tbd: tbd,
   };
 }
 
-const STATUS_ORDER: Record<string, number> = { live: 0, scheduled: 1, final: 2, postponed: 3, cancelled: 3 };
+/** Live, then upcoming, finished, results not in yet, and postponed/cancelled; within a group by kickoff, times TBA last. */
+const STATUS_ORDER: Record<string, number> = { live: 0, scheduled: 1, final: 2, pending: 3, postponed: 4, cancelled: 4 };
 export function sortMatches(rows: MatchRow[]): MatchRow[] {
-  return [...rows].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || a.game_date.localeCompare(b.game_date)
-    || (a.start_epoch ?? Number.MAX_SAFE_INTEGER) - (b.start_epoch ?? Number.MAX_SAFE_INTEGER) || (a.home.name ?? '').localeCompare(b.home.name ?? ''));
+  const group = (m: MatchRow) => STATUS_ORDER[m.result_pending ? 'pending' : m.status] ?? 9;
+  const kick = (m: MatchRow) => (m.kickoff_tbd || m.start_epoch == null ? Number.MAX_SAFE_INTEGER : m.start_epoch);
+  return [...rows].sort((a, b) => group(a) - group(b) || a.game_date.localeCompare(b.game_date) || kick(a) - kick(b) || (a.home.name ?? '').localeCompare(b.home.name ?? ''));
 }
 
 export interface MatchesFilter { date: string; days?: unknown; gender?: string; division?: string; conference?: string; status?: string; only?: string }

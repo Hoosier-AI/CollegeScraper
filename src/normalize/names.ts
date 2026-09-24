@@ -52,3 +52,11 @@ export function looseNameMatch(a: { firstName: string; lastName: string }, b: { 
   if (!fa || !fb) return true;
   return fa === fb || fa[0] === fb[0];
 }
+
+/** A stat crew's placeholder instead of a person — a team or bench card, "#0", "TM", "Team" — reads as no player. */
+export function personOrNull(raw: string | null | undefined): string | null {
+  const s = (raw ?? '').replace(/\s+/g, ' ').trim();
+  if (!/[a-z]/i.test(s)) return null;
+  if (/^(the )?(team|tm|bench|coach(es)?|staff|unknown)$/i.test(s)) return null;
+  return s;
+}

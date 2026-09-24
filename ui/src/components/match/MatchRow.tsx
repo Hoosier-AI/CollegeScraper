@@ -9,6 +9,8 @@ export interface MatchLike {
   home: { program_id: string | null; name: string | null; short_name?: string | null; seo?: string | null; logo: string | null; rank: number | null; score: number | null; conference?: { short: string | null; name: string } | null };
   away: { program_id: string | null; name: string | null; short_name?: string | null; seo?: string | null; logo: string | null; rank: number | null; score: number | null; conference?: { short: string | null; name: string } | null };
   live: { period: string | null; clock: string | null } | null;
+  /** Its day is over (or kickoff was hours ago) and no result has come in. */
+  result_pending?: boolean;
 }
 
 /** "63′ 2H", "HT", "OT 4′" from NCAA's period + clock strings. */
@@ -38,11 +40,12 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
   const final = g.status === 'final';
   const hs = g.home.score, as = g.away.score;
   const homeWin = final && hs != null && as != null && hs > as, awayWin = final && hs != null && as != null && as > hs;
-  const when = live ? liveMinute(g.live) : final ? 'FT' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ?? 'TBD') : g.status === 'postponed' ? 'PPD' : g.status === 'cancelled' ? 'CANC' : g.status;
+  const pending = !!g.result_pending;
+  const when = live ? liveMinute(g.live) : final ? 'FT' : pending ? 'No result' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ?? 'TBD') : g.status === 'postponed' ? 'PPD' : g.status === 'cancelled' ? 'CANC' : g.status;
   const tag = g.tournament ?? (g.conference_game ? (g.home.conference?.short ?? g.home.conference?.name ?? 'Conference') : null);
   return (
     <Link to={href(`/matches/${g.id}`)} className={`flex items-center gap-3 px-3 transition-colors duration-150 hover:bg-field-800 coarse:min-h-[64px] ${dense ? 'py-1.5' : 'py-2.5'}`} aria-label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${when}`}>
-      <span className={`w-14 shrink-0 text-center text-xs tnum ${live ? 'font-semibold text-win' : 'text-chalk-500'}`} title={g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined}>
+      <span className={`w-14 shrink-0 text-center text-xs tnum ${live ? 'font-semibold text-win' : pending ? 'text-note' : 'text-chalk-500'}`} title={pending ? 'The result has not been reported yet' : g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined}>
         {live && <span aria-hidden className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-win align-middle motion-reduce:animate-none" />}
         {showDate && !live ? <span className="block text-2xs">{fmt.day(g.game_date)}</span> : null}
         <span className="block">{when}</span>

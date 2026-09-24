@@ -11,10 +11,11 @@ import { MatchRow, type MatchLike } from '../components/match/MatchRow';
 import { Chip, EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Select, Skeleton } from '../components/primitives';
 
 const DIV_OPTIONS = [{ value: '', label: 'All' }, { value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
-const GROUPS: { key: string; label: string; statuses: string[] }[] = [
+const GROUPS: { key: string; label: string; statuses: string[]; pending?: boolean; note?: string }[] = [
   { key: 'live', label: 'Live', statuses: ['live'] },
-  { key: 'upcoming', label: 'Upcoming', statuses: ['scheduled'] },
+  { key: 'upcoming', label: 'Upcoming', statuses: ['scheduled'], pending: false },
   { key: 'final', label: 'Final', statuses: ['final'] },
+  { key: 'pending', label: 'Result not in yet', statuses: ['scheduled'], pending: true, note: 'These matches should have been played, but neither the schools nor NCAA.com have posted a score yet. Most arrive within a day.' },
   { key: 'other', label: 'Postponed or cancelled', statuses: ['postponed', 'cancelled'] },
 ];
 
@@ -68,7 +69,7 @@ export default function Matches() {
       )}
       <div className={`space-y-6 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
         {GROUPS.map((grp) => {
-          const rows = games.filter((g) => grp.statuses.includes(g.status));
+          const rows = games.filter((g) => grp.statuses.includes(g.status) && (grp.pending === undefined || !!g.result_pending === grp.pending));
           if (!rows.length) return null;
           const byDiv = new Map<string, typeof rows>();
           for (const g of rows) { const k = g.division ?? 'other'; byDiv.set(k, [...(byDiv.get(k) ?? []), g]); }
@@ -77,6 +78,7 @@ export default function Matches() {
               <h2 id={`grp-${grp.key}`} className="flex items-center gap-2 text-base font-semibold text-chalk-100">
                 {grp.key === 'live' && <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />}{grp.label}<span className="text-sm font-normal text-chalk-500 tnum">{rows.length}</span>
               </h2>
+              {grp.note && <p className="text-xs text-chalk-400">{grp.note}</p>}
               {[...byDiv.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([div, list]) => (
                 <div key={div} className="frame divide-y divide-field-700">
                   {!division && <div className="px-3 py-1.5 text-2xs font-medium text-chalk-500">{divisionLabel(div)}</div>}

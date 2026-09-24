@@ -6,7 +6,7 @@ import type { BoxScore, BoxScoreTeam, EventType, GameEvent, PeriodLine, PlayerSt
 import { EMPTY_PLAYER_LINE, EMPTY_TEAM_LINE } from '../../../model.js';
 import { clockToSeconds, minutesFromClock } from '../../../normalize/clock.js';
 import { int } from '../../../normalize/num.js';
-import { cleanName, splitName } from '../../../normalize/names.js';
+import { cleanName, personOrNull, splitName } from '../../../normalize/names.js';
 import { arr, bool, collapse, isObj, isoDate, nameJerseyKey, obj, str, type Dict } from './common.js';
 import { decodeNuxtData, findObject } from './devalue.js';
 
@@ -47,7 +47,7 @@ function mapAction(action: string | null, text: string): EventType {
 
 /** "Agunbiade, Remi" → "Remi Agunbiade"; already "First Last" stays as-is. */
 export function displayFromLastFirst(raw: string | null | undefined): string | null {
-  const s = collapse(raw)?.replace(/[.,;]+$/, '');
+  const s = personOrNull(collapse(raw)?.replace(/[.,;]+$/, ''));
   if (!s) return null;
   if (!s.includes(',')) return s;
   const { firstName, lastName } = splitName(s);

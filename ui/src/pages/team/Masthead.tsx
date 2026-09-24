@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
 import { fmt, resultOf, useAdmin } from '../../lib/api';
+import { todayEastern } from '../../lib/dates';
 import { genderLabel, divisionLabel, useHref } from '../../lib/filters';
 import { Badge, Figure, FormPips, ResultBadge, TeamLogo, VerifiedMark, type VerifyState } from '../../components/primitives';
 
@@ -96,7 +97,10 @@ function GameStrip({ label, g, id, href }: { label: string; g: any; id: string; 
         <div className="truncate text-sm font-medium text-chalk-100">{side.where} {side.opp ?? 'TBD'}</div>
         <div className="truncate text-xs text-chalk-500">{g.venue_name ? `${g.venue_name}${g.venue_city ? `, ${g.venue_city}` : ''}` : g.neutral_site ? 'Neutral site' : side.home ? 'Home' : 'Away'}{g.conference_game ? ', conference' : ''}</div>
       </div>
-      {side.result ? <ResultBadge result={side.result} us={side.us} them={side.them} ot={g.overtime} pk={g.shootout} forfeit={g.forfeit} /> : <Badge>{g.status === 'scheduled' ? 'upcoming' : g.status}</Badge>}
+      {side.result ? <ResultBadge result={side.result} us={side.us} them={side.them} ot={g.overtime} pk={g.shootout} forfeit={g.forfeit} /> : <Badge tone={g.status === 'scheduled' && g.game_date < todayEastern() ? 'amber' : 'gray'}>{statusWord(g)}</Badge>}
     </Link>
   );
 }
+
+/** A game without a result: upcoming, or its day is over and the score has not come in. */
+export const statusWord = (g: { status: string; game_date: string }): string => (g.status === 'scheduled' ? (g.game_date < todayEastern() ? 'no result yet' : 'upcoming') : g.status);

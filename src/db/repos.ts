@@ -378,6 +378,20 @@ export async function reorientGame(db: Db, game: GameRow): Promise<boolean> {
 }
 
 // ---------- schedule → games ----------
+/** "Team A vs. Team B" as an opponent name: a game between two other teams, copied from a tournament page. */
+export const isOthersFixture = (opponentName: string): boolean => /\S\s+vs?\.?\s+\S/i.test(opponentName);
+
+/**
+ * The status a school's schedule entry may set on a stored game, or null for no change. A school that has not
+ * posted a result yet says "scheduled", which is no information: it must never undo a final, live or postponed
+ * game another source (the opponent's site, NCAA.com) already recorded. Postponed/cancelled never override a score.
+ */
+export function scheduleStatusPatch(game: Pick<GameRow, 'status' | 'home_score' | 'away_score'>, entry: string | null, entryHasScore: boolean): string | null {
+  if (!entry || entry === game.status || game.status === 'final') return null;
+  if (entry === 'scheduled') return null;
+  if ((entry === 'postponed' || entry === 'cancelled') && (game.home_score != null || entryHasScore)) return null;
+  return entry;
+}
 export interface ScheduleWriteInput {
   programId: string; season: number; gender: Gender; division: Division | null; host: string;
   entries: ScheduleEntry[];
@@ -392,7 +406,11 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
   const { findGame } = await import('../identity/gameMatch.js');
   for (const e of input.entries) {
     if (e.isExhibition) continue;
+    // A multi-team event page lists other teams' games ("Stanislaus State vs. Concordia Irvine"): not this program's.
+    if (isOthersFixture(e.opponentName)) continue;
     const oppId = await input.resolveOpponent(e.opponentName);
+    // A program cannot play itself: an intrasquad or alumni game, or a name that resolved back to the school.
+    if (oppId === input.programId) continue;
     if (!oppId) unresolved.push(e.opponentName);
     const isHome = e.homeAway === 'H';
     const home = isHome ? input.programId : oppId;
@@ -428,12 +446,15 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
     const awayScore = e.result ? (isHome ? e.result.opponentScore : e.result.teamScore) : null;
     if (game) {
       const patch: Record<string, unknown> = { site_game_refs: { ...(game.site_game_refs ?? {}), ...(e.boxScoreUrl ? refs : {}) } };
-      if (game.status !== 'final' && status) patch.status = status;
+      const next = scheduleStatusPatch(game, status ?? null, homeScore != null);
+      if (next) patch.status = next;
       if (game.home_score == null && homeScore != null) { patch.home_score = homeScore; patch.away_score = awayScore; }
       if (e.result?.forfeit && !game.forfeit) patch.forfeit = true;
       if (e.homeAway === 'N') patch.neutral_site = true;
       if (e.attendance != null) patch.attendance = e.attendance;
       await updateGame(db, game.id, patch);
+      // The same list serves every program in the run: the other school's schedule must see this write.
+      Object.assign(game, patch);
       updated += 1;
     } else {
       game = await insertGame(db, {

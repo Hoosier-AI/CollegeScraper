@@ -11,7 +11,7 @@ import { liveMinute, MatchRow, type MatchLike } from './MatchRow';
 export function MatchMasthead({ g, sides }: { g: any; sides?: any }) {
   const href = useHref();
   const live = g.status === 'live', final = g.status === 'final';
-  const statusLine = live ? liveMinute(g.live ?? { period: g.live_period, clock: g.live_clock }) : final ? (g.forfeit ? 'Final, forfeit' : g.shootout ? 'Final, penalties' : g.overtime ? 'Final, overtime' : 'Final') : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ? `${fmt.weekday(g.game_date)}, ${fmt.kickoff(g.start_epoch)}` : fmt.weekday(g.game_date)) : g.status;
+  const statusLine = live ? liveMinute(g.live ?? { period: g.live_period, clock: g.live_clock }) : final ? (g.forfeit ? 'Final, forfeit' : g.shootout ? 'Final, penalties' : g.overtime ? 'Final, overtime' : 'Final') : g.result_pending ? 'Result not in yet' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ? `${fmt.weekday(g.game_date)}, ${fmt.kickoff(g.start_epoch)}` : `${fmt.weekday(g.game_date)}, time TBD`) : g.status;
   const team = (side: 'home' | 'away') => {
     const s = g[side]; const info = sides?.[side];
     return (
@@ -67,7 +67,7 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
     <ol className="frame divide-y divide-field-700" aria-label="Key events">
       {rows.map((e) => {
         const home = e.program_id === homeId; const ev = EV[e.event_type]!;
-        const who = <span className="text-sm"><span className="font-medium text-chalk-100">{e.player_name_raw ?? ''}</span>{e.assist_name_raw && <span className="text-chalk-400"> (assist {e.assist_name_raw})</span>}{e.event_type === 'goal' && e.home_score != null && <span className="ml-2 text-chalk-500 tnum">{e.home_score}–{e.away_score}</span>}</span>;
+        const who = <span className="text-sm"><span className="font-medium text-chalk-100">{personName(e.player_name_raw) ?? (e.event_type === 'goal' ? 'Unknown scorer' : 'Team (bench)')}</span>{e.assist_name_raw && <span className="text-chalk-400"> (assist {e.assist_name_raw})</span>}{e.event_type === 'goal' && e.home_score != null && <span className="ml-2 text-chalk-500 tnum">{e.home_score}–{e.away_score}</span>}</span>;
         return (
           <li key={e.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-2">
             <div className={`flex items-center justify-end gap-2 ${home ? '' : 'invisible'}`}>{who}<span className={ev.cls} title={ev.label}>{ev.icon}<span className="sr-only">{ev.label}</span></span></div>
@@ -80,6 +80,9 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
     </ol>
   );
 }
+
+/** Stored names from before the parsers dropped placeholders ("0", "TEAM") still show as no person. */
+const personName = (raw: string | null | undefined): string | null => { const s = (raw ?? '').trim(); return /[a-z]/i.test(s) && !/^(the )?(team|tm|bench)$/i.test(s) ? s : null; };
 
 /* ---------- lineups ---------- */
 

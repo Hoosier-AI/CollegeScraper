@@ -31,3 +31,16 @@ describe('hotlinkable', () => {
     expect(hotlinkable(null)).toBe(false);
   });
 });
+
+import { personOrNull } from '../../src/normalize/names.js';
+describe('personOrNull', () => {
+  it('drops stat-crew placeholders for team and bench cards', () => {
+    expect(personOrNull('0')).toBeNull();
+    expect(personOrNull('#0')).toBeNull();
+    expect(personOrNull('TEAM')).toBeNull();
+    expect(personOrNull('Bench')).toBeNull();
+    expect(personOrNull('')).toBeNull();
+    expect(personOrNull('Olivia Goretski')).toBe('Olivia Goretski');
+    expect(personOrNull('Goretski, Olivia')).toBe('Goretski, Olivia');
+  });
+});

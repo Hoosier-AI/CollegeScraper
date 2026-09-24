@@ -47,6 +47,9 @@ export const qs = (o: Record<string, unknown>) => {
   return s ? `?${s}` : '';
 };
 
+/** Midnight Eastern: NCAA.com's placeholder for a kickoff time not yet announced. */
+export const tbaEpoch = (epoch: number): boolean => new Date(epoch * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' }).replace(/^24/, '00') === '00:00';
+
 export const fmt = {
   num: (v: unknown, d = 0) => (v === null || v === undefined || v === '' ? '–' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d })),
   pct: (v: unknown) => (v === null || v === undefined ? '–' : `${(Number(v) * 100).toFixed(1)}%`),
@@ -65,9 +68,10 @@ export const fmt = {
   day: (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '–'),
   weekday: (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '–'),
   /** Kickoff from unix seconds in the viewer's own time zone: "7:00 PM". */
-  kickoff: (epoch: number | null | undefined) => (epoch ? new Date(epoch * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null),
+  // NCAA.com stores "time TBA" as midnight Eastern; nobody kicks off at 00:00, so that reads as no time.
+  kickoff: (epoch: number | null | undefined) => (epoch && !tbaEpoch(epoch) ? new Date(epoch * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null),
   /** The same instant in Eastern time, for the title attribute: "7:00 PM ET". */
-  kickoffEt: (epoch: number | null | undefined) => (epoch ? `${new Date(epoch * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} ET` : null),
+  kickoffEt: (epoch: number | null | undefined) => (epoch && !tbaEpoch(epoch) ? `${new Date(epoch * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} ET` : null),
   /** Ordinal: 1st, 2nd, 3rd, 11th. */
   ordinal: (n: number | null | undefined) => { if (n == null) return '–'; const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`; },
   /** Whole minutes ago in words: "just now", "23 minutes ago", "3 hours ago", "2 days ago". */

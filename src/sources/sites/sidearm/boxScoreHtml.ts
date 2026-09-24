@@ -5,7 +5,7 @@
 import * as cheerio from 'cheerio';
 import type { BoxScore, BoxScoreTeam, GameEvent, PlayerStatLine, SiteContext, TeamStatLine, EventType } from '../../../model.js';
 import { EMPTY_PLAYER_LINE, EMPTY_TEAM_LINE } from '../../../model.js';
-import { splitName } from '../../../normalize/names.js';
+import { personOrNull, splitName } from '../../../normalize/names.js';
 import { int } from '../../../normalize/num.js';
 import { clockToSeconds, minutesFromClock } from '../../../normalize/clock.js';
 import { normalizePosition } from '../../../normalize/position.js';
@@ -160,9 +160,9 @@ export function parseLegacyBoxScore(html: string, url: string, ctx: SiteContext,
     const typeText = rest.slice(0, -1).join(' ').toLowerCase() + ' ' + (r[0] ?? '').toLowerCase();
     const type: EventType = /red|ejection/.test(typeText) ? 'red' : 'yellow';
     const side = sideOf(teamLabel);
-    const name = collapse(player.replace(/^#?\d+\s*/, ''));
-    events.push({ period: periodOf(clock), clock, clockSeconds: clockToSeconds(clock), seq: ++seq, side, type, playerNameRaw: name, assistNameRaw: null, homeScore: null, awayScore: null, text: `${type} card ${name}` });
-    if (side) { const s = splitName(name); const p = players[side].find((x) => x.lastName.toLowerCase() === s.lastName.toLowerCase()); if (p) { if (type === 'red') p.red = (p.red ?? 0) + 1; else p.yellow = (p.yellow ?? 0) + 1; } }
+    const name = personOrNull(collapse(player.replace(/^#?\d+\s*/, '')));
+    events.push({ period: periodOf(clock), clock, clockSeconds: clockToSeconds(clock), seq: ++seq, side, type, playerNameRaw: name, assistNameRaw: null, homeScore: null, awayScore: null, text: `${type} card ${name ?? 'team (bench)'}` });
+    if (side && name) { const s = splitName(name); const p = players[side].find((x) => x.lastName.toLowerCase() === s.lastName.toLowerCase()); if (p) { if (type === 'red') p.red = (p.red ?? 0) + 1; else p.yellow = (p.yellow ?? 0) + 1; } }
   }
   for (const side of ['home', 'away'] as const) { const t = totalsFor(side); t.yellow = players[side].reduce((s, p) => s + (p.yellow ?? 0), 0); t.red = players[side].reduce((s, p) => s + (p.red ?? 0), 0); t.assists = players[side].reduce((s, p) => s + (p.assists ?? 0), 0); }
   events.sort((a, b) => (a.clockSeconds ?? 0) - (b.clockSeconds ?? 0)).forEach((e, i) => { e.seq = i + 1; });

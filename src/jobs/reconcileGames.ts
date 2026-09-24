@@ -1,8 +1,8 @@
 // Choose source_of_truth per final game: 'site' when the school box score validated, else 'ncaa'.
 import { registerJob, type JobContext } from './runner.js';
 import { selectAll, kvSet } from '../db/client.js';
-import { updateGame, listProgramSeasons } from '../db/repos.js';
-import { currentSeason } from './seasons.js';
+import { updateGame, listProgramSeasons, isOthersFixture } from '../db/repos.js';
+import { currentSeason, eastern } from './seasons.js';
 
 interface G { id: string; status: string; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; ncaa_contest_id?: number | null; source_of_truth: string | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }
 interface TS { game_id: string; program_id: string; source: string; is_home: boolean; goals: number | null; shots: number | null; yellow_cards: number | null }
@@ -40,6 +40,7 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     for (let i = 0; i < pre.length; i += 100) await db.from('college_games').delete().in('id', pre.slice(i, i + 100).map((g) => g.id));
     ctx.inc('preseason_exhibitions_deleted', pre.length);
   }
+  await repairFixtures(ctx, season);
   let games = await selectAll<G>(db, 'college_games', 'id,status,home_program_id,away_program_id,home_score,away_score,source_of_truth,site_fetched_at,ncaa_fetched_at,conference_game,postseason,tournament,ncaa_contest_id',
     (q) => { q = q.eq('season', season).eq('status', 'final'); return ctx.params.all ? q : q.or(`source_of_truth.is.null,site_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()},ncaa_fetched_at.gte.${new Date(Date.now() - 3 * 86400000).toISOString()}`); });
   if (programIds) games = games.filter((g) => (g.home_program_id && programIds!.includes(g.home_program_id)) || (g.away_program_id && programIds!.includes(g.away_program_id)));
@@ -175,3 +176,23 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
 }
 
 registerJob('reconcile-games', reconcileGames);
+
+/**
+ * Fixture rows no source should have produced, and one that a later write undid:
+ *  - a program playing itself, or a row whose "opponent" is two other teams ("A vs. B" from a tournament page),
+ *    neither linked to NCAA.com nor carrying a box score: deleted;
+ *  - a game whose day is over with both scores stored but still "scheduled" (a school that had not posted the
+ *    result yet used to overwrite the opponent's final): marked final.
+ */
+export async function repairFixtures(ctx: JobContext, season: number): Promise<void> {
+  const db = ctx.db;
+  const today = eastern().date;
+  const rows = await selectAll<any>(db, 'college_games', 'id,game_date,status,home_program_id,away_program_id,home_name,away_name,home_score,away_score,ncaa_contest_id,source_of_truth',
+    (q) => q.eq('season', season).is('source_of_truth', null).neq('status', 'final'));
+  const junk = rows.filter((g) => !g.ncaa_contest_id && ((g.home_program_id && g.home_program_id === g.away_program_id) || isOthersFixture(g.home_name ?? '') || isOthersFixture(g.away_name ?? '')));
+  for (let i = 0; i < junk.length; i += 100) await db.from('college_games').delete().in('id', junk.slice(i, i + 100).map((g) => g.id));
+  ctx.inc('junk_fixtures_deleted', junk.length);
+  const scored = rows.filter((g) => g.status === 'scheduled' && g.game_date < today && g.home_score != null && g.away_score != null);
+  for (const g of scored) await updateGame(db, g.id, { status: 'final' });
+  ctx.inc('scored_fixtures_finalized', scored.length);
+}
