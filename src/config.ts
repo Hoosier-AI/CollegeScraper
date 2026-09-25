@@ -12,6 +12,8 @@ const schema = z.object({
   LOG_LEVEL: z.string().default('info'),
   PORT: z.coerce.number().int().default(8080),
   SCHEDULER_ENABLED: z.string().default('0'),
+  // '0' serves pages and the API only: a laptop pointed at the production database must not claim its jobs.
+  WORKERS_ENABLED: z.string().default('1'),
   // Public read API (/v1): "name:key,name:key" (keys ≥ 16 chars), browser origins allowed to call it, per-key
   // requests per minute, and the base URL advertised in /v1/openapi.json.
   COLLEGE_API_KEYS: z.string().default(''),
@@ -43,6 +45,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     LOG_LEVEL: env.LOG_LEVEL,
     PORT: env.PORT,
     SCHEDULER_ENABLED: env.SCHEDULER_ENABLED,
+    WORKERS_ENABLED: env.WORKERS_ENABLED,
     COLLEGE_API_KEYS: env.COLLEGE_API_KEYS,
     CORS_ORIGINS: env.CORS_ORIGINS,
     API_RATE_LIMIT_PER_MIN: env.API_RATE_LIMIT_PER_MIN,
