@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
 import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
+import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TeamLogo } from '../components/primitives';
 
@@ -16,11 +17,15 @@ const PRESETS: Preset[] = [
 const SPLIT_LABEL: Record<string, string> = { home: 'Home', away: 'Away', neutral: 'Neutral', conf: 'Conference', nonconf: 'Non-conference', vs_ranked: 'Against ranked teams' };
 
 export default function Player() {
-  const { id = '' } = useParams();
+  const { id: param = '' } = useParams();
+  const entity = useEntityId('player', param);
+  const id = entity.id;
   const admin = useAdmin();
   const href = useHref();
   const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PRESETS.map((p) => p.id) });
-  const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`) });
+  const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`), enabled: !!id });
+  if (entity.missing) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/rankings?view=leaders">Browse leaders</Link>} />;
+  if (entity.error) return <ErrorBox error={entity.error} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const p = q.data?.player;

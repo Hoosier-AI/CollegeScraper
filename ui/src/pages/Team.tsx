@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, qs, fmt, useAdmin } from '../lib/api';
 import { useFilters, useHref } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
+import { useEntityId } from '../lib/entity';
 import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, Section, Skeleton, TabsNav, TeamLogo } from '../components/primitives';
 import { RunProgress } from '../components/RunProgress';
 import { TeamMasthead } from './team/Masthead';
@@ -14,24 +15,30 @@ type Tab = 'roster' | 'games' | 'season' | 'coaches' | 'honors';
 const TABS: Tab[] = ['roster', 'games', 'season', 'coaches', 'honors'];
 
 export default function Team() {
-  const { id = '' } = useParams();
+  // /teams/<uuid> (links inside the app) or /teams/<school>/<men|women> (the address search engines see).
+  const { id: param = '', school, gender } = useParams();
+  const entity = useEntityId('team', school ? `${school}/${gender}` : param);
+  const id = entity.id;
+  const { pathname } = useLocation();
   const f = useFilters();
   const admin = useAdmin();
   const href = useHref();
   const qc = useQueryClient();
   const [tab] = useUrlState('tab', 'roster', { allow: TABS });
   const [runId, setRunId] = useState<string | null>(null);
-  const team = useQuery({ queryKey: ['program', id, f.season], queryFn: () => api<any>(`/api/programs/${id}${qs({ season: f.season })}`) });
-  const roster = useQuery({ queryKey: ['roster', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/roster${qs({ season: f.season })}`) });
-  const games = useQuery({ queryKey: ['pgames', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/games${qs({ season: f.season })}`) });
+  const team = useQuery({ queryKey: ['program', id, f.season], queryFn: () => api<any>(`/api/programs/${id}${qs({ season: f.season })}`), enabled: !!id });
+  const roster = useQuery({ queryKey: ['roster', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/roster${qs({ season: f.season })}`), enabled: !!id });
+  const games = useQuery({ queryKey: ['pgames', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/games${qs({ season: f.season })}`), enabled: !!id });
   const sync = useMutation({ mutationFn: (force: boolean) => api<{ id: string }>(`/api/programs/${id}/sync`, { method: 'POST', body: JSON.stringify({ season: f.season, force }) }), onSuccess: (r) => setRunId(r.id) });
   const refreshAll = () => { qc.invalidateQueries({ queryKey: ['program', id] }); qc.invalidateQueries({ queryKey: ['roster', id] }); qc.invalidateQueries({ queryKey: ['pgames', id] }); };
+  if (entity.missing) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
+  if (entity.error) return <ErrorBox error={entity.error} />;
   if (team.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-10 w-96" /><Skeleton className="h-64" /></div>;
   if (team.error) return <ErrorBox error={team.error} retry={() => team.refetch()} />;
   if (!team.data?.program) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
   const t = team.data; const p = t.program; const s = t.teamStats;
   const honors = (roster.data ?? []).flatMap((r: any) => r.honors.map((h: string) => ({ player: r.player?.display_name, id: r.player?.id, text: h })));
-  const tabHref = (x: Tab) => href(`/teams/${id}`, { tab: x === 'roster' ? null : x });
+  const tabHref = (x: Tab) => href(pathname, { tab: x === 'roster' ? null : x });
   const tabs = [
     { id: 'roster' as Tab, label: 'Roster', count: roster.data?.length },
     { id: 'games' as Tab, label: 'Matches', count: games.data?.length },

@@ -14,6 +14,7 @@ const Team = lazy(() => import('./pages/Team'));
 const Match = lazy(() => import('./pages/Match'));
 const Matches = lazy(() => import('./pages/Matches'));
 const Player = lazy(() => import('./pages/Player'));
+const Conference = lazy(() => import('./pages/Conference'));
 const Rankings = lazy(() => import('./pages/Rankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Docs = lazy(() => import('./pages/Docs'));
@@ -49,10 +50,11 @@ const router = createBrowserRouter([
           { index: true, element: <Home /> },
           { path: 'teams', element: <Teams /> },
           { path: 'teams/:id', element: <Team /> },
+          { path: 'teams/:school/:gender', element: <Team /> },
           { path: 'matches', element: <Matches /> },
           { path: 'matches/:id', element: <Match /> },
           { path: 'conferences', element: <Redirect to={() => '/rankings'} extra="view=standings" /> },
-          { path: 'conferences/:id', element: <Redirect to={() => '/rankings'} extra="view=standings" params={(p) => ({ conference: p.id })} /> },
+          { path: 'conferences/:id', element: <Conference /> },
           // Old addresses keep working.
           { path: 'games/:id', element: <Redirect to={(p) => `/matches/${p.id}`} /> },
           { path: 'standings', element: <Redirect to={() => '/rankings'} /> },

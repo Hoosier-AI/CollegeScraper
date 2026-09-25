@@ -1,12 +1,13 @@
 // One match: the scoreline masthead, then Summary / Lineups / Stats / Head-to-head / Preview.
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { api, fmt, useAdmin } from '../lib/api';
 import { useHref } from '../lib/filters';
 import { agoShort, useNow } from '../lib/hooks';
 import { scorersFrom } from '../lib/match';
 import { useUrlState } from '../lib/urlState';
+import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
 import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
@@ -20,7 +21,10 @@ const PLAYER_PRESETS: Preset[] = [
 ];
 
 export default function Match() {
-  const { id = '' } = useParams();
+  const { id: param = '' } = useParams();
+  const entity = useEntityId('match', param);
+  const id = entity.id;
+  const { pathname } = useLocation();
   const admin = useAdmin();
   const href = useHref();
   const [tabParam] = useUrlState('tab', '', { allow: ['summary', 'lineups', 'stats', 'h2h', 'preview', 'raw'] });
@@ -30,10 +34,12 @@ export default function Match() {
   const isLive = (q: any) => q.state.data?.game?.status === 'live';
   // While live: the scoreboard tick is every minute and the stats snapshot every couple of minutes, so 30 s keeps
   // the page within a tick of the source without hammering the API.
-  const box = useQuery({ queryKey: ['game', id], queryFn: () => api<any>(`/api/games/${id}`), refetchInterval: (q) => (isLive(q) ? 30_000 : false) });
-  const preview = useQuery({ queryKey: ['preview', id], queryFn: () => api<any>(`/api/matches/${id}/preview`), refetchInterval: (q) => (isLive(q) ? 30_000 : false) });
+  const box = useQuery({ queryKey: ['game', id], queryFn: () => api<any>(`/api/games/${id}`), enabled: !!id, refetchInterval: (q) => (isLive(q) ? 30_000 : false) });
+  const preview = useQuery({ queryKey: ['preview', id], queryFn: () => api<any>(`/api/matches/${id}/preview`), enabled: !!id, refetchInterval: (q) => (isLive(q) ? 30_000 : false) });
   const now = useNow(5_000);
   const refetch = useMutation({ mutationFn: () => api(`/api/games/${id}/refetch`, { method: 'POST' }) });
+  if (entity.missing) return <EmptyState title="No such match" body="The link may be out of date." />;
+  if (entity.error) return <ErrorBox error={entity.error} />;
   if (preview.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-44" /><Skeleton className="h-10 w-96" /><Skeleton className="h-64" /></div>;
   if (preview.error) return <ErrorBox error={preview.error} retry={() => preview.refetch()} />;
   if (!preview.data?.game) return <EmptyState title="No such match" body="The link may be out of date." />;
@@ -89,7 +95,7 @@ export default function Match() {
         )}
         {admin && <button className="btn-ghost btn-sm" onClick={() => refetch.mutate()} disabled={refetch.isPending || refetch.isSuccess}>{refetch.isSuccess ? 'Re-fetch queued' : 'Re-fetch'}</button>}
       </div>
-      <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => href(`/matches/${id}`, { tab: x === defaultTab ? null : x })} />
+      <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => href(pathname, { tab: x === defaultTab ? null : x })} />
 
       {tab === 'summary' && (
         <div className="space-y-6">

@@ -1,5 +1,5 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
-import Fastify from 'fastify';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import { loadConfig } from './config.js';
 import { getDb } from './db/client.js';
@@ -20,6 +20,11 @@ import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { log } from './log.js';
+import { registerSeo } from './seo/routes.js';
+import { DbSeoData } from './seo/data.js';
+import { fileTemplate } from './seo/template.js';
+import { BotVerifier } from './seo/bots.js';
+import { DEFAULT_PUBLIC_URL } from './seo/util.js';
 
 const cfg = loadConfig();
 registerAllJobs();
@@ -43,22 +48,23 @@ function authorized(header: string | undefined): boolean {
 const anonLimiter = new RateLimiter(cfg.API_ANON_RATE_LIMIT_PER_MIN);
 const keyLimiter = new RateLimiter(cfg.API_RATE_LIMIT_PER_MIN);
 const siteLimiter = new RateLimiter(cfg.API_ANON_RATE_LIMIT_PER_MIN * 5);
+// Googlebot and Bingbot, proven by reverse + forward DNS, are not held to the site limit (sitemap crawls).
+const bots = new BotVerifier();
+const limitSite = async (req: FastifyRequest, reply: FastifyReply): Promise<boolean> => {
+  if (await bots.isVerified(req.ip, req.headers['user-agent'])) { usage.hit('site', false); return true; }
+  const r = siteLimiter.take(anonPrincipal(req.ip).name);
+  usage.hit('site', !r.ok);
+  reply.header('X-RateLimit-Limit', String(siteLimiter.max));
+  reply.header('X-RateLimit-Remaining', String(r.remaining));
+  if (!r.ok) { reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000))); reply.code(429).send({ error: 'rate_limited', retry_after_seconds: Math.ceil(r.resetMs / 1000) }); return false; }
+  return true;
+};
 
 // The site's read routes are public; enqueueing work, cancelling runs and the crawl-health pages are not.
 // Usage per principal (keys, admin, anon, site) for the console; flushed to the database once a minute.
 const usage = new UsageMeter(cfg.SUPABASE_URL ? getDb() : null);
 usage.start();
-registerUiApi(app, {
-  authorized,
-  limitAnonymous: (req, reply) => {
-    const r = siteLimiter.take(anonPrincipal(req.ip).name);
-    usage.hit('site', !r.ok);
-    reply.header('X-RateLimit-Limit', String(siteLimiter.max));
-    reply.header('X-RateLimit-Remaining', String(r.remaining));
-    if (!r.ok) { reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000))); reply.code(429).send({ error: 'rate_limited', retry_after_seconds: Math.ceil(r.resetMs / 1000) }); return false; }
-    return true;
-  },
-});
+registerUiApi(app, { authorized, limitAnonymous: limitSite });
 
 // Public read API: open to anyone at the free-tier limit, higher for named keys (env list + keys made in the console).
 const apiKeys = parseApiKeys(cfg.COLLEGE_API_KEYS);
@@ -80,17 +86,29 @@ log.info({ keys: apiKeys.map((k) => k.name), anonPerMin: cfg.API_ANON_RATE_LIMIT
 const startedAt = Date.now();
 registerConsoleApi(app, { keyStore, usage, envKeys: apiKeys.map((k) => k.name), corsOrigins, limits: { key: cfg.API_RATE_LIMIT_PER_MIN, anon: cfg.API_ANON_RATE_LIMIT_PER_MIN, site: cfg.API_ANON_RATE_LIMIT_PER_MIN * 5 }, startedAt });
 
-// Built stats viewer (ui/dist) with SPA fallback; API and health routes are registered above it.
+// Server-rendered public pages (titles, canonicals, JSON-LD, a text summary), slug redirects, sitemaps, robots.txt
+// and real 404s. Registered before the static files so its specific routes win over the static wildcard.
 const uiDist = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'ui', 'dist');
+const seo = cfg.SUPABASE_URL ? registerSeo(app, {
+  data: new DbSeoData(getDb()),
+  template: fileTemplate(resolve(uiDist, 'index.html')),
+  baseUrl: cfg.PUBLIC_URL ?? DEFAULT_PUBLIC_URL,
+  limit: limitSite,
+  gscVerificationFile: cfg.GSC_VERIFICATION_FILE ?? null,
+  indexNowKey: cfg.INDEXNOW_KEY ?? null,
+  log,
+}) : null;
+
+// Built stats viewer (ui/dist); API and health routes are registered above it.
 if (existsSync(uiDist)) {
   // wildcard: true serves whatever is on disk at request time, so a UI rebuild does not need a restart.
   app.register(fastifyStatic, { root: uiDist, prefix: '/', wildcard: true });
-  app.setNotFoundHandler((req, reply) => {
-    // API-ish paths 404 as JSON; everything else gets index.html.
-    if (req.url.startsWith('/api/') || req.url.startsWith('/v1/') || req.url.startsWith('/health')) return reply.code(404).send({ error: 'not found' });
-    return reply.sendFile('index.html');
-  });
 }
+app.setNotFoundHandler((req, reply) => {
+  if (seo) return seo.notFound(req, reply);
+  if (req.url.startsWith('/api/') || req.url.startsWith('/v1/') || req.url.startsWith('/health') || !existsSync(uiDist)) return reply.code(404).send({ error: 'not found' });
+  return reply.sendFile('index.html');
+});
 
 // Liveness for Render: the database answers and both worker lanes have beaten recently (see src/ops/health.ts).
 let dbLastOkAt: number | null = null;

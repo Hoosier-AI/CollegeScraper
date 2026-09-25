@@ -80,6 +80,7 @@ export function Footer() {
         <a href="/v1/openapi.json" className="text-pitch-400 hover:text-pitch-300">OpenAPI</a>
         <Link to="/admin" className="hover:text-chalk-300">Admin</Link>
       </div>
+      <p className="mt-3"><a href="https://www.plaibook.soccer/?utm_source=stats&utm_medium=referral&utm_campaign=footer" className="text-pitch-400 hover:text-pitch-300">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
     </footer>
   );
 }

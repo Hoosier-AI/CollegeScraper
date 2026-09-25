@@ -5,6 +5,7 @@ import { api, ApiError, clearToken, useAdmin } from './lib/api';
 import { FiltersProvider } from './lib/filters';
 import { BottomBar, Footer, TopBar, useFocusMain } from './components/shell';
 import { Skeleton } from './components/primitives';
+import { removeServerSummary } from './lib/entity';
 
 export default function App() {
   const admin = useAdmin();
@@ -13,6 +14,8 @@ export default function App() {
   const rejected = check.error instanceof ApiError && check.error.status === 401;
   useEffect(() => { if (rejected) clearToken(); }, [rejected]);
   useFocusMain();
+  // The server-rendered summary is for crawlers and the first paint; the app replaces it as soon as it mounts.
+  useEffect(() => { removeServerSummary(); }, []);
   return (
     <FiltersProvider>
       <a href="#main" className="sr-only-focusable">Skip to content</a>

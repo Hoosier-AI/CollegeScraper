@@ -16,11 +16,24 @@
     <meta property="og:site_name" content="Plaibook Stats" />
     <meta property="og:title" content="Plaibook Stats — NCAA college soccer data" />
     <meta property="og:description" content="Rosters, box scores, season stats, standings and polls for every NCAA soccer program. Browse it, or call the API — no key required." />
-    <meta property="og:image" content="/brand/og.png" />
+    <meta property="og:image" content="https://plaibook-college-scraper.onrender.com/brand/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- Server-rendered pages put their own title, description, canonical, Open Graph and JSON-LD here (src/seo). -->
+    <!--ssr-head-->
+    <style>
+      /* The server-rendered summary shown before the app boots (and to crawlers); the app removes it on mount. */
+      #ssr { max-width: 72rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; font: 15px/1.5 'IBM Plex Sans', system-ui, sans-serif; color: #d9dee5; }
+      #ssr h1 { font-size: 1.75rem; margin: 0.75rem 0; } #ssr h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+      #ssr a { color: #5fd3a5; } #ssr nav ol { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0; }
+      #ssr nav li + li::before { content: '/'; margin-right: 0.5rem; color: #6b7a8c; }
+      #ssr table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; font-size: 13px; }
+      #ssr caption { text-align: left; font-weight: 600; padding: 0.25rem 0; } #ssr th, #ssr td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #1d2b3d; text-align: left; white-space: nowrap; }
+      #ssr .ssr-cta { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #1d2b3d; }
+    </style>
   </head>
   <body class="bg-field-950 text-chalk-100">
     <div id="root"></div>
+    <!--ssr-body-->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

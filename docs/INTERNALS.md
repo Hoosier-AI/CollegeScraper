@@ -36,6 +36,7 @@ fixtures/                recorded real payloads used by the tests
 scripts/sanity.sql       post-crawl data checks
 src/api/                 public read API (/v1): routes, auth + rate limits, OpenAPI document
 src/ui/                  the site's own JSON API (/api) and the shared query layer both APIs call
+src/seo/                 server-rendered head + summary for search engines, slug redirects, sitemaps, robots.txt, 404s
 ui/                      Vite + React + Tailwind front end, built into ui/dist
 ```
 
@@ -109,6 +110,29 @@ conference standings pages for ~1,300 programs turned it into a multi-hour crawl
 
 For a new season, run `discover-teams` and `detect-sites` once (Jobs page or CLI), then sync teams on demand.
 Seasons from 2025 use the NCAA GraphQL scoreboard; the old casablanca JSON feed ended with 2024 data.
+
+## Search engines
+
+The site is a single-page app, so `src/seo/` renders what crawlers need on the server, in the same response the
+app boots from: a page-specific `<head>` (title, description, canonical on `PUBLIC_URL`, Open Graph, JSON-LD
+`SportsTeam` / `Person` / `SportsEvent` / `BreadcrumbList`) at `<!--ssr-head-->` in `ui/index.html`, and an escaped
+text summary in `<section id="ssr">` at `<!--ssr-body-->`, which the app removes when it mounts.
+
+- Addresses: `/teams/<school seo>/<men|women>`, `/players/<slug>`, `/matches/<slug>`, `/conferences/<ncaa_seo>`
+  (migration 129). UUID addresses 301 to them; a renamed player or re-oriented game 301s through
+  `college_slug_redirects`. The app resolves slugs with `GET /api/resolve?kind=&key=`.
+- Real status codes: unknown slugs and paths that are not app routes are 404 pages; `/games/:id`, `/standings`,
+  `/leaders`, `/conferences` are server 301s. A database failure answers 503 with the plain app shell.
+- Rendered pages are cached in process (500 pages, 5 minutes) and sent with
+  `Cache-Control: public, max-age=300, s-maxage=3600, stale-while-revalidate=86400`.
+- Players with no appearances, or `college_players.noindex = true`, get `noindex,follow` and stay out of the
+  sitemaps; suppressed players are 404.
+- `/sitemap.xml` indexes `core.xml`, `teams.xml` and per-season `matches-<season>-<n>.xml` /
+  `players-<season>-<n>.xml` (40,000 URLs each), built on demand and cached for an hour.
+- `robots.txt` is generated (`src/seo/robots.ts`, mirrored in `ui/public/robots.txt`): `/api/` is crawlable because
+  pages render from it; admin surfaces and `/v1` are not; AI training crawlers are blocked everywhere.
+- Googlebot and Bingbot, verified by reverse and forward DNS (cached 24 h), are exempt from the site rate limit.
+- `GSC_VERIFICATION_FILE` and `INDEXNOW_KEY` add the Search Console verification file and the IndexNow key file.
 
 ## Database
 

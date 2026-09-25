@@ -34,6 +34,11 @@ services:
         value: "60"
       - key: PUBLIC_URL
         value: https://plaibook-college-scraper.onrender.com
+      # Search Console HTML-file verification (the file name, e.g. google1234abcd.html) and the IndexNow key.
+      - key: GSC_VERIFICATION_FILE
+        sync: false
+      - key: INDEXNOW_KEY
+        sync: false
       - key: LOG_LEVEL
         value: info
       - key: PORT

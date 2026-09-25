@@ -15,7 +15,7 @@ export interface UiApiOptions {
    * Rate-limits a request that is not from an admin, replying 429 itself when over the limit.
    * Returning false means the reply has already been sent.
    */
-  limitAnonymous?: (req: FastifyRequest, reply: FastifyReply) => boolean;
+  limitAnonymous?: (req: FastifyRequest, reply: FastifyReply) => boolean | Promise<boolean>;
 }
 
 export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: string | undefined) => boolean)): void {
@@ -30,7 +30,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
       return;
     }
     if (authorized(req.headers.authorization)) return;
-    if (limitAnonymous && !limitAnonymous(req, reply)) return reply;
+    if (limitAnonymous && !(await limitAnonymous(req, reply))) return reply;
   });
   const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1990 && n < 2100 ? n : null; };
   const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
