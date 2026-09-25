@@ -510,7 +510,7 @@ export async function matchPreview(db: Db, id: string) {
     for (const m of h2hGames) {
       const t = truth.get(m.id);
       const rows = (t ? bySource.get(`${m.id}|${t}`) : undefined) ?? bySource.get(`${m.id}|site`) ?? bySource.get(`${m.id}|ncaa`) ?? [];
-      scorersByGame.set(m.id, rows.map((e) => ({ program_id: e.program_id ?? null, name: e.player_name_raw ?? null, minute: goalMinute(e.clock, e.period) })));
+      scorersByGame.set(m.id, rows.map((e) => ({ program_id: e.program_id ?? null, name: firstLast(e.player_name_raw), minute: goalMinute(e.clock, e.period) })));
     }
   }
   // Earlier meetings stored as results only (the 2024/2025 backfill) have no scorers: fetch their NCAA.com box
@@ -532,6 +532,14 @@ async function requestMeetingDetail(db: Db, games: MatchRow[]): Promise<boolean>
   for (const [season, ids] of bySeason) await enqueue(db, 'h2h-detail', { season, contest_ids: ids.sort() }).catch(() => {});
   return todo.length > 0;
 }
+
+/** "Carroll, Campbell" (NCAA.com's play-by-play) → "Campbell Carroll". */
+export const firstLast = (raw: string | null | undefined): string | null => {
+  const s = (raw ?? '').replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  const m = s.match(/^([^,]+),\s*(.+)$/);
+  return m ? `${m[2]} ${m[1]}` : s;
+};
 
 export interface MeetingScorer { program_id: string | null; name: string | null; minute: string | null }
 

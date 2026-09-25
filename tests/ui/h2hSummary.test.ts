@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { goalMinute, h2hSummary, toMatchRow } from '../../src/ui/queries.js';
+import { firstLast, goalMinute, h2hSummary, toMatchRow } from '../../src/ui/queries.js';
 
 // A = current home team, B = visitors. Meetings newest first.
 const meet = (id: string, date: string, home: 'A' | 'B', hs: number, as: number, neutral = false) =>
@@ -36,5 +36,8 @@ describe('h2hSummary', () => {
   });
   it('turns a counting-up clock into a minute', () => {
     expect(goalMinute('56:12', 2)).toBe('57′'); expect(goalMinute('45:00', 1)).toBe('45′'); expect(goalMinute(null, 3)).toBe('OT'); expect(goalMinute(null, 1)).toBeNull();
+  });
+  it('turns "Last, First" into "First Last"', () => {
+    expect(firstLast('Carroll, Campbell')).toBe('Campbell Carroll'); expect(firstLast('Jasmine Aikey')).toBe('Jasmine Aikey'); expect(firstLast('  ')).toBeNull();
   });
 });

@@ -16,7 +16,8 @@ export function scorersFrom(events: any[], players: any[], ids: { home: string |
     for (const e of goals) {
       const side = e.program_id === ids.home ? 'home' : e.program_id === ids.away ? 'away' : null;
       if (!side) continue;
-      const name = isPerson(e.player_name_raw) ? String(e.player_name_raw).trim() : 'Unknown scorer';
+      const raw = isPerson(e.player_name_raw) ? String(e.player_name_raw).trim() : null;
+      const name = raw ? raw.replace(/^([^,]+),\s*(.+)$/, '$2 $1') : 'Unknown scorer';
       const list = out[side];
       let s = list.find((x) => x.name === name);
       if (!s) { s = { name, minutes: [], player_id: null, count: 0 }; list.push(s); }
