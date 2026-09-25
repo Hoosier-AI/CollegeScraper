@@ -4,6 +4,7 @@
 import { Link } from 'react-router-dom';
 import { useHref } from '../../lib/filters';
 import { PlayerAvatar } from '../primitives';
+import { Goals } from '../icons';
 import { LineupChip, type SideLineup } from './parts';
 
 type Band = 'gk' | 'd' | 'x' | 'm' | 'f';
@@ -47,12 +48,13 @@ export function placeStarters(starters: any[]): { line: any; x: number; y: numbe
 function Token({ line, x, y, top, crest, crestSeo, past }: { line: any; x: number; y: number; top: boolean; crest?: string | null; crestSeo?: string | null; past?: boolean }) {
   const href = useHref();
   const last = String(line.name ?? '').trim().split(/\s+/).slice(-1)[0] ?? '';
-  const marks = [line.goals ? { t: `${line.goals} G`, c: 'bg-win text-field-950' } : null, line.assists ? { t: `${line.assists} A`, c: 'bg-chalk-200 text-field-950' } : null, line.rc ? { t: 'RC', c: 'bg-loss text-field-950' } : line.yc ? { t: 'YC', c: 'bg-note text-field-950' } : null].filter(Boolean) as { t: string; c: string }[];
+  const marks = [line.assists ? { t: `${line.assists} A`, c: 'bg-chalk-200 text-field-950' } : null, line.rc ? { t: 'RC', c: 'bg-loss text-field-950' } : line.yc ? { t: 'YC', c: 'bg-note text-field-950' } : null].filter(Boolean) as { t: string; c: string }[];
   const body = (
     <>
       <span className="relative block">
         <PlayerAvatar src={line.headshot_url} name={line.name} size={40} crest={crest} crestSeo={crestSeo} ring={past ? 'past' : undefined} />
         <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-[10px] font-semibold text-chalk-100 tnum shadow" aria-hidden>{line.jersey ?? ''}</span>
+        {line.goals > 0 && <span className="absolute -right-2 -top-1 flex items-center rounded-full bg-white px-0.5 text-field-950 shadow" aria-hidden><Goals n={line.goals} size={11} /></span>}
         {marks.length > 0 && <span className="absolute -left-1 -top-1 flex flex-col gap-0.5" aria-hidden>{marks.map((m) => <span key={m.t} className={`rounded px-1 text-[9px] font-semibold leading-3 ${m.c}`}>{m.t}</span>)}</span>}
       </span>
       <span className="mt-1 block max-w-[72px] truncate text-center text-[11px] font-medium text-white drop-shadow">{last}</span>
@@ -60,7 +62,7 @@ function Token({ line, x, y, top, crest, crestSeo, past }: { line: any; x: numbe
   );
   const style = { left: `${x * 100}%`, top: `${(top ? y / 2 : 1 - y / 2) * 100}%` };
   const cls = `absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2 ${past ? 'opacity-75' : ''}`;
-  const label = `${line.jersey ?? ''} ${line.name}${marks.length ? `, ${marks.map((m) => m.t).join(', ')}` : ''}`;
+  const label = `${line.jersey ?? ''} ${line.name}${line.goals ? `, ${line.goals} goal${line.goals > 1 ? 's' : ''}` : ''}${marks.length ? `, ${marks.map((m) => m.t).join(', ')}` : ''}`;
   return line.player_id ? <Link to={href(`/players/${line.player_id}`)} className={cls} style={style} aria-label={label}>{body}</Link> : <span className={cls} style={style} aria-label={label}>{body}</span>;
 }
 

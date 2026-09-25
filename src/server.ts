@@ -113,10 +113,10 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   process.on('SIGINT', () => controller.abort());
   // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
   if (cfg.WORKERS_ENABLED !== '0') {
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather'], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail'], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['weather'], idleMs: 30_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['weather', 'h2h-detail'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
   }
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });

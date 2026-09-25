@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { api, fmt, useAdmin } from '../lib/api';
 import { useHref } from '../lib/filters';
 import { agoShort, useNow } from '../lib/hooks';
+import { scorersFrom } from '../lib/match';
 import { useUrlState } from '../lib/urlState';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
@@ -78,7 +79,7 @@ export default function Match() {
   const periodLines = (['site', 'ncaa'] as Src[]).map((s) => ({ s, rows: team.filter((t) => t.source === s && t.period_lines) })).find((x) => x.rows.length);
   return (
     <div className="space-y-5">
-      <MatchMasthead g={g} sides={sides} />
+      <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
         {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
         {g.ncaa_contest_id && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={`https://www.ncaa.com/game/${g.ncaa_contest_id}`} target="_blank" rel="noreferrer">NCAA.com <ExternalLink size={12} aria-hidden /></a>}
@@ -144,6 +145,17 @@ export default function Match() {
                 </div>
               </div>
             )}
+        </div>
+      )}
+
+      {tab === 'stats' && (
+        <Section title="Team stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
+          {box.isPending ? <Skeleton className="h-48" /> : <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />}
+          {sources.length === 2 && <Note>The school's stat crew and NCAA.com count shots differently; goals, cards and saves should agree.</Note>}
+        </Section>
+      )}
+      {tab === 'stats' && (
+        <div className="space-y-6">
           {played && players.length > 0 && (
             <Section title="Full player stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
               {[g.home.program_id, g.away.program_id].map((pid) => (
@@ -154,14 +166,8 @@ export default function Match() {
               ))}
             </Section>
           )}
+          {played && !box.isPending && players.length === 0 && <EmptyState title="No player stats yet" body="They arrive with the box score." />}
         </div>
-      )}
-
-      {tab === 'stats' && (
-        <Section title="Team stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
-          {box.isPending ? <Skeleton className="h-48" /> : <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />}
-          {sources.length === 2 && <Note>The school's stat crew and NCAA.com count shots differently; goals, cards and saves should agree.</Note>}
-        </Section>
       )}
 
       {tab === 'h2h' && <HeadToHead g={g} h2h={p.head_to_head} sides={sides} />}

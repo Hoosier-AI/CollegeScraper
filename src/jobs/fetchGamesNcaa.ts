@@ -29,7 +29,8 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
   const fetcher = makeFetcher(db);
   const { transport, store } = makeTransport(db, fetcher);
   await store.init();
-  let games = (await listGames(db, season, (q) => q.not('ncaa_contest_id', 'is', null))).filter((g) => (!ctx.params.gender || g.gender === ctx.params.gender) && (!ctx.params.division || g.division === ctx.params.division));
+  const wanted = Array.isArray(ctx.params.contest_ids) ? (ctx.params.contest_ids as unknown[]).map(Number).filter(Number.isFinite) : null;
+  let games = (await listGames(db, season, (q) => (wanted ? q.in('ncaa_contest_id', wanted) : q.not('ncaa_contest_id', 'is', null)))).filter((g) => (!ctx.params.gender || g.gender === ctx.params.gender) && (!ctx.params.division || g.division === ctx.params.division));
   const today = new Date().toISOString().slice(0, 10);
   if (ctx.params.contest_ids) { const want = new Set((ctx.params.contest_ids as string[]).map(String)); games = games.filter((g) => want.has(String(g.ncaa_contest_id))); }
   else if (ctx.params.recent_days) { const since = new Date(Date.now() - Number(ctx.params.recent_days) * 86400000).toISOString().slice(0, 10); games = games.filter((g) => g.game_date >= since && g.game_date <= today); }
@@ -87,4 +88,7 @@ registerJob('pq-health', async (ctx) => {
 });
 
 registerJob('fetch-games-ncaa', fetchGamesNcaa);
+// The same fetch for the few earlier meetings a match page needs scorers for; it runs on the small side lane so a
+// visitor does not wait hours behind the nightly crawl.
+registerJob('h2h-detail', fetchGamesNcaa);
 export type { GameRow };

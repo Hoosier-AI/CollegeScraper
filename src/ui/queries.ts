@@ -2,6 +2,7 @@
 import type { Db } from '../db/client.js';
 import { selectAll, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
+import { enqueue } from '../jobs/runner.js';
 import { teamCategories } from '../normalize/logos.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
 
@@ -499,14 +500,98 @@ export async function matchPreview(db: Db, id: string) {
   };
   const [home, away] = await Promise.all([sideOf(A), sideOf(B)]);
   const h2hGames = h2hRows.map((r) => toMatchRow(r, ranks));
-  const h2h = { played: h2hGames.length, home_wins: 0, away_wins: 0, ties: 0, home_goals: 0, away_goals: 0, games: h2hGames.slice(0, 20) };
-  for (const m of h2hGames) {
-    const hs = m.home.program_id === A ? m.home.score : m.away.score, as = m.home.program_id === A ? m.away.score : m.home.score;
-    if (hs == null || as == null) continue;
-    h2h.home_goals += hs; h2h.away_goals += as;
-    if (hs > as) h2h.home_wins += 1; else if (hs < as) h2h.away_wins += 1; else h2h.ties += 1;
+  // Who scored in each earlier meeting (goal events from the source each game was settled on).
+  const scorersByGame = new Map<string, MeetingScorer[]>();
+  if (h2hGames.length) {
+    const truth = new Map(h2hRows.map((r) => [r.id as string, r.source_of_truth as string | null]));
+    const ev = await selectAll<any>(db, 'college_game_events', 'game_id,source,program_id,period,clock,seq,player_name_raw', (q) => q.in('game_id', h2hGames.map((m) => m.id)).eq('event_type', 'goal').order('period').order('seq'));
+    const bySource = new Map<string, any[]>();
+    for (const e of ev) { const k = `${e.game_id}|${e.source}`; bySource.set(k, [...(bySource.get(k) ?? []), e]); }
+    for (const m of h2hGames) {
+      const t = truth.get(m.id);
+      const rows = (t ? bySource.get(`${m.id}|${t}`) : undefined) ?? bySource.get(`${m.id}|site`) ?? bySource.get(`${m.id}|ncaa`) ?? [];
+      scorersByGame.set(m.id, rows.map((e) => ({ program_id: e.program_id ?? null, name: e.player_name_raw ?? null, minute: goalMinute(e.clock, e.period) })));
+    }
   }
+  // Earlier meetings stored as results only (the 2024/2025 backfill) have no scorers: fetch their NCAA.com box
+  // scores once, on the side lane, the first time a match page asks. The page shows them on its next load.
+  const scorersPending = await requestMeetingDetail(db, h2hGames.filter((m) => !(scorersByGame.get(m.id) ?? []).length && m.ncaa_contest_id != null && (m.home.score ?? 0) + (m.away.score ?? 0) > 0));
+  const h2h = { ...h2hSummary(h2hGames.map((m) => ({ ...m, scorers: scorersByGame.get(m.id) ?? [] })), A), scorers_pending: scorersPending };
   return { game, head_to_head: h2h, sides: { home, away } };
+}
+
+const requestedDetail = new Set<string>();
+/** Queue NCAA.com box scores for meetings never fetched; true when any are on their way. */
+async function requestMeetingDetail(db: Db, games: MatchRow[]): Promise<boolean> {
+  if (!games.length) return false;
+  const { data } = await db.from('college_games').select('id,season,ncaa_contest_id,ncaa_fetched_at').in('id', games.map((g) => g.id));
+  const todo = (data ?? []).filter((r: any) => !r.ncaa_fetched_at && r.ncaa_contest_id != null);
+  const fresh = todo.filter((r: any) => !requestedDetail.has(String(r.ncaa_contest_id)));
+  const bySeason = new Map<number, string[]>();
+  for (const r of fresh as any[]) { requestedDetail.add(String(r.ncaa_contest_id)); bySeason.set(r.season, [...(bySeason.get(r.season) ?? []), String(r.ncaa_contest_id)]); }
+  for (const [season, ids] of bySeason) await enqueue(db, 'h2h-detail', { season, contest_ids: ids.sort() }).catch(() => {});
+  return todo.length > 0;
+}
+
+export interface MeetingScorer { program_id: string | null; name: string | null; minute: string | null }
+
+/** "57′" from a counting-up match clock; extra-time periods without a clock read "OT". */
+export const goalMinute = (clock: string | null | undefined, period: number | null | undefined): string | null => {
+  const m = String(clock ?? '').match(/^(\d+):(\d\d)/);
+  if (m) return `${Number(m[1]) + (Number(m[2]) > 0 ? 1 : 0)}′`;
+  return (period ?? 0) > 2 ? 'OT' : null;
+};
+
+/**
+ * Head-to-head from the current home team's side (`homeId`): every earlier meeting newest first with its result
+ * for the home team, the totals, clean sheets, the record when the current hosts were at home or away, each
+ * side's biggest win and the current run.
+ */
+export function h2hSummary<M extends MatchRow & { scorers?: MeetingScorer[] }>(games: M[], homeId: string | null) {
+  const ours = (m: M) => (m.home.program_id === homeId ? [m.home.score, m.away.score] : [m.away.score, m.home.score]) as [number | null, number | null];
+  const out = {
+    played: games.length, home_wins: 0, away_wins: 0, ties: 0, home_goals: 0, away_goals: 0, avg_goals: null as number | null,
+    home_clean_sheets: 0, away_clean_sheets: 0,
+    at_home: { w: 0, l: 0, t: 0 }, at_away: { w: 0, l: 0, t: 0 }, at_neutral: { w: 0, l: 0, t: 0 },
+    biggest_home_win: null as null | { id: string; game_date: string; score: string; margin: number },
+    biggest_away_win: null as null | { id: string; game_date: string; score: string; margin: number },
+    streak: null as null | { side: 'home' | 'away' | null; kind: 'won' | 'unbeaten' | 'drawn'; count: number },
+    first_season: games.length ? Math.min(...games.map((m) => m.season)) : null,
+    last_meeting: games[0] ? { id: games[0].id, game_date: games[0].game_date } : null,
+    games: [] as (M & { result: 'W' | 'L' | 'T' | null })[],
+  };
+  let scored = 0;
+  for (const m of games) {
+    const [f, a] = ours(m);
+    let result: 'W' | 'L' | 'T' | null = null;
+    if (f != null && a != null) {
+      scored += 1;
+      out.home_goals += f; out.away_goals += a;
+      if (a === 0) out.home_clean_sheets += 1;
+      if (f === 0) out.away_clean_sheets += 1;
+      result = f > a ? 'W' : f < a ? 'L' : 'T';
+      if (result === 'W') out.home_wins += 1; else if (result === 'L') out.away_wins += 1; else out.ties += 1;
+      const venue = m.neutral_site ? out.at_neutral : m.home.program_id === homeId ? out.at_home : out.at_away;
+      venue[result === 'W' ? 'w' : result === 'L' ? 'l' : 't'] += 1;
+      const margin = Math.abs(f - a);
+      const rec = { id: m.id, game_date: m.game_date, score: `${Math.max(f, a)}–${Math.min(f, a)}`, margin };
+      if (result === 'W' && (!out.biggest_home_win || margin > out.biggest_home_win.margin)) out.biggest_home_win = rec;
+      if (result === 'L' && (!out.biggest_away_win || margin > out.biggest_away_win.margin)) out.biggest_away_win = rec;
+    }
+    out.games.push({ ...m, result });
+  }
+  out.avg_goals = scored ? Math.round(((out.home_goals + out.away_goals) / scored) * 10) / 10 : null;
+  // The current run, newest meeting first: a side that keeps winning, or at least not losing.
+  const results = out.games.map((g) => g.result).filter((r): r is 'W' | 'L' | 'T' => !!r);
+  if (results.length) {
+    const lead = (ok: (r: 'W' | 'L' | 'T') => boolean) => { let n = 0; while (n < results.length && ok(results[n]!)) n += 1; return n; };
+    const hw = lead((r) => r === 'W'), aw = lead((r) => r === 'L'), hu = lead((r) => r !== 'L'), au = lead((r) => r !== 'W'), d = lead((r) => r === 'T');
+    if (hw) out.streak = hw >= 2 || hu < 2 ? { side: 'home', kind: 'won', count: hw } : { side: 'home', kind: 'unbeaten', count: hu };
+    else if (aw) out.streak = aw >= 2 || au < 2 ? { side: 'away', kind: 'won', count: aw } : { side: 'away', kind: 'unbeaten', count: au };
+    else if (hu > d || au > d) out.streak = hu >= au ? { side: 'home', kind: 'unbeaten', count: hu } : { side: 'away', kind: 'unbeaten', count: au };
+    else out.streak = { side: null, kind: 'drawn', count: d };
+  }
+  return out;
 }
 
 // ---------- conferences ----------

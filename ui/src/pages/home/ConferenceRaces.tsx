@@ -1,6 +1,7 @@
 // Six conference tables at a glance for the scope, the ones with the most conference games played first.
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api, qs } from '../../lib/api';
 import { useHref } from '../../lib/filters';
@@ -24,7 +25,7 @@ export function ConferenceRaces({ scope, className }: { scope: Scope; className?
           const t = c.table?.[scope.gender] ?? { top: [], source: 'none' };
           return (
             <li key={c.id}>
-              <Link to={href('/rankings', { view: 'standings', conference: c.id, gender: scope.gender })} className="frame block h-full p-3 transition-colors duration-150 hover:border-field-600 hover:bg-field-800/60">
+              <Link to={href('/rankings', { view: 'standings', conference: c.id, gender: scope.gender })} className="group frame flex h-full flex-col p-3 transition-colors duration-150 hover:border-field-600 hover:bg-field-800/60">
                 <div className="flex items-start justify-between gap-2">
                   <span className="display text-base text-chalk-100">{c.name}</span>
                   {t.source === 'conference' ? <Badge tone="teal">Official</Badge> : t.source === 'computed' ? <Badge>Computed</Badge> : null}
@@ -42,6 +43,10 @@ export function ConferenceRaces({ scope, className }: { scope: Scope; className?
                     ))}
                   </ol>
                 ) : <p className="mt-2 text-sm text-chalk-500">Conference play has not started.</p>}
+                <span className="mt-auto flex items-center justify-between gap-2 pt-2.5">
+                  <span className="text-2xs text-chalk-500">{c.members[scope.gender]} teams</span>
+                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md border border-field-600 px-2.5 text-xs font-medium text-pitch-300 transition-colors duration-150 group-hover:border-pitch-400 group-hover:bg-pitch-400/10">Full table and stats <ChevronRight size={13} aria-hidden /></span>
+                </span>
               </Link>
             </li>
           );
