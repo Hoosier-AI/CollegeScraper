@@ -9,3 +9,5 @@ dist/
 coverage/
 ui/node_modules/
 ui/dist/
+
+scripts/tmp/
