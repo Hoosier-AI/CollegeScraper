@@ -12,6 +12,8 @@
 BEGIN;
 
 SET LOCAL statement_timeout = '15min';
+-- Fail fast rather than queue behind a crawler transaction (the ALTERs below block reads while waiting).
+SET LOCAL lock_timeout = '10s';
 
 ALTER TABLE public.college_players ADD COLUMN IF NOT EXISTS slug text;
 ALTER TABLE public.college_players ADD COLUMN IF NOT EXISTS noindex boolean NOT NULL DEFAULT false;
@@ -113,6 +115,10 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- Plain indexes first so the backfill's clash checks are index lookups, not a scan per row.
+CREATE INDEX IF NOT EXISTS college_players_slug_backfill_idx ON public.college_players(slug);
+CREATE INDEX IF NOT EXISTS college_games_slug_backfill_idx ON public.college_games(slug);
+
 -- ---------- backfill (updated_at triggers off, so sitemap lastmod keeps meaning "data changed") ----------
 ALTER TABLE public.college_players DISABLE TRIGGER trg_college_players_updated_at;
 ALTER TABLE public.college_games DISABLE TRIGGER trg_college_games_updated_at;
@@ -153,6 +159,8 @@ ALTER TABLE public.college_games ENABLE TRIGGER trg_college_games_updated_at;
 
 CREATE UNIQUE INDEX IF NOT EXISTS college_players_slug_key ON public.college_players(slug);
 CREATE UNIQUE INDEX IF NOT EXISTS college_games_slug_key ON public.college_games(slug);
+DROP INDEX IF EXISTS public.college_players_slug_backfill_idx;
+DROP INDEX IF EXISTS public.college_games_slug_backfill_idx;
 
 CREATE TRIGGER trg_college_players_slug BEFORE INSERT OR UPDATE OF display_name, slug ON public.college_players
   FOR EACH ROW EXECUTE FUNCTION public.college_players_set_slug();
