@@ -39,6 +39,10 @@ services:
         sync: false
       - key: INDEXNOW_KEY
         sync: false
+      - key: SEO_BOT_URL
+        sync: false
+      - key: SEO_BOT_SECRET
+        sync: false
       - key: LOG_LEVEL
         value: info
       - key: PORT

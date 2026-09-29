@@ -29,6 +29,9 @@ const schema = z.object({
   GSC_VERIFICATION_FILE: z.string().min(1).optional(),
   // IndexNow key, served at /<key>.txt.
   INDEXNOW_KEY: z.string().min(1).optional(),
+  // AI crawler counts go to the Plaibook hub (SEO → Overview) with this bearer secret.
+  SEO_BOT_URL: z.string().url().optional(),
+  SEO_BOT_SECRET: z.string().min(32).optional(),
 });
 
 export type Config = z.infer<typeof schema> & { userAgent: string; contactEmail: string };
@@ -59,6 +62,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     RENDER_SERVICE_ID: env.RENDER_SERVICE_ID || undefined,
     GSC_VERIFICATION_FILE: env.GSC_VERIFICATION_FILE || undefined,
     INDEXNOW_KEY: env.INDEXNOW_KEY || undefined,
+    SEO_BOT_URL: env.SEO_BOT_URL || undefined,
+    SEO_BOT_SECRET: env.SEO_BOT_SECRET || undefined,
   });
   const cfg: Config = {
     ...parsed,

@@ -5,7 +5,7 @@ import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { firstLast, goalMinute, kickoffTbd } from '../ui/queries.js';
 import type { BoxLine, ConferencePage, ConferenceRef, EntityKind, Gender, HomePage, MatchEvent, MatchPage, PlayerPage, Poll, RankingsPage, SeoData, SitemapEntry, StandingRow, TeamLine, TeamPage, TeamRef, TeamsIndexPage } from './types.js';
-import { classLabel, conferencePath, playerPath, matchPath, teamPath } from './util.js';
+import { classLabel, conferencePath, displayName, playerPath, matchPath, teamPath } from './util.js';
 
 /** Fall season in progress: July starts the next one (same rule as /api/meta). */
 export function seasonFor(now = new Date()): number {
@@ -78,7 +78,7 @@ export class DbSeoData implements SeoData {
       poll: poll ? { rank: poll.rank, label: poll.label ?? null } : null,
       roster: rosterRows.map((r) => {
         const st = stats.get(r.id);
-        return { name: r.college_players.display_name, slug: r.college_players.slug ?? null, jersey: num(r.jersey), position: r.position ?? null, class_label: classLabel(r.class_raw, r.class_year, r.is_redshirt),
+        return { name: displayName(r.college_players.display_name), slug: r.college_players.slug ?? null, jersey: num(r.jersey), position: r.position ?? null, class_label: classLabel(r.class_raw, r.class_year, r.is_redshirt),
           gp: num(st?.gp), gs: num(st?.gs), minutes: num(st?.minutes), goals: num(st?.goals), assists: num(st?.assists), points: num(st?.points), saves: num(st?.saves), ga: num(st?.ga), shutouts: num(st?.shutouts) };
       }).sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999) || a.name.localeCompare(b.name)),
       games: games.map((g) => {
@@ -117,7 +117,7 @@ export class DbSeoData implements SeoData {
     const latest = seasons[0];
     const hometown = latest?.hometown_raw || [p.hometown_city, p.hometown_region, p.hometown_country].filter(Boolean).join(', ') || null;
     return {
-      id: p.id, slug: p.slug, name: p.display_name, noindex: !!p.noindex,
+      id: p.id, slug: p.slug, name: displayName(p.display_name), noindex: !!p.noindex,
       headshot_url: p.headshot_url ?? null, hometown, high_school: latest?.high_school ?? p.high_school ?? null,
       seasons: seasons.filter((s) => teamRef(s.college_programs)).map((s) => {
         const x = st.get(s.id);
@@ -163,7 +163,7 @@ export class DbSeoData implements SeoData {
     const box = (pid: string | null): BoxLine[] => (pid ? lines.filter((l) => l.source === src && l.program_id === pid && l.participated !== false) : [])
       .map((l) => {
         const withheld = !!l.college_player_seasons?.college_players?.suppress;
-        return { name: withheld ? 'Name withheld' : `${l.first_name ?? ''} ${l.last_name ?? ''}`.trim() || 'Unknown', slug: withheld ? null : l.college_player_seasons?.college_players?.slug ?? null,
+        return { name: withheld ? 'Name withheld' : displayName(`${l.first_name ?? ''} ${l.last_name ?? ''}`) || 'Unknown', slug: withheld ? null : l.college_player_seasons?.college_players?.slug ?? null,
           jersey: num(l.jersey), position: l.position ?? null, starter: !!l.starter, minutes: num(l.minutes), goals: num(l.goals), assists: num(l.assists), shots: num(l.shots), saves: num(l.saves), is_goalie: !!l.is_goalie };
       })
       .sort((a, b) => Number(b.starter) - Number(a.starter) || (a.jersey ?? 999) - (b.jersey ?? 999));
@@ -172,8 +172,8 @@ export class DbSeoData implements SeoData {
       minute: goalMinute(e.clock, e.period),
       side: e.program_id ? (e.program_id === g.home_program_id ? 'home' : e.program_id === g.away_program_id ? 'away' : null) : null,
       type: e.event_type,
-      player: e.player_season_id && hidden.has(e.player_season_id) ? 'Name withheld' : firstLast(e.player_name_raw),
-      assist: e.assist_player_season_id && hidden.has(e.assist_player_season_id) ? 'Name withheld' : firstLast(e.assist_name_raw),
+      player: e.player_season_id && hidden.has(e.player_season_id) ? 'Name withheld' : (firstLast(e.player_name_raw) && displayName(firstLast(e.player_name_raw))),
+      assist: e.assist_player_season_id && hidden.has(e.assist_player_season_id) ? 'Name withheld' : (firstLast(e.assist_name_raw) && displayName(firstLast(e.assist_name_raw))),
     }));
     return {
       id: g.id, slug: g.slug, season: g.season, date: g.game_date, start_epoch: num(g.start_epoch), kickoff_tbd: kickoffTbd(g.start_epoch),

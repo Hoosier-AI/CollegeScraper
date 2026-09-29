@@ -6,6 +6,19 @@ export const SITE_NAME = 'Plaibook Stats';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SLUG = /^[a-z0-9][a-z0-9-]{0,160}$/;
 
+/**
+ * "MALIK ALI" -> "Malik Ali", "O'CONNOR-MCDONALD" -> "O'Connor-McDonald".
+ * Only for names that arrive all caps from a source; mixed case is left as is
+ * (it is already how the school spells it, e.g. "DeAndre", "van Dijk").
+ */
+export function displayName(raw: string | null | undefined): string {
+  const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  if (!/[A-Z]{2}/.test(s) || /[a-z]/.test(s)) return s;
+  return s.toLowerCase().replace(/(^|[\s'\-.])([a-z])/g, (_m, sep: string, ch: string) => sep + ch.toUpperCase())
+    .replace(/\b(Ma?c)([a-z])/g, (_m, pre: string, ch: string) => pre + ch.toUpperCase())
+    .replace(/\b(Ii|Iii|Iv)\b/g, (r) => r.toUpperCase());
+}
+
 /** HTML text and attribute escaping. */
 export function esc(v: unknown): string {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');

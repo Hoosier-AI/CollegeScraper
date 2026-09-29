@@ -148,3 +148,22 @@ describe('util', () => {
     expect(classLabel('Gr.', null)).toBe('Gr.');
   });
 });
+
+describe('search quality', () => {
+  it('title-cases names that arrive all caps, and leaves real spellings alone', async () => {
+    const { displayName } = await import('../src/seo/util.js');
+    expect(displayName('MALIK ALI')).toBe('Malik Ali');
+    expect(displayName("O'CONNOR-MCDONALD")).toBe("O'Connor-McDonald");
+    expect(displayName('JOHN SMITH III')).toBe('John Smith III');
+    expect(displayName('DeAndre van Dijk')).toBe('DeAndre van Dijk');
+    expect(displayName('  ')).toBe('');
+  });
+  it('keeps score-only finals out of search, but not games with a box score', () => {
+    const thin = matchFixture();
+    thin.events = [];
+    thin.players = { home: [], away: [] };
+    thin.team_stats = { home: null, away: null };
+    expect(matchHead(thin, ctx).robots).toBe('noindex,follow');
+    expect(matchHead(matchFixture(), ctx).robots).toBeNull();
+  });
+});

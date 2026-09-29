@@ -25,12 +25,23 @@ import { DbSeoData } from './seo/data.js';
 import { fileTemplate } from './seo/template.js';
 import { BotVerifier } from './seo/bots.js';
 import { DEFAULT_PUBLIC_URL } from './seo/util.js';
+import { AiBotCounter, canonicalRedirect } from './seo/aiBots.js';
 
 const cfg = loadConfig();
 registerAllJobs();
 // trustProxy: Render terminates TLS in front of us, so without it req.ip is the proxy for every caller and
 // the whole free tier would share one rate-limit bucket.
 const app = Fastify({ logger: false, trustProxy: true });
+
+// Old onrender.com page URLs move to the Stats domain (301) once PUBLIC_URL is set to it.
+// AI crawler visits are counted for the hub's SEO dashboard.
+const aiBots = new AiBotCounter({ url: cfg.SEO_BOT_URL ?? null, secret: cfg.SEO_BOT_SECRET ?? null, onError: (msg) => log.warn({ msg }, 'ai bot counts not sent') });
+aiBots.start();
+app.addHook('onRequest', async (req, reply) => {
+  const to = canonicalRedirect(cfg.PUBLIC_URL, req.headers.host, req.url);
+  if (to) return reply.code(301).header('location', to).send();
+  aiBots.hit(req.headers['user-agent']);
+});
 
 function authorized(header: string | undefined): boolean {
   const secret = cfg.COLLEGE_TRIGGER_SECRET;
