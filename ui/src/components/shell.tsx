@@ -26,7 +26,7 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950">
       <div className="mx-auto flex h-14 max-w-page items-center gap-3 px-4 sm:gap-4 sm:px-6">
-        <Link to="/" className="shrink-0 rounded" aria-label="Plaibook Stats home"><Logo withText={false} size={26} className="sm:hidden" /><Logo size={26} className="hidden sm:inline-flex" /></Link>
+        <Link to="/" className="shrink-0 rounded" aria-label="Plaibook Stats home"><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
         <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">
           {NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{n.label}</NavLink>)}
           <NavLink to="/docs" className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>API</NavLink>

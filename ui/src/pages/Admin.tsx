@@ -31,7 +31,7 @@ function Login() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-4">
       <form onSubmit={submit} className="card w-full max-w-sm space-y-3 p-4">
-        <Logo size={32} />
+        <Logo size={40} />
         <h1 className="text-xl display text-chalk-100">Admin sign-in</h1>
         <p className="text-sm text-chalk-400">Enter the scraper's trigger secret (COLLEGE_TRIGGER_SECRET). Browsing the stats does not need this.</p>
         <label className="block text-xs font-medium text-chalk-500" htmlFor="secret">Trigger secret</label>
