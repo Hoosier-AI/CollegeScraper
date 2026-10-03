@@ -17,7 +17,6 @@ const Player = lazy(() => import('./pages/Player'));
 const Conference = lazy(() => import('./pages/Conference'));
 const Rankings = lazy(() => import('./pages/Rankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
-const Docs = lazy(() => import('./pages/Docs'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
 
@@ -62,7 +61,6 @@ const router = createBrowserRouter([
           { path: 'players/:id', element: <Player /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
-          { path: 'docs', element: <Docs /> },
           { path: 'admin', element: <Admin /> },
           { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
           { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },

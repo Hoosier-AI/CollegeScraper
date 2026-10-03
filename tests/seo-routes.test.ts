@@ -85,7 +85,7 @@ describe('seo routes', () => {
   });
 
   it('serves the app shell with 200 for app routes it does not render', async () => {
-    for (const url of ['/matches', '/search?q=duke', '/docs', '/console', '/teams/']) {
+    for (const url of ['/matches', '/search?q=duke', '/console', '/teams/']) {
       const r = await app.inject({ url, headers: HTML });
       expect(r.statusCode, url).toBe(200);
       expect(r.body).toContain('<div id="root"></div>');

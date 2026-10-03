@@ -17,7 +17,7 @@ export const NAV = [
 ] as const;
 const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
 // The season/gender controls only mean something on the data pages.
-const FILTERLESS = ['/', '/docs', '/admin', '/search', '/console'];
+const FILTERLESS = ['/', '/admin', '/search', '/console'];
 
 export function TopBar() {
   const admin = useAdmin();
@@ -29,7 +29,6 @@ export function TopBar() {
         <Link to="/" className="shrink-0 rounded" aria-label="Plaibook Stats home"><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
         <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">
           {NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{n.label}</NavLink>)}
-          <NavLink to="/docs" className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>API</NavLink>
           {admin && ADMIN_NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-note/80 hover:text-note'}`}>{n.label}</NavLink>)}
         </nav>
         <div className="ml-auto hidden w-64 md:block lg:w-72"><SearchBox /></div>
@@ -76,9 +75,7 @@ export function Footer() {
     <footer className="mx-auto mt-12 max-w-page border-t border-field-700 px-4 py-6 text-xs text-chalk-500 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span>Plaibook Stats collects NCAA soccer data from each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, and shows where they agree.</span>
-        <Link to="/docs" className="ml-auto text-pitch-400 hover:text-pitch-300">API docs</Link>
-        <a href="/v1/openapi.json" className="text-pitch-400 hover:text-pitch-300">OpenAPI</a>
-        <Link to="/admin" className="hover:text-chalk-300">Admin</Link>
+        <Link to="/admin" className="ml-auto hover:text-chalk-300">Admin</Link>
       </div>
       <p className="mt-3"><a href="https://www.plaibook.soccer/?utm_source=stats&utm_medium=referral&utm_campaign=footer" className="text-pitch-400 hover:text-pitch-300">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
     </footer>

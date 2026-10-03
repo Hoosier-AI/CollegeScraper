@@ -1,5 +1,4 @@
 // Why the numbers can be trusted, in three lines, and where to get them as data.
-import { Link } from 'react-router-dom';
 import { Globe, School, Table2 } from 'lucide-react';
 import { Panel } from './Panel';
 
@@ -20,7 +19,6 @@ export function HowChecked({ className }: { className?: string }) {
           </li>
         ))}
       </ul>
-      <p className="mt-4 border-t border-field-700 pt-3 text-sm text-chalk-400">All of it is available as a <Link className="text-pitch-400 hover:text-pitch-300" to="/docs">read API</Link>, no key needed.</p>
     </Panel>
   );
 }

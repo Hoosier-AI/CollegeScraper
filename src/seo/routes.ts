@@ -42,7 +42,7 @@ export type CachedPage = { status: 200; html: string } | { status: 301; path: st
 type Outcome = { head: HeadMeta; body: string } | { redirect: string } | { shell: true } | null;
 
 /** Single-page-app routes that the server does not render but must still answer with 200 and the shell. */
-const SPA_ROUTE = /^\/(?:matches|search|docs|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders)?\/?$/;
+const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders)?\/?$/;
 const API_PATH = /^\/(?:api|v1)(?:\/|$)|^\/health(?:\/|$)/;
 
 const pathOf = (url: string) => url.split('?')[0] ?? url;

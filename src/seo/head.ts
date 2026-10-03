@@ -182,7 +182,7 @@ export function homeHead(h: HomePage, ctx: HeadContext): HeadMeta {
   const url = abs(ctx, '/');
   return {
     title: `${SITE_NAME}: NCAA College Soccer Stats, Rosters, Standings and Rankings`,
-    description: clip(`Every NCAA soccer program, Division I to III, men's and women's: rosters, box scores, season stats, conference standings and polls for ${h.season}. Free, with an open API.`),
+    description: clip(`Every NCAA soccer program, Division I to III, men's and women's: rosters, box scores, season stats, conference standings and polls for ${h.season}. Free to browse.`),
     canonical: url, robots: null, ogType: 'website', image: ogImage(ctx),
     jsonLd: [ld('WebSite', { '@id': `${url}#website`, name: SITE_NAME, url, description: 'NCAA college soccer data: rosters, box scores, season stats, standings and polls.', publisher: { '@type': 'Organization', name: 'Plaibook', url: 'https://www.plaibook.soccer/' } })],
   };

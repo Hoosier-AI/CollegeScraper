@@ -1,7 +1,6 @@
 // The public API from the operator's side: keys (env and console-made), who is calling and how much, the
 // limits and origins in force, and the Plaibook connection.
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, fmt } from '../../lib/api';
 import { agoShort, useNow } from '../../lib/hooks';
 import { useConsole, useConsoleAction, type ApiData } from '../../lib/console';
@@ -48,7 +47,6 @@ export default function ApiTab() {
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button className="btn-ghost btn-sm" onClick={testCall}>Test the API from here</button>
           {test && <span className={`text-sm ${test.ok ? 'text-win' : 'text-loss'}`} role="status">{test.text}</span>}
-          <Link className="text-sm text-pitch-400 hover:text-pitch-300" to="/docs">API docs</Link>
           <a className="text-sm text-pitch-400 hover:text-pitch-300" href="/v1/openapi.json" target="_blank" rel="noreferrer">OpenAPI</a>
         </div>
         <div className="mt-3 space-y-1">

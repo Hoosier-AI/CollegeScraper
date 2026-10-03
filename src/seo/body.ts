@@ -181,7 +181,7 @@ export function homeBody(h: HomePage, ctx: HeadContext): string {
     ? `<h2>Conferences</h2><ul>${h.conferences.map((c) => `<li>${a(conferencePath(c.seo, h.season, ctx.currentSeason), c.name)}${c.division ? ` (${esc(divisionLabel(c.division))})` : ''}</li>`).join('')}</ul>`
     : '';
   const inner = `<h1>NCAA College Soccer Stats</h1>
-<p>Every NCAA soccer program, Division I to III, men's and women's: ${esc(h.teams)} teams with rosters, box scores, season stats, conference standings and the United Soccer Coaches polls for ${esc(h.season)}. Browse ${a('/teams', 'all teams')} or the ${a('/rankings', 'rankings')}, or call the free ${a('/docs', 'API')}.</p>${polls}${confs}`;
+<p>Every NCAA soccer program, Division I to III, men's and women's: ${esc(h.teams)} teams with rosters, box scores, season stats, conference standings and the United Soccer Coaches polls for ${esc(h.season)}. Browse ${a('/teams', 'all teams')} or the ${a('/rankings', 'rankings')}.</p>${polls}${confs}`;
   return wrapBody('home', [], inner);
 }
 
