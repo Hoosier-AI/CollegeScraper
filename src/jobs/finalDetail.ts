@@ -37,7 +37,10 @@ export async function finalDetail(ctx: JobContext): Promise<void> {
   const { data, error } = await ctx.db.from('college_games').select('id, home_program_id, away_program_id, ncaa_fetched_at, final_at').in('ncaa_contest_id', ids.map(Number));
   if (error) throw new Error(error.message);
   const games = (data ?? []) as FinalGame[];
-  const programIds = [...new Set(games.flatMap((g) => [g.home_program_id, g.away_program_id]).filter((p): p is string => !!p))];
+  // Only games whose final box score landed change anything downstream; the rest are asked again by the live job.
+  const landed = games.filter((g) => g.ncaa_fetched_at);
+  ctx.inc('box_scores_pending', games.length - landed.length);
+  const programIds = [...new Set(landed.flatMap((g) => [g.home_program_id, g.away_program_id]).filter((p): p is string => !!p))];
   const { data: progs } = programIds.length ? await ctx.db.from('college_programs').select('id, school_seo').in('id', programIds) : { data: [] };
   const reconcile = getJob('reconcile-games'); const aggregate = getJob('compute-aggregates');
   for (const p of (progs ?? []) as { id: string; school_seo: string }[]) {

@@ -53,7 +53,10 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
       if (box.status !== 'final') {
         // A same-day game that is not over yet is not "fetched": stamping it would hide the final box until a refetch.
         const stamp = g.game_date < today ? { ncaa_fetched_at: new Date().toISOString() } : {};
-        await updateGame(db, g.id, { detail_attempts: (g.detail_attempts ?? 0) + 1, ...stamp, status: box.status === 'live' ? 'live' : g.status, ...(g.detail_attempts >= 2 && daysAgo(g.game_date) > 3 ? { status: 'postponed' } : {}) });
+        // NCAA.com's box score often still reads "in progress" minutes after its scoreboard says final: a game the
+        // scoreboard closed stays final (writing "live" back made the live job close it again and queue final-detail
+        // every tick, 2026-10-05).
+        await updateGame(db, g.id, { detail_attempts: (g.detail_attempts ?? 0) + 1, ...stamp, status: box.status === 'live' && g.status !== 'final' ? 'live' : g.status, ...(g.detail_attempts >= 2 && daysAgo(g.game_date) > 3 ? { status: 'postponed' } : {}) });
         ctx.inc('not_final'); continue;
       }
       for (const pid of [g.home_program_id, g.away_program_id]) if (pid && !candCache.has(pid)) candCache.set(pid, await statLineCandidates(db, pid, season));
