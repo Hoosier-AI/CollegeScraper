@@ -23,5 +23,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 127_college_console_live.sql | `live_stats_at` (provisional live box scores), quality snapshots, API keys + usage, per-host fetch stats | yes (2026-09-21) |
 | 128_college_weather.sql | `weather` / `weather_at` on games (NWS forecast at kickoff), schedule view carries them | yes (2026-09-24) |
 | 129_college_seo_slugs.sql | `college_players.slug` / `noindex`, `college_games.slug` (backfilled, kept by triggers), `college_slug_redirects` for renamed slugs | yes (2026-09-27) |
+| 130_college_search_aliases.sql | team search: filler words stripped, school name/long name/aliases (initials, St./State), exact first, indexed player match | yes (2026-10-05) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

@@ -18,6 +18,8 @@ import { liveSettings } from '../ops/settings.js';
 import type { Division, Gender } from '../model.js';
 import { log } from '../log.js';
 
+const yesterdayOf = (date: string) => new Date(Date.parse(`${date}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+
 export interface PendingGame {
   id: string; season: number; game_date: string; gender: Gender; division: Division | null; status: string;
   start_epoch: number | null; ncaa_contest_id: number | null; home_program_id: string | null; away_program_id: string | null;
@@ -134,8 +136,17 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
   }
   ctx.inc('absent_from_feed', pending.filter((g) => !seen.has(g.id)).length);
   ctx.inc('live_games', pending.filter((g) => g.status === 'live').length);
-  // The final box score should land minutes after full time, not at the next half-hourly sweep.
-  if (wentFinal.length) await enqueue(db, 'fetch-games-ncaa', { season, contest_ids: wentFinal, refetch: true });
+  // The final box score should land minutes after full time, not at the next half-hourly sweep: final-detail runs on
+  // the aux lane (never behind the crawl), recomputes the two programs and tells Plaibook.
+  if (wentFinal.length) await enqueue(db, 'final-detail', { season, contest_ids: wentFinal });
+  // NCAA.com often marks the box score final a few minutes after the scoreboard: every 5 minutes, ask again for
+  // today's and yesterday's finals that still have none.
+  if (new Date().getUTCMinutes() % 5 === 0) {
+    const { data: late } = await db.from('college_games').select('ncaa_contest_id').eq('status', 'final').is('ncaa_fetched_at', null)
+      .not('ncaa_contest_id', 'is', null).gte('game_date', yesterdayOf(et.date)).lte('game_date', et.date).limit(40);
+    const lateIds = ((late ?? []) as { ncaa_contest_id: number }[]).map((g) => String(g.ncaa_contest_id)).filter((id) => !wentFinal.includes(id)).sort();
+    if (lateIds.length) { await enqueue(db, 'final-detail', { season, contest_ids: lateIds }); ctx.inc('late_finals_requeued', lateIds.length); }
+  }
 
   // Phase 2: live stats. Time-boxed so the next scoreboard tick is never late; the stalest games go first.
   if (settings.detail_enabled && ctx.params.detail !== false) {

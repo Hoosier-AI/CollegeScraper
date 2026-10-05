@@ -43,6 +43,11 @@ services:
         sync: false
       - key: SEO_BOT_SECRET
         sync: false
+      # Plaibook's receiver for "this game just got its final box score" (final-detail), and the shared secret.
+      - key: PLAIBOOK_FINAL_WEBHOOK_URL
+        value: https://www.plaibook.soccer/api/cron?job=college-final
+      - key: PLAIBOOK_FINAL_WEBHOOK_SECRET
+        sync: false
       - key: LOG_LEVEL
         value: info
       - key: PORT

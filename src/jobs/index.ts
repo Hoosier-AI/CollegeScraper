@@ -3,6 +3,7 @@ import './discoverTeams.js';
 import './detectSites.js';
 import './sweepScoreboard.js';
 import './fetchGamesNcaa.js';
+import './finalDetail.js';
 import './syncSite.js';
 import './reconcileGames.js';
 import './computeAggregates.js';
