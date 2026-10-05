@@ -7,6 +7,7 @@ import { upsertSchools, upsertProgram, upsertProgramSeasons, upsertConference, l
 import { currentSeason, eachDate } from './seasons.js';
 import type { Division, Gender } from '../model.js';
 import { log } from '../log.js';
+import { ncaaLogoUrl } from '../normalize/logos.js';
 
 const DIVISIONS: Division[] = ['d1', 'd2', 'd3'];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -78,7 +79,12 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
     const program = await upsertProgram(db, { school_seo: t.seo, gender: t.gender, name: t.name, short_name: t.short, name6: t.char6 });
     seasonRows.push({ program_id: program.id, season, division: t.division, conference_id: confId });
   }
-  if (seasonRows.length) await upsertProgramSeasons(db, seasonRows);
+  // A scoreboard that shows no conference for a team never clears the one we have (Cal women lost the ACC this way,
+  // and the standings job then created a synthetic twin): rows without one are written without the column.
+  const withConf = seasonRows.filter((r) => r.conference_id);
+  const noConf = seasonRows.filter((r) => !r.conference_id).map(({ conference_id: _c, ...r }) => r);
+  if (withConf.length) await upsertProgramSeasons(db, withConf);
+  if (noConf.length) await upsertProgramSeasons(db, noConf as typeof seasonRows);
   ctx.inc('programs', seasonRows.length);
 
   // 4. school pages → athletics URL + logos (only for schools that have a program and no athletics url yet, unless force)
@@ -103,7 +109,28 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
       await ctx.heartbeat();
     }
     ctx.inc('school_pages_fetched', fetched);
+
+    // 5. Crest fallback: a real school whose page gave no logo (or failed) gets NCAA.com's crest at its fixed address,
+    // when that address serves an image. Without it 800+ fixtures showed a blank crest (2026-10).
+    const noLogo = [...new Map((await listSchools(db)).map((s) => [s.seo, s])).values()].filter((s) => !s.logo_svg_url && seos.includes(s.seo) && ncaaLogoUrl(s.seo));
+    let crests = 0;
+    for (const s of noLogo.slice(0, 600)) {
+      if (await ctx.cancelled()) return;
+      const url = ncaaLogoUrl(s.seo)!;
+      if (await imageServed(url)) { await upsertSchools(db, [{ seo: s.seo, name: s.name, logo_svg_url: url }]); crests += 1; }
+    }
+    ctx.inc('crests_from_ncaa_address', crests);
   }
+}
+
+/** True when `url` answers 200 with an image (NCAA.com answers 403/404 for a slug it has no crest for). */
+export async function imageServed(url: string, doFetch: typeof fetch = fetch): Promise<boolean> {
+  try {
+    const r = await doFetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PlaibookStats/1.0)' }, signal: AbortSignal.timeout(10_000) });
+    const ok = r.ok && /image|svg/.test(r.headers.get('content-type') ?? '');
+    await r.body?.cancel().catch(() => undefined);
+    return ok;
+  } catch { return false; }
 }
 
 registerJob('discover-teams', discoverTeams);

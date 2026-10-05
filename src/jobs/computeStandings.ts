@@ -12,7 +12,7 @@ import { parsePrestoStandings, prestoSeasonSlug } from '../sources/conferences/p
 import { listPrograms, listSchools, listProgramSeasons, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { listConferences, updateConference, writeStandings, writeStandingsChecks, confPoints, type StandingRow, type StandingsCheck } from '../db/standingsRepo.js';
 import { selectAll, kvSet, kvGet } from '../db/client.js';
-import { setMembership, setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, opponentSeo, isCleanOpponentName, type MemberNames } from '../normalize/aliasIndex.js';
+import { setMembership, setKnownConferences, buildAliasIndex, resolveName, matchAmongMembers, opponentSeo, isCleanOpponentName, realProgramFor, type MemberNames } from '../normalize/aliasIndex.js';
 import { currentSeason } from './seasons.js';
 import { compareRecord, wltString, type GameResult } from '../normalize/records.js';
 import type { Gender } from '../model.js';
@@ -156,14 +156,27 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
             });
           }
           for (const pc of pendingCreates) {
-            const seo = opponentSeo(pc.row.school);
-            await upsertSchools(db, [{ seo, name: pc.row.school }]);
-            const prog = await upsertProgram(db, { school_seo: seo, gender, name: pc.row.school, short_name: pc.row.school });
-            await upsertProgramSeasons(db, [{ program_id: prog.id, season, division: division as 'd1' | 'd2' | 'd3', conference_id: c.id, ncaa_member: true, member_source: 'conference_site' } as any]);
-            conferenceOf.set(prog.id, c.id); divisionOf.set(prog.id, division);
-            const cur = best.get(prog.id);
-            if (!cur || pc.podSize > cur.podSize) best.set(prog.id, { row: pc.row, rank: pc.rank, podSize: pc.podSize, pod: cur?.pod ?? null });
-            ctx.inc('programs_created_from_standings');
+            // A real program that dropped out of the members list (its conference went missing) is put back in the
+            // conference, never shadowed by a synthetic twin (x-notre-dame, x-california in the ACC, 2026-09).
+            const realId = realProgramFor(programs, schools, gender, pc.row.school, { division, divisionOf })
+              ?? (pc.row.logoAlt ? realProgramFor(programs, schools, gender, pc.row.logoAlt, { division, divisionOf }) : null);
+            let pid: string;
+            if (realId) {
+              const ps = seasonOf.get(realId);
+              await upsertProgramSeasons(db, [{ program_id: realId, season, division: (ps?.division ?? division) as 'd1' | 'd2' | 'd3', conference_id: c.id, ncaa_member: true, member_source: (ps as any)?.member_source ?? 'conference_site' } as any]);
+              pid = realId;
+              ctx.inc('programs_restored_from_standings');
+            } else {
+              const seo = opponentSeo(pc.row.school);
+              await upsertSchools(db, [{ seo, name: pc.row.school }]);
+              const prog = await upsertProgram(db, { school_seo: seo, gender, name: pc.row.school, short_name: pc.row.school });
+              await upsertProgramSeasons(db, [{ program_id: prog.id, season, division: division as 'd1' | 'd2' | 'd3', conference_id: c.id, ncaa_member: true, member_source: 'conference_site' } as any]);
+              pid = prog.id;
+              ctx.inc('programs_created_from_standings');
+            }
+            conferenceOf.set(pid, c.id); divisionOf.set(pid, divisionOf.get(pid) ?? division);
+            const cur = best.get(pid);
+            if (!cur || pc.podSize > cur.podSize) best.set(pid, { row: pc.row, rank: pc.rank, podSize: pc.podSize, pod: cur?.pod ?? null });
           }
           if (best.size) {
             official = true;
@@ -210,6 +223,16 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
       }
       if (rows.length) {
         await writeStandings(db, rows);
+        // The fresh table replaces the old one: a program no longer in it (moved conference, a twin merged away) must
+        // not keep a stale row beside the current ones.
+        const keep = new Set(rows.map((r) => r.program_id));
+        const { data: held } = await db.from('college_standings').select('program_id').eq('season', season).eq('conference_id', c.id);
+        const stale = ((held ?? []) as { program_id: string }[]).map((h) => h.program_id).filter((id) => !keep.has(id) && programById.get(id)?.gender === gender);
+        if (stale.length) {
+          const { error: delErr } = await db.from('college_standings').delete().eq('season', season).eq('conference_id', c.id).in('program_id', stale);
+          if (delErr) log.warn({ conference: c.ncaa_seo, gender, err: delErr.message }, 'stale standings cleanup failed');
+          else ctx.inc('standings_stale_removed', stale.length);
+        }
         ctx.inc('standings_rows', rows.length);
         await writeStandingsChecks(db, season, rows.map((r) => r.program_id), checks);
       }

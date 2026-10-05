@@ -49,9 +49,16 @@ export function buildAliasIndex(programs: AliasProgramLike[], schools: Map<strin
     add(gender, teamKeyKeepParens(name), id);
   };
   const bySeo = new Map<string, AliasProgramLike[]>();
+  // Twins: synthetic programs whose own name is exactly a real program's (qualifier included). Only these lose a tie to
+  // the real program; a synthetic "Rochester" beside "Rochester (NY)" is a different school and stays ambiguous.
+  const realKeys = new Set<string>();
+  for (const p of programs) if (!isSyntheticSeo(p.school_seo)) for (const n of exactNames(p, schools.get(p.school_seo))) realKeys.add(`${p.gender}|${teamKeyKeepParens(n)}`);
+  synthetic = new Set(programs.filter((p) => isSyntheticSeo(p.school_seo) && realKeys.has(`${p.gender}|${teamKeyKeepParens(p.name)}`)).map((p) => p.id));
   for (const p of programs) {
     bySeo.set(p.school_seo, [...(bySeo.get(p.school_seo) ?? []), p]);
     const s = schools.get(p.school_seo);
+    // The official long name, verbatim ("University of Notre Dame"), names one real school: as decisive as a curated alias.
+    if (s?.long_name && !synthetic.has(p.id)) add(p.gender, verbatimKey(s.long_name), p.id);
     for (const n of [p.name, p.short_name, s?.name, s?.long_name, p.school_seo.replace(/-/g, ' ')]) addName(p.gender, n, p.id);
     // Initialisms and NCAA six-letter codes are ambiguous (USC, UNC, "VT"…): stored as weaker keys that only win
     // when nothing else matches, and never expanded like ordinary names ("VT" is Virginia Tech, not Vermont).
@@ -121,6 +128,11 @@ export function isExhibitionName(raw: string): boolean {
 }
 
 let programTokens = new Map<string, { id: string; names: string[][] }[]>();
+/** Synthetic `x-` programs that are twins of a real program (same name, qualifier included); see buildAliasIndex. */
+let synthetic = new Set<string>();
+/** A program's own names, without the long name ("University of Rochester" keys like the bare "Rochester"). */
+const exactNames = (p: AliasProgramLike, s: AliasSchoolLike | null | undefined): string[] => [p.name, p.short_name, s?.name].filter((x): x is string => !!x);
+export const isSyntheticSeo = (seo: string | null | undefined): boolean => String(seo ?? '').startsWith('x-');
 let membership: Map<string, boolean> | null = null;
 /** program id → NCAA member; ambiguous names prefer members ("St. Thomas" = St. Thomas (MN), not St. Thomas (FL)). */
 export function setMembership(m: Map<string, boolean>): void { membership = m; }
@@ -195,6 +207,10 @@ function resolveExact(m: Map<string, string[]>, scope: ResolverScope, name: stri
   if (!cands.length && /^[A-Z][A-Za-z&.]{1,6}$/.test(name)) cands = m.get(`~${name.toLowerCase().replace(/[^a-z]/g, '')}`) ?? [];
   if (cands.length === 1) return cands[0]!;
   if (!cands.length) return null;
+  // A real NCAA.com program beats its synthetic `x-` twin of the same name ("Notre Dame" vs x-notre-dame).
+  const real = cands.filter((id) => !synthetic.has(id));
+  if (real.length === 1) return real[0]!;
+  if (real.length) cands = real;
   if (membership) { const mem = cands.filter((id) => membership!.get(id) !== false); if (mem.length === 1) return mem[0]!; if (mem.length) cands = mem; }
   const sameDiv = scope.ownDivision ? cands.filter((id) => scope.divisionOf.get(id) === scope.ownDivision) : cands;
   if (sameDiv.length === 1) return sameDiv[0]!;
@@ -250,6 +266,26 @@ export function isCleanOpponentName(raw: string): boolean {
   if (!n || n.length > 40 || /\d|[|!]/.test(n) || PROMO_WORDS.test(n)) return false;
   if (n.split(' ').length > 5) return false;
   return !isPlaceholderOpponent(n) && !isExhibitionName(n);
+}
+
+/**
+ * The real (NCAA.com-indexed) program a name belongs to, if exactly one fits: checked before any synthetic `x-` program
+ * is created, so a table, schedule or scoreboard row that missed its usual match never invents a twin of a real school.
+ * Only an exact name counts, qualifier included ("Notre Dame (MD)" is not "Notre Dame", and a bare "Rochester" is not
+ * "Rochester (NY)"); several fits are narrowed to `division` when given, else no match.
+ */
+export function realProgramFor(programs: AliasProgramLike[], schools: Map<string, AliasSchoolLike> | null, gender: string, rawName: string, opts: { division?: string | null; divisionOf?: Map<string, string> } = {}): string | null {
+  const name = cleanOpponentName(rawName);
+  if (!name) return null;
+  const k = teamKeyKeepParens(name);
+  if (!k) return null;
+  const hits = programs.filter((p) => p.gender === gender && !isSyntheticSeo(p.school_seo) && exactNames(p, schools?.get(p.school_seo)).some((n) => teamKeyKeepParens(n) === k));
+  if (hits.length === 1) return hits[0]!.id;
+  if (hits.length > 1 && opts.division && opts.divisionOf) {
+    const same = hits.filter((p) => opts.divisionOf!.get(p.id) === opts.division);
+    if (same.length === 1) return same[0]!.id;
+  }
+  return null;
 }
 
 /** Synthetic school slug for a team NCAA.com does not index ("Monroe University" → "x-monroe"). */

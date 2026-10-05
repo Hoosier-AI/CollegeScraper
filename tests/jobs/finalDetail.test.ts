@@ -14,7 +14,7 @@ describe('final-detail tells Plaibook', () => {
     const [url, init] = fetchFn.mock.calls[0] as any;
     expect(url).toBe('https://x.test/hook');
     expect(init.headers['x-college-secret']).toBe('s3');
-    expect(JSON.parse(init.body)).toEqual({ games: [{ game_id: 'g1', home_program_id: 'a', away_program_id: 'b' }] });
+    expect(JSON.parse(init.body)).toEqual({ games: [{ game_id: 'g1', home_program_id: 'a', away_program_id: 'b', final_at: null }] });
   });
   it('skips without config or ready games, and never throws on a failed post', async () => {
     expect(await notifyPlaibook(games, {} as any)).toBe('skipped');

@@ -24,5 +24,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 128_college_weather.sql | `weather` / `weather_at` on games (NWS forecast at kickoff), schedule view carries them | yes (2026-09-24) |
 | 129_college_seo_slugs.sql | `college_players.slug` / `noindex`, `college_games.slug` (backfilled, kept by triggers), `college_slug_redirects` for renamed slugs | yes (2026-09-27) |
 | 130_college_search_aliases.sql | team search: filler words stripped, school name/long name/aliases (initials, St./State), exact first, indexed player match | yes (2026-10-05) |
+| 131_college_twins_and_final_timing.sql | `college_games.final_at` / `ncaa_box_first_at` (set once by trigger, final_at backfilled), `college_merge_program()` to fold synthetic x- twins into the real program (job merge-twins) | yes (2026-10-05) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

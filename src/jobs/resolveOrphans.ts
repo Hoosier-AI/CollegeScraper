@@ -4,7 +4,7 @@
 // rows ("TBD", "Semifinals") are deleted.  params: { season? }
 import { registerJob, type JobContext } from './runner.js';
 import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame, upsertSchools, upsertProgram, upsertProgramSeasons, type GameRow } from '../db/repos.js';
-import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName, isCleanOpponentName, opponentSeo, cleanOpponentName, resolveNameExact } from '../normalize/aliasIndex.js';
+import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName, isCleanOpponentName, opponentSeo, cleanOpponentName, resolveNameExact, realProgramFor } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import { findGame } from '../identity/gameMatch.js';
 import { teamKey as teamKeyOf } from '../normalize/teamIdentity.js';
@@ -42,6 +42,8 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
       continue;
     }
     let oppId = ownId ? resolveName(index, { gender: g.gender, ownDivision: divisionOf.get(ownId) ?? null, ownConference: conferenceOf.get(ownId) ?? null, divisionOf, conferenceOf }, name) : null;
+    // Never a synthetic twin of a real school: an exact name of exactly one real program is that program.
+    if (!oppId && ownId) oppId = realProgramFor(programs, schools, g.gender, name, { division: divisionOf.get(ownId) ?? null, divisionOf });
     // A played game against a team NCAA.com does not index (NAIA, junior college, new members) still counts in the
     // official record: give the opponent a non-member program so both sides exist.
     if (!oppId && ownId && g.status === 'final' && g.home_score != null && isCleanOpponentName(name)) {

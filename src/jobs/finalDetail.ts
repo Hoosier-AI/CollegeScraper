@@ -8,7 +8,7 @@ import { fetchGamesNcaa } from './fetchGamesNcaa.js';
 import { currentSeason } from './seasons.js';
 import { log } from '../log.js';
 
-interface FinalGame { id: string; home_program_id: string | null; away_program_id: string | null; ncaa_fetched_at: string | null }
+interface FinalGame { id: string; home_program_id: string | null; away_program_id: string | null; ncaa_fetched_at: string | null; final_at?: string | null }
 
 /** Tell Plaibook which games just got their final box score. Best effort: Plaibook also syncs game days on a timer. */
 export async function notifyPlaibook(games: FinalGame[], env = process.env, doFetch: typeof fetch = fetch): Promise<'sent' | 'skipped' | 'failed'> {
@@ -19,7 +19,8 @@ export async function notifyPlaibook(games: FinalGame[], env = process.env, doFe
     const r = await doFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-college-secret': secret },
-      body: JSON.stringify({ games: ready.map((g) => ({ game_id: g.id, home_program_id: g.home_program_id, away_program_id: g.away_program_id })) }),
+      // final_at lets Plaibook log the full-time-to-coaches lag for each run.
+      body: JSON.stringify({ games: ready.map((g) => ({ game_id: g.id, home_program_id: g.home_program_id, away_program_id: g.away_program_id, final_at: g.final_at ?? null })) }),
       signal: AbortSignal.timeout(15_000),
     });
     return r.ok ? 'sent' : 'failed';
@@ -33,7 +34,7 @@ export async function finalDetail(ctx: JobContext): Promise<void> {
   if (!ids.length) return;
   await fetchGamesNcaa({ ...ctx, params: { season, contest_ids: ids, refetch: true } });
 
-  const { data, error } = await ctx.db.from('college_games').select('id, home_program_id, away_program_id, ncaa_fetched_at').in('ncaa_contest_id', ids.map(Number));
+  const { data, error } = await ctx.db.from('college_games').select('id, home_program_id, away_program_id, ncaa_fetched_at, final_at').in('ncaa_contest_id', ids.map(Number));
   if (error) throw new Error(error.message);
   const games = (data ?? []) as FinalGame[];
   const programIds = [...new Set(games.flatMap((g) => [g.home_program_id, g.away_program_id]).filter((p): p is string => !!p))];

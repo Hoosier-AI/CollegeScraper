@@ -4,6 +4,7 @@ import './detectSites.js';
 import './sweepScoreboard.js';
 import './fetchGamesNcaa.js';
 import './finalDetail.js';
+import './mergeTwins.js';
 import './syncSite.js';
 import './reconcileGames.js';
 import './computeAggregates.js';

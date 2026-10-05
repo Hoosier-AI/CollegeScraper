@@ -7,7 +7,7 @@ import { kvGet, kvSet } from '../db/client.js';
 import { log } from '../log.js';
 import { listPrograms, listGames, upsertGameByNcaa, updateGame, reorientGame, upsertSchools, upsertProgram, upsertProgramSeasons } from '../db/repos.js';
 import { findGame } from '../identity/gameMatch.js';
-import { isCleanOpponentName, opponentSeo } from '../normalize/aliasIndex.js';
+import { isCleanOpponentName, opponentSeo, realProgramFor } from '../normalize/aliasIndex.js';
 import { currentSeason, eachDate, eastern } from './seasons.js';
 import type { Division, Gender } from '../model.js';
 
@@ -56,6 +56,8 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         if (!seo) return null;
         const hit = bySeo.get(`${seo}|${gender}`);
         if (hit) return hit;
+        // A team listed without its school page whose name is exactly one real program's is that program, not an x- twin.
+        if (!t.seo) { const real = realProgramFor(programs, null, gender, name); if (real) { bySeo.set(`${seo}|${gender}`, real); return real; } }
         await upsertSchools(db, [{ seo, name }]);
         const prog = await upsertProgram(db, { school_seo: seo, gender, name, short_name: (t.short ?? name).trim(), name6: t.char6 ?? null });
         await upsertProgramSeasons(db, [{ program_id: prog.id, season, division, conference_id: null, ncaa_member: false, member_source: 'scoreboard' } as any]);
