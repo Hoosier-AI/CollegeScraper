@@ -307,7 +307,7 @@ export class DbSeoData implements SeoData {
 
   private gamesQuery(season: number, head = false) {
     return this.db.from('college_games').select('slug,updated_at', head ? { count: 'exact', head: true } : undefined)
-      .eq('season', season).not('slug', 'is', null).in('status', ['final', 'scheduled', 'live']);
+      .eq('season', season).not('slug', 'is', null).in('status', ['final', 'live']); // unplayed games are noindex (head.ts isUnplayed)
   }
   async countMatches(season: number): Promise<number> {
     const { count, error } = await this.gamesQuery(season, true);

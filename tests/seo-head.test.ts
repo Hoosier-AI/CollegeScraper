@@ -167,3 +167,19 @@ describe('search quality', () => {
     expect(matchHead(matchFixture(), ctx).robots).toBeNull();
   });
 });
+
+describe('unplayed games', () => {
+  it('keeps scheduled, postponed and cancelled games out of search, but not live or final ones', () => {
+    for (const status of ['scheduled', 'postponed', 'cancelled']) {
+      const m = matchFixture();
+      m.status = status;
+      m.home.score = null;
+      m.away.score = null;
+      expect(matchHead(m, ctx).robots).toBe('noindex,follow');
+    }
+    const live = matchFixture();
+    live.status = 'live';
+    expect(matchHead(live, ctx).robots).toBeNull();
+    expect(matchHead(matchFixture(), ctx).robots).toBeNull();
+  });
+});

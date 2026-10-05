@@ -101,6 +101,12 @@ export const isFinal = (m: MatchPage) => m.status === 'final' && m.home.score !=
  */
 export const isThinMatch = (m: MatchPage) =>
   isFinal(m) && !m.events.length && !m.players.home.length && !m.players.away.length && !m.team_stats.home && !m.team_stats.away;
+/**
+ * Games not played yet (scheduled, postponed, cancelled) are previews with
+ * little on them; they stay out of search until they're final. A live game
+ * stays indexable: that's when people search for it.
+ */
+export const isUnplayed = (m: MatchPage) => m.status !== 'live' && !isFinal(m);
 export const extraTime = (m: MatchPage) => (m.shootout ? ' (PKs)' : m.overtime ? ' (OT)' : '');
 export const matchName = (m: MatchPage) => `${m.away.name} at ${m.home.name}`;
 export const scoreLine = (m: MatchPage) => `${m.away.name} ${m.away.score}, ${m.home.name} ${m.home.score}${extraTime(m)}`;
@@ -137,7 +143,7 @@ export function matchHead(m: MatchPage, ctx: HeadContext): HeadMeta {
     superEvent: m.tournament ? { '@type': 'SportsEvent', name: m.tournament } : undefined,
   });
   const crumbs = [{ name: SITE_NAME, path: '/' }, ...(m.home.team ? [{ name: teamTitle(m.home.team), path: teamPath(m.home.team) }] : []), { name: matchName(m), path: matchPath(m.slug) }];
-  return { title, description, canonical, robots: isThinMatch(m) ? NOINDEX : null, ogType: 'website', image: ogImage(ctx), jsonLd: [event, breadcrumbs(ctx, crumbs)] };
+  return { title, description, canonical, robots: isThinMatch(m) || isUnplayed(m) ? NOINDEX : null, ogType: 'website', image: ogImage(ctx), jsonLd: [event, breadcrumbs(ctx, crumbs)] };
 }
 
 // ---------- conference ----------
