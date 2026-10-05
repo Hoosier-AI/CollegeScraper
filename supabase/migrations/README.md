@@ -26,5 +26,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 130_college_search_aliases.sql | team search: filler words stripped, school name/long name/aliases (initials, St./State), exact first, indexed player match | yes (2026-10-05) |
 | 131_college_twins_and_final_timing.sql | `college_games.final_at` / `ncaa_box_first_at` (set once by trigger, final_at backfilled), `college_merge_program()` to fold synthetic x- twins into the real program (job merge-twins) | yes (2026-10-05) |
 | 132_college_schedule_names.sql | schedule view falls back to the schedule line's opponent name when no program matched (no nameless sides) | yes (2026-10-05) |
+| 133_college_aggregates_queue.sql | season-total refreshes take a per-season advisory lock and their own 240 s lock_timeout, so they queue instead of being cancelled at PostgREST's 8 s (nightly failed at its last step 09-30 to 10-04) | yes (2026-10-05) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
