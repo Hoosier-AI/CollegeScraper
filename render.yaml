@@ -33,7 +33,7 @@ services:
       - key: API_ANON_RATE_LIMIT_PER_MIN
         value: "60"
       - key: PUBLIC_URL
-        value: https://plaibook-college-scraper.onrender.com
+        value: https://www.plaibook.live
       # Search Console HTML-file verification (the file name, e.g. google1234abcd.html) and the IndexNow key.
       - key: GSC_VERIFICATION_FILE
         sync: false
