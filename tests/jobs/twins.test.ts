@@ -53,6 +53,14 @@ describe('synthetic twins', () => {
     expect(realProgramFor(programs, schools, 'w', 'Monroe University')).toBeNull();
   });
 
+  it('a same-name program in another known division is a different school', () => {
+    const progs = [{ id: 'nu', gender: 'w', school_seo: 'northwestern', name: 'Northwestern', short_name: 'Northwestern' }];
+    const div = new Map([['nu', 'd1']]);
+    expect(realProgramFor(progs, null, 'w', 'Northwestern', { division: 'd3', divisionOf: div })).toBeNull();
+    expect(realProgramFor(progs, null, 'w', 'Northwestern', { division: 'd1', divisionOf: div })).toBe('nu');
+    expect(realProgramFor(progs, null, 'w', 'Northwestern', { division: 'd3', divisionOf: new Map() })).toBe('nu'); // unknown division
+  });
+
   it('several real fits are narrowed by division, else no match', () => {
     const two = [...programs, { id: 'nd2', gender: 'w', school_seo: 'notre-dame-oh', name: 'Notre Dame', short_name: 'Notre Dame' }];
     const div = new Map([...divisionOf, ['nd2', 'd2']]);

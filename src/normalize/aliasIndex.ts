@@ -272,7 +272,8 @@ export function isCleanOpponentName(raw: string): boolean {
  * The real (NCAA.com-indexed) program a name belongs to, if exactly one fits: checked before any synthetic `x-` program
  * is created, so a table, schedule or scoreboard row that missed its usual match never invents a twin of a real school.
  * Only an exact name counts, qualifier included ("Notre Dame (MD)" is not "Notre Dame", and a bare "Rochester" is not
- * "Rochester (NY)"); several fits are narrowed to `division` when given, else no match.
+ * "Rochester (NY)"); a fit whose known division differs from `division` is refused, and several fits are narrowed
+ * to `division`, else no match.
  */
 export function realProgramFor(programs: AliasProgramLike[], schools: Map<string, AliasSchoolLike> | null, gender: string, rawName: string, opts: { division?: string | null; divisionOf?: Map<string, string> } = {}): string | null {
   const name = cleanOpponentName(rawName);
@@ -280,7 +281,9 @@ export function realProgramFor(programs: AliasProgramLike[], schools: Map<string
   const k = teamKeyKeepParens(name);
   if (!k) return null;
   const hits = programs.filter((p) => p.gender === gender && !isSyntheticSeo(p.school_seo) && exactNames(p, schools?.get(p.school_seo)).some((n) => teamKeyKeepParens(n) === k));
-  if (hits.length === 1) return hits[0]!.id;
+  // A known division that differs is a different school: UMAC's "Northwestern" (D3, St. Paul) is not the Big Ten's.
+  const otherDivision = (id: string) => !!(opts.division && opts.divisionOf?.get(id) && opts.divisionOf.get(id) !== opts.division);
+  if (hits.length === 1) return otherDivision(hits[0]!.id) ? null : hits[0]!.id;
   if (hits.length > 1 && opts.division && opts.divisionOf) {
     const same = hits.filter((p) => opts.divisionOf!.get(p.id) === opts.division);
     if (same.length === 1) return same[0]!.id;
