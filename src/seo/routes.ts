@@ -14,7 +14,7 @@ import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
-import { proHomeBody, proHomeHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead } from './pro/pages.js';
+import { proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead } from './pro/pages.js';
 import { eastern } from '../jobs/seasons.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
@@ -171,6 +171,11 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     app.get('/pro', (req, reply) => serve(req, reply, keyOf(req), async () => {
       const c = ctx(); const h = await pro.home(eastern().date);
       return { head: proHomeHead(h, c), body: proHomeBody(h) };
+    }));
+    // Today's scoreboard; another day (?date=) is the app's own view of the same page.
+    app.get('/pro/matches', (req, reply) => serve(req, reply, keyOf(req), async () => {
+      const c = ctx(); const h = await pro.home(eastern().date);
+      return { head: proMatchesHead(h, c), body: proMatchesBody(h) };
     }));
     app.get('/pro/leagues', (req, reply) => serve(req, reply, keyOf(req), async () => {
       const c = ctx(); const ls = await pro.leagues();

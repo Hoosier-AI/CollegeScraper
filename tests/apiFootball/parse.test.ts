@@ -56,6 +56,10 @@ describe('parseLeagues', () => {
     expect(on.get(10)).toBe(false); // friendlies
     expect(on.get(14)).toBe(false); // youth
   });
+  it('one row per league season even when the provider repeats a year', () => {
+    const r = parseLeagues([{ league: { id: 1, name: 'X', type: 'League' }, country: { name: 'USA' }, seasons: [{ year: 2026, current: false }, { year: 2026, current: true }, { year: 2025 }] }]);
+    expect(r.seasons.map((s) => [s.season, s.is_current])).toEqual([[2026, true], [2025, false]]);
+  });
   it('keeps the coverage flags per season', () => {
     const s = seasons.find((x) => x.league_id === 39 && x.is_current)!;
     expect(s.coverage.fixtures?.events).toBe(true);

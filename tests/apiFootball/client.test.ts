@@ -88,6 +88,14 @@ describe('ApiFootball client', () => {
     expect(api.headroom()).toBe(Number.POSITIVE_INFINITY);
   });
 
+  it('an unset option (undefined) keeps its default', async () => {
+    const f = fakeFetch([ok(7000)]);
+    const api = new ApiFootball({ key: 'k'.repeat(32), base: undefined, reserve: undefined, fetchImpl: f.impl, sleep: noSleep });
+    await api.get('leagues');
+    expect(f.calls).toContain('https://v3.football.api-sports.io/leagues');
+    expect(api.floor('everyday')).toBe(1500);
+  });
+
   it('reads the provider\'s errors field in both shapes', () => {
     expect(errorText([])).toBeNull();
     expect(errorText({})).toBeNull();

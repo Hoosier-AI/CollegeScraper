@@ -213,14 +213,15 @@ export async function player(db: Db, slug: string) {
   const pl = p as any;
   const [seasons, recent, links] = await Promise.all([
     selectAll<any>(db, 'pro_player_season_stats', '*', (q) => q.eq('player_id', pl.id).order('season', { ascending: false })),
-    db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,pos,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(25),
+    db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,pos,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
     db.from('pro_college_links').select('college_name,school_seo,college_player_id,first_season,last_season,confidence,verified,rejected,method,college:college_players(slug,display_name)').eq('pro_player_id', pl.id).eq('rejected', false),
   ]);
   const lgs = await leaguesById(db, seasons.map((s) => s.league_id));
   const teams = await teamsById(db, seasons.map((s) => s.team_id));
   const shown = ((links.data ?? []) as any[]).filter((l) => l.verified || Number(l.confidence) >= SHOW_AT);
   const matches = ((recent.data ?? []) as any[]).filter((r) => r.fixture).map((r) => ({ match: toMatchRow(r.fixture), team_id: r.team_id, starter: r.starter, minutes: r.minutes, goals: r.goals, assists: r.assists, yellow: r.yellow, red: r.red, rating: r.rating == null ? null : Number(r.rating), saves: r.saves, pos: r.pos }))
-    .sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff));
+    // Fixture ids are not in date order: take a wide slice, then the latest by kickoff.
+    .sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff)).slice(0, 25);
   const latestTeam = matches[0] ? (matches[0].team_id === matches[0].match.home.id ? matches[0].match.home : matches[0].match.away) : (seasons[0] ? teams.get(seasons[0].team_id) ?? null : null);
   return {
     player: { id: pl.id, name: pl.display_name, slug: pl.slug, short_name: pl.name, first_name: pl.first_name, last_name: pl.last_name, birth_date: pl.birth_date, birth_place: pl.birth_place, birth_country: pl.birth_country, nationality: pl.nationality, height_cm: pl.height_cm, weight_kg: pl.weight_kg, position: pl.position, photo: pl.photo, gender: pl.gender, noindex: pl.noindex },

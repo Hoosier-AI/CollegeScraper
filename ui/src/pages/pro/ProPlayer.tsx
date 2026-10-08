@@ -78,7 +78,7 @@ export default function ProPlayer() {
               <li key={r.match.id} className="flex items-center">
                 <div className="min-w-0 flex-1"><ProMatchRow m={r.match} showDate showLeague /></div>
                 <span className="hidden w-36 shrink-0 px-3 text-right text-xs tnum text-chalk-400 sm:block">
-                  {r.minutes != null ? `${r.minutes}′` : 'unused'}{r.goals ? ` · ${r.goals} G` : ''}{r.assists ? ` · ${r.assists} A` : ''}{r.rating != null ? ` · ${r.rating.toFixed(1)}` : ''}
+                  {(r.minutes ?? 0) > 0 ? `${r.minutes}′` : 'on the bench'}{r.goals ? ` · ${r.goals} G` : ''}{r.assists ? ` · ${r.assists} A` : ''}{r.rating != null ? ` · ${r.rating.toFixed(1)}` : ''}
                 </span>
               </li>
             ))}

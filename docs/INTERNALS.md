@@ -134,6 +134,42 @@ text summary in `<section id="ssr">` at `<!--ssr-body-->`, which the app removes
 - Googlebot and Bingbot, verified by reverse and forward DNS (cached 24 h), are exempt from the site rate limit.
 - `GSC_VERIFICATION_FILE` and `INDEXNOW_KEY` add the Search Console verification file and the IndexNow key file.
 
+## Plaibook Stats Pro (/pro)
+
+Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaibook's existing Pro plan: 7,500 requests a day, shared with the Plaibook app. Its terms allow showing the data on a website, not reselling the raw feed, so pro data is in no public API (`/v1` stays college-only). Scraping FBref, FotMob, ESPN, Transfermarkt, Sofascore, WhoScored or mlssoccer.com is off the table: their terms forbid it.
+
+- **Source:** `src/sources/apiFootball/`
+  - `client.ts` is its own small client: an API-key header, the provider's quota headers, no fetch cache.
+  - Quota guard: everyday jobs stop when `PRO_RESERVE` (1,500) requests are left for the day; the backfill stops at `PRO_BACKFILL_RESERVE` (2,500). So the Plaibook app always has headroom. `/status` reads the day's usage for free.
+  - `parse.ts` turns API answers into rows (pure, tested against `fixtures/apiFootball/`).
+  - `leagues.ts` sets gender, level (pro, youth, friendly, amateur) and crawl priority: the US pyramid first.
+- **Tables:** migration 134 creates the `pro_*` tables, keyed by the provider's own ids.
+- **Jobs:** `src/jobs/pro/`. The everyday ones run on their own `pro` worker lane, all year:
+
+  | Job | What it does | Requests |
+  |---|---|---|
+  | `pro-scoreboard` | every match of a UTC day (every 10 min) | 1 per day read |
+  | `pro-live` | every match in play (every 3 min while one is) | 1 |
+  | `pro-final-detail` | events, lineups, player and team stats | 1 per 20 finals |
+  | `pro-standings` | league tables after new finals | 1 per table |
+
+  On the crawl lane:
+
+  | Job | What it does | Requests |
+  |---|---|---|
+  | `pro-catalog` | the competition list (weekly) | 1 |
+  | `pro-backfill` | history, a league season at a time (hourly, until its quota floor) | about 15 per league season |
+  | `pro-players` | player profiles | 1 each |
+  | `pro-college-link` | Wikidata (CC0) "educated at" plus name and age against our rosters | none |
+
+  A full day of current data costs roughly 1,000 to 1,500 requests.
+- **College links:** shown when verified or at confidence ≥ 0.85. Set `pro_college_links.verified` or `rejected` by hand to override; the job never touches reviewed rows.
+- **Site:**
+  - Reads: `src/pro/queries.ts`, used by both `/api/pro/*` (`src/ui/proApi.ts`) and the server-rendered pages (`src/seo/pro/`).
+  - React pages: `ui/src/pages/pro/`. A College/Pro switch sits in the header.
+  - Sitemaps: `pro-core`, `pro-teams-N`, `pro-matches-YEAR-N` (finals with detail only) and `pro-players-N` (players who have played).
+- **Env:** `API_FOOTBALL_KEY`, plus `PRO_RESERVE`, `PRO_BACKFILL_RESERVE`, `PRO_PER_MIN` and `PRO_BACKFILL_SEASONS`. Without the key, every pro job is a no-op.
+
 ## Database
 
 The schema lives in `supabase/migrations/` in this repo (120 base, 122 aggregates and standings v2, 123 WMT, 124

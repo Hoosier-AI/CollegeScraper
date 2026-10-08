@@ -55,6 +55,21 @@ ${groups ? `<h2>Matches on ${esc(longDate(h.date))}</h2>${groups}` : ''}${featur
   return wrapBody('pro', [], inner);
 }
 
+// ---------- the scoreboard (/pro/matches) ----------
+export function proMatchesHead(h: ProHomePage, ctx: HeadContext): HeadMeta {
+  return {
+    title: `Pro Soccer Scores Today, ${longDate(h.date)}: Live Results and Fixtures${SUFFIX}`,
+    description: clip(`${h.matches.total} professional soccer matches on ${longDate(h.date)} across ${h.matches.groups.length} competitions${h.matches.live ? `, ${h.matches.live} live now` : ''}: live scores, results and kickoff times, men's and women's.`),
+    canonical: abs(ctx, proPaths.matches), robots: null, ogType: 'website', image: ogImage(ctx),
+    jsonLd: [breadcrumbs(ctx, [...crumbsHome, { name: 'Matches', path: proPaths.matches }])],
+  };
+}
+
+export function proMatchesBody(h: ProHomePage): string {
+  const groups = h.matches.groups.map((g) => `<h2>${a(proPaths.league(g.league.slug), g.league.name)}</h2><ul>${g.matches.map((m) => `<li>${a(proPaths.match(m.slug), proIsFinal(m) || m.status === 'live' ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>`).join('');
+  return wrapBody('pro', [...crumbsHome, { name: 'Matches', path: proPaths.matches }], `<h1>Pro Soccer Matches, ${esc(longDate(h.date))}</h1><p>${esc(h.matches.total)} matches in ${esc(h.matches.groups.length)} competitions.</p>${groups}`);
+}
+
 // ---------- competitions ----------
 export function proLeaguesHead(ls: ProLeaguesPage, ctx: HeadContext): HeadMeta {
   return {

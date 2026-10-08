@@ -5,18 +5,33 @@ import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, upsertChunked } from '../../db/client.js';
 import { loadConfig } from '../../config.js';
 import { chunk } from './shared.js';
-import { matchNameAge, matchWikidata, parseWikidata, schoolIndex, WIKIDATA_QUERY, type CollegeLite, type LinkProposal, type ProNameLite, type SchoolLite } from './collegeMatch.js';
+import { matchNameAge, matchWikidata, parseWikidata, schoolIndex, withLabels, WIKIDATA_QUERY, type CollegeLite, type LinkProposal, type ProNameLite, type SchoolLite } from './collegeMatch.js';
 import { log } from '../../log.js';
 
 const WDQS = 'https://query.wikidata.org/sparql';
+const WD_API = 'https://www.wikidata.org/w/api.php';
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-async function wikidataRows(userAgent: string, contact: string): Promise<ReturnType<typeof parseWikidata>> {
+async function wikidataRows(ua: string): Promise<ReturnType<typeof parseWikidata>> {
   const res = await fetch(`${WDQS}?format=json&query=${encodeURIComponent(WIKIDATA_QUERY)}`, {
-    headers: { accept: 'application/sparql-results+json', 'user-agent': `PlaibookStats/1.0 (https://www.plaibook.live; ${contact}) ${userAgent.split(' ').pop()}` },
-    signal: AbortSignal.timeout(120_000),
+    headers: { accept: 'application/sparql-results+json', 'user-agent': ua },
+    signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) throw new Error(`Wikidata HTTP ${res.status}`);
   return parseWikidata(await res.json() as Parameters<typeof parseWikidata>[0]);
+}
+
+/** English labels for QIDs, 50 per request (the API's limit), one request a second. */
+async function wikidataLabels(ids: string[], ua: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const batch of chunk([...new Set(ids)], 50)) {
+    const res = await fetch(`${WD_API}?action=wbgetentities&format=json&props=labels&languages=en&ids=${batch.join('|')}`, { headers: { 'user-agent': ua }, signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`Wikidata labels HTTP ${res.status}`);
+    const body = await res.json() as { entities?: Record<string, { labels?: { en?: { value: string } } }> };
+    for (const [id, e] of Object.entries(body.entities ?? {})) { const v = e.labels?.en?.value; if (v) out.set(id, v); }
+    await sleep(1000);
+  }
+  return out;
 }
 
 export async function proCollegeLink(ctx: JobContext): Promise<void> {
@@ -26,12 +41,17 @@ export async function proCollegeLink(ctx: JobContext): Promise<void> {
   const index = schoolIndex(schools);
   const proposals: LinkProposal[] = [];
 
-  // 1. Wikidata.
+  // 1. Wikidata: the footballers educated in the US, then names only for those born on a day one of ours was.
   try {
-    const rows = await wikidataRows(cfg.userAgent, cfg.contactEmail);
-    ctx.inc('wikidata_rows', rows.length);
+    const ua = `PlaibookStats/1.0 (https://www.plaibook.live; ${cfg.contactEmail})`;
+    const raw = await wikidataRows(ua);
+    ctx.inc('wikidata_rows', raw.length);
     const pros = await selectAll<{ id: number; last_name: string | null; birth_date: string | null; gender: 'm' | 'w' | null }>(db, 'pro_players', 'id,last_name,birth_date,gender', (q) => q.not('birth_date', 'is', null));
-    const found = matchWikidata(rows, pros, index);
+    const dobs = new Set(pros.map((p) => p.birth_date!.slice(0, 10)));
+    const near = raw.filter((r) => r.dob && dobs.has(r.dob));
+    ctx.inc('wikidata_dob_matches', near.length);
+    const labels = near.length ? await wikidataLabels(near.flatMap((r) => [r.qid, r.collegeQid]), ua) : new Map<string, string>();
+    const found = matchWikidata(withLabels(near, labels), pros, index);
     ctx.inc('wikidata_matches', found.length);
     proposals.push(...found);
     for (const f of found) await db.from('pro_players').update({ wikidata_qid: String(f.evidence.qid) }).eq('id', f.pro_player_id);

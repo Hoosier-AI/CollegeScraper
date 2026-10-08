@@ -108,12 +108,20 @@ export function parseLeagues(items: AfLeagueItem[]): { leagues: LeagueRow[]; sea
       // Crawled when professional and still running (a current season the provider covers with fixtures).
       enabled: kind === 'pro' && !!current,
     });
+    // The provider sometimes lists a season year twice for one league; keep one row (the current one if either is).
+    const byYear = new Map<number, SeasonRow>();
     for (const s of it.seasons ?? []) {
       if (!Number.isInteger(s.year)) continue;
-      seasons.push({ league_id: id, season: s.year, starts_on: str(s.start), ends_on: str(s.end), is_current: !!s.current, coverage: s.coverage ?? {} });
+      const row: SeasonRow = { league_id: id, season: s.year, starts_on: str(s.start), ends_on: str(s.end), is_current: !!s.current, coverage: s.coverage ?? {} };
+      const prev = byYear.get(s.year);
+      if (!prev || (row.is_current && !prev.is_current)) byYear.set(s.year, row);
     }
+    seasons.push(...byYear.values());
   }
-  return { leagues, seasons };
+  // And the same league twice: last one wins.
+  const uniq = new Map(leagues.map((l) => [l.id, l]));
+  const seen = new Set<string>();
+  return { leagues: [...uniq.values()], seasons: seasons.filter((s) => { const k = `${s.league_id}|${s.season}`; if (seen.has(k)) return false; seen.add(k); return true; }) };
 }
 
 // ---------- fixtures ----------
@@ -183,7 +191,8 @@ export function parseFixtureDetail(it: AfFixtureItem, gender: Gender | null): Fi
       slot += 1;
       players.push({
         fixture_id, team_id, slot, player_id: id, name, number: int(lp?.number ?? st.games?.number), pos: str(lp?.pos) ?? str(st.games?.position), grid: str(lp?.grid),
-        starter, substitute: !starter, captain: !!st.games?.captain, minutes: int(st.games?.minutes), rating: num(st.games?.rating),
+        // An unused substitute comes back with a 0 rating: no rating, not a bad one.
+        starter, substitute: !starter, captain: !!st.games?.captain, minutes: int(st.games?.minutes), rating: num(st.games?.rating) || null,
         goals: int(st.goals?.total), assists: int(st.goals?.assists), conceded: int(st.goals?.conceded), saves: int(st.goals?.saves),
         shots: int(st.shots?.total), shots_on: int(st.shots?.on), passes: int(st.passes?.total), key_passes: int(st.passes?.key), pass_accuracy: int(st.passes?.accuracy),
         tackles: int(st.tackles?.total), blocks: int(st.tackles?.blocks), interceptions: int(st.tackles?.interceptions),

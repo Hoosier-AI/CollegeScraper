@@ -105,7 +105,9 @@ describe('pro seo routes', () => {
     expect(moved.statusCode).toBe(301);
     expect(moved.headers.location).toBe('/pro/players/sophia-smith-9');
     expect((await app.inject({ url: '/pro/players/nobody-1', headers: HTML })).statusCode).toBe(404);
-    expect((await app.inject({ url: '/pro/matches', headers: HTML })).statusCode).toBe(200);
+    const board = await app.inject({ url: '/pro/matches', headers: HTML });
+    expect(board.statusCode).toBe(200);
+    expect(between(board.body, '<title>', '</title>')).toMatch(/^Pro Soccer Scores Today, /);
   });
 
   it('league and home pages', async () => {

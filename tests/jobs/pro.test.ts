@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { backfillQueue } from '../../src/jobs/pro/backfill.js';
 import { scoreboardDays } from '../../src/jobs/pro/scoreboard.js';
-import { matchNameAge, matchWikidata, parseWikidata, resolveSchool, schoolIndex } from '../../src/jobs/pro/collegeMatch.js';
+import { matchNameAge, matchWikidata, parseWikidata, resolveSchool, schoolIndex, withLabels } from '../../src/jobs/pro/collegeMatch.js';
 import type { LeagueInfo } from '../../src/db/proRepo.js';
 import { SCHEDULE, clockAt } from '../../src/jobs/scheduler.js';
 import { LIVE_DEFAULTS } from '../../src/ops/settings.js';
@@ -54,20 +54,29 @@ describe('college links', () => {
     { seo: 'nc-state', name: 'NC State', long_name: 'North Carolina State University' },
     { seo: 'stanford', name: 'Stanford', long_name: 'Stanford University' },
     { seo: 'boston-college', name: 'Boston College', long_name: 'Boston College' },
+    // Listed first and with no long name: must not take "Georgetown University".
+    { seo: 'georgetown-ky', name: 'Georgetown (KY)', long_name: null },
+    { seo: 'georgetown', name: 'Georgetown', long_name: 'Georgetown University' },
   ]);
   it('maps Wikidata college names to our schools, campus suffixes included', () => {
     expect(resolveSchool(schools, 'University of North Carolina at Chapel Hill')).toBe('north-carolina');
     expect(resolveSchool(schools, 'North Carolina State University')).toBe('nc-state');
     expect(resolveSchool(schools, 'Stanford University')).toBe('stanford');
     expect(resolveSchool(schools, 'Boston College')).toBe('boston-college');
+    expect(resolveSchool(schools, 'Georgetown University')).toBe('georgetown');
+    // No exact name for it here: no school rather than the wrong one.
+    expect(resolveSchool(schools, 'Georgetown College')).toBeNull();
     expect(resolveSchool(schools, 'Some High School')).toBeNull();
   });
   it('Wikidata: birth date plus family name, one candidate only, colleges not high schools', () => {
-    const rows = parseWikidata({ results: { bindings: [
-      { p: { value: 'http://www.wikidata.org/entity/Q1' }, pLabel: { value: 'Sophia Smith' }, dob: { value: '2000-08-10T00:00:00Z' }, sex: { value: 'http://www.wikidata.org/entity/Q6581072' }, collegeLabel: { value: 'Stanford University' }, start: { value: '2018-01-01T00:00:00Z' }, end: { value: '2020-01-01T00:00:00Z' } },
-      { p: { value: 'http://www.wikidata.org/entity/Q1' }, pLabel: { value: 'Sophia Smith' }, dob: { value: '2000-08-10T00:00:00Z' }, collegeLabel: { value: 'Fort Collins High School' } },
-      { p: { value: 'http://www.wikidata.org/entity/Q2' }, pLabel: { value: 'John Doe' }, dob: { value: '1999-01-01T00:00:00Z' }, collegeLabel: { value: 'Q12345' } },
+    const raw = parseWikidata({ results: { bindings: [
+      { p: { value: 'http://www.wikidata.org/entity/Q1' }, dob: { value: '2000-08-10T00:00:00Z' }, sex: { value: 'http://www.wikidata.org/entity/Q6581072' }, college: { value: 'http://www.wikidata.org/entity/Q41506' }, start: { value: '2018-01-01T00:00:00Z' }, end: { value: '2020-01-01T00:00:00Z' } },
+      { p: { value: 'http://www.wikidata.org/entity/Q1' }, dob: { value: '2000-08-10T00:00:00Z' }, college: { value: 'http://www.wikidata.org/entity/Q5' } },
+      { p: { value: 'http://www.wikidata.org/entity/Q2' }, dob: { value: '1999-01-01T00:00:00Z' }, college: { value: 'http://www.wikidata.org/entity/Q12345' } },
     ] } });
+    expect(raw).toHaveLength(3);
+    // A college with no English label (Q12345) drops out.
+    const rows = withLabels(raw, new Map([['Q1', 'Sophia Smith'], ['Q2', 'John Doe'], ['Q41506', 'Stanford University'], ['Q5', 'Fort Collins High School']]));
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ qid: 'Q1', gender: 'w', start: 2018, end: 2020, dob: '2000-08-10' });
     const pros = [{ id: 7, last_name: 'Smith', birth_date: '2000-08-10', gender: 'w' as const }, { id: 8, last_name: 'Smith', birth_date: '2001-08-10', gender: 'w' as const }];

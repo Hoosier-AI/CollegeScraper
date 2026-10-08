@@ -62,7 +62,7 @@ export class Sitemaps {
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
     if (this.pro) {
-      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/leagues' }, ...(await this.pro.sitemapLeagues())]);
+      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/matches' }, { path: '/pro/leagues' }, ...(await this.pro.sitemapLeagues())]);
       const p = PRO_FILE.exec(file);
       if (p) {
         const [, kind, nStr, year, mStr] = p;

@@ -49,10 +49,21 @@ export function EventTimeline({ events, homeName, awayName }: { events: ProEvent
   );
 }
 
+const BAND_ROW: Record<string, number> = { G: 1, D: 2, M: 3, F: 4 };
+/** "row:col" from the provider, or (when any player lacks one) rows by position group, spread evenly. */
+function grids(lines: ProLine[]): ({ line: ProLine; row: number; col: number } | null)[] {
+  const given = lines.map((l) => { const m = /^(\d+):(\d+)$/.exec(l.grid ?? ''); return m ? { line: l, row: Number(m[1]), col: Number(m[2]) } : null; });
+  if (given.every(Boolean)) return given;
+  const rows = new Map<number, ProLine[]>();
+  for (const l of lines) { const r = BAND_ROW[(l.pos ?? '').toUpperCase()]; if (r) rows.set(r, [...(rows.get(r) ?? []), l]); }
+  if ([...rows.values()].reduce((n, r) => n + r.length, 0) < lines.length) return [];
+  return [...rows.entries()].flatMap(([row, ls]) => ls.map((line, i) => ({ line, row, col: i + 1 })));
+}
+
 /** Starters placed by the provider's "row:col" grid: row 1 is the keeper, the last row the forwards. */
 function place(lines: ProLine[]): { line: ProLine; x: number; y: number }[] {
-  const parsed = lines.map((l) => { const m = /^(\d+):(\d+)$/.exec(l.grid ?? ''); return m ? { line: l, row: Number(m[1]), col: Number(m[2]) } : null; });
-  if (parsed.some((p) => !p)) return [];
+  const parsed = grids(lines);
+  if (!parsed.length || parsed.some((p) => !p)) return [];
   const rows = Math.max(...parsed.map((p) => p!.row));
   const perRow = new Map<number, number>();
   for (const p of parsed) perRow.set(p!.row, Math.max(perRow.get(p!.row) ?? 0, p!.col));
@@ -71,7 +82,7 @@ function Token({ line, x, y, top }: { line: ProLine; x: number; y: number; top: 
         {(line.red ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-loss" /> : (line.yellow ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-note" /> : null}
       </span>
       <span className="mt-1 block max-w-[72px] truncate text-center text-[11px] font-medium text-white drop-shadow">{last}</span>
-      {line.rating != null && <span className="text-[10px] tnum text-chalk-200">{line.rating.toFixed(1)}</span>}
+      {line.rating != null && line.rating > 0 && <span className="text-[10px] tnum text-chalk-200">{line.rating.toFixed(1)}</span>}
     </>
   );
   const cls = 'absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2';
@@ -144,8 +155,8 @@ export function LineupList({ side, title }: { side: ProSideDetail; title: string
       {l.captain && <span className="text-2xs text-chalk-500" title="Captain">(c)</span>}
       <span className="ml-auto flex shrink-0 items-center gap-2 text-xs tnum text-chalk-400">
         {(l.goals ?? 0) > 0 && <Goals n={l.goals!} size={12} />}
-        {l.minutes != null && <span title="Minutes">{l.minutes}′</span>}
-        {l.rating != null && <span className={`rounded px-1 font-semibold ${l.rating >= 7.5 ? 'bg-win/20 text-win' : l.rating < 6.3 ? 'bg-loss/15 text-loss' : 'bg-field-700 text-chalk-200'}`} title="Match rating">{l.rating.toFixed(1)}</span>}
+        {(l.minutes ?? 0) > 0 && <span title="Minutes">{l.minutes}′</span>}
+        {l.rating != null && l.rating > 0 && <span className={`rounded px-1 font-semibold ${l.rating >= 7.5 ? 'bg-win/20 text-win' : l.rating < 6.3 ? 'bg-loss/15 text-loss' : 'bg-field-700 text-chalk-200'}`} title="Match rating">{l.rating.toFixed(1)}</span>}
       </span>
     </li>
   );

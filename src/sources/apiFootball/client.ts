@@ -76,7 +76,9 @@ export class ApiFootball {
   private statusCheckedAt = 0;
 
   constructor(opts: ApiFootballOptions) {
-    this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...opts };
+    // Unset options (undefined from an empty env var) keep their defaults.
+    const given = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined)) as ApiFootballOptions;
+    this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
     this.queue = new PQueue({ concurrency: 4, interval: 60_000, intervalCap: this.o.perMinute });
     const now = this.o.now();
     this.quota = { remaining: null, limit: null, at: null, used: 0, usedToday: 0, day: utcDay(now), blockedUntil: null, lastError: null };
