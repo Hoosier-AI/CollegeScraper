@@ -48,6 +48,9 @@ services:
         value: https://www.plaibook.soccer/api/cron?job=college-final
       - key: PLAIBOOK_FINAL_WEBHOOK_SECRET
         sync: false
+      # Plaibook Stats Pro: API-Football (Plaibook's Pro-plan key, shared with the app; see .env.example for the floors).
+      - key: API_FOOTBALL_KEY
+        sync: false
       - key: LOG_LEVEL
         value: info
       - key: PORT

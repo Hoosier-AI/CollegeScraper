@@ -30,6 +30,15 @@ export const JOB_META: Record<string, JobMeta> = {
   'merge-twins': { description: 'Fold synthetic x- programs into the real program of the same school (duplicate standings rows, unmatched poll entries). Lists the pairs unless Apply is set.', lane: 'crawl', params: [season, { name: 'apply', type: 'boolean', label: 'Apply', help: 'Off = list the pairs only.' }, { name: 'only', type: 'string[]', label: 'Only these x- slugs' }], dangerous: true },
   'final-detail': { description: 'A game that just went final: its NCAA.com box score now, its two programs reconciled and totals recomputed, then Plaibook told (queued by the live job; runs on the side lane).', lane: 'aux', params: [season, { name: 'contest_ids', type: 'string[]', label: 'Contest ids' }] },
   'ops-retention': { description: 'Delete finished runs older than 30 days (live: 1 day), API usage older than 90 days, quality snapshots older than 180 days.', lane: 'crawl', params: [] },
+  // Plaibook Stats Pro (API-Football; every request counts against Plaibook's shared daily quota, see src/sources/apiFootball/client.ts).
+  'pro-catalog': { description: 'Pro: the competition list from API-Football (1 request): leagues, seasons and coverage. New professional leagues switch on by themselves.', lane: 'crawl', params: [] },
+  'pro-scoreboard': { description: 'Pro: every match worldwide on a UTC day (1 request per day) for enabled competitions; finals queue their detail.', lane: 'pro', params: [{ name: 'days', type: 'enum', label: 'Days', options: ['auto', 'today', 'recent'], default: 'auto', help: 'recent = yesterday, today, tomorrow; auto = recent at the top of the hour.' }, { name: 'dates', type: 'string[]', label: 'Dates (UTC)', help: 'YYYY-MM-DD; overrides Days.' }] },
+  'pro-live': { description: 'Pro: live scores for every match in play (1 request); a match that leaves the live list is read by id for its final score and detail.', lane: 'pro', params: [] },
+  'pro-final-detail': { description: 'Pro: events, lineups, player and team stats for finals missing them (20 matches per request), then season totals.', lane: 'pro', params: [{ name: 'ids', type: 'string[]', label: 'Fixture ids' }, { name: 'limit', type: 'number', label: 'Limit', default: 400 }, { name: 'since_days', type: 'number', label: 'Finals from the last N days', default: 7 }] },
+  'pro-standings': { description: 'Pro: league tables for every league season with a new final (1 request each), or one on demand.', lane: 'pro', params: [{ name: 'league', type: 'number', label: 'League id' }, { name: 'season', type: 'number', label: 'Season (provider year)' }] },
+  'pro-backfill': { description: 'Pro: history a league season at a time (fixtures, clubs, detail, table, totals), current seasons first by priority, on the backfill quota floor.', lane: 'crawl', params: [{ name: 'league', type: 'number', label: 'Only this league id' }, { name: 'seasons', type: 'number', label: 'Seasons back', help: 'Defaults to PRO_BACKFILL_SEASONS.' }, { name: 'max_minutes', type: 'number', label: 'Time budget (minutes)', default: 50 }], dangerous: true },
+  'pro-players': { description: 'Pro: player profiles (full name, birth date, height, photo) for players first seen in a match (1 request each).', lane: 'crawl', params: [{ name: 'limit', type: 'number', label: 'Players', default: 60 }] },
+  'pro-college-link': { description: 'Pro: which pro players played NCAA soccer, from Wikidata and our own rosters (no API-Football requests).', lane: 'crawl', params: [] },
   'hourly': { description: 'Every 30 minutes in season: recent scoreboard days, NCAA box scores, pending school box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season] },
   'nightly': { description: 'Daily: two-day sweep, NCAA re-fetch, school sync (no bios), orphans, reconcile, aggregates, standings, polls, quality, retention.', lane: 'crawl', composite: true, params: [season], dangerous: true },
   'standings': { description: 'Every 3 hours in season: membership verification, conference standings, polls.', lane: 'crawl', composite: true, params: [season] },
@@ -37,6 +46,9 @@ export const JOB_META: Record<string, JobMeta> = {
   'backfill': { description: 'Everything for a season from scratch (hours).', lane: 'crawl', composite: true, params: [season, gender, division, force], dangerous: true },
   'sync-program': { description: 'One program end to end: site sync, NCAA box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season, program, gender, force, { name: 'conference', type: 'string', label: 'Conference (NCAA seo)' }] },
 };
+
+/** The jobs the 'pro' worker lane claims (and the crawl lane leaves alone). */
+export const PRO_LANE_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'pro').map(([n]) => n);
 
 export function metaFor(name: string): JobMeta {
   return JOB_META[name] ?? { description: '', lane: 'crawl', params: [] };

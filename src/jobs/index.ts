@@ -16,5 +16,12 @@ import './liveScoreboard.js';
 import './schedules.js';
 import './quality.js';
 import './weather.js';
+// Plaibook Stats Pro (API-Football).
+import './pro/catalog.js';
+import './pro/scoreboard.js';
+import './pro/detail.js';
+import './pro/standings.js';
+import './pro/backfill.js';
+import './pro/collegeLink.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

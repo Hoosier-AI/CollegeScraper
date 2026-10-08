@@ -57,6 +57,29 @@ for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-
     });
 }
 
+// Plaibook Stats Pro jobs (API-Football). Each spends from Plaibook's shared daily quota.
+for (const job of ['pro-catalog', 'pro-scoreboard', 'pro-live', 'pro-final-detail', 'pro-standings', 'pro-backfill', 'pro-players', 'pro-college-link']) {
+  program.command(job).description(`run the ${job} job inline`)
+    .option('--days <auto|today|recent>', 'pro-scoreboard: which UTC days')
+    .option('--dates <list>', 'pro-scoreboard: comma list of YYYY-MM-DD (UTC)')
+    .option('--ids <list>', 'pro-final-detail: comma list of fixture ids')
+    .option('--limit <n>', 'pro-final-detail / pro-players: how many')
+    .option('--league <id>', 'pro-standings / pro-backfill: one league (API-Football id)')
+    .option('--season <n>', 'pro-standings: the provider season year')
+    .option('--seasons <n>', 'pro-backfill: seasons back')
+    .option('--max-minutes <n>', 'pro-backfill: time budget')
+    .action(async (opts) => {
+      const p: Record<string, unknown> = {};
+      if (opts.days) p.days = String(opts.days);
+      if (opts.dates) p.dates = String(opts.dates).split(',');
+      if (opts.ids) p.ids = String(opts.ids).split(',');
+      for (const k of ['limit', 'league', 'season', 'seasons'] as const) if (opts[k]) p[k] = Number(opts[k]);
+      if (opts.maxMinutes) p.max_minutes = Number(opts.maxMinutes);
+      const counters = await runInline(getDb(), job, p);
+      console.log(JSON.stringify(counters, null, 2));
+    });
+}
+
 program.command('enqueue <job>').description('queue a job for the worker').action(async (job: string) => {
   if (!jobNames().includes(job)) throw new Error(`unknown job ${job}; known: ${jobNames().join(', ')}`);
   console.log(JSON.stringify(await enqueue(getDb(), job, {})));

@@ -13,7 +13,8 @@ import { KeyStore } from './api/keys.js';
 import { UsageMeter } from './api/usage.js';
 import { registerConsoleApi } from './ui/consoleApi.js';
 import { evaluateHealth } from './ops/health.js';
-import { heartbeats } from './ops/consoleQueries.js';
+import { heartbeats, LANES } from './ops/consoleQueries.js';
+import { PRO_LANE_JOBS } from './jobs/catalogue.js';
 import type { WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -128,8 +129,8 @@ app.get('/health', async (_req, reply) => {
   let dbOk = false;
   try { const { error } = await db.from('college_kv').select('key').limit(1); dbOk = !error; } catch { dbOk = false; }
   if (dbOk) dbLastOkAt = Date.now();
-  const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : { crawl: null, live: null, aux: null };
-  const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: ['crawl', 'live', 'aux'] });
+  const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : Object.fromEntries(LANES.map((l) => [l, null]));
+  const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: LANES });
   reply.code(h.ok ? 200 : 503);
   return { ...h, jobs: jobNames().length, api: '/v1', time: new Date().toISOString() };
 });
@@ -142,10 +143,12 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   process.on('SIGINT', () => controller.abort());
   // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
   if (cfg.WORKERS_ENABLED !== '0') {
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail'], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', ...PRO_LANE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather', 'h2h-detail'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
+  // A fourth for Plaibook Stats Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
+  workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
   }
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });

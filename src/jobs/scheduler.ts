@@ -11,6 +11,8 @@ import type { Db } from '../db/client.js';
 import { enqueue } from './runner.js';
 import { currentSeason, eastern, inLiveWindow, liveDates } from './seasons.js';
 import { pendingLiveCount } from './liveScoreboard.js';
+import { proLiveDue } from './pro/scoreboard.js';
+import { loadConfig } from '../config.js';
 import { liveSettings, schedulerOverrides, schedulerPaused, setKv, KV, type LiveSettings } from '../ops/settings.js';
 import { log } from '../log.js';
 
@@ -35,7 +37,18 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'standings', label: 'Standings, polls, record checks', cadence: 'every 3 hours at :15, Aug–Dec', due: (c) => c.m === 15 && c.h % 3 === 0 && inSeason(c) },
   { job: 'nightly', label: 'Nightly crawl', cadence: 'daily 08:15 UTC', due: (c) => c.h === 8 && c.m === 15 },
   { job: 'weekly', label: 'Weekly full re-sync', cadence: 'Tuesdays 15:00 UTC', due: (c) => c.dow === 2 && c.h === 15 && c.m === 0 },
+  // Plaibook Stats Pro: all year (pro seasons never stop somewhere), only with an API-Football key.
+  { job: 'pro-live', label: 'Pro: live scores', cadence: 'every 3 minutes while a pro match is in play', due: (c) => c.m % 3 === 1, gate: async (db) => proEnabled() && proLiveDue(db) },
+  { job: 'pro-scoreboard', label: 'Pro: today\'s matches', cadence: 'every 10 minutes (yesterday and tomorrow too at :00)', due: (c) => c.m % 10 === 0, gate: async () => proEnabled() },
+  { job: 'pro-final-detail', label: 'Pro: match detail', cadence: 'every 15 minutes at :07', due: (c) => c.m % 15 === 7, gate: async () => proEnabled() },
+  { job: 'pro-standings', label: 'Pro: league tables', cadence: 'every 3 hours at :25', due: (c) => c.m === 25 && c.h % 3 === 0, gate: async () => proEnabled() },
+  { job: 'pro-backfill', label: 'Pro: history backfill', cadence: 'hourly at :35, until the backfill quota floor', due: (c) => c.m === 35, gate: async () => proEnabled() },
+  { job: 'pro-players', label: 'Pro: player profiles', cadence: 'every 3 hours at :50', due: (c) => c.m === 50 && c.h % 3 === 1, gate: async () => proEnabled() },
+  { job: 'pro-catalog', label: 'Pro: competition list', cadence: 'Mondays 06:00 UTC', due: (c) => c.dow === 1 && c.h === 6 && c.m === 0, gate: async () => proEnabled() },
+  { job: 'pro-college-link', label: 'Pro: college links', cadence: 'Wednesdays 07:30 UTC', due: (c) => c.dow === 3 && c.h === 7 && c.m === 30 },
 ];
+
+const proEnabled = () => !!loadConfig().API_FOOTBALL_KEY;
 
 export function clockAt(now: Date, live: LiveSettings): ScheduleClock {
   return { m: now.getUTCMinutes(), h: now.getUTCHours(), month: now.getUTCMonth() + 1, dow: now.getUTCDay(), et: eastern(now), live };

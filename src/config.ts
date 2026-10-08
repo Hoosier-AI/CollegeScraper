@@ -32,6 +32,15 @@ const schema = z.object({
   // AI crawler counts go to the Plaibook hub (SEO → Overview) with this bearer secret.
   SEO_BOT_URL: z.string().url().optional(),
   SEO_BOT_SECRET: z.string().min(32).optional(),
+  // Plaibook Stats Pro: API-Football (the Pro plan key Plaibook already uses; shared, so the crawler keeps a floor of
+  // requests untouched each day). PRO_RESERVE is the floor for everyday jobs, PRO_BACKFILL_RESERVE for the history backfill.
+  API_FOOTBALL_KEY: z.string().min(10).optional(),
+  API_FOOTBALL_BASE: z.string().url().optional(),
+  PRO_RESERVE: z.coerce.number().int().nonnegative().default(1500),
+  PRO_BACKFILL_RESERVE: z.coerce.number().int().nonnegative().default(2500),
+  PRO_PER_MIN: z.coerce.number().int().positive().default(120),
+  // How many seasons back (the current one included) the backfill fills.
+  PRO_BACKFILL_SEASONS: z.coerce.number().int().positive().default(3),
 });
 
 export type Config = z.infer<typeof schema> & { userAgent: string; contactEmail: string };
@@ -64,6 +73,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     INDEXNOW_KEY: env.INDEXNOW_KEY || undefined,
     SEO_BOT_URL: env.SEO_BOT_URL || undefined,
     SEO_BOT_SECRET: env.SEO_BOT_SECRET || undefined,
+    API_FOOTBALL_KEY: env.API_FOOTBALL_KEY || undefined,
+    API_FOOTBALL_BASE: env.API_FOOTBALL_BASE || undefined,
+    PRO_RESERVE: env.PRO_RESERVE || undefined,
+    PRO_BACKFILL_RESERVE: env.PRO_BACKFILL_RESERVE || undefined,
+    PRO_PER_MIN: env.PRO_PER_MIN || undefined,
+    PRO_BACKFILL_SEASONS: env.PRO_BACKFILL_SEASONS || undefined,
   });
   const cfg: Config = {
     ...parsed,

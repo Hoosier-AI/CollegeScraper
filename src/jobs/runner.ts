@@ -24,8 +24,8 @@ export type JobFn = (ctx: JobContext) => Promise<void>;
 export interface ParamSpec { name: string; type: 'number' | 'string' | 'boolean' | 'enum' | 'string[]' | 'json'; label: string; help?: string; default?: unknown; options?: string[]; required?: boolean }
 export interface JobMeta {
   description: string;
-  /** Which worker lane runs it: everything but the live scoreboard is 'crawl'. */
-  lane: 'crawl' | 'live' | 'aux';
+  /** Which worker lane runs it: everything but the live scoreboard is 'crawl'; Plaibook Stats Pro's everyday jobs run on 'pro'. */
+  lane: 'crawl' | 'live' | 'aux' | 'pro';
   /** A composite of other jobs (hourly, nightly…). */
   composite?: boolean;
   params: ParamSpec[];
