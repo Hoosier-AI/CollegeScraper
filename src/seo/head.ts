@@ -16,12 +16,12 @@ export interface HeadMeta {
   jsonLd: Record<string, unknown>[];
 }
 
-const SUFFIX = ` | ${SITE_NAME}`;
+export const SUFFIX = ` | ${SITE_NAME}`;
 export const NOINDEX = 'noindex,follow';
 
-const abs = (ctx: HeadContext, path: string) => `${trimBase(ctx.baseUrl)}${path}`;
-const ogImage = (ctx: HeadContext) => abs(ctx, '/brand/og.png');
-const ld = (type: string, body: Record<string, unknown>) => ({ '@context': 'https://schema.org', '@type': type, ...body });
+export const abs = (ctx: HeadContext, path: string) => `${trimBase(ctx.baseUrl)}${path}`;
+export const ogImage = (ctx: HeadContext) => abs(ctx, '/brand/og.png');
+export const ld = (type: string, body: Record<string, unknown>) => ({ '@context': 'https://schema.org', '@type': type, ...body });
 
 export function breadcrumbs(ctx: HeadContext, items: { name: string; path: string }[]): Record<string, unknown> {
   return ld('BreadcrumbList', { itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: abs(ctx, it.path) })) });

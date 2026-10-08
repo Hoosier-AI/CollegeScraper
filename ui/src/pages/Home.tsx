@@ -9,6 +9,7 @@ import { LeadersPanel } from './home/LeadersPanel';
 import { ConferenceRaces } from './home/ConferenceRaces';
 import { BrowseGrid } from './home/BrowseGrid';
 import { HowChecked } from './home/HowChecked';
+import { Link } from 'react-router-dom';
 
 export default function Home() {
   const scope = useScope();
@@ -22,6 +23,12 @@ export default function Home() {
         </div>
         <RightNow scope={scope} />
       </section>
+
+      <Link to="/pro" className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors duration-150 hover:bg-field-800">
+        <span className="text-xs font-semibold uppercase tracking-wide text-pitch-300">New: Plaibook Stats Pro</span>
+        <span className="text-sm text-chalk-200">Professional soccer worldwide, from MLS and the NWSL to Europe, with college players linked to their pro careers.</span>
+        <span className="ml-auto text-sm font-medium text-pitch-300">Open Pro</span>
+      </Link>
 
       <ScopeBar />
 

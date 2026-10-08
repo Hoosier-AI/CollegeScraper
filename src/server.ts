@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { log } from './log.js';
 import { registerSeo } from './seo/routes.js';
 import { DbSeoData } from './seo/data.js';
+import { DbProSeoData } from './seo/pro/data.js';
 import { fileTemplate } from './seo/template.js';
 import { BotVerifier } from './seo/bots.js';
 import { DEFAULT_PUBLIC_URL } from './seo/util.js';
@@ -108,6 +109,7 @@ const seo = cfg.SUPABASE_URL ? registerSeo(app, {
   limit: limitSite,
   gscVerificationFile: cfg.GSC_VERIFICATION_FILE ?? null,
   indexNowKey: cfg.INDEXNOW_KEY ?? null,
+  pro: new DbProSeoData(getDb()),
   log,
 }) : null;
 

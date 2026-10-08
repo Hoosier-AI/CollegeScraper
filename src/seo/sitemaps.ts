@@ -3,13 +3,19 @@
 //   /sitemaps/teams.xml                one URL per NCAA program (canonical, current season)
 //   /sitemaps/matches-<season>-<n>.xml  games, at most 40,000 per file
 //   /sitemaps/players-<season>-<n>.xml  players who appeared that season (never noindex or suppressed ones)
+//   /sitemaps/pro-core.xml              Plaibook Stats Pro: home, competitions index, every enabled competition
+//   /sitemaps/pro-teams-<n>.xml          clubs with a profile
+//   /sitemaps/pro-matches-<year>-<n>.xml finals with detail (score-only finals and unplayed matches are noindex)
+//   /sitemaps/pro-players-<n>.xml        players who have played
 // Every document is built on demand and kept in memory for an hour.
 import type { SeoData, SitemapEntry } from './types.js';
+import type { ProSeoData } from './pro/data.js';
 import { LruCache } from './cache.js';
 import { esc, trimBase } from './util.js';
 
 export const PER_FILE = 40_000;
 const FILE = /^(matches|players)-(\d{4})-(\d{1,3})\.xml$/;
+const PRO_FILE = /^pro-(?:(teams|players)-(\d{1,3})|matches-(\d{4})-(\d{1,3}))\.xml$/;
 
 const lastmod = (v: string | null | undefined): string | null => {
   if (!v) return null;
@@ -31,7 +37,7 @@ export function sitemapIndexXml(base: string, files: { path: string; lastmod?: s
 
 export class Sitemaps {
   private cache: LruCache<string>;
-  constructor(private data: SeoData, private baseUrl: string, private opts: { perFile?: number; ttlMs?: number } = {}) {
+  constructor(private data: SeoData, private baseUrl: string, private opts: { perFile?: number; ttlMs?: number } = {}, private pro: ProSeoData | null = null) {
     this.cache = new LruCache<string>(200, opts.ttlMs ?? 3600_000);
   }
   private get perFile() { return this.opts.perFile ?? PER_FILE; }
@@ -55,6 +61,20 @@ export class Sitemaps {
       return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, ...confs]);
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
+    if (this.pro) {
+      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/leagues' }, ...(await this.pro.sitemapLeagues())]);
+      const p = PRO_FILE.exec(file);
+      if (p) {
+        const [, kind, nStr, year, mStr] = p;
+        const page = Number(nStr ?? mStr);
+        if (page < 1) return null;
+        const offset = (page - 1) * this.perFile;
+        const count = kind === 'teams' ? await this.pro.countTeams() : kind === 'players' ? await this.pro.countPlayers() : await this.pro.countMatches(Number(year));
+        if (offset >= count) return null;
+        const rows = kind === 'teams' ? await this.pro.teams(offset, this.perFile) : kind === 'players' ? await this.pro.players(offset, this.perFile) : await this.pro.matches(Number(year), offset, this.perFile);
+        return urlsetXml(this.baseUrl, rows);
+      }
+    }
     const f = FILE.exec(file);
     if (!f) return null;
     const kind = f[1] as 'matches' | 'players', season = Number(f[2]), n = Number(f[3]);
@@ -74,6 +94,16 @@ export class Sitemaps {
       const [games, players] = await Promise.all([this.data.countMatches(s), this.data.countPlayers(s)]);
       for (let i = 0; i < Math.ceil(games / this.perFile); i += 1) out.push({ path: `/sitemaps/matches-${s}-${i + 1}.xml` });
       for (let i = 0; i < Math.ceil(players / this.perFile); i += 1) out.push({ path: `/sitemaps/players-${s}-${i + 1}.xml` });
+    }
+    if (this.pro) {
+      out.push({ path: '/sitemaps/pro-core.xml' });
+      const [teams, players, years] = await Promise.all([this.pro.countTeams(), this.pro.countPlayers(), this.pro.matchYears()]);
+      for (let i = 0; i < Math.ceil(teams / this.perFile); i += 1) out.push({ path: `/sitemaps/pro-teams-${i + 1}.xml` });
+      for (const y of years) {
+        const m = await this.pro.countMatches(y);
+        for (let i = 0; i < Math.ceil(m / this.perFile); i += 1) out.push({ path: `/sitemaps/pro-matches-${y}-${i + 1}.xml` });
+      }
+      for (let i = 0; i < Math.ceil(players / this.perFile); i += 1) out.push({ path: `/sitemaps/pro-players-${i + 1}.xml` });
     }
     return out;
   }

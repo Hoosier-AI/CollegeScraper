@@ -19,6 +19,14 @@ const Rankings = lazy(() => import('./pages/Rankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
+// Plaibook Stats Pro.
+const ProHome = lazy(() => import('./pages/pro/ProHome'));
+const ProMatches = lazy(() => import('./pages/pro/ProMatches'));
+const ProLeagues = lazy(() => import('./pages/pro/ProLeagues'));
+const ProLeague = lazy(() => import('./pages/pro/ProLeague'));
+const ProTeam = lazy(() => import('./pages/pro/ProTeam'));
+const ProPlayer = lazy(() => import('./pages/pro/ProPlayer'));
+const ProMatch = lazy(() => import('./pages/pro/ProMatch'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
 window.addEventListener('vite:preloadError', (e) => {
@@ -65,6 +73,13 @@ const router = createBrowserRouter([
           { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
           { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
           { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
+          { path: 'pro', element: <ProHome /> },
+          { path: 'pro/matches', element: <ProMatches /> },
+          { path: 'pro/matches/:slug', element: <ProMatch /> },
+          { path: 'pro/leagues', element: <ProLeagues /> },
+          { path: 'pro/leagues/:slug', element: <ProLeague /> },
+          { path: 'pro/teams/:slug', element: <ProTeam /> },
+          { path: 'pro/players/:slug', element: <ProPlayer /> },
           { path: '*', element: <NotFound /> },
         ],
       },

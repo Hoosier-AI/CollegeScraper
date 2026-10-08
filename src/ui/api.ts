@@ -5,6 +5,7 @@ import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
 import * as q from './queries.js';
 import { eastern } from '../jobs/seasons.js';
+import { registerProApi } from './proApi.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -36,6 +37,9 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
   app.get('/api/meta', async () => ({ ...(await q.meta(getDb())), jobs: jobNames() }));
+
+  // Plaibook Stats Pro (/pro pages).
+  registerProApi(app);
 
   app.get<{ Querystring: Record<string, string> }>('/api/programs', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

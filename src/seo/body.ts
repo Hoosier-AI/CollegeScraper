@@ -5,21 +5,23 @@ import type { HeadContext } from './head.js';
 import { extraTime, isFinal, matchName, teamTitle } from './head.js';
 import { conferencePath, divisionLabel, esc, genderWord, longDate, matchPath, playerPath, rec, SITE_NAME, teamPath } from './util.js';
 
-export type PageType = 'home' | 'team' | 'player' | 'match' | 'conference' | 'rankings' | 'teams' | 'not-found';
+export type PageType = 'home' | 'team' | 'player' | 'match' | 'conference' | 'rankings' | 'teams' | 'not-found' | 'pro';
 
 export const TEKKI_URL = 'https://www.plaibook.soccer/';
 export const ctaHref = (page: PageType) => `${TEKKI_URL}?utm_source=stats&utm_medium=referral&utm_campaign=${encodeURIComponent(page)}`;
 
-const n = (v: number | null | undefined, d = 0) => (v == null || !Number.isFinite(Number(v)) ? '–' : Number(v).toFixed(d));
+export const n = (v: number | null | undefined, d = 0) => (v == null || !Number.isFinite(Number(v)) ? '–' : Number(v).toFixed(d));
 const pct = (v: number | null | undefined) => (v == null ? '–' : `${(Number(v) * 100).toFixed(1)}%`);
-const a = (href: string, text: string) => `<a href="${esc(href)}">${esc(text)}</a>`;
+export const a = (href: string, text: string) => `<a href="${esc(href)}">${esc(text)}</a>`;
 const th = (cols: string[]) => `<thead><tr>${cols.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}</tr></thead>`;
-const table = (caption: string, cols: string[], rows: string[]) => `<table><caption>${esc(caption)}</caption>${th(cols)}<tbody>${rows.join('')}</tbody></table>`;
-const tr = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+export const table = (caption: string, cols: string[], rows: string[]) => `<table><caption>${esc(caption)}</caption>${th(cols)}<tbody>${rows.join('')}</tbody></table>`;
+export const tr = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
 
 /** Site navigation, breadcrumbs, the page content and the Tekki footer link. */
 export function wrapBody(page: PageType, crumbs: { name: string; path: string }[], inner: string): string {
-  const nav = `<nav aria-label="Site">${a('/', SITE_NAME)} · ${a('/teams', 'Teams')} · ${a('/rankings', 'Rankings')} · ${a('/matches', 'Matches')}</nav>`;
+  const nav = page === 'pro'
+    ? `<nav aria-label="Site">${a('/pro', `${SITE_NAME} Pro`)} · ${a('/pro/matches', 'Matches')} · ${a('/pro/leagues', 'Leagues')} · ${a('/', 'College soccer')}</nav>`
+    : `<nav aria-label="Site">${a('/', SITE_NAME)} · ${a('/teams', 'Teams')} · ${a('/rankings', 'Rankings')} · ${a('/matches', 'Matches')} · ${a('/pro', 'Pro soccer')}</nav>`;
   const bc = crumbs.length > 1
     ? `<nav aria-label="Breadcrumb"><ol>${crumbs.map((c, i) => `<li>${i === crumbs.length - 1 ? esc(c.name) : a(c.path, c.name)}</li>`).join('')}</ol></nav>`
     : '';

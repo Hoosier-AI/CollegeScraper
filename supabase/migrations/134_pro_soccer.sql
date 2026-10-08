@@ -100,11 +100,14 @@ CREATE TABLE IF NOT EXISTS public.pro_players (
   gender text CHECK (gender IN ('m','w')),
   wikidata_qid text,
   noindex boolean NOT NULL DEFAULT false,
+  -- Played minutes in at least one stored match (set by pro_refresh_season_aggregates): the sitemap lists only these.
+  appeared boolean NOT NULL DEFAULT false,
   slug text,
   profile_synced_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS pro_players_appeared_idx ON public.pro_players(id) WHERE appeared AND NOT noindex;
 CREATE INDEX IF NOT EXISTS pro_players_name_key_idx ON public.pro_players(name_key);
 CREATE INDEX IF NOT EXISTS pro_players_name_trgm ON public.pro_players USING gin (display_name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS pro_players_profile_idx ON public.pro_players(profile_synced_at NULLS FIRST);
@@ -441,6 +444,9 @@ BEGIN
     AND EXISTS (SELECT 1 FROM public.pro_players p WHERE p.id = fp.player_id)
   GROUP BY fp.player_id, fp.team_id
   HAVING count(*) FILTER (WHERE coalesce(fp.minutes, 0) > 0) > 0;
+
+  UPDATE public.pro_players p SET appeared = true
+  WHERE NOT p.appeared AND p.id IN (SELECT player_id FROM public.pro_player_season_stats WHERE league_id = p_league AND season = p_season);
 
   DELETE FROM public.pro_team_season_stats WHERE league_id = p_league AND season = p_season;
   INSERT INTO public.pro_team_season_stats (team_id, league_id, season, played, w, d, l, gf, ga, clean_sheets,

@@ -13,6 +13,9 @@ import { conferenceBody, homeBody, matchBody, notFoundBody, playerBody, rankings
 import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
+import type { ProSeoData } from './pro/data.js';
+import { proHomeBody, proHomeHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead } from './pro/pages.js';
+import { eastern } from '../jobs/seasons.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 const REDIRECT_CACHE_CONTROL = 'public, max-age=3600';
@@ -36,13 +39,15 @@ export interface SeoOptions {
   cache?: LruCache<CachedPage>;
   sitemaps?: Sitemaps;
   log?: SeoLogger;
+  /** Plaibook Stats Pro pages (/pro/...) and their sitemaps. */
+  pro?: ProSeoData | null;
 }
 
 export type CachedPage = { status: 200; html: string } | { status: 301; path: string };
 type Outcome = { head: HeadMeta; body: string } | { redirect: string } | { shell: true } | null;
 
 /** Single-page-app routes that the server does not render but must still answer with 200 and the shell. */
-const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders)?\/?$/;
+const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders|pro\/matches|pro\/leagues|pro\/teams|pro\/players)?\/?$/;
 const API_PATH = /^\/(?:api|v1)(?:\/|$)|^\/health(?:\/|$)/;
 
 const pathOf = (url: string) => url.split('?')[0] ?? url;
@@ -54,7 +59,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   const { data, template } = opts;
   const baseUrl = trimBase(opts.baseUrl);
   const cache = opts.cache ?? new LruCache<CachedPage>(500, 5 * 60_000);
-  const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl);
+  const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null);
   const warn = (obj: unknown, msg: string) => opts.log?.warn(obj, msg);
   const ctx = (): HeadContext => ({ baseUrl, currentSeason: data.currentSeason() });
 
@@ -159,6 +164,34 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     const c = ctx(); const conf = await data.conference(s, seasonParam(req) ?? c.currentSeason);
     return conf ? { head: conferenceHead(conf, c), body: conferenceBody(conf, c) } : null;
   }));
+
+  // ---------- Plaibook Stats Pro ----------
+  const pro = opts.pro;
+  if (pro) {
+    app.get('/pro', (req, reply) => serve(req, reply, keyOf(req), async () => {
+      const c = ctx(); const h = await pro.home(eastern().date);
+      return { head: proHomeHead(h, c), body: proHomeBody(h) };
+    }));
+    app.get('/pro/leagues', (req, reply) => serve(req, reply, keyOf(req), async () => {
+      const c = ctx(); const ls = await pro.leagues();
+      return { head: proLeaguesHead(ls, c), body: proLeaguesBody(ls) };
+    }));
+    // A slug page, or a 301 when the slug was renamed, or a real 404.
+    const proPage = <T>(kind: 'league' | 'team' | 'player' | 'match', load: (slug: string, req: FastifyRequest) => Promise<T | null>, render: (page: T) => { head: HeadMeta; body: string }, path: (slug: string) => string) =>
+      (req: P<{ slug: string }>, reply: FastifyReply) => serve(req, reply, keyOf(req), async () => {
+        const s = req.params.slug;
+        if (!s) return { shell: true };
+        if (!SLUG.test(s)) return null;
+        const page = await load(s, req);
+        if (page) return render(page);
+        const moved = await pro.renamedSlug(kind, s);
+        return moved ? { redirect: path(moved) } : null;
+      });
+    app.get('/pro/leagues/:slug', proPage('league', (s, req) => pro.league(s, seasonParam(req)), (p) => ({ head: proLeagueHead(p, ctx()), body: proLeagueBody(p) }), (s) => proPaths.league(s)));
+    app.get('/pro/teams/:slug', proPage('team', (s, req) => pro.team(s, seasonParam(req)), (p) => ({ head: proTeamHead(p, ctx()), body: proTeamBody(p) }), (s) => proPaths.team(s)));
+    app.get('/pro/players/:slug', proPage('player', (s) => pro.player(s), (p) => ({ head: proPlayerHead(p, ctx()), body: proPlayerBody(p) }), (s) => proPaths.player(s)));
+    app.get('/pro/matches/:slug', proPage('match', (s) => pro.match(s), (p) => ({ head: proMatchHead(p, ctx()), body: proMatchBody(p) }), (s) => proPaths.match(s)));
+  }
 
   // ---------- old addresses (were client-side redirects only) ----------
   const moved = (to: string, extra?: string) => (req: FastifyRequest, reply: FastifyReply) => {

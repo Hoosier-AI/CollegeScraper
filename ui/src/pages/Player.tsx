@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
 import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
@@ -24,6 +24,8 @@ export default function Player() {
   const href = useHref();
   const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PRESETS.map((p) => p.id) });
   const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`), enabled: !!id });
+  // Plaibook Stats Pro: a confident link to this player's professional career.
+  const pro = useQuery({ queryKey: ['pro-from-college', id], queryFn: () => api<{ pro: { name: string; slug: string } | null }>(`/api/pro/from-college/${id}`), enabled: !!id, staleTime: 300_000 });
   if (entity.missing) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/rankings?view=leaders">Browse leaders</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
@@ -69,6 +71,7 @@ export default function Player() {
           {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
           <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, (latest?.high_school ?? p.high_school) ? `${latest?.high_school ?? p.high_school}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null, latest?.major ? `studying ${latest.major}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
           {bioUrl && <a className="mt-1 inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={bioUrl} target="_blank" rel="noreferrer">School bio <ExternalLink size={12} aria-hidden /></a>}
+          {pro.data?.pro && <p className="mt-2"><Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2 py-1 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link></p>}
         </div>
         {st && (
           <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-3 sm:justify-end">
