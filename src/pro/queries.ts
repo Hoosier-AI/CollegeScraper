@@ -3,6 +3,7 @@
 import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { SHOW_AT } from '../jobs/pro/collegeMatch.js';
+import { leagueAdvancedLeaders, matchAdvanced, playerAdvanced, teamAdvanced } from './sources.js';
 
 // ---------- shapes ----------
 export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup' }
@@ -123,14 +124,14 @@ async function leadersFor(db: Db, league: number, season: number, stat: 'goals' 
   return rows.map((r) => ({ player: { id: r.player?.id, name: r.player?.display_name, slug: r.player?.slug, photo: r.player?.photo ?? null }, team: teams.get(r.team_id) ?? null, apps: r.apps, minutes: r.minutes, goals: r.goals, assists: r.assists, rating: r.rating == null ? null : Number(r.rating) }));
 }
 
-async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
+export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
   const uniq = [...new Set(ids.filter((n) => Number.isFinite(n)))];
   if (!uniq.length) return new Map();
   const rows = await selectAll<any>(db, 'pro_teams', TEAM_COLS, (q) => q.in('id', uniq));
   return new Map(rows.map((t) => [t.id, teamRef(t)]));
 }
 
-async function leaguesById(db: Db, ids: number[]): Promise<Map<number, ProLeagueRef & { priority: number }>> {
+export async function leaguesById(db: Db, ids: number[]): Promise<Map<number, ProLeagueRef & { priority: number }>> {
   const uniq = [...new Set(ids)];
   if (!uniq.length) return new Map();
   const rows = await selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority', (q) => q.in('id', uniq));
@@ -169,6 +170,7 @@ export async function league(db: Db, slug: string, season?: number | null) {
     standings, results: ((results.data ?? []) as any[]).map(toMatchRow), fixtures: ((fixtures.data ?? []) as any[]).map(toMatchRow),
     scorers, assists: assisters, teams: teamCount.count ?? 0,
     champions: [...champions.values()].slice(0, 15), team_table: teamTable,
+    advanced_leaders: await leagueAdvancedLeaders(db, lg.id, s ?? null),
   };
 }
 
@@ -282,6 +284,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
     splits: { home: split(true), away: split(false) },
     results: games.filter((g) => g.status === 'final' || g.status === 'live').reverse(),
     fixtures: games.filter((g) => g.status === 'scheduled' && g.kickoff >= new Date().toISOString()),
+    advanced: await teamAdvanced(db, tm.id, s),
   };
 }
 
@@ -342,6 +345,7 @@ export async function player(db: Db, slug: string) {
     trophies: ((trophies.data ?? []) as any[]).sort((a, b) => String(b.season).localeCompare(String(a.season))),
     injury: injury ? { type: injury.type, reason: injury.reason, date: injury.date } : null,
     injury_history: injuryHistory,
+    advanced: await playerAdvanced(db, pl.id),
     matches,
     college: shown.map((l) => ({ college_name: l.college_name, school_seo: l.school_seo, first_season: l.first_season, last_season: l.last_season, college_player_slug: l.college?.slug ?? null, verified: l.verified })),
   };
@@ -384,6 +388,7 @@ export async function match(db: Db, slug: string) {
     events: events.map((e) => ({ ...e, side: e.team_id === fx.home_team_id ? 'home' : e.team_id === fx.away_team_id ? 'away' : null, player_slug: e.player_id != null ? slugs.get(e.player_id)?.slug ?? null : null })),
     home: side(fx.home_team_id), away: side(fx.away_team_id),
     h2h: ((h2h.data ?? []) as any[]).map(toMatchRow),
+    advanced: await matchAdvanced(db, fx.id, fx.home_team_id),
   };
 }
 

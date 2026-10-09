@@ -8,8 +8,9 @@ import { EventTimeline, LineupList, ProPitch, TeamStatsCompare, type ProEvent, t
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ErrorBox, Section, Skeleton, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
+import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 
-interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[] }
+interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null }
 
 function Scoreline({ m }: { m: MatchData['match'] }) {
   const played = m.status === 'live' || m.status === 'final';
@@ -59,10 +60,13 @@ export default function ProMatch() {
       <h1 className="sr-only">{m.home.name} vs {m.away.name}, {m.league.name}</h1>
       <Scoreline m={m} />
       <p className="text-center text-xs text-chalk-400">{kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}</p>
+      {d.advanced && d.advanced.xg[0] != null && <p className="text-center text-sm tnum text-chalk-300" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}</p>}
+      {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} /></div>}
       {m.status === 'final' && !m.detail && !d.events.length && <p className="text-center text-sm text-chalk-400">Lineups and match stats arrive shortly after full time.</p>}
       <div className="grid gap-5 lg:grid-cols-12">
         <div className="space-y-5 lg:col-span-7">
           {d.events.length > 0 && <Section title="Match events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>}
+          {d.advanced && d.advanced.shots.length > 0 && <Section title="Shot map"><ShotMap shots={d.advanced.shots} homeName={m.home.name} awayName={m.away.name} /><Credit credit={d.advanced.credit} /></Section>}
           {(d.home.stats || d.away.stats) && <Section title="Team stats"><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
           {hasLineups && (
             <Section title="Lineups">

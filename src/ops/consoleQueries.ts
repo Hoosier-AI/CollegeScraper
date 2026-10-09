@@ -160,8 +160,8 @@ export async function crawlHealth(db: Db) {
 }
 
 export async function settings(db: Db) {
-  const [live, paused, crawl, overrides, contact] = await Promise.all([liveSettings(db), schedulerPaused(db), crawlPaused(db), schedulerOverrides(db), cachedKv<string | null>(db, KV.contactEmail, null)]);
-  return { live, scheduler_paused: paused, crawl_paused: crawl, overrides, contact_email: contact ?? loadConfig().contactEmail, jobs: Object.keys(JOB_META) };
+  const [live, paused, crawl, overrides, contact, sources] = await Promise.all([liveSettings(db), schedulerPaused(db), crawlPaused(db), schedulerOverrides(db), cachedKv<string | null>(db, KV.contactEmail, null), cachedKv<boolean>(db, KV.proSourcesVisible, false)]);
+  return { live, scheduler_paused: paused, crawl_paused: crawl, overrides, contact_email: contact ?? loadConfig().contactEmail, pro_sources_visible: !!sources, jobs: Object.keys(JOB_META) };
 }
 
 /** College crawl progress for the hub: every stage's programs synced (by division), box-score coverage, quality, recent runs. */

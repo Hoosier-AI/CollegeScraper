@@ -67,12 +67,13 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   app.get('/api/console/crawl', async () => cq.crawlHealth(getDb()));
 
   app.get('/api/console/settings', async () => cq.settings(getDb()));
-  app.put<{ Body: { live?: Partial<LiveSettings>; scheduler_paused?: boolean; crawl_paused?: boolean; contact_email?: string } | null }>('/api/console/settings', async (req) => {
+  app.put<{ Body: { live?: Partial<LiveSettings>; scheduler_paused?: boolean; crawl_paused?: boolean; contact_email?: string; pro_sources_visible?: boolean } | null }>('/api/console/settings', async (req) => {
     const db = getDb(); const b = req.body ?? {};
     if (b.live) await setKv(db, KV.live, normalizeLive(b.live));
     if (typeof b.scheduler_paused === 'boolean') await setKv(db, KV.schedulerPaused, b.scheduler_paused);
     if (typeof b.crawl_paused === 'boolean') await setKv(db, KV.crawlPaused, b.crawl_paused);
     if (typeof b.contact_email === 'string') await setKv(db, KV.contactEmail, b.contact_email.trim() || null);
+    if (typeof b.pro_sources_visible === 'boolean') await setKv(db, KV.proSourcesVisible, b.pro_sources_visible);
     forgetKv();
     return cq.settings(db);
   });

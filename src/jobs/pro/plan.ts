@@ -185,11 +185,13 @@ export async function proPlan(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const leagues = await leagueIndex(db);
   const enabled = new Set([...leagues.values()].filter((l) => l.enabled).map((l) => l.id));
-  const seasonRows = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; players?: boolean; injuries?: boolean; fixtures?: { statistics_players?: boolean } } | null }>(db, 'pro_seasons', 'league_id,season,coverage');
+  const seasonRows = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; players?: boolean; injuries?: boolean; fixtures?: { statistics_players?: boolean }; source?: string } | null }>(db, 'pro_seasons', 'league_id,season,coverage');
   const seasons = new Map<number, SeasonCoverage[]>();
   for (const r of seasonRows) {
     if (!enabled.has(r.league_id)) continue;
     const c = r.coverage ?? {};
+    // A season filled from another source (history API-Football does not have): nothing to ask it for.
+    if (c.source) continue;
     seasons.set(r.league_id, [...(seasons.get(r.league_id) ?? []), { season: r.season, standings: c.standings !== false, players: c.players !== false, injuries: c.injuries !== false, playerLines: c.fixtures?.statistics_players === true }]);
   }
   const leagueTeams = await selectAll<{ league_id: number; season: number; team_id: number }>(db, 'pro_league_teams', 'league_id,season,team_id');

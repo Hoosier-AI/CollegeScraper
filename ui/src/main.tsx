@@ -33,6 +33,7 @@ const ProCountry = lazy(() => import('./pages/pro/ProCountries').then((m) => ({ 
 const ProCompare = lazy(() => import('./pages/pro/ProCompare'));
 const ProTransfers = lazy(() => import('./pages/pro/ProTransfers'));
 const ProCollege = lazy(() => import('./pages/pro/ProCollege'));
+const ProSources = lazy(() => import('./pages/pro/ProSources'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
 window.addEventListener('vite:preloadError', (e) => {
@@ -80,6 +81,7 @@ const router = createBrowserRouter([
           { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
           { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
           { path: 'pro', element: <ProHome /> },
+          { path: 'pro/sources', element: <ProSources /> },
           { path: 'pro/matches', element: <ProMatches /> },
           { path: 'pro/matches/:slug', element: <ProMatch /> },
           { path: 'pro/leagues', element: <ProLeagues /> },

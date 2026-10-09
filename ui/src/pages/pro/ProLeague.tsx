@@ -11,10 +11,12 @@ import { LeagueTable } from '../../components/pro/LeagueTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { EmptyState, ErrorBox, Field, PageHeader, PlayerAvatar, Section, SegmentedControl, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
+import { AdvancedLeaders, Credit, type AdvLeaderLine, type SourceCredit } from '../../components/pro/Advanced';
 
 interface TeamLine { team: ProTeamRef; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; shots: number | null; shots_on: number | null; corners: number | null; fouls: number | null; yellow: number | null; red: number | null; possession: number | null }
 interface LeagueData { league: ProLeagueRef & { current_season: number | null }; season: number | null; seasons: number[]; standings: { name: string; rows: ProStandingRow[] }[]; results: ProMatch[]; fixtures: ProMatch[]; scorers: ProLeader[]; assists: ProLeader[]; teams: number;
-  champions: { season: number; teams: { team: ProTeamRef; group: string; points: number | null }[] }[]; team_table: TeamLine[] }
+  champions: { season: number; teams: { team: ProTeamRef; group: string; points: number | null }[] }[]; team_table: TeamLine[];
+  advanced_leaders?: { credit: SourceCredit; xg: AdvLeaderLine[]; xa: AdvLeaderLine[]; g_plus: AdvLeaderLine[] } | null }
 type Tab = 'table' | 'results' | 'fixtures' | 'players' | 'stats' | 'history';
 
 /** Leaders on any stat for this league season, by position, totals or per 90 (pro_leaders). */
@@ -107,6 +109,7 @@ export default function ProLeague() {
         <div className="grid gap-4 md:grid-cols-2">
           <Section title="Top scorers"><Leaders rows={d.scorers} stat="goals" label="Goals" /></Section>
           <Section title="Most assists"><Leaders rows={d.assists} stat="assists" label="Assists" /></Section>
+          {d.advanced_leaders && <div className="md:col-span-2"><Section title="Advanced leaders"><AdvancedLeaders data={d.advanced_leaders} season={d.season} /><Credit credit={d.advanced_leaders.credit} /></Section></div>}
         </div>
       )}
       {tab === 'stats' && <StatsTab league={l.id} season={d.season} current={l.current_season} teams={d.team_table} />}

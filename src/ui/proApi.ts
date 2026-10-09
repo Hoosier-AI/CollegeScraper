@@ -11,6 +11,7 @@ import * as pro from '../pro/queries.js';
 import { eastern } from '../jobs/seasons.js';
 import { SLUG } from '../seo/util.js';
 import { PRO_QUOTA_KEY } from '../jobs/pro/shared.js';
+import { cachedKv, KV } from '../ops/settings.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1900 && n < 2100 ? n : null; };
@@ -139,11 +140,55 @@ export function registerProApi(app: FastifyInstance): void {
         crawl_enabled: entry('pro-crawl')?.enabled ?? false, plan_enabled: entry('pro-plan')?.enabled ?? false,
         next_crawl: entry('pro-crawl')?.next ?? null, next_plan: entry('pro-plan')?.next ?? null,
       },
+      sources: await sourcesBlock(db),
       // Kept for the Stats console's own Pro card (older shape).
       leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links,
     };
   });
 }
 
+/**
+ * Other sources for the hub: whether they show on the site, each league season's sync and agreement with
+ * API-Football (shown = switch on and 97%+ agree), how many clubs, players and games are matched, the shot backlog.
+ */
+async function sourcesBlock(db: ReturnType<typeof getDb>) {
+  const count = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);
+  const [visible, seasons, agreement, runs, ...counts] = await Promise.all([
+    cachedKv<boolean>(db, KV.proSourcesVisible, false),
+    selectAll<{ source: string; league_id: number; season: number; synced_at: string | null; games: number; player_rows: number; last_error: string | null }>(db, 'pro_source_seasons', 'source,league_id,season,synced_at,games,player_rows,last_error'),
+    db.rpc('pro_source_agreement').then((r) => (r.data ?? []) as { source: string; league_id: number; season: number; kind: string; agree: number; differ: number; unmatched: number; checked_at: string }[]),
+    db.from('college_crawl_runs').select('id,job,status,created_at,started_at,finished_at,counters,error').in('job', ['asa-sync', 'asa-shots', 'source-map', 'source-check', 'openfootball-sync', 'history-fill']).order('created_at', { ascending: false }).limit(20).then((r) => (r.data ?? []) as any[]),
+    ...(['team', 'player', 'game'] as const).flatMap((k) => [count('pro_source_ids', (q) => q.eq('kind', k).not('pro_id', 'is', null)), count('pro_source_ids', (q) => q.eq('kind', k).is('pro_id', null))]),
+    count('pro_src_games', (q) => q.eq('status', 'final')), count('pro_src_games', (q) => q.eq('status', 'final').not('shots_at', 'is', null)),
+  ]);
+  // A sample of disagreements to review, newest seasons first.
+  const differ = ((await db.from('pro_source_checks').select('source,kind,key,field,league_id,season,pro_key,ours,api').eq('status', 'differ').order('season', { ascending: false }).limit(25)).data ?? []) as any[];
+  const names = new Map((await selectAll<{ id: number; name: string }>(db, 'pro_leagues', 'id,name', (q) => q.in('id', [...new Set(seasons.map((s) => s.league_id))]))).map((l) => [l.id, l.name]));
+  const agree = new Map<string, { agree: number; differ: number; unmatched: number; checked_at: string | null }>();
+  for (const a of agreement) {
+    const k = `${a.source}|${a.league_id}|${a.season}`;
+    const x = agree.get(k) ?? { agree: 0, differ: 0, unmatched: 0, checked_at: null };
+    x.agree += Number(a.agree); x.differ += Number(a.differ); x.unmatched += Number(a.unmatched);
+    if (!x.checked_at || a.checked_at > x.checked_at) x.checked_at = a.checked_at;
+    agree.set(k, x);
+  }
+  const lastRuns: Record<string, unknown> = {};
+  for (const r of runs) if (!lastRuns[r.job] && r.status !== 'queued') lastRuns[r.job] = r;
+  const [teamOk, teamNo, playerOk, playerNo, gameOk, gameNo, finals, withShots] = counts as number[];
+  return {
+    visible: !!visible, trust_at: 0.97,
+    seasons: seasons.map((s) => {
+      const a = agree.get(`${s.source}|${s.league_id}|${s.season}`) ?? null;
+      const compared = a ? a.agree + a.differ : 0;
+      const rate = compared ? Math.round((a!.agree / compared) * 1000) / 1000 : null;
+      return { ...s, league: names.get(s.league_id) ?? String(s.league_id), agree: a?.agree ?? 0, differ: a?.differ ?? 0, unmatched: a?.unmatched ?? 0, checked_at: a?.checked_at ?? null, rate, shown: !!visible && rate != null && rate >= 0.97 };
+    }).sort((x, y) => x.league_id - y.league_id || y.season - x.season),
+    matched: { team: { matched: teamOk, unmatched: teamNo }, player: { matched: playerOk, unmatched: playerNo }, game: { matched: gameOk, unmatched: gameNo } },
+    shots: { finals, with_shots: withShots },
+    differences: differ.map((d) => ({ ...d, league: names.get(d.league_id) ?? String(d.league_id), ours: d.ours == null ? null : Number(d.ours), api: d.api == null ? null : Number(d.api) })),
+    last_runs: lastRuns,
+  };
+}
+
 /** Display order of the crawl kinds: what is crawled first, first. */
-const KIND_ORDER = ['countries', 'country_teams', 'profiles_page', 'profile', 'season_fixtures', 'standings', 'league_players', 'detail', 'squad', 'transfers', 'coach', 'injuries', 'trophies'];
+const KIND_ORDER = ['countries', 'country_teams', 'profiles_page', 'profile', 'season_fixtures', 'standings', 'league_players', 'detail', 'team_stats', 'squad', 'transfers', 'coach', 'injuries', 'venues', 'sidelined', 'trophies', 'coach_trophies'];

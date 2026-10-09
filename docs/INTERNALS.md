@@ -198,6 +198,32 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     scene, 2 top competitions (priority under 100), 3 other leagues, 4 cups.
     - Every run upserts each planned task's priority, interval and tier; due dates and progress are kept.
     - `pro_reschedule_tasks()` then brings due dates in line with any interval that changed.
+- **Other sources (migration 138):**
+  - What may be collected: only sources whose terms allow a commercial site. The official league sites (MLS, NWSL, USL,
+    US Soccer) and Squadi (NPSL, WPSL) forbid it in their terms, so they are never scraped.
+  - **American Soccer Analysis** (`src/sources/asa/`) covers MLS 2013+, NWSL 2016+, USL Championship 2017+, USL
+    League One 2019+, MLS Next Pro 2022+ and USL Super League 2024+. The API is free and public; every page that shows
+    its numbers carries the credit.
+  - Jobs, on their own `sources` lane, using no API-Football quota:
+    - `asa-sync` (daily, past seasons once): games with xG, player and keeper xG, xA, passing and goals added per
+      club, and club totals.
+    - `asa-shots`: shots, game by game.
+    - `source-map`: matches the source's ids onto API-Football ids in `pro_source_ids`. Clubs by name, then by games
+      against mapped opponents; games by clubs and date; players by name and birth date, else by name at the mapped
+      club. Verified rows and `data/pro-source-aliases.json` win.
+    - `source-check`: every score, and each player's minutes (±3%), goals and assists, against API-Football, into
+      `pro_source_checks`.
+  - What the site shows (`src/pro/sources.ts`): nothing unless `settings:pro_sources_visible` is on (console settings
+    or the hub). Then only for league seasons where 97%+ of compared numbers agree, and never a player row whose
+    minutes disagree.
+  - Effect on the crawl: `pro-plan` skips API-Football's paged season totals (`league_players`) where ASA covers the
+    season and API-Football has per-player match lines.
+  - **History (migration 139):**
+    - `openfootball-sync` (weekly) stores MLS results from 2005 on (public domain); clubs are keyed by name.
+    - `history-fill` turns seasons API-Football lacks into ordinary pro matches: MLS 2005-2011 from openfootball,
+      NWSL 2016-2018 from ASA. They get negative ids, `source` set to the source, an "Overall (from results)" table and
+      `coverage.source` on the season, so the planner and backfill leave them alone.
+    - It only runs while that source agrees with API-Football on 99%+ of the scores both have.
   - `sidelined`, `trophies` and `coach_trophies` ask for 20 people a request (`players=` / `coachs=`). If an answer
     can't be split by person, the process goes back to one request each (`batchWorks` in `src/jobs/pro/tasks.ts`).
   - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.

@@ -10,6 +10,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { Flag, PercentileBars, TransfersList, type TransferLine } from '../../components/pro/People';
 import { EmptyState, ErrorBox, Figure, PageHeader, PlayerAvatar, Section, SegmentedControl, Skeleton, TeamLogo } from '../../components/primitives';
+import { Credit, GplusBars, PlayerAdvancedTable, type AdvPlayerSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { ProMoved } from './ProMoved';
 
 interface SeasonRow { season: number; league: (ProLeagueRef & { priority?: number }) | null; team: (ProTeamRef & { national?: boolean }) | null; source: string; position: string | null; apps: number; starts: number; minutes: number; goals: number; assists: number; shots: number | null; shots_on: number | null; key_passes: number | null; passes: number | null; pass_accuracy: number | null; tackles: number | null; interceptions: number | null; duels_won: number | null; dribbles_won: number | null; yellow: number; red: number; saves: number | null; conceded: number | null; clean_sheets: number | null; rating: number | null }
@@ -20,6 +21,7 @@ export interface PlayerData {
   transfers: TransferLine[]; trophies: { league: string; country: string; season: string; place: string }[];
   injury: { type: string | null; reason: string | null; date: string | null } | null;
   injury_history?: { type: string; start: string; end: string | null; days: number; matches_missed: number | null }[];
+  advanced?: { credit: SourceCredit; seasons: AdvPlayerSeason[] } | null;
   matches: { match: ProMatch; team_id: number; starter: boolean; minutes: number | null; goals: number | null; assists: number | null; rating: number | null }[];
   college: { college_name: string; school_seo: string | null; first_season: number | null; last_season: number | null; college_player_slug: string | null; verified: boolean }[];
 }
@@ -95,6 +97,13 @@ export default function ProPlayer() {
             <DataTable rows={d.seasons} columns={cols} rowKey={(s) => `${s.season}-${s.league?.id}-${s.team?.id}`} caption={`${p.name} career by season`} dense
               empty={<EmptyState title="No season stats yet" body="Season totals arrive as the crawl reaches this player's competitions." />} />
           </Section>
+          {d.advanced && d.advanced.seasons.length > 0 && (
+            <Section title="Advanced">
+              <PlayerAdvancedTable seasons={d.advanced.seasons} />
+              {d.advanced.seasons[0]!.g_plus_by_action && <GplusBars byAction={d.advanced.seasons[0]!.g_plus_by_action} caption={`Goals added above average by action, ${d.advanced.seasons[0]!.season}${d.advanced.seasons[0]!.team ? `, ${d.advanced.seasons[0]!.team.name}` : ''}`} />}
+              <Credit credit={d.advanced.credit} />
+            </Section>
+          )}
           {d.matches.length > 0 && (
             <Section title="Recent matches">
               <ul className="frame divide-y divide-field-700">

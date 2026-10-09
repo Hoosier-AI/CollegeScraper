@@ -27,5 +27,6 @@ import './pro/plan.js';
 // Other sources (American Soccer Analysis), mapped onto API-Football and checked against it.
 import './sources/asaSync.js';
 import './sources/sourceMap.js';
+import './sources/history.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

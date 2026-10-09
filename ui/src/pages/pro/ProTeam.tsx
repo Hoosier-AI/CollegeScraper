@@ -13,6 +13,7 @@ import { ProForm } from '../../components/pro/LeagueTable';
 import { Flag, GoalsByPeriod, TransfersList, type TransferLine } from '../../components/pro/People';
 import { EmptyState, ErrorBox, Figure, PageHeader, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
+import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { ProMoved } from './ProMoved';
 
 interface SquadRow { player: { id: number; name: string; slug: string; photo: string | null; position: string | null; nationality: string | null; birth_date: string | null }; number: number | null; listed: boolean; apps: number; starts: number; minutes: number; goals: number; assists: number; yellow: number; red: number; saves: number | null; conceded: number | null; clean_sheets: number | null; rating: number | null }
@@ -29,6 +30,7 @@ interface TeamData {
   goals_by_period: { period: string; for: number; against: number }[];
   goals_by_period_source?: 'provider' | 'events';
   season_detail?: ClubSeasonRow[];
+  advanced?: { credit: SourceCredit; competitions: AdvTeamSeason[] } | null;
   splits: { home: Split; away: Split };
   results: ProMatch[]; fixtures: ProMatch[];
 }
@@ -116,6 +118,7 @@ export default function ProTeam() {
       )}
       {tab === 'stats' && (
         <div className="grid gap-5 lg:grid-cols-2">
+          {d.advanced && d.advanced.competitions.length > 0 && <div className="lg:col-span-2"><Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /><Credit credit={d.advanced.credit} /></Section></div>}
           {(d.season_detail?.length ?? 0) > 0 && <div className="lg:col-span-2"><Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section></div>}
           <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
           <Section title="Home and away">
