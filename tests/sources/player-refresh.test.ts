@@ -19,3 +19,14 @@ describe('players fetched on view', () => {
     expect(new Set(all.map((r) => `${r.player_id}|${r.league_id}|${r.team_id}`)).size).toBe(all.length);
   });
 });
+
+import { isSelfNamed } from '../../src/pro/queries.js';
+describe('transfers to a club named after the player', () => {
+  it('are the provider\'s placeholder, not moves', () => {
+    const salah = { display_name: 'Mohamed Salah', first_name: 'Mohamed', last_name: 'Salah Hamed Mahrous Ghaly' };
+    expect(isSelfNamed('Salah Mohamed', salah)).toBe(true);
+    expect(isSelfNamed('Liverpool', salah)).toBe(false);
+    expect(isSelfNamed('Trabzonspor', salah)).toBe(false);
+    expect(isSelfNamed(null, salah)).toBe(false);
+  });
+});

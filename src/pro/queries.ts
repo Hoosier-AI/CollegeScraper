@@ -142,6 +142,15 @@ function historyCredits(source: string | null, hasResults: boolean, tableSource:
   return out.length ? out : null;
 }
 
+const words = (v: unknown) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 1);
+/** A "club" whose every word is one of the player's own names ("Salah Mohamed"): the provider's placeholder, not a move. */
+export function isSelfNamed(club: string | null | undefined, p: { display_name?: string | null; first_name?: string | null; last_name?: string | null }): boolean {
+  const c = words(club);
+  if (c.length < 2) return false;
+  const own = new Set([...words(p.display_name), ...words(p.first_name), ...words(p.last_name)]);
+  return c.every((w) => own.has(w));
+}
+
 export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
   const uniq = [...new Set(ids.filter((n) => Number.isFinite(n)))];
   if (!uniq.length) return new Map();
@@ -375,7 +384,9 @@ export async function player(db: Db, slug: string) {
       pen_won: s.pen_won ?? null, pen_committed: s.pen_committed ?? null, pen_scored: s.pen_scored ?? null, pen_missed: s.pen_missed ?? null, pen_saved: s.pen_saved ?? null }))
       .sort((a, b) => b.season - a.season || (a.team?.national ? 1 : 0) - (b.team?.national ? 1 : 0) || (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     percentiles: ranked ? { league: lgs.get(ranked.league_id) ?? null, season: ranked.season, rows: percentiles } : null,
-    transfers: ((moves.data ?? []) as any[]).map((m) => ({ ...m, from_slug: moveClubs.get(m.from_team_id)?.slug ?? null, to_slug: moveClubs.get(m.to_team_id)?.slug ?? null })),
+    // The provider sometimes lists a "club" named after the player himself: not a move.
+    transfers: ((moves.data ?? []) as any[]).filter((m) => !isSelfNamed(m.from_name, pl) && !isSelfNamed(m.to_name, pl))
+      .map((m) => ({ ...m, from_slug: moveClubs.get(m.from_team_id)?.slug ?? null, to_slug: moveClubs.get(m.to_team_id)?.slug ?? null })),
     trophies: ((trophies.data ?? []) as any[]).sort((a, b) => String(b.season).localeCompare(String(a.season))),
     injury: injury ? { type: injury.type, reason: injury.reason, date: injury.date } : null,
     injury_history: injuryHistory,
