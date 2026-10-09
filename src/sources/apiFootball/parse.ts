@@ -272,7 +272,25 @@ export function personDisplayName(first: string | null | undefined, last: string
   const f = (first ?? '').trim().split(/\s+/)[0] ?? '';
   const l = (last ?? '').trim();
   const full = `${f} ${l}`.trim();
-  return full && l ? full : fallback;
+  const legal = full && l ? full : fallback;
+  return commonName(fallback, first, last, legal);
+}
+
+const INITIALS = /^(\p{Lu}\p{L}?\.\s*)+/u;
+/**
+ * The name people use (same rule as pro_common_name in migration 142): the provider's short name "L. Messi" gives the
+ * surname ("Lionel Messi", "Virgil van Dijk"); a short name of one or two words without initials ("Neymar") is used
+ * as it is; otherwise the full name.
+ */
+export function commonName(short: string | null | undefined, first: string | null | undefined, last: string | null | undefined, display: string): string {
+  const s = (short ?? '').trim();
+  const f = (first ?? '').trim();
+  if (INITIALS.test(s) && f) {
+    const surname = s.replace(INITIALS, '').trim();
+    if (surname && `${last ?? ''} ${display}`.toLowerCase().includes(surname.toLowerCase())) return `${f.split(/\s+/)[0]} ${surname}`;
+  }
+  if (s && !s.includes('.') && s.length > 1 && s.split(/\s+/).length <= 2) return s;
+  return display;
 }
 
 export function parseProfile(it: AfProfile, at = new Date().toISOString()): PlayerProfileRow {

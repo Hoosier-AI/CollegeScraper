@@ -105,3 +105,15 @@ describe('v3 parsers: every stat the provider has (recorded answers)', () => {
     expect(t.extra).not.toHaveProperty('ball_possession');
   });
 });
+
+import { commonName } from '../../src/sources/apiFootball/parse.js';
+describe('names people use', () => {
+  it('the surname from the short name, the short name when it is one, else the full name', () => {
+    expect(commonName('L. Messi', 'Lionel Andrés', 'Messi Cuccittini', 'Lionel Messi Cuccittini')).toBe('Lionel Messi');
+    expect(commonName('V. van Dijk', 'Virgil', 'van Dijk', 'Virgil van Dijk')).toBe('Virgil van Dijk');
+    expect(commonName('J. Sancho', 'Jadon Malik', 'Sancho', 'Jadon Sancho')).toBe('Jadon Sancho');
+    expect(commonName('Neymar', 'Neymar', 'da Silva Santos Júnior', 'Neymar da Silva Santos Júnior')).toBe('Neymar');
+    expect(commonName('Virgilio Nazareth Piñero Delgado', 'Virgilio Nazareth', 'Piñero Delgado', 'Virgilio Piñero Delgado')).toBe('Virgilio Piñero Delgado');
+    expect(commonName('X. Nobody', 'Lionel', 'Messi', 'Lionel Messi')).toBe('Lionel Messi'); // a surname that is not theirs
+  });
+});

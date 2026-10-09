@@ -11,10 +11,13 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ProForm } from '../../components/pro/LeagueTable';
 import { Flag, GoalsByPeriod, TransfersList, type TransferLine } from '../../components/pro/People';
-import { EmptyState, ErrorBox, Figure, PageHeader, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
 import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
+import { ProHero, StatTile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 interface SquadRow { player: { id: number; name: string; slug: string; photo: string | null; position: string | null; nationality: string | null; birth_date: string | null }; number: number | null; listed: boolean; apps: number; starts: number; minutes: number; goals: number; assists: number; yellow: number; red: number; saves: number | null; conceded: number | null; clean_sheets: number | null; rating: number | null }
 interface Split { played: number; w: number; d: number; l: number; gf: number; ga: number }
@@ -68,17 +71,18 @@ export default function ProTeam() {
   const splitRow = (label: string, s: Split) => <tr className="border-t border-field-700"><th scope="row" className="td text-left font-normal text-chalk-300">{label}</th><td className="td text-right tnum">{s.played}</td><td className="td text-right tnum">{s.w}-{s.d}-{s.l}</td><td className="td text-right tnum">{s.gf}:{s.ga}</td><td className="td text-right tnum">{s.played ? ((s.w * 3 + s.d) / s.played).toFixed(2) : '–'}</td></tr>;
   return (
     <div className="space-y-5">
-      <PageHeader title={<span className="flex items-center gap-3"><TeamLogo src={t.logo} name={t.name} size={52} />{t.name}</span>}
-        meta={<span className="inline-flex flex-wrap items-center gap-x-2"><Flag country={t.country} />{[t.country, t.founded ? `founded ${t.founded}` : null, t.venue ? `${t.venue.name}${t.venue.city ? `, ${t.venue.city}` : ''}${t.venue.capacity ? ` (${fmt.num(t.venue.capacity)})` : ''}` : null, coach ? `coach ${coach.name}` : null].filter(Boolean).join(' · ')}</span>}>
-        {d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: v === String(d.seasons[0]) ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}
-      </PageHeader>
-      {d.season != null && total.p > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Figure label={`${d.season} record`} value={`${total.w}-${total.d}-${total.l}`} sub="won, drawn, lost" />
-          <Figure label="Goals" value={`${total.gf}:${total.ga}`} sub={`${total.p} matches`} />
-          {d.standings.slice(0, 2).map((s) => s.league && <Figure key={`${s.league.id}-${s.group}`} label={s.group || s.league.name} value={s.rank ? fmt.ordinal(s.rank) : '–'} sub={<span className="inline-flex items-center gap-2">{s.points ?? 0} pts <ProForm form={s.form} /></span>} />)}
-        </div>
-      )}
+      <ProHero image={<span className="grid h-24 w-24 place-items-center rounded-xl bg-white/95 p-2 shadow-lg"><TeamLogo src={t.logo} name={t.name} size={76} chip={false} /></span>} title={t.name}
+        line={<>{t.country && <span className="inline-flex items-center gap-1.5"><Flag country={t.country} />{t.country}</span>}{coach && <span>Coach {coach.name}</span>}</>}
+        chips={[t.founded ? `Founded ${t.founded}` : null, t.venue ? `${t.venue.name}${t.venue.capacity ? ` · ${fmt.num(t.venue.capacity)}` : ''}` : null, t.venue?.surface ? cap(t.venue.surface) : null]}
+        actions={d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: v === String(d.seasons[0]) ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}>
+        {d.season != null && total.p > 0 && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <StatTile label={`${d.season} record`} value={`${total.w}-${total.d}-${total.l}`} sub="won, drawn, lost" />
+            <StatTile label="Goals" value={`${total.gf}:${total.ga}`} sub={`${total.p} matches · ${(total.gf / total.p).toFixed(2)} a match`} />
+            {d.standings.slice(0, 2).map((s) => s.league && <StatTile key={`${s.league.id}-${s.group}`} accent label={s.group || s.league.name} value={s.rank ? fmt.ordinal(s.rank) : '–'} sub={<span className="inline-flex items-center gap-2">{s.points ?? 0} pts <ProForm form={s.form} /></span>} />)}
+          </div>
+        )}
+      </ProHero>
       {d.injuries.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-loss/10 px-3 py-2 text-sm text-loss">
           <Ambulance size={16} aria-hidden /><span className="font-medium">Unavailable:</span>

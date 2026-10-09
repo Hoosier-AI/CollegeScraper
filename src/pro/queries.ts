@@ -320,7 +320,7 @@ export async function player(db: Db, slug: string) {
   const recentInjury = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
   const [seasons, recent, links, moves, trophies, hurt, spells, missed] = await Promise.all([
     selectAll<any>(db, 'pro_player_season_stats', '*', (q) => q.eq('player_id', pl.id).order('season', { ascending: false })),
-    db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,pos,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
+    db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,conceded,pos,shots,shots_on,key_passes,passes,pass_accuracy,tackles,interceptions,duels,duels_won,dribbles,dribbles_won,fouls_drawn,fouls_committed,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
     db.from('pro_college_links').select('college_name,school_seo,college_player_id,first_season,last_season,confidence,verified,rejected,method,college:college_players(slug,display_name)').eq('pro_player_id', pl.id).eq('rejected', false),
     db.from('pro_transfers').select('date,type,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').eq('player_id', pl.id).order('date', { ascending: false }).limit(40),
     db.from('pro_trophies').select('league,country,season,place').eq('subject', 'player').eq('subject_id', pl.id).limit(200),
@@ -339,9 +339,10 @@ export async function player(db: Db, slug: string) {
   const teamIds = [...seasons.map((s) => s.team_id), ...(pl.current_team_id ? [pl.current_team_id] : [])];
   const teams = await teamsById(db, teamIds);
   const shown = ((links.data ?? []) as any[]).filter((l) => l.verified || Number(l.confidence) >= SHOW_AT);
-  const matches = ((recent.data ?? []) as any[]).filter((r) => r.fixture).map((r) => ({ match: toMatchRow(r.fixture), team_id: r.team_id, starter: r.starter, minutes: r.minutes, goals: r.goals, assists: r.assists, yellow: r.yellow, red: r.red, rating: r.rating == null ? null : Number(r.rating), saves: r.saves, pos: r.pos }))
+  const matches = ((recent.data ?? []) as any[]).filter((r) => r.fixture).map((r) => ({ match: toMatchRow(r.fixture), team_id: r.team_id, starter: r.starter, minutes: r.minutes, goals: r.goals, assists: r.assists, yellow: r.yellow, red: r.red, rating: r.rating == null ? null : Number(r.rating), saves: r.saves, conceded: r.conceded, pos: r.pos,
+      shots: r.shots, shots_on: r.shots_on, key_passes: r.key_passes, passes: r.passes, pass_accuracy: r.pass_accuracy, tackles: r.tackles, interceptions: r.interceptions, duels: r.duels, duels_won: r.duels_won, dribbles: r.dribbles, dribbles_won: r.dribbles_won, fouls_drawn: r.fouls_drawn, fouls_committed: r.fouls_committed }))
     // Fixture ids are not in date order: take a wide slice, then the latest by kickoff.
-    .sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff)).slice(0, 25);
+    .sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff)).slice(0, 40);
   const lastPlayed = matches[0] ? (matches[0].team_id === matches[0].match.home.id ? matches[0].match.home : matches[0].match.away) : null;
   const club = pl.current_team_id ? teams.get(pl.current_team_id) ?? null : lastPlayed ?? (seasons[0] ? teams.get(seasons[0].team_id) ?? null : null);
   // Percentiles for the latest club season with real minutes in a competition (not national-team games).
@@ -359,7 +360,11 @@ export async function player(db: Db, slug: string) {
     seasons: seasons.map((s) => ({ season: s.season, league: lgs.get(s.league_id) ?? null, team: teams.get(s.team_id) ?? null, source: s.source, position: s.position ?? null,
       apps: s.apps, starts: s.starts, minutes: s.minutes, goals: s.goals, assists: s.assists, shots: s.shots, shots_on: s.shots_on, key_passes: s.key_passes, passes: s.passes, pass_accuracy: s.pass_accuracy,
       tackles: s.tackles, interceptions: s.interceptions, duels_won: s.duels_won, dribbles_won: s.dribbles_won, yellow: s.yellow, red: s.red, saves: s.saves, conceded: s.conceded, clean_sheets: s.clean_sheets,
-      rating: s.rating == null ? null : Number(s.rating) }))
+      rating: s.rating == null ? null : Number(s.rating),
+      // Everything else the season rows hold.
+      lineups: s.lineups ?? null, sub_in: s.sub_in ?? null, sub_out: s.sub_out ?? null, bench: s.bench ?? null, captain: s.captain ?? null, blocks: s.blocks ?? null, duels: s.duels ?? null,
+      dribbles: s.dribbles ?? null, dribbled_past: s.dribbled_past ?? null, fouls_drawn: s.fouls_drawn ?? null, fouls_committed: s.fouls_committed ?? null, yellowred: s.yellowred ?? null,
+      pen_won: s.pen_won ?? null, pen_committed: s.pen_committed ?? null, pen_scored: s.pen_scored ?? null, pen_missed: s.pen_missed ?? null, pen_saved: s.pen_saved ?? null }))
       .sort((a, b) => b.season - a.season || (a.team?.national ? 1 : 0) - (b.team?.national ? 1 : 0) || (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     percentiles: ranked ? { league: lgs.get(ranked.league_id) ?? null, season: ranked.season, rows: percentiles } : null,
     transfers: ((moves.data ?? []) as any[]).map((m) => ({ ...m, from_slug: moveClubs.get(m.from_team_id)?.slug ?? null, to_slug: moveClubs.get(m.to_team_id)?.slug ?? null })),
