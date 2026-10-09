@@ -12,6 +12,7 @@ import { replaceChecks, sourceIdMap, writeSourceIds, type SourceIdRow } from '..
 import { ASA_LEAGUES } from '../../sources/asa/leagues.js';
 import { type AdvPlayerSeasonRow, type SrcGameRow } from '../../sources/asa/parse.js';
 import { mapGames, mapPlayer, mapTeams, type ApiPerson, type ApiFixture, type Mapped } from './mapping.js';
+import { bestOf, clubScore } from '../../sources/match.js';
 import { checkGame, checkPlayerSeason, type CheckRow } from './checks.js';
 
 /** `.in()` over many values, a few hundred at a time (the filter travels in the URL). */
@@ -81,6 +82,20 @@ async function mapSource(ctx: JobContext, SOURCE: string, leagueIds: number[], w
     }
     perLeague.push({ league, games, fixtures });
     await ctx.heartbeat();
+  }
+  // Clubs no league season matched (defunct sides API-Football lists by country but not in a season it has crawled):
+  // the exact same name among US clubs, and only one of them.
+  const open = [...best].filter(([, m]) => m.pro_id == null).map(([ext]) => ext);
+  if (open.length) {
+    const src = new Map((await selectIn<{ ext_id: string; name: string; league_id: number }>(db, 'pro_src_teams', 'ext_id,name,league_id', 'ext_id', open, (q) => q.eq('source', SOURCE))).map((t) => [t.ext_id, t]));
+    const genders = new Map((await selectAll<{ id: number; gender: string }>(db, 'pro_leagues', 'id,gender', (q) => q.in('id', leagueIds))).map((l) => [l.id, l.gender]));
+    const us = await selectAll<{ id: number; name: string; display_name: string; gender: string | null }>(db, 'pro_teams', 'id,name,display_name,gender', (q) => q.eq('country', 'USA').eq('national', false).gt('id', 0));
+    for (const ext of open) {
+      const t0 = src.get(ext); if (!t0) continue;
+      const name = t0.name, gender = genders.get(t0.league_id) ?? 'm';
+      const hit = bestOf(us.filter((t) => (t.gender ?? 'm') === gender), (t) => Math.max(clubScore(name, t.name), clubScore(name, t.display_name)) === 1 ? 1 : 0, 1);
+      if (hit) best.set(ext, { pro_id: hit.item.id, method: 'name (country)', confidence: 0.85, evidence: { api_name: hit.item.name } });
+    }
   }
   await writeSourceIds(db, SOURCE, 'team', asRows(SOURCE, 'team', best));
   for (const [ext, m] of best) if (m.pro_id != null) teamMap.set(ext, m.pro_id);

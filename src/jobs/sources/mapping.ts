@@ -10,6 +10,19 @@ export interface ApiFixture { id: number; kickoff: string; home_team_id: number;
 export interface SrcPerson { ext_id: string; name: string; birth_date: string | null }
 export type ApiPerson = ProPerson & { id: number; birth_date: string | null };
 
+/** Fixtures by UTC day, so a game only looks at the days around its own (not every fixture of every season). */
+function dayIndex(fixtures: ApiFixture[]): (kickoff: string, hours: number) => ApiFixture[] {
+  const DAY = 86400_000;
+  const byDay = new Map<number, ApiFixture[]>();
+  for (const f of fixtures) { const d = Math.floor(Date.parse(f.kickoff) / DAY); byDay.set(d, [...(byDay.get(d) ?? []), f]); }
+  return (kickoff, hours) => {
+    const t = Date.parse(kickoff), d = Math.floor(t / DAY), span = Math.ceil(hours / 24);
+    const out: ApiFixture[] = [];
+    for (let i = d - span; i <= d + span; i += 1) for (const f of byDay.get(i) ?? []) if (nearKickoff(f.kickoff, kickoff, hours)) out.push(f);
+    return out;
+  };
+}
+
 /**
  * Clubs: a hand-kept alias first, then the name (0.85 and up, clearly ahead of the rest), then the games: a club
  * that keeps meeting a mapped opponent at the same kickoff is the one API-Football has there (3+ games, 80%+).
@@ -23,13 +36,14 @@ export function mapTeams(src: SrcTeam[], api: ApiTeam[], games: SrcGame[], fixtu
     if (best) out.set(t.ext_id, { pro_id: best.item.id, method: 'name', confidence: Math.round(best.score * 95) / 100, evidence: { api_name: best.item.name } });
   }
   // Games settle the rest, a round at a time (each round can unlock the next).
+  const near = dayIndex(fixtures);
   for (let round = 0; round < 3; round += 1) {
     const votes = new Map<string, Map<number, number>>();
     for (const g of games) {
       for (const [mine, other, side] of [[g.home_ext, g.away_ext, 'home'], [g.away_ext, g.home_ext, 'away']] as const) {
         const known = out.get(mine)?.pro_id;
         if (known == null || out.get(other)?.pro_id != null) continue;
-        const f = fixtures.filter((x) => nearKickoff(x.kickoff, g.kickoff, 3) && (side === 'home' ? x.home_team_id === known : x.away_team_id === known));
+        const f = near(g.kickoff, 3).filter((x) => (side === 'home' ? x.home_team_id === known : x.away_team_id === known));
         if (f.length !== 1) continue;
         const theirs = side === 'home' ? f[0]!.away_team_id : f[0]!.home_team_id;
         const v = votes.get(other) ?? new Map<number, number>();
@@ -52,10 +66,11 @@ export function mapTeams(src: SrcTeam[], api: ApiTeam[], games: SrcGame[], fixtu
 /** Games: the same two mapped clubs within 36 hours (home and away swapped counts, a little less sure). */
 export function mapGames(games: SrcGame[], fixtures: ApiFixture[], teams: Map<string, Mapped>): Map<string, Mapped> {
   const out = new Map<string, Mapped>();
+  const around = dayIndex(fixtures);
   for (const g of games) {
     const h = teams.get(g.home_ext)?.pro_id, a = teams.get(g.away_ext)?.pro_id;
     if (h == null || a == null) { out.set(g.ext_id, { pro_id: null, method: 'none', confidence: 0 }); continue; }
-    const near = fixtures.filter((f) => nearKickoff(f.kickoff, g.kickoff));
+    const near = around(g.kickoff, 36);
     const same = near.filter((f) => f.home_team_id === h && f.away_team_id === a);
     const swapped = near.filter((f) => f.home_team_id === a && f.away_team_id === h);
     if (same.length === 1) out.set(g.ext_id, { pro_id: same[0]!.id, method: 'teams+date', confidence: 1 });

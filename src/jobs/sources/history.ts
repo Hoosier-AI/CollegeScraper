@@ -44,9 +44,15 @@ export async function openfootballSync(ctx: JobContext): Promise<void> {
   const to = Number(ctx.params.to) || new Date().getUTCFullYear();
   for (let season = Number(ctx.params.from) || FIRST; season <= to; season += 1) {
     if (await ctx.cancelled()) return;
-    const res = await f.get(`${OF_BASE}/${season}_mls.txt`, { accept: 'text/plain', noStore: true, skipCache: true });
-    if (res.status === 404) { ctx.inc('seasons_missing'); continue; }
-    if (res.status !== 200) { ctx.inc('errors'); await patchSourceSeason(ctx.db, OF_SOURCE, MLS, season, { last_error: `HTTP ${res.status}` }); continue; }
+    let res: Awaited<ReturnType<typeof f.get>>;
+    try { res = await f.get(`${OF_BASE}/${season}_mls.txt`, { accept: 'text/plain', noStore: true, skipCache: true, attempts: 2 }); }
+    catch (err) {
+      // No file yet for a season (the current one until it is published) is not an error.
+      if ((err as { status?: number }).status === 404) { ctx.inc('seasons_missing'); continue; }
+      ctx.inc('errors');
+      await patchSourceSeason(ctx.db, OF_SOURCE, MLS, season, { last_error: String(err instanceof Error ? err.message : err).slice(0, 500) });
+      continue;
+    }
     const at = new Date().toISOString();
     const matches = parseSeasonFile(res.text, season);
     const names = [...new Set(matches.flatMap((m) => [m.home, m.away]))];

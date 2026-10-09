@@ -1,4 +1,13 @@
 {
   "_comment": "Hand-kept club matches another source's names miss: source -> { source club id or exact name: API-Football team id }. Verified rows in pro_source_ids work the same way.",
-  "asa": {}
+  "asa": {
+    "Chivas USA": 13173
+  },
+  "openfootball": {
+    "CD Chivas": 13173,
+    "D.C. United": 1615,
+    "Kansas City Wizards": 1611,
+    "MetroStars": 1602,
+    "New York RB": 1602
+  }
 }
