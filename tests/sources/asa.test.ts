@@ -105,10 +105,14 @@ describe('checks against API-Football', () => {
     expect(checkGame(g, null)[0]).toMatchObject({ field: 'game', status: 'unmatched' });
     expect(checkGame(g, { id: 1, home_goals: null, away_goals: null, status: 'scheduled' })).toEqual([]);
   });
-  it('a player season: minutes within 3% or 10, goals and assists exact', () => {
-    const r = mergePlayerSeasons({ xgoals: load('players-xgoals.json') }, 253, 2025)[0]!;
+  it('a player season: ASA minutes include stoppage time; goals and assists exact once a season is over', () => {
+    const r = mergePlayerSeasons({ xgoals: load('players-xgoals.json') }, 253, 2025)[0]!; // 1634 minutes, 3 goals, 2 assists
     expect(checkPlayerSeason(r, { key: '1|2', minutes: 1640, goals: 3, assists: 2 }).map((x) => x.status)).toEqual(['agree', 'agree', 'agree']);
-    expect(checkPlayerSeason(r, { key: '1|2', minutes: 1400, goals: 4, assists: 2 }).map((x) => x.status)).toEqual(['differ', 'differ', 'agree']);
+    expect(checkPlayerSeason(r, { key: '1|2', minutes: 1480, goals: 3, assists: 2 })[0]!.status).toBe('agree'); // ASA ~10% higher: stoppage time
+    expect(checkPlayerSeason(r, { key: '1|2', minutes: 1300, goals: 4, assists: 2 }).map((x) => x.status)).toEqual(['differ', 'differ', 'agree']);
+    expect(checkPlayerSeason(r, { key: '1|2', minutes: 1700, goals: 3, assists: 2 })[0]!.status).toBe('differ'); // under API-Football's
+    // The current season: totals may be a match apart.
+    expect(checkPlayerSeason(r, { key: '1|2', minutes: 1640, goals: 2, assists: 3 }, undefined, true).map((x) => x.status)).toEqual(['agree', 'agree', 'agree']);
     expect(agreementRate([{ status: 'agree' }, { status: 'agree' }, { status: 'differ' }, { status: 'unmatched' }])).toBe(0.5);
     expect(agreementRate([])).toBeNull();
   });

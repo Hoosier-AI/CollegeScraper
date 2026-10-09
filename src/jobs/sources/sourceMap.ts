@@ -59,6 +59,10 @@ async function mapSource(ctx: JobContext, SOURCE: string, leagueIds: number[], w
   const teamMap = new Map<string, number>();
   const pre = (k: string) => `${SOURCE}_${k}`;
 
+  // Clubs first, across every league: a club can play in more than one over the years (FC Cincinnati in the USL
+  // Championship, then MLS), and the best match any league finds is the one kept. Then games, with every club known.
+  const perLeague: { league: number; games: SrcGameRow[]; fixtures: ApiFixture[] }[] = [];
+  const best = new Map<string, Mapped>();
   for (const league of leagueIds) {
     const games = await selectAll<SrcGameRow>(db, 'pro_src_games', 'ext_id,kickoff,home_ext,away_ext,season', (q) => q.eq('source', SOURCE).eq('league_id', league));
     if (!games.length) continue;
@@ -69,14 +73,22 @@ async function mapSource(ctx: JobContext, SOURCE: string, leagueIds: number[], w
     const apiTeamIds = [...new Set([...fixtures.flatMap((f) => [f.home_team_id, f.away_team_id]),
       ...(await selectAll<{ team_id: number }>(db, 'pro_league_teams', 'team_id', (q) => q.eq('league_id', league))).map((r) => r.team_id)])];
     const apiTeams = await selectIn<{ id: number; name: string; display_name: string }>(db, 'pro_teams', 'id,name,display_name', 'id', apiTeamIds);
-    const teams = mapTeams(srcTeams, apiTeams, games, fixtures, aliases);
-    await writeSourceIds(db, SOURCE, 'team', asRows(SOURCE, 'team', teams));
-    for (const [ext, m] of teams) if (m.pro_id != null) teamMap.set(ext, m.pro_id);
-    const gameMap = mapGames(games, fixtures, teams);
-    await writeSourceIds(db, SOURCE, 'game', asRows(SOURCE, 'game', gameMap));
-    ctx.inc(pre('teams_mapped'), count(teams)); ctx.inc(pre('teams_unmatched'), teams.size - count(teams));
-    ctx.inc(pre('games_mapped'), count(gameMap)); ctx.inc(pre('games_unmatched'), gameMap.size - count(gameMap));
+    // Clubs another league already matched count as known here (their games settle the rest).
+    const known = Object.fromEntries([...best].filter(([, m]) => m.pro_id != null).map(([ext, m]) => [ext, m.pro_id!]));
+    for (const [ext, m] of mapTeams(srcTeams, apiTeams, games, fixtures, { ...known, ...aliases })) {
+      const prev = best.get(ext);
+      if (!prev || (prev.pro_id == null && m.pro_id != null) || (m.pro_id != null && m.pro_id !== prev.pro_id && m.confidence > prev.confidence)) best.set(ext, m);
+    }
+    perLeague.push({ league, games, fixtures });
     await ctx.heartbeat();
+  }
+  await writeSourceIds(db, SOURCE, 'team', asRows(SOURCE, 'team', best));
+  for (const [ext, m] of best) if (m.pro_id != null) teamMap.set(ext, m.pro_id);
+  ctx.inc(pre('teams_mapped'), count(best)); ctx.inc(pre('teams_unmatched'), best.size - count(best));
+  for (const { games, fixtures } of perLeague) {
+    const gameMap = mapGames(games, fixtures, best);
+    await writeSourceIds(db, SOURCE, 'game', asRows(SOURCE, 'game', gameMap));
+    ctx.inc(pre('games_mapped'), count(gameMap)); ctx.inc(pre('games_unmatched'), gameMap.size - count(gameMap));
   }
   if (!withPlayers) return;
 
@@ -122,16 +134,18 @@ async function checkSource(ctx: JobContext, SOURCE: string, leagueIds: number[],
     return q;
   });
   const at = new Date().toISOString();
+  const currentOf = new Map((await selectAll<{ id: number; current_season: number | null }>(db, 'pro_leagues', 'id,current_season', (q) => q.in('id', leagueIds))).map((l) => [l.id, l.current_season ?? 9999]));
   for (const { league_id: league, season } of seasons) {
     const rows: CheckRow[] = [];
     const src = await selectAll<SrcGameRow>(db, 'pro_src_games', '*', (x) => x.eq('source', SOURCE).eq('league_id', league).eq('season', season));
-    const fx = new Map((await selectIn<{ id: number; home_team_id: number; home_goals: number | null; away_goals: number | null; status: string }>(db, 'pro_fixtures', 'id,home_team_id,home_goals,away_goals,status', 'id',
+    const fx = new Map((await selectIn<{ id: number; home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; status: string }>(db, 'pro_fixtures', 'id,home_team_id,away_team_id,home_goals,away_goals,status', 'id',
       src.map((g) => games.get(g.ext_id)).filter((x): x is number => x != null))).map((f) => [f.id, f]));
     // A season API-Football does not have at all: nothing to compare (history), not a pile of unmatched games.
     const apiHas = fx.size > 0 || (await db.from('pro_fixtures').select('id', { count: 'exact', head: true }).eq('league_id', league).eq('season', season).eq('source', 'api-football')).count;
     if (apiHas) for (const g of src) {
       const id = games.get(g.ext_id); const f = id != null ? fx.get(id) : undefined;
-      rows.push(...checkGame(g, f ? { ...f, swapped: f.home_team_id !== teams.get(g.home_ext) } : null, at));
+      // Home and away swapped only when the clubs say so (an unmatched club proves nothing).
+      rows.push(...checkGame(g, f ? { ...f, swapped: teams.get(g.home_ext) === f.away_team_id } : null, at));
     }
     if (withPlayers) {
       const adv = await selectAll<AdvPlayerSeasonRow>(db, 'pro_adv_player_seasons', '*', (x) => x.eq('source', SOURCE).eq('league_id', league).eq('season', season));
@@ -144,7 +158,7 @@ async function checkSource(ctx: JobContext, SOURCE: string, leagueIds: number[],
         for (const r of adv) {
           const p = players.get(r.player_ext), t = teams.get(r.team_ext);
           const hit = p != null && t != null ? totals.get(`${p}|${t}`) : undefined;
-          rows.push(...checkPlayerSeason(r, hit ? { key: `${p}|${t}`, minutes: hit.minutes, goals: hit.goals, assists: hit.assists } : null, at));
+          rows.push(...checkPlayerSeason(r, hit ? { key: `${p}|${t}`, minutes: hit.minutes, goals: hit.goals, assists: hit.assists } : null, at, season >= (currentOf.get(league) ?? 9999)));
         }
       } else ctx.inc(`${SOURCE}_player_checks_waiting_on_api`);
     }
