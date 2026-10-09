@@ -337,15 +337,22 @@ export async function player(db: Db, slug: string) {
     return { type: x.type, start: x.start, end: x.end, days: Math.max(1, Math.round((Date.parse(x.end ?? todayIso) - Date.parse(x.start)) / 86400_000)), matches_missed: n || null };
   });
   const lgs = await leaguesById(db, seasons.map((s) => s.league_id));
-  const teamIds = [...seasons.map((s) => s.team_id), ...(pl.current_team_id ? [pl.current_team_id] : [])];
+  const today = new Date().toISOString().slice(0, 10);
+  const latestMove = ((moves.data ?? []) as any[]).find((m) => m.date <= today && m.to_team_id > 0) ?? null;
+  const teamIds = [...seasons.map((s) => s.team_id), ...(pl.current_team_id ? [pl.current_team_id] : []), ...(latestMove ? [latestMove.to_team_id] : [])];
   const teams = await teamsById(db, teamIds);
   const shown = ((links.data ?? []) as any[]).filter((l) => l.verified || Number(l.confidence) >= SHOW_AT);
   const matches = ((recent.data ?? []) as any[]).filter((r) => r.fixture).map((r) => ({ match: toMatchRow(r.fixture), team_id: r.team_id, starter: r.starter, minutes: r.minutes, goals: r.goals, assists: r.assists, yellow: r.yellow, red: r.red, rating: r.rating == null ? null : Number(r.rating), saves: r.saves, conceded: r.conceded, pos: r.pos,
       shots: r.shots, shots_on: r.shots_on, key_passes: r.key_passes, passes: r.passes, pass_accuracy: r.pass_accuracy, tackles: r.tackles, interceptions: r.interceptions, duels: r.duels, duels_won: r.duels_won, dribbles: r.dribbles, dribbles_won: r.dribbles_won, fouls_drawn: r.fouls_drawn, fouls_committed: r.fouls_committed }))
     // Fixture ids are not in date order: take a wide slice, then the latest by kickoff.
     .sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff)).slice(0, 40);
-  const lastPlayed = matches[0] ? (matches[0].team_id === matches[0].match.home.id ? matches[0].match.home : matches[0].match.away) : null;
-  const club = pl.current_team_id ? teams.get(pl.current_team_id) ?? null : lastPlayed ?? (seasons[0] ? teams.get(seasons[0].team_id) ?? null : null);
+  // The club, never the national team: the squad he is listed in, else his latest club match, the club he last moved
+  // to, his latest club season.
+  const clubOf = (t: ProTeamRef | null | undefined) => (t && !t.national ? t : null);
+  const lastClubMatch = matches.find((m) => !(m.team_id === m.match.home.id ? m.match.home : m.match.away).national);
+  const lastPlayed = lastClubMatch ? (lastClubMatch.team_id === lastClubMatch.match.home.id ? lastClubMatch.match.home : lastClubMatch.match.away) : null;
+  const latestClubSeason = [...seasons].sort((a, b) => b.season - a.season).map((s) => clubOf(teams.get(s.team_id))).find(Boolean) ?? null;
+  const club = clubOf(pl.current_team_id ? teams.get(pl.current_team_id) : null) ?? clubOf(lastPlayed) ?? clubOf(latestMove ? teams.get(latestMove.to_team_id) : null) ?? latestClubSeason;
   // Percentiles for the latest club season with real minutes in a competition (not national-team games).
   const ranked = seasons.filter((s) => s.minutes >= 450 && !teams.get(s.team_id)?.national).sort((a, b) => b.season - a.season || b.minutes - a.minutes)[0];
   let percentiles: { stat: string; value: number; pct: number; peers: number }[] = [];

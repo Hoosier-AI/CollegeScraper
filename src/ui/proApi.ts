@@ -12,6 +12,7 @@ import { eastern } from '../jobs/seasons.js';
 import { SLUG } from '../seo/util.js';
 import { PRO_QUOTA_KEY } from '../jobs/pro/shared.js';
 import { cachedKv, KV } from '../ops/settings.js';
+import { isBot, refreshPlayerOnView } from '../pro/playerRefresh.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1900 && n < 2100 ? n : null; };
@@ -47,7 +48,15 @@ export function registerProApi(app: FastifyInstance): void {
   });
   app.get<{ Params: { slug: string } }>('/api/pro/players/:slug', async (req, reply) => {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
-    const r = await pro.player(getDb(), req.params.slug);
+    const db = getDb();
+    // Someone opening a player we have little on: fetch their transfers, honours and seasons first (capped, see
+    // playerRefresh.ts). Bots never trigger it.
+    if (!isBot(req.headers['user-agent'])) {
+      const { data: hit } = await db.from('pro_players').select('id').eq('slug', req.params.slug).maybeSingle();
+      const id = (hit as { id?: number } | null)?.id;
+      if (id != null) await refreshPlayerOnView(db, id).catch(() => 'failed');
+    }
+    const r = await pro.player(db, req.params.slug);
     return r ? reply.header('Cache-Control', CACHE).send(r) : notFound(reply, 'player', req.params.slug);
   });
   app.get<{ Params: { slug: string } }>('/api/pro/matches/:slug', async (req, reply) => {

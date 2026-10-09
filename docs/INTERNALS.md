@@ -242,6 +242,13 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     - `results-tables` covers leagues with no table anywhere (WPSL and others): it works one out from results, one
       table per group of clubs that played each other. `pro_standings.source` says where each table came from.
     - The expected table (xPts, xG) comes from American Soccer Analysis, behind the sources switch.
+  - **Players on view (migration 144):** opening a player's page in the browser fetches their transfers, honours and
+    this and last season in every competition (4 requests, `src/pro/playerRefresh.ts`). Limits:
+    - at most once every 14 days a player;
+    - `PRO_PLAYER_REFRESH_PER_DAY` (default 400) requests a day;
+    - on the everyday quota floor;
+    - the page waits at most 5 seconds;
+    - bots and the server-rendered pages never trigger it.
   - **Season totals where API-Football has none (migration 143):**
     - `asa-fill` writes ASA's minutes, appearances, goals, assists, shots, passes and saves into
       `pro_player_season_stats` with source 'asa'. It does this for league seasons whose scores agree 97%+ with

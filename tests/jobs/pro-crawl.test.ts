@@ -67,7 +67,7 @@ describe('crawl plan', () => {
   });
   it('every club that ever played in the US gets squad, transfers and coach; a former one less often', () => {
     expect(get('squad', '11')).toMatchObject({ priority: 17, every_days: 90, tier: 1 });
-    expect(get('transfers', '1')).toMatchObject({ priority: 17, every_days: 7 });
+    expect(get('transfers', '1')).toMatchObject({ priority: 12, every_days: 7 });
     expect(get('coach', '11')).toMatchObject({ priority: 17, every_days: 90 });
   });
   it('an international competition does not make a foreign club American', () => {

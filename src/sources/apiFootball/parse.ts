@@ -377,7 +377,8 @@ export const parseProfilesPage = (items: AfProfile[], at = new Date().toISOStrin
  * players?league&season: each player's profile plus one season row per club in that competition. Rows with no
  * appearance are dropped (a squad listing is not a season played), as are other competitions the answer may carry.
  */
-export function parseLeaguePlayers(items: AfLeaguePlayer[], league: number, season: number, at = new Date().toISOString()): { profiles: PlayerProfileRow[]; stats: SeasonStatRow[] } {
+/** league null: every competition in the answer (players?id&season: one player's whole season). */
+export function parseLeaguePlayers(items: AfLeaguePlayer[], league: number | null, season: number, at = new Date().toISOString()): { profiles: PlayerProfileRow[]; stats: SeasonStatRow[] } {
   const profiles: PlayerProfileRow[] = []; const stats: SeasonStatRow[] = [];
   const seen = new Set<string>();
   for (const it of items) {
@@ -385,14 +386,15 @@ export function parseLeaguePlayers(items: AfLeaguePlayer[], league: number, seas
     if (!Number.isInteger(id) || id <= 0 || !str(it.player.name)) continue;
     profiles.push(parseProfile({ player: it.player }, at));
     for (const s of it.statistics ?? []) {
-      if (s.league?.id !== league || Number(s.league?.season) !== season || !Number.isInteger(s.team?.id)) continue;
+      const lid = s.league?.id;
+      if (!Number.isInteger(lid) || (league != null && lid !== league) || Number(s.league?.season) !== season || !Number.isInteger(s.team?.id)) continue;
       const apps = int(s.games?.appearences) ?? 0, minutes = int(s.games?.minutes) ?? 0;
       if (apps <= 0 && minutes <= 0) continue;
-      const key = `${id}|${s.team.id}`;
+      const key = `${id}|${lid}|${s.team.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
       stats.push({
-        player_id: id, league_id: league, season, team_id: s.team.id!, source: 'provider',
+        player_id: id, league_id: lid!, season, team_id: s.team.id!, source: 'provider',
         apps, starts: int(s.games?.lineups) ?? 0, lineups: int(s.games?.lineups), minutes, goals: int(s.goals?.total) ?? 0, assists: int(s.goals?.assists) ?? 0,
         sub_in: int(s.substitutes?.in), sub_out: int(s.substitutes?.out), bench: int(s.substitutes?.bench), captain: s.games?.captain ?? null,
         number: int(s.games?.number), position: str(s.games?.position), rating: num(s.games?.rating) ? Math.round(num(s.games?.rating)! * 100) / 100 : null,

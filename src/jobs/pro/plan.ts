@@ -108,7 +108,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
   }
   for (const team of usClubs) {
     add('squad', team, active.has(team) ? 12 : 17, activePro.has(team) ? 3 : active.has(team) ? 30 : 90);
-    add('transfers', team, 17, activePro.has(team) ? 7 : 60);
+    add('transfers', team, active.has(team) ? 12 : 17, activePro.has(team) ? 7 : 60);
     add('coach', team, 17, activePro.has(team) ? 30 : 90);
   }
   for (const p of input.usPlayers ?? []) { add('sidelined', p, 18, 60); add('trophies', p, 18, 90); }
