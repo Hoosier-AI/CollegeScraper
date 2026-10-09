@@ -150,17 +150,17 @@ export default function ProTeam() {
           {sum && (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
               <StatTile label="Matches" value={sum.p} sub={`${sum.w}-${sum.d}-${sum.l}`} />
-              <StatTile label="Scored a match" value={(sum.gf / sum.p).toFixed(2)} sub={`${sum.gf} goals`} accent />
-              <StatTile label="Conceded a match" value={(sum.ga / sum.p).toFixed(2)} sub={`${sum.ga} goals`} />
+              <StatTile label="Goals for" value={(sum.gf / sum.p).toFixed(2)} sub={`a match · ${sum.gf} in all`} accent />
+              <StatTile label="Goals against" value={(sum.ga / sum.p).toFixed(2)} sub={`a match · ${sum.ga} in all`} />
               <StatTile label="Clean sheets" value={sum.cs} sub={`${Math.round((sum.cs / sum.p) * 100)}% of matches`} />
-              <StatTile label="Shots a match" value={sum.shots != null ? (sum.shots / sum.statP).toFixed(1) : '–'} sub={sum.shotsOn != null ? `${(sum.shotsOn / sum.statP).toFixed(1)} on target` : 'from match detail'} />
+              <StatTile label="Shots" value={sum.shots != null ? (sum.shots / sum.statP).toFixed(1) : '–'} sub={sum.shotsOn != null ? `a match · ${(sum.shotsOn / sum.statP).toFixed(1)} on target` : 'from match detail'} />
               <StatTile label="Possession" value={sum.poss != null ? `${Math.round(sum.poss)}%` : '–'} sub="average" />
-              <StatTile label="Corners a match" value={sum.corners != null ? (sum.corners / sum.statP).toFixed(1) : '–'} />
+              <StatTile label="Corners" value={sum.corners != null ? (sum.corners / sum.statP).toFixed(1) : '–'} sub="a match" />
               <StatTile label="Cards" value={sum.yellow != null ? `${sum.yellow} / ${sum.red ?? 0}` : '–'} sub="yellow / red" />
             </div>
           )}
           {formItems.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid items-start gap-4 lg:grid-cols-2">
               <ResultStrip items={formItems.slice(-15)} caption={`Last ${Math.min(15, formItems.length)} results`} />
               <PointsLine results={formItems.map((f) => f.result)} caption={`Points over the ${d.season} season, every competition`} />
             </div>

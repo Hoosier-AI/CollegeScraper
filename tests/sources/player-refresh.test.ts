@@ -42,3 +42,18 @@ describe('clubs fetched on view', () => {
     expect(await teamRefreshDue({} as never, -5)).toBe(false);
   });
 });
+
+import { cleanMoves } from '../../src/pro/queries.js';
+describe('club transfer lists', () => {
+  it('drops moves to the same club, placeholder clubs named after the player and repeats', () => {
+    const m = (o: Record<string, unknown>) => ({ player_id: 1, date: '2026-01-05', from_team_id: 1595, to_team_id: 9000, from_name: 'Seattle Sounders', to_name: 'Austin', ...o });
+    const names = new Map([[1, { display_name: 'P. Kingston', first_name: 'Paul', last_name: 'Kingston' }]]);
+    const rows = [
+      m({}), m({}),
+      m({ to_team_id: 1595, to_name: 'Seattle Sounders' }),
+      m({ to_team_id: 77001, to_name: 'Kingston Paul' }),
+      m({ date: '2026-02-01', from_team_id: 9000, to_team_id: 1595, from_name: 'Austin', to_name: 'Seattle Sounders' }),
+    ];
+    expect(cleanMoves(rows, names).map((r) => `${r.date} ${r.from_name}>${r.to_name}`)).toEqual(['2026-01-05 Seattle Sounders>Austin', '2026-02-01 Austin>Seattle Sounders']);
+  });
+});

@@ -151,6 +151,19 @@ export function isSelfNamed(club: string | null | undefined, p: { display_name?:
   return c.every((w) => own.has(w));
 }
 
+/** Drops the provider's noise from a list of moves: a club to itself, a placeholder club named after the player, and the
+ *  same move listed twice. names: the player rows by id (display, first and last names). */
+export function cleanMoves<T extends { player_id: number; date: string | null; player_name?: string | null; from_team_id: number | null; to_team_id: number | null; from_name: string | null; to_name: string | null }>(rows: T[], names: Map<number, any>): T[] {
+  const seen = new Set<string>();
+  return rows.filter((m) => {
+    if (m.from_team_id != null && m.from_team_id === m.to_team_id) return false;
+    const p = names.get(m.player_id) ?? { display_name: m.player_name };
+    if (isSelfNamed(m.from_name, p) || isSelfNamed(m.to_name, p)) return false;
+    const k = `${m.player_id}|${m.date}|${m.from_team_id}|${m.to_team_id}`;
+    return !seen.has(k) && !!seen.add(k);
+  });
+}
+
 export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
   const uniq = [...new Set(ids.filter((n) => Number.isFinite(n)))];
   if (!uniq.length) return new Map();
@@ -225,7 +238,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
     // The current squad (players/squads), only shown for the latest season.
     s === seasons[0] || s == null ? selectAll<any>(db, 'pro_squads', 'player_id,number,position,player:pro_players(id,display_name,slug,photo,position,nationality,birth_date)', (q) => q.eq('team_id', tm.id)) : Promise.resolve([] as any[]),
     selectAll<any>(db, 'pro_coach_career', 'start,end,coach:pro_coaches(id,display_name,photo,nationality,birth_date)', (q) => q.eq('team_id', tm.id).order('start', { ascending: false })),
-    db.from('pro_transfers').select('player_id,date,type,player_name,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').or(`to_team_id.eq.${tm.id},from_team_id.eq.${tm.id}`).lte('date', today).order('date', { ascending: false }).limit(60),
+    db.from('pro_transfers').select('player_id,date,type,player_name,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').or(`to_team_id.eq.${tm.id},from_team_id.eq.${tm.id}`).lte('date', today).order('date', { ascending: false }).limit(120),
     db.from('pro_injuries').select('player_id,type,reason,date').eq('team_id', tm.id).gte('date', new Date(Date.now() - 10 * 86400_000).toISOString().slice(0, 10)).order('date', { ascending: false }).limit(60),
     tm.venue_id ? db.from('pro_venues').select('name,address,city,capacity,surface,image').eq('id', tm.venue_id).maybeSingle() : Promise.resolve({ data: null }),
     // The provider's season stats per competition (teams/statistics): formations, biggest results, streaks ...
@@ -288,7 +301,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
   };
   const hurtIds = [...new Set(((hurt.data ?? []) as any[]).map((h) => h.player_id))];
   const moveIds = [...new Set(((moves.data ?? []) as any[]).map((m) => m.player_id))];
-  const people = new Map((hurtIds.length + moveIds.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,slug', (q) => q.in('id', [...hurtIds, ...moveIds])) : []).map((p) => [p.id, p]));
+  const people = new Map((hurtIds.length + moveIds.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,first_name,last_name,slug', (q) => q.in('id', [...hurtIds, ...moveIds])) : []).map((p) => [p.id, p]));
   const hurtPlayers = people;
   const clubSlugs = await teamsById(db, ((moves.data ?? []) as any[]).flatMap((m) => [m.from_team_id, m.to_team_id]).filter((x) => x > 0));
   const coachSeen = new Set<number>();
@@ -304,7 +317,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
     squad: [...squad.values()].map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
     coaches: coachRows.filter((c) => c.coach && !coachSeen.has(c.coach.id) && coachSeen.add(c.coach.id)).slice(0, 8)
       .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: !c.end, ...honoursOf(c.coach.id) })),
-    transfers: ((moves.data ?? []) as any[]).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out',
+    transfers: cleanMoves((moves.data ?? []) as any[], people).slice(0, 80).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out',
       player: { name: people.get(t.player_id)?.display_name ?? t.player_name ?? 'Unknown', slug: people.get(t.player_id)?.slug ?? null },
       from_slug: clubSlugs.get(t.from_team_id)?.slug ?? null, to_slug: clubSlugs.get(t.to_team_id)?.slug ?? null })),
     injuries: ((hurt.data ?? []) as any[]).filter((h, i, all) => all.findIndex((x) => x.player_id === h.player_id) === i)
@@ -386,7 +399,7 @@ export async function player(db: Db, slug: string) {
       .sort((a, b) => b.season - a.season || (a.team?.national ? 1 : 0) - (b.team?.national ? 1 : 0) || (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     percentiles: ranked ? { league: lgs.get(ranked.league_id) ?? null, season: ranked.season, rows: percentiles } : null,
     // The provider sometimes lists a "club" named after the player himself: not a move.
-    transfers: ((moves.data ?? []) as any[]).filter((m) => !isSelfNamed(m.from_name, pl) && !isSelfNamed(m.to_name, pl))
+    transfers: ((moves.data ?? []) as any[]).filter((m) => !(m.from_team_id != null && m.from_team_id === m.to_team_id) && !isSelfNamed(m.from_name, pl) && !isSelfNamed(m.to_name, pl))
       .map((m) => ({ ...m, from_slug: moveClubs.get(m.from_team_id)?.slug ?? null, to_slug: moveClubs.get(m.to_team_id)?.slug ?? null })),
     trophies: ((trophies.data ?? []) as any[]).sort((a, b) => String(b.season).localeCompare(String(a.season))),
     injury: injury ? { type: injury.type, reason: injury.reason, date: injury.date } : null,
@@ -529,9 +542,10 @@ export async function transfersFeed(db: Db, o: { limit?: number; offset?: number
   if (o.team) q = q.or(`to_team_id.eq.${o.team},from_team_id.eq.${o.team}`);
   const { data, error } = await q.order('date', { ascending: false }).range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
-  const rows = (data ?? []) as any[];
+  let rows = (data ?? []) as any[];
   const ids = [...new Set(rows.map((r) => r.player_id))];
-  const ppl = new Map((ids.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,slug,photo,nationality,position', (q2) => q2.in('id', ids)) : []).map((p) => [p.id, p]));
+  const ppl = new Map((ids.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,first_name,last_name,slug,photo,nationality,position', (q2) => q2.in('id', ids)) : []).map((p) => [p.id, p]));
+  rows = cleanMoves(rows, ppl);
   const teamSlugs = new Map((await teamsById(db, rows.flatMap((r) => [r.from_team_id, r.to_team_id]).filter((x) => x > 0))).entries());
   return rows.map((r) => {
     const p = ppl.get(r.player_id);
