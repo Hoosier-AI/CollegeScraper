@@ -122,9 +122,7 @@ export function registerProApi(app: FastifyInstance): void {
     const kinds = byKind(progress).sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
     const left = kinds.reduce((n, k) => n + k.calls_left, 0);
     const tasks = kinds.reduce((n, k) => n + k.tasks, 0), done = kinds.reduce((n, k) => n + k.done, 0);
-    // By the end of the UTC day the crawl may spend down to its lowest floor (see ApiFootball.floor).
-    const lowestFloor = cfg.PRO_EVERYDAY_PER_HOUR ? Math.min(cfg.PRO_BACKFILL_RESERVE, cfg.PRO_RESERVE + 300) : cfg.PRO_BACKFILL_RESERVE;
-    const budget = Math.max(0, (quota?.limit ?? 7500) - lowestFloor);
+    const budget = Math.max(0, (quota?.limit ?? 7500) - cfg.PRO_BACKFILL_RESERVE);
     const lastRuns: Record<string, unknown> = {};
     for (const r of last) if (!lastRuns[r.job] && r.status !== 'queued') lastRuns[r.job] = r;
     const entry = (job: string) => sched.entries.find((e: { job: string }) => e.job === job) as { enabled: boolean; last_fired: string | null; next: string | null } | undefined;

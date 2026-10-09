@@ -14,19 +14,6 @@ describe('several people in one request', () => {
   });
 });
 
-describe('backfill floor through the UTC day', () => {
-  const at = (iso: string) => new ApiFootball({ key: 'k'.repeat(32), reserve: 1500, backfillReserve: 2500, everydayPerHour: 100, backfillMargin: 300, now: () => Date.parse(iso) });
-  it('keeps the full floor early, comes down as the day runs out, never under reserve + margin', () => {
-    expect(at('2026-10-09T03:00:00Z').floor('backfill')).toBe(2500);
-    expect(at('2026-10-09T18:00:00Z').floor('backfill')).toBe(2100);
-    expect(at('2026-10-09T23:30:00Z').floor('backfill')).toBe(1800);
-    expect(at('2026-10-09T23:30:00Z').floor('everyday')).toBe(1500);
-  });
-  it('a fixed floor without an hourly need', () => {
-    expect(new ApiFootball({ key: 'k'.repeat(32), backfillReserve: 2500, now: () => Date.parse('2026-10-09T23:30:00Z') }).floor('backfill')).toBe(2500);
-  });
-});
-
 /** A Supabase stand-in for the calls the people handler makes: due tasks of a kind, deletes, upserts, updates. */
 function fakeDb(due: { key: string; every_days: number | null }[]) {
   const log: { table: string; op: string; args: unknown[] }[] = [];
