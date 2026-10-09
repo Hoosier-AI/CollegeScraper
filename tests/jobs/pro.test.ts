@@ -7,7 +7,7 @@ import { SCHEDULE, clockAt } from '../../src/jobs/scheduler.js';
 import { LIVE_DEFAULTS } from '../../src/ops/settings.js';
 import { JOB_META, PRO_LANE_JOBS } from '../../src/jobs/catalogue.js';
 
-const L = (id: number, priority: number, current = 2026, enabled = true): [number, LeagueInfo] => [id, { id, gender: 'm', enabled, priority, type: 'league', current_season: current }];
+const L = (id: number, priority: number, current = 2026, enabled = true): [number, LeagueInfo] => [id, { id, gender: 'm', enabled, priority, type: 'league', current_season: current, country: null, kind: 'pro' }];
 
 describe('pro backfill order', () => {
   const leagues = new Map([L(253, 1), L(39, 20), L(183, 500), L(256, 900, 2026, false)]);

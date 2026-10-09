@@ -178,7 +178,10 @@ export class ApiFootball {
         else if (/rate/i.test(err)) { await this.o.sleep(60_000); continue; }
         throw new ApiFootballError(200, `API-Football: ${err}`);
       }
-      return { response: Array.isArray(body.response) ? body.response : [], results: Number(body.results) || 0, paging: body.paging ?? { current: 1, total: 1 }, errors: null };
+      // A few endpoints (teams/statistics) answer with one object: it comes back as a list of one.
+      const one = body.response as unknown;
+      const list = Array.isArray(one) ? one : one && typeof one === 'object' ? [one as T] : [];
+      return { response: list, results: Number(body.results) || 0, paging: body.paging ?? { current: 1, total: 1 }, errors: null };
     }
     const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
     this.quota.lastError = msg;

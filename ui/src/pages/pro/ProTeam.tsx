@@ -1,5 +1,6 @@
 // One club: record and table places, the current squad by position (number, age, nationality, season numbers), coach,
-// injuries, goals by 15-minute period, home/away splits, transfers in and out, results and fixtures.
+// injuries, ground, goals by 15-minute period, home/away splits, the provider's season stats (formations, biggest
+// results, streaks, clean sheets, penalties, cards by minute), transfers in and out, results and fixtures.
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Ambulance } from 'lucide-react';
@@ -11,20 +12,23 @@ import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ProForm } from '../../components/pro/LeagueTable';
 import { Flag, GoalsByPeriod, TransfersList, type TransferLine } from '../../components/pro/People';
 import { EmptyState, ErrorBox, Figure, PageHeader, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
+import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
 import { ProMoved } from './ProMoved';
 
 interface SquadRow { player: { id: number; name: string; slug: string; photo: string | null; position: string | null; nationality: string | null; birth_date: string | null }; number: number | null; listed: boolean; apps: number; starts: number; minutes: number; goals: number; assists: number; yellow: number; red: number; saves: number | null; conceded: number | null; clean_sheets: number | null; rating: number | null }
 interface Split { played: number; w: number; d: number; l: number; gf: number; ga: number }
 interface TeamData {
-  team: ProTeamRef & { founded: number | null; national: boolean; venue: { name: string; city: string | null; capacity: number | null } | null };
+  team: ProTeamRef & { founded: number | null; national: boolean; venue: Ground | null };
   season: number | null; seasons: number[];
   competitions: { league: (ProLeagueRef & { priority: number }) | null; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; possession: number | null }[];
   standings: { league: ProLeagueRef | null; group: string; rank: number | null; points: number | null; played: number | null; form: string | null }[];
   squad: SquadRow[];
-  coaches: { id: number; name: string; photo: string | null; nationality: string | null; birth_date: string | null; start: string | null; end: string | null; current: boolean }[];
+  coaches: { id: number; name: string; photo: string | null; nationality: string | null; birth_date: string | null; start: string | null; end: string | null; current: boolean; trophies?: number }[];
   transfers: TransferLine[];
   injuries: { player: { name: string; slug: string } | null; type: string | null; reason: string | null; date: string | null }[];
   goals_by_period: { period: string; for: number; against: number }[];
+  goals_by_period_source?: 'provider' | 'events';
+  season_detail?: ClubSeasonRow[];
   splits: { home: Split; away: Split };
   results: ProMatch[]; fixtures: ProMatch[];
 }
@@ -90,11 +94,12 @@ export default function ProTeam() {
             {!d.squad.length && <EmptyState title="No squad yet" body="The squad arrives as the crawl reaches this club." />}
           </div>
           <div className="space-y-5 lg:col-span-4">
+            {t.venue && <Section title="Ground"><GroundCard ground={t.venue} /></Section>}
             {d.coaches.length > 0 && (
               <Section title="Coaches">
                 <ul className="frame divide-y divide-field-700 text-sm">
                   {d.coaches.map((c) => (
-                    <li key={c.id} className="flex items-center gap-2 px-3 py-2"><PlayerAvatar src={c.photo} name={c.name} size={28} /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-chalk-100">{c.name} <Flag country={c.nationality} size={10} /></span><span className="text-2xs text-chalk-500">{c.start ? fmt.date(c.start) : '?'} – {c.end ? fmt.date(c.end) : 'now'}</span></span>{c.current && <span className="rounded bg-pitch-400/15 px-1.5 text-2xs text-pitch-300">current</span>}</li>
+                    <li key={c.id} className="flex items-center gap-2 px-3 py-2"><PlayerAvatar src={c.photo} name={c.name} size={28} /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-chalk-100">{c.name} <Flag country={c.nationality} size={10} /></span><span className="text-2xs text-chalk-500">{c.start ? fmt.date(c.start) : '?'} – {c.end ? fmt.date(c.end) : 'now'}{c.trophies ? ` · ${c.trophies} ${c.trophies === 1 ? 'trophy' : 'trophies'}` : ''}</span></span>{c.current && <span className="rounded bg-pitch-400/15 px-1.5 text-2xs text-pitch-300">current</span>}</li>
                   ))}
                 </ul>
               </Section>
@@ -111,6 +116,7 @@ export default function ProTeam() {
       )}
       {tab === 'stats' && (
         <div className="grid gap-5 lg:grid-cols-2">
+          {(d.season_detail?.length ?? 0) > 0 && <div className="lg:col-span-2"><Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section></div>}
           <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
           <Section title="Home and away">
             <div className="frame overflow-x-auto"><table className="w-full text-sm"><caption className="sr-only">Home and away record</caption>

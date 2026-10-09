@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { fixture } from '../helpers/fakeFetcher.js';
-import { parseCoaches, parseCountries, parseCountryTeams, parseInjuries, parseLeaguePlayers, parseProfilesPage, parseSquad, parseTransfers, parseTrophies } from '../../src/sources/apiFootball/parse.js';
+import { parseCoaches, parseCountries, parseCountryTeams, parseFixtureDetail, parseInjuries, parseLeaguePlayers, parseProfilesPage, parseSidelined, parseSquad, parseTeamStatistics, parseTransfers, parseTrophies, parseVenues } from '../../src/sources/apiFootball/parse.js';
 
 const load = (f: string) => JSON.parse(fixture(`apiFootball/${f}`));
 
@@ -13,7 +13,7 @@ describe('v2 parsers (recorded answers)', () => {
   it('every club in a country, women\'s sides by their trailing W', () => {
     const rows = parseCountryTeams(load('teams-country.json').response);
     expect(rows.length).toBe(30);
-    expect(rows.find((r) => r.id === 1595)).toMatchObject({ display_name: 'Seattle Sounders', gender: 'm', venue_name: 'Lumen Field', venue_capacity: 72000, founded: 2007 });
+    expect(rows.find((r) => r.id === 1595)).toMatchObject({ display_name: 'Seattle Sounders', gender: 'm', venue_id: 11534, venue_name: 'Lumen Field', venue_capacity: 72000, founded: 2007 });
     expect(parseCountryTeams([{ team: { id: 1, name: 'Seattle Reign W' } }])[0]).toMatchObject({ display_name: 'Seattle Reign', gender: 'w' });
   });
   it('a page of 250 profiles', () => {
@@ -55,5 +55,53 @@ describe('v2 parsers (recorded answers)', () => {
     const inj = parseInjuries([{ player: { id: 5, name: 'A', type: 'Missing Fixture', reason: 'Knee Injury' }, team: { id: 42 }, fixture: { id: 99, timestamp: 1791072000 }, league: { id: 39, season: 2026 } },
       { player: { id: 5, name: 'A', type: 'Missing Fixture', reason: 'Knee Injury' }, team: { id: 42 }, fixture: { id: 99, timestamp: 1791072000 }, league: { id: 39, season: 2026 } }]);
     expect(inj).toEqual([{ league_id: 39, season: 2026, player_id: 5, fixture_id: 99, team_id: 42, type: 'Missing Fixture', reason: 'Knee Injury', date: '2026-10-04' }]);
+  });
+});
+
+describe('v3 parsers: every stat the provider has (recorded answers)', () => {
+  it('a club season: record, goals by window, biggest, clean sheets, penalties, formations, cards', () => {
+    const r = parseTeamStatistics(load('teamstats.json').response, 1595, 253, 2025, '2026-10-09T00:00:00Z')!;
+    expect(r).toMatchObject({ team_id: 1595, league_id: 253, season: 2025 });
+    expect(r.form).toHaveLength(37);
+    expect(r.fixtures!.wins).toEqual({ home: 11, away: 5, total: 16 });
+    expect(r.goals!.for.total).toEqual({ home: 42, away: 23, total: 65 });
+    expect(r.goals!.for.average.total).toBe(1.8);
+    expect(r.goals!.for.minute['46-60']).toBe(16);
+    expect(r.goals!.for.minute['91-105']).toBeNull();
+    expect(r.goals!.against.under_over['2.5']).toEqual({ over: 7, under: 30 });
+    expect(r.biggest).toMatchObject({ streak: { wins: 3, draws: 2, loses: 2 }, wins: { home: '5-2', away: '0-4' } });
+    expect(r.clean_sheet).toEqual({ home: 7, away: 2, total: 9 });
+    expect(r.failed_to_score!.away).toBe(7);
+    expect(r.penalty).toEqual({ scored: 4, missed: 0, total: 4 });
+    expect(r.lineups[0]).toEqual({ formation: '4-2-3-1', played: 25 });
+    expect(r.lineups).toHaveLength(6);
+    expect(r.cards!.red!['91-105']).toBe(3);
+  });
+  it('a club season with nothing in it is no row', () => {
+    expect(parseTeamStatistics(undefined, 1, 2, 3)).toBeNull();
+    expect(parseTeamStatistics({ fixtures: { played: { home: 0, away: 0, total: 0 } } }, 1, 2, 3)).toBeNull();
+  });
+  it('grounds, from venues?country= and from a club answer', () => {
+    const rows = parseVenues(load('venues.json').response);
+    expect(rows).toHaveLength(25);
+    expect(rows[0]).toMatchObject({ id: 11534, name: 'Lumen Field', city: 'Seattle, Washington', country: 'USA', capacity: 72000, surface: 'artificial turf' });
+    expect(parseVenues([{ id: 0, name: 'Nowhere' }, { id: 5, name: null }, { id: 6, name: 'Field', capacity: 0 }])).toEqual([expect.objectContaining({ id: 6, capacity: null })]);
+  });
+  it('injury history: one row per spell, the current one open', () => {
+    const rows = parseSidelined(load('sidelined.json').response, 276);
+    expect(rows.length).toBeGreaterThan(20);
+    expect(rows[0]).toMatchObject({ player_id: 276, type: 'Thigh Injury', start: '2025-09-19', end: null });
+    expect(rows[1]).toMatchObject({ start: '2025-04-18', end: '2025-05-22' });
+    expect(parseSidelined([{ type: 'X', start: null }, { type: 'Y', start: '2024-01-01' }, { type: 'Y', start: '2024-01-01' }], 1)).toHaveLength(1);
+  });
+  it('match lines keep dribbled past and penalties won and committed; team stats keep every other type', () => {
+    const it0 = load('fixtures-ids.json').response.find((i: { fixture: { id: number } }) => i.fixture.id === 1508568);
+    const line = it0.players[0].players[0];
+    line.statistics[0].dribbles.past = 3; line.statistics[0].penalty.won = 1; line.statistics[0].penalty.commited = 0;
+    const d = parseFixtureDetail(it0, 'w');
+    expect(d.players.find((p) => p.player_id === line.player.id)).toMatchObject({ dribbled_past: 3, pen_won: 1, pen_committed: 0 });
+    const t = d.teamStats[0]!;
+    expect(t.extra).toHaveProperty('free_kicks');
+    expect(t.extra).not.toHaveProperty('ball_possession');
   });
 });

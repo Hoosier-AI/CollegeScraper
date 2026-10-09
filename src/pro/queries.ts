@@ -185,7 +185,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const s = season ?? seasons[0] ?? null;
   const games = s == null ? [] : (await selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => q.or(`home_team_id.eq.${tm.id},away_team_id.eq.${tm.id}`).eq('season', s).order('kickoff'))).map(toMatchRow);
   const today = new Date().toISOString().slice(0, 10);
-  const [squadRows, totals, standingRows, listed, coachRows, moves, hurt] = await Promise.all([
+  const [squadRows, totals, standingRows, listed, coachRows, moves, hurt, ground, detailRows] = await Promise.all([
     s == null ? [] : selectAll<any>(db, 'pro_player_season_stats', 'player_id,league_id,apps,starts,minutes,goals,assists,yellow,red,saves,conceded,clean_sheets,rating,position,number,player:pro_players(id,display_name,slug,photo,position,nationality,birth_date)', (q) => q.eq('team_id', tm.id).eq('season', s)),
     s == null ? [] : selectAll<any>(db, 'pro_team_season_stats', '*', (q) => q.eq('team_id', tm.id).eq('season', s)),
     s == null ? [] : selectAll<any>(db, 'pro_standings', 'league_id,group_name,rank,points,played,win,draw,lose,gf,ga,gd,form', (q) => q.eq('team_id', tm.id).eq('season', s)),
@@ -194,8 +194,11 @@ export async function team(db: Db, slug: string, season?: number | null) {
     selectAll<any>(db, 'pro_coach_career', 'start,end,coach:pro_coaches(id,display_name,photo,nationality,birth_date)', (q) => q.eq('team_id', tm.id).order('start', { ascending: false })),
     db.from('pro_transfers').select('player_id,date,type,player_name,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').or(`to_team_id.eq.${tm.id},from_team_id.eq.${tm.id}`).lte('date', today).order('date', { ascending: false }).limit(60),
     db.from('pro_injuries').select('player_id,type,reason,date').eq('team_id', tm.id).gte('date', new Date(Date.now() - 10 * 86400_000).toISOString().slice(0, 10)).order('date', { ascending: false }).limit(60),
+    tm.venue_id ? db.from('pro_venues').select('name,address,city,capacity,surface,image').eq('id', tm.venue_id).maybeSingle() : Promise.resolve({ data: null }),
+    // The provider's season stats per competition (teams/statistics): formations, biggest results, streaks ...
+    s == null ? [] : selectAll<any>(db, 'pro_team_season_detail', '*', (q) => q.eq('team_id', tm.id).eq('season', s)),
   ]);
-  const lgs = await leaguesById(db, [...totals.map((x) => x.league_id), ...games.map((g) => g.league.id), ...standingRows.map((x) => x.league_id)]);
+  const lgs = await leaguesById(db, [...totals.map((x) => x.league_id), ...games.map((g) => g.league.id), ...standingRows.map((x) => x.league_id), ...detailRows.map((x) => x.league_id)]);
   // One squad line per player: the listed squad first, plus anyone who played for the club this season.
   const squad = new Map<number, any>();
   const blank = (pl: any, number: number | null, pos: string | null) => ({ player: { id: pl?.id, name: pl?.display_name, slug: pl?.slug, photo: pl?.photo ?? null, position: pos ?? pl?.position ?? null, nationality: pl?.nationality ?? null, birth_date: pl?.birth_date ?? null }, number, listed: false, apps: 0, starts: 0, minutes: 0, goals: 0, assists: 0, yellow: 0, red: 0, saves: null as number | null, conceded: null as number | null, clean_sheets: null as number | null, rating: null as number | null, _rw: 0 });
@@ -229,6 +232,22 @@ export async function team(db: Db, slug: string, season?: number | null) {
       if (ours) byPeriod[i]!.for += 1; else byPeriod[i]!.against += 1;
     }
   }
+  // The provider's goals by minute, when it has them, replace ours (it counts every competition's matches, ours only
+  // those with stored events).
+  if (detailRows.length) {
+    const PROVIDER: Record<string, number> = { '0-15': 0, '16-30': 1, '31-45': 2, '46-60': 3, '61-75': 4, '76-90': 5, '91-105': 6, '106-120': 6 };
+    for (const r of byPeriod) { r.for = 0; r.against = 0; }
+    for (const d of detailRows) for (const side of ['for', 'against'] as const) {
+      for (const [k, n] of Object.entries((d.goals?.[side]?.minute ?? {}) as Record<string, number | null>)) {
+        const i = PROVIDER[k];
+        if (i != null && n) byPeriod[i]![side] += n;
+      }
+    }
+    byPeriod[6]!.period = '90+';
+  }
+  const coachIds = [...new Set(coachRows.map((c) => c.coach?.id).filter(Boolean))].slice(0, 12) as number[];
+  const coachHonours = coachIds.length ? await selectAll<{ subject_id: number; place: string }>(db, 'pro_trophies', 'subject_id,place', (q) => q.eq('subject', 'coach').in('subject_id', coachIds)) : [];
+  const honoursOf = (id: number) => { const all = coachHonours.filter((h) => h.subject_id === id); return { trophies: all.filter((h) => /winner/i.test(h.place)).length, finals: all.length }; };
   const split = (home: boolean) => {
     const g = finals.filter((x) => (x.home.id === tm.id) === home);
     const us = (x: ProMatchRow) => (home ? x.home.score : x.away.score) ?? 0, them = (x: ProMatchRow) => (home ? x.away.score : x.home.score) ?? 0;
@@ -241,20 +260,25 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const clubSlugs = await teamsById(db, ((moves.data ?? []) as any[]).flatMap((m) => [m.from_team_id, m.to_team_id]).filter((x) => x > 0));
   const coachSeen = new Set<number>();
   return {
-    team: { ...teamRef(tm), founded: tm.founded, national: tm.national, venue: tm.venue_name ? { name: tm.venue_name, city: tm.venue_city, capacity: tm.venue_capacity } : null },
+    team: { ...teamRef(tm), founded: tm.founded, national: tm.national,
+      venue: ground.data ? { name: (ground.data as any).name, city: (ground.data as any).city, capacity: (ground.data as any).capacity, address: (ground.data as any).address ?? null, surface: (ground.data as any).surface ?? null, image: (ground.data as any).image ?? null }
+        : tm.venue_name ? { name: tm.venue_name, city: tm.venue_city, capacity: tm.venue_capacity, address: null, surface: null, image: null } : null },
     season: s, seasons,
     competitions: totals.map((x) => ({ league: lgs.get(x.league_id) ?? null, played: x.played, w: x.w, d: x.d, l: x.l, gf: x.gf, ga: x.ga, clean_sheets: x.clean_sheets, possession: x.possession == null ? null : Number(x.possession) }))
       .sort((a, b) => (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     standings: standingRows.map((x) => ({ league: lgs.get(x.league_id) ?? null, group: x.group_name, rank: x.rank, points: x.points, played: x.played, win: x.win, draw: x.draw, lose: x.lose, gf: x.gf, ga: x.ga, gd: x.gd, form: x.form })),
     squad: [...squad.values()].map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
     coaches: coachRows.filter((c) => c.coach && !coachSeen.has(c.coach.id) && coachSeen.add(c.coach.id)).slice(0, 8)
-      .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: !c.end })),
+      .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: !c.end, ...honoursOf(c.coach.id) })),
     transfers: ((moves.data ?? []) as any[]).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out',
       player: { name: people.get(t.player_id)?.display_name ?? t.player_name ?? 'Unknown', slug: people.get(t.player_id)?.slug ?? null },
       from_slug: clubSlugs.get(t.from_team_id)?.slug ?? null, to_slug: clubSlugs.get(t.to_team_id)?.slug ?? null })),
     injuries: ((hurt.data ?? []) as any[]).filter((h, i, all) => all.findIndex((x) => x.player_id === h.player_id) === i)
       .map((h) => ({ player: hurtPlayers.get(h.player_id) ? { name: hurtPlayers.get(h.player_id).display_name, slug: hurtPlayers.get(h.player_id).slug } : null, type: h.type, reason: h.reason, date: h.date })),
     goals_by_period: byPeriod,
+    goals_by_period_source: detailRows.length ? 'provider' : 'events',
+    season_detail: detailRows.map((x) => ({ league: lgs.get(x.league_id) ?? null, form: x.form, fixtures: x.fixtures, goals: x.goals, biggest: x.biggest, clean_sheet: x.clean_sheet, failed_to_score: x.failed_to_score, penalty: x.penalty, lineups: x.lineups ?? [], cards: x.cards }))
+      .sort((a, b) => (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     splits: { home: split(true), away: split(false) },
     results: games.filter((g) => g.status === 'final' || g.status === 'live').reverse(),
     fixtures: games.filter((g) => g.status === 'scheduled' && g.kickoff >= new Date().toISOString()),
@@ -270,14 +294,23 @@ export async function player(db: Db, slug: string) {
   if (!p) return null;
   const pl = p as any;
   const recentInjury = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
-  const [seasons, recent, links, moves, trophies, hurt] = await Promise.all([
+  const [seasons, recent, links, moves, trophies, hurt, spells, missed] = await Promise.all([
     selectAll<any>(db, 'pro_player_season_stats', '*', (q) => q.eq('player_id', pl.id).order('season', { ascending: false })),
     db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,pos,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
     db.from('pro_college_links').select('college_name,school_seo,college_player_id,first_season,last_season,confidence,verified,rejected,method,college:college_players(slug,display_name)').eq('pro_player_id', pl.id).eq('rejected', false),
     db.from('pro_transfers').select('date,type,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').eq('player_id', pl.id).order('date', { ascending: false }).limit(40),
     db.from('pro_trophies').select('league,country,season,place').eq('subject', 'player').eq('subject_id', pl.id).limit(200),
     db.from('pro_injuries').select('type,reason,date,team_id').eq('player_id', pl.id).gte('date', recentInjury).order('date', { ascending: false }).limit(1),
+    db.from('pro_sidelined').select('type,start,end').eq('player_id', pl.id).order('start', { ascending: false }).limit(80),
+    db.from('pro_injuries').select('date').eq('player_id', pl.id).eq('type', 'Missing Fixture').limit(1000),
   ]);
+  // Matches missed in a spell: the provider's per-fixture absences that fall inside it (known for covered leagues).
+  const missedDates = ((missed.data ?? []) as { date: string | null }[]).map((m) => m.date).filter(Boolean) as string[];
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const injuryHistory = ((spells.data ?? []) as { type: string; start: string; end: string | null }[]).map((x) => {
+    const n = missedDates.filter((d) => d >= x.start && d <= (x.end ?? todayIso)).length;
+    return { type: x.type, start: x.start, end: x.end, days: Math.max(1, Math.round((Date.parse(x.end ?? todayIso) - Date.parse(x.start)) / 86400_000)), matches_missed: n || null };
+  });
   const lgs = await leaguesById(db, seasons.map((s) => s.league_id));
   const teamIds = [...seasons.map((s) => s.team_id), ...(pl.current_team_id ? [pl.current_team_id] : [])];
   const teams = await teamsById(db, teamIds);
@@ -308,6 +341,7 @@ export async function player(db: Db, slug: string) {
     transfers: ((moves.data ?? []) as any[]).map((m) => ({ ...m, from_slug: moveClubs.get(m.from_team_id)?.slug ?? null, to_slug: moveClubs.get(m.to_team_id)?.slug ?? null })),
     trophies: ((trophies.data ?? []) as any[]).sort((a, b) => String(b.season).localeCompare(String(a.season))),
     injury: injury ? { type: injury.type, reason: injury.reason, date: injury.date } : null,
+    injury_history: injuryHistory,
     matches,
     college: shown.map((l) => ({ college_name: l.college_name, school_seo: l.school_seo, first_season: l.first_season, last_season: l.last_season, college_player_slug: l.college?.slug ?? null, verified: l.verified })),
   };

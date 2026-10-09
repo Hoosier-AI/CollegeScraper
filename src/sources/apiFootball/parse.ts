@@ -1,7 +1,7 @@
 // Pure: API-Football JSON -> rows for the pro_* tables (column names match migration 134). No I/O, so each shape is
 // tested against recorded answers in fixtures/apiFootball/.
 import { nameKey, stripDiacritics } from '../../normalize/names.js';
-import { leagueGender, leagueKind, leaguePriority, teamDisplayName, type Gender } from './leagues.js';
+import { isUsScene, leagueGender, leagueKind, leaguePriority, teamDisplayName, type Gender } from './leagues.js';
 
 // ---------- provider shapes (only the fields we read) ----------
 export interface AfCoverage { fixtures?: { events?: boolean; lineups?: boolean; statistics_fixtures?: boolean; statistics_players?: boolean }; standings?: boolean; players?: boolean; [k: string]: unknown }
@@ -34,22 +34,23 @@ export interface AfPlayerLine {
     goals?: { total?: number | null; conceded?: number | null; assists?: number | null; saves?: number | null };
     passes?: { total?: number | null; key?: number | null; accuracy?: string | number | null };
     tackles?: { total?: number | null; blocks?: number | null; interceptions?: number | null };
-    duels?: { total?: number | null; won?: number | null }; dribbles?: { attempts?: number | null; success?: number | null };
+    duels?: { total?: number | null; won?: number | null }; dribbles?: { attempts?: number | null; success?: number | null; past?: number | null };
     fouls?: { drawn?: number | null; committed?: number | null }; cards?: { yellow?: number | null; red?: number | null };
-    penalty?: { scored?: number | null; missed?: number | null; saved?: number | null };
+    penalty?: { won?: number | null; commited?: number | null; scored?: number | null; missed?: number | null; saved?: number | null };
   }[];
 }
 export interface AfStandingRow { rank: number; team: { id: number; name: string; logo?: string | null }; points: number; goalsDiff: number; group?: string | null; form?: string | null; description?: string | null; all: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } } }
 export interface AfStandingsItem { league: { id: number; season: number; standings: AfStandingRow[][] } }
 export interface AfProfile { player: { id: number; name: string; firstname?: string | null; lastname?: string | null; birth?: { date?: string | null; place?: string | null; country?: string | null }; nationality?: string | null; height?: string | null; weight?: string | null; position?: string | null; photo?: string | null } }
-export interface AfTeamItem { team: { id: number; name: string; code?: string | null; country?: string | null; founded?: number | null; national?: boolean; logo?: string | null }; venue?: { name?: string | null; city?: string | null; capacity?: number | null } }
+export interface AfVenue { id?: number | null; name?: string | null; address?: string | null; city?: string | null; country?: string | null; capacity?: number | null; surface?: string | null; image?: string | null }
+export interface AfTeamItem { team: { id: number; name: string; code?: string | null; country?: string | null; founded?: number | null; national?: boolean; logo?: string | null }; venue?: AfVenue }
 
 // ---------- rows ----------
 export type FixtureStatus = 'scheduled' | 'live' | 'final' | 'postponed' | 'cancelled' | 'abandoned';
 export interface LeagueRow { id: number; name: string; type: 'league' | 'cup'; country: string | null; country_code: string | null; country_flag: string | null; logo: string | null; gender: Gender; kind: ReturnType<typeof leagueKind>; priority: number; current_season: number | null; enabled: boolean }
 export interface SeasonRow { league_id: number; season: number; starts_on: string | null; ends_on: string | null; is_current: boolean; coverage: AfCoverage }
 export interface TeamRow { id: number; name: string; display_name: string; logo: string | null; gender: Gender | null }
-export interface TeamProfileRow extends TeamRow { code: string | null; country: string | null; founded: number | null; national: boolean; venue_name: string | null; venue_city: string | null; venue_capacity: number | null; profile_synced_at: string }
+export interface TeamProfileRow extends TeamRow { code: string | null; country: string | null; founded: number | null; national: boolean; venue_id: number | null; venue_name: string | null; venue_city: string | null; venue_capacity: number | null; profile_synced_at: string }
 export interface FixtureRow {
   id: number; league_id: number; season: number; round: string | null; kickoff: string; status: FixtureStatus; status_short: string;
   elapsed: number | null; elapsed_extra: number | null; home_team_id: number; away_team_id: number;
@@ -65,8 +66,11 @@ export interface FixturePlayerRow {
   passes: number | null; key_passes: number | null; pass_accuracy: number | null; tackles: number | null; blocks: number | null; interceptions: number | null;
   duels: number | null; duels_won: number | null; dribbles: number | null; dribbles_won: number | null; fouls_drawn: number | null; fouls_committed: number | null;
   yellow: number | null; red: number | null; offsides: number | null; pen_scored: number | null; pen_missed: number | null; pen_saved: number | null;
+  dribbled_past: number | null; pen_won: number | null; pen_committed: number | null;
 }
-export interface TeamStatsRow { fixture_id: number; team_id: number; possession: number | null; shots: number | null; shots_on: number | null; shots_off: number | null; shots_blocked: number | null; shots_inside: number | null; shots_outside: number | null; corners: number | null; offsides: number | null; fouls: number | null; yellow: number | null; red: number | null; saves: number | null; passes: number | null; passes_accurate: number | null; pass_pct: number | null; xg: number | null }
+export interface TeamStatsRow { fixture_id: number; team_id: number; possession: number | null; shots: number | null; shots_on: number | null; shots_off: number | null; shots_blocked: number | null; shots_inside: number | null; shots_outside: number | null; corners: number | null; offsides: number | null; fouls: number | null; yellow: number | null; red: number | null; saves: number | null; passes: number | null; passes_accurate: number | null; pass_pct: number | null; xg: number | null;
+  /** Every other stat type the provider sent (free kicks, goals prevented ...), by snake-cased name. */
+  extra: Record<string, number | string> | null }
 export interface PlayerStubRow { id: number; name: string; display_name: string; photo: string | null; gender: Gender | null }
 export interface PlayerProfileRow { id: number; name: string; display_name: string; first_name: string | null; last_name: string | null; name_key: string | null; birth_date: string | null; birth_place: string | null; birth_country: string | null; nationality: string | null; height_cm: number | null; weight_kg: number | null; position: string | null; photo: string | null; profile_synced_at: string }
 export interface StandingRow { league_id: number; season: number; group_name: string; team_id: number; rank: number | null; points: number | null; played: number | null; win: number | null; draw: number | null; lose: number | null; gf: number | null; ga: number | null; gd: number | null; form: string | null; description: string | null }
@@ -107,8 +111,9 @@ export function parseLeagues(items: AfLeagueItem[]): { leagues: LeagueRow[]; sea
     leagues.push({
       id, name, type, country: str(it.country?.name), country_code: str(it.country?.code), country_flag: str(it.country?.flag), logo: str(it.league.logo),
       gender: leagueGender(id, name), kind, priority: leaguePriority(id, type, kind), current_season: current?.year ?? null,
-      // Crawled when professional and still running (a current season the provider covers with fixtures).
-      enabled: kind === 'pro' && !!current,
+      // Crawled when professional and still running (a current season the provider covers with fixtures); the whole US
+      // scene is crawled whatever its level.
+      enabled: (kind === 'pro' || isUsScene(id, str(it.country?.name))) && !!current,
     });
     // The provider sometimes lists a season year twice for one league; keep one row (the current one if either is).
     const byYear = new Map<number, SeasonRow>();
@@ -201,6 +206,7 @@ export function parseFixtureDetail(it: AfFixtureItem, gender: Gender | null): Fi
         duels: int(st.duels?.total), duels_won: int(st.duels?.won), dribbles: int(st.dribbles?.attempts), dribbles_won: int(st.dribbles?.success),
         fouls_drawn: int(st.fouls?.drawn), fouls_committed: int(st.fouls?.committed), yellow: int(st.cards?.yellow), red: int(st.cards?.red),
         offsides: int(st.offsides), pen_scored: int(st.penalty?.scored), pen_missed: int(st.penalty?.missed), pen_saved: int(st.penalty?.saved),
+        dribbled_past: int(st.dribbles?.past), pen_won: int(st.penalty?.won), pen_committed: int(st.penalty?.commited),
       });
       if (id != null && !stubs.has(id)) stubs.set(id, { id, name, display_name: name, photo: str(line?.player.photo), gender });
     };
@@ -216,16 +222,25 @@ export function parseFixtureDetail(it: AfFixtureItem, gender: Gender | null): Fi
     if (!s.statistics?.length) continue;
     const v = new Map(s.statistics.map((x) => [x.type.toLowerCase(), x.value]));
     const g = (k: string) => int(v.get(k));
+    const extra: Record<string, number | string> = {};
+    for (const [k, val] of v) {
+      if (MAPPED_TEAM_STATS.has(k) || val == null || val === '') continue;
+      const n = num(val);
+      extra[k.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')] = n ?? String(val);
+    }
     teamStats.push({
       fixture_id, team_id: s.team.id, possession: num(v.get('ball possession')),
       shots: g('total shots'), shots_on: g('shots on goal'), shots_off: g('shots off goal'), shots_blocked: g('blocked shots'),
       shots_inside: g('shots insidebox'), shots_outside: g('shots outsidebox'), corners: g('corner kicks'), offsides: g('offsides'), fouls: g('fouls'),
       yellow: g('yellow cards'), red: g('red cards'), saves: g('goalkeeper saves'), passes: g('total passes'), passes_accurate: g('passes accurate'),
-      pass_pct: num(v.get('passes %')), xg: num(v.get('expected_goals')),
+      pass_pct: num(v.get('passes %')), xg: num(v.get('expected_goals')), extra: Object.keys(extra).length ? extra : null,
     });
   }
   return { events, lineups, players, teamStats, playerStubs: [...stubs.values()] };
 }
+
+const MAPPED_TEAM_STATS = new Set(['ball possession', 'total shots', 'shots on goal', 'shots off goal', 'blocked shots', 'shots insidebox', 'shots outsidebox',
+  'corner kicks', 'offsides', 'fouls', 'yellow cards', 'red cards', 'goalkeeper saves', 'total passes', 'passes accurate', 'passes %', 'expected_goals']);
 
 /** True when the answer carries any detail at all (some competitions have none: the score is all there is). */
 export const hasDetail = (d: FixtureDetail): boolean => d.events.length > 0 || d.players.length > 0 || d.teamStats.length > 0;
@@ -276,7 +291,7 @@ export function parseProfile(it: AfProfile, at = new Date().toISOString()): Play
 export function parseTeams(items: AfTeamItem[], gender: Gender | null, at = new Date().toISOString()): TeamProfileRow[] {
   return items.filter((t) => Number.isInteger(t.team?.id)).map((t) => ({
     id: t.team.id, name: t.team.name, display_name: teamDisplayName(t.team.name), logo: str(t.team.logo), gender,
-    code: str(t.team.code), country: str(t.team.country), founded: int(t.team.founded), national: !!t.team.national,
+    code: str(t.team.code), country: str(t.team.country), founded: int(t.team.founded), national: !!t.team.national, venue_id: realId(t.venue?.id),
     venue_name: str(t.venue?.name), venue_city: str(t.venue?.city), venue_capacity: int(t.venue?.capacity), profile_synced_at: at,
   }));
 }
@@ -441,6 +456,88 @@ export function parseInjuries(items: AfInjury[]): InjuryRow[] {
     const ts = i.fixture?.timestamp ? new Date(i.fixture.timestamp * 1000).toISOString().slice(0, 10) : isoDate(i.fixture?.date);
     const row: InjuryRow = { league_id: i.league.id, season: i.league.season, player_id: pid as number, fixture_id: i.fixture?.id ?? 0, team_id: i.team?.id ?? null, type: str(i.player.type), reason: str(i.player.reason), date: ts };
     out.set(`${row.player_id}|${row.fixture_id}`, row);
+  }
+  return [...out.values()];
+}
+
+// ---------- v3: club season stats, grounds, injury history ----------
+export type Split = { home: number | null; away: number | null; total: number | null };
+export type Minutes = Record<string, number | null>;
+export interface AfTeamStatistics {
+  league?: { id?: number; season?: number }; team?: { id?: number }; form?: string | null;
+  fixtures?: Record<string, { home?: number | null; away?: number | null; total?: number | null }>;
+  goals?: Record<'for' | 'against', { total?: Record<string, number | null>; average?: Record<string, string | number | null>; minute?: Record<string, { total?: number | null }>; under_over?: Record<string, { over?: number | null; under?: number | null }> }>;
+  biggest?: { streak?: Record<string, number | null>; wins?: Record<string, string | null>; loses?: Record<string, string | null>; goals?: Record<string, Record<string, number | null>> };
+  clean_sheet?: Record<string, number | null>; failed_to_score?: Record<string, number | null>;
+  penalty?: { scored?: { total?: number | null }; missed?: { total?: number | null }; total?: number | null };
+  lineups?: { formation?: string | null; played?: number | null }[];
+  cards?: Record<string, Record<string, { total?: number | null }>>;
+}
+export interface TeamSeasonDetailRow {
+  team_id: number; league_id: number; season: number; form: string | null;
+  fixtures: Record<string, Split> | null; goals: Record<'for' | 'against', { total: Split; average: Record<string, number | null>; minute: Minutes; under_over: Record<string, { over: number | null; under: number | null }> }> | null;
+  biggest: { streak: Record<string, number | null>; wins: Record<string, string | null>; loses: Record<string, string | null>; goals: Record<string, Record<string, number | null>> } | null;
+  clean_sheet: Split | null; failed_to_score: Split | null; penalty: { scored: number | null; missed: number | null; total: number | null } | null;
+  lineups: { formation: string; played: number }[]; cards: Record<string, Minutes> | null; updated_at: string;
+}
+export interface VenueRow { id: number; name: string; address: string | null; city: string | null; country: string | null; capacity: number | null; surface: string | null; image: string | null; updated_at: string }
+export interface SidelinedRow { player_id: number; start: string; type: string; end: string | null; updated_at: string }
+
+const split = (o: { home?: unknown; away?: unknown; total?: unknown } | null | undefined): Split | null =>
+  o ? { home: int(o.home), away: int(o.away), total: int(o.total) } : null;
+const minutes = (o: Record<string, { total?: number | null }> | null | undefined): Minutes => {
+  const out: Minutes = {};
+  for (const [k, v] of Object.entries(o ?? {})) out[k] = int(v?.total);
+  return out;
+};
+const mapValues = <A, B>(o: Record<string, A> | null | undefined, f: (a: A) => B): Record<string, B> => Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k, f(v)]));
+
+/**
+ * teams/statistics: one club's season in one competition. Null when the provider has nothing for it (an empty
+ * answer, or a club that played no match).
+ */
+export function parseTeamStatistics(r: AfTeamStatistics | null | undefined, team: number, league: number, season: number, at = new Date().toISOString()): TeamSeasonDetailRow | null {
+  if (!r || Array.isArray(r) || !r.fixtures) return null;
+  const played = int(r.fixtures.played?.total);
+  if (!played) return null;
+  const goals = r.goals ? Object.fromEntries((['for', 'against'] as const).map((side) => {
+    const g = r.goals![side] ?? {};
+    return [side, { total: split(g.total as never) ?? { home: null, away: null, total: null }, average: mapValues(g.average, (v) => num(v)), minute: minutes(g.minute), under_over: mapValues(g.under_over, (v) => ({ over: int(v?.over), under: int(v?.under) })) }];
+  })) as TeamSeasonDetailRow['goals'] : null;
+  const b = r.biggest;
+  return {
+    team_id: team, league_id: league, season, form: str(r.form),
+    fixtures: mapValues(r.fixtures, (v) => split(v)!),
+    goals,
+    biggest: b ? { streak: mapValues(b.streak, (v) => int(v)), wins: mapValues(b.wins, (v) => str(v)), loses: mapValues(b.loses, (v) => str(v)), goals: mapValues(b.goals, (side) => mapValues(side, (v) => int(v))) } : null,
+    clean_sheet: split(r.clean_sheet), failed_to_score: split(r.failed_to_score),
+    penalty: r.penalty ? { scored: int(r.penalty.scored?.total), missed: int(r.penalty.missed?.total), total: int(r.penalty.total) } : null,
+    lineups: (r.lineups ?? []).filter((l) => str(l.formation) && int(l.played)).map((l) => ({ formation: str(l.formation)!, played: int(l.played)! })),
+    cards: r.cards ? mapValues(r.cards, (m) => minutes(m)) : null,
+    updated_at: at,
+  };
+}
+
+export function parseVenue(v: AfVenue | null | undefined, at = new Date().toISOString()): VenueRow | null {
+  const id = realId(v?.id); const name = str(v?.name);
+  if (id == null || !name) return null;
+  return { id, name, address: str(v!.address), city: str(v!.city), country: str(v!.country), capacity: int(v!.capacity) || null, surface: str(v!.surface), image: str(v!.image), updated_at: at };
+}
+
+/** venues?country= and the grounds teams?country= carries: one row per ground. */
+export function parseVenues(items: AfVenue[], at = new Date().toISOString()): VenueRow[] {
+  const out = new Map<number, VenueRow>();
+  for (const v of items) { const row = parseVenue(v, at); if (row) out.set(row.id, row); }
+  return [...out.values()];
+}
+
+/** sidelined?player=: every spell out (injury, illness, suspension), with its dates. */
+export function parseSidelined(items: { type?: string | null; start?: string | null; end?: string | null }[], player: number, at = new Date().toISOString()): SidelinedRow[] {
+  const out = new Map<string, SidelinedRow>();
+  for (const i of items) {
+    const start = isoDate(i.start); const type = str(i.type);
+    if (!start || !type) continue;
+    out.set(`${start}|${type}`, { player_id: player, start, type, end: isoDate(i.end), updated_at: at });
   }
   return [...out.values()];
 }

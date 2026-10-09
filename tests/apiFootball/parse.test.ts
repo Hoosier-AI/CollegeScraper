@@ -49,10 +49,11 @@ describe('parseLeagues', () => {
     expect(mls).toMatchObject({ name: 'Major League Soccer', type: 'league', country: 'USA', gender: 'm', kind: 'pro', enabled: true, priority: 1 });
     expect(mls.current_season).toBe(2026);
   });
-  it('enables professional competitions only', () => {
+  it('enables professional competitions, and the whole US scene whatever its level', () => {
     const on = new Map(leagues.map((l) => [l.id, l.enabled]));
     expect(on.get(254)).toBe(true);
-    expect(on.get(256)).toBe(false); // USL League Two
+    expect(on.get(256)).toBe(true); // USL League Two: amateur, but American
+    expect(leagues.find((l) => l.id === 256)).toMatchObject({ kind: 'amateur', priority: 13 });
     expect(on.get(10)).toBe(false); // friendlies
     expect(on.get(14)).toBe(false); // youth
   });

@@ -88,6 +88,11 @@ describe('ApiFootball client', () => {
     expect(api.headroom()).toBe(Number.POSITIVE_INFINITY);
   });
 
+  it('an answer that is one object (teams/statistics) comes back as a list of one', async () => {
+    const f = fakeFetch([{ remaining: 7000, body: { response: { team: { id: 1 } }, results: 11, errors: [] } }]);
+    const api = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: f.impl, sleep: noSleep });
+    expect((await api.get('teams/statistics', { league: 253, season: 2025, team: 1 })).response).toEqual([{ team: { id: 1 } }]);
+  });
   it('an unset option (undefined) keeps its default', async () => {
     const f = fakeFetch([ok(7000)]);
     const api = new ApiFootball({ key: 'k'.repeat(32), base: undefined, reserve: undefined, fetchImpl: f.impl, sleep: noSleep });

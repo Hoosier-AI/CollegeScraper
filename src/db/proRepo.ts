@@ -1,13 +1,13 @@
 // Writes for the pro_* tables (migration 134). Upserts are keyed by the provider's ids, so re-running any step is safe.
 import { selectAll, upsertChunked, type Db } from './client.js';
-import type { CoachCareerRow, CoachRow, CountryRow, FixtureDetail, FixtureRow, InjuryRow, LeagueRow, PlayerProfileRow, PlayerStubRow, SeasonRow, SeasonStatRow, SquadRow, StandingRow, TeamProfileRow, TeamRow, TransferRow, TrophyRow } from '../sources/apiFootball/parse.js';
-import type { Gender } from '../sources/apiFootball/leagues.js';
+import type { CoachCareerRow, CoachRow, CountryRow, FixtureDetail, FixtureRow, InjuryRow, LeagueRow, PlayerProfileRow, PlayerStubRow, SeasonRow, SeasonStatRow, SidelinedRow, SquadRow, StandingRow, TeamProfileRow, TeamRow, TeamSeasonDetailRow, TransferRow, TrophyRow, VenueRow } from '../sources/apiFootball/parse.js';
+import type { Gender, LeagueKind } from '../sources/apiFootball/leagues.js';
 
-export interface LeagueInfo { id: number; gender: Gender; enabled: boolean; priority: number; type: 'league' | 'cup'; current_season: number | null }
+export interface LeagueInfo { id: number; gender: Gender; enabled: boolean; priority: number; type: 'league' | 'cup'; current_season: number | null; country: string | null; kind: LeagueKind }
 
 /** Every league the catalog knows, by id. */
 export async function leagueIndex(db: Db): Promise<Map<number, LeagueInfo>> {
-  const rows = await selectAll<LeagueInfo>(db, 'pro_leagues', 'id,gender,enabled,priority,type,current_season');
+  const rows = await selectAll<LeagueInfo>(db, 'pro_leagues', 'id,gender,enabled,priority,type,current_season,country,kind');
   return new Map(rows.map((r) => [r.id, r]));
 }
 
@@ -181,10 +181,37 @@ export async function replaceInjuries(db: Db, league: number, season: number, ro
   return rows.length ? upsertChunked(db, 'pro_injuries', asRows(rows), { onConflict: 'league_id,season,player_id,fixture_id' }) : 0;
 }
 
-/** tier: 0 everyone (clubs, profiles), 1 hand-picked competitions, 2 other leagues, 3 cups (progress views). */
+/** tier: 0 everyone (clubs, profiles), 1 US scene, 2 top competitions, 3 other leagues, 4 cups (progress views). */
 export interface TaskSeed { kind: string; key: string; priority: number; every_days: number | null; tier?: number }
 
-/** New tasks only: an existing task keeps its schedule and progress (its priority follows the tier, see plan.ts). */
+/**
+ * Adds missing tasks and gives existing ones their planned priority, refresh interval and tier. Only those columns
+ * are sent, so an existing task keeps its due date, page and counters (pro_reschedule_tasks then brings due dates in
+ * line with a changed interval).
+ */
 export async function insertTasks(db: Db, seeds: TaskSeed[]): Promise<number> {
-  return seeds.length ? upsertChunked(db, 'pro_crawl_tasks', asRows(seeds), { onConflict: 'kind,key', ignoreDuplicates: true, chunk: 1000 }) : 0;
+  const rows = seeds.map((s) => ({ kind: s.kind, key: s.key, priority: s.priority, every_days: s.every_days, tier: s.tier ?? 0 }));
+  return rows.length ? upsertChunked(db, 'pro_crawl_tasks', rows, { onConflict: 'kind,key', chunk: 1000 }) : 0;
+}
+
+export async function rescheduleTasks(db: Db): Promise<number> {
+  const { data, error } = await db.rpc('pro_reschedule_tasks');
+  if (error) throw new Error(`reschedule tasks: ${error.message}`);
+  return Number(data) || 0;
+}
+
+// ---------- v3: club season stats, grounds, injury history ----------
+export async function upsertTeamSeasonDetail(db: Db, rows: TeamSeasonDetailRow[]): Promise<number> {
+  return rows.length ? upsertChunked(db, 'pro_team_season_detail', asRows(rows), { onConflict: 'team_id,league_id,season' }) : 0;
+}
+
+export async function upsertVenues(db: Db, rows: VenueRow[], chunk = 250): Promise<number> {
+  return rows.length ? upsertChunked(db, 'pro_venues', asRows(rows), { onConflict: 'id', chunk }) : 0;
+}
+
+/** A player's spells out are replaced whole: the provider corrects dates and types. */
+export async function replaceSidelined(db: Db, playerId: number, rows: SidelinedRow[]): Promise<number> {
+  const { error } = await db.from('pro_sidelined').delete().eq('player_id', playerId);
+  if (error) throw new Error(`clear sidelined ${playerId}: ${error.message}`);
+  return rows.length ? upsertChunked(db, 'pro_sidelined', asRows(rows), { onConflict: 'player_id,start,type' }) : 0;
 }

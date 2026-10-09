@@ -1,5 +1,5 @@
 // One pro player: profile (flag, age, club, number), injury, college career, career by season in every competition
-// with per-90 numbers, percentiles against the same position, transfers, trophies and recent matches.
+// with per-90 numbers, percentiles against the same position, transfers, trophies, injury history and recent matches.
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ export interface PlayerData {
   percentiles: { league: ProLeagueRef | null; season: number; rows: { stat: string; value: number; pct: number; peers: number }[] } | null;
   transfers: TransferLine[]; trophies: { league: string; country: string; season: string; place: string }[];
   injury: { type: string | null; reason: string | null; date: string | null } | null;
+  injury_history?: { type: string; start: string; end: string | null; days: number; matches_missed: number | null }[];
   matches: { match: ProMatch; team_id: number; starter: boolean; minutes: number | null; goals: number | null; assists: number | null; rating: number | null }[];
   college: { college_name: string; school_seo: string | null; first_season: number | null; last_season: number | null; college_player_slug: string | null; verified: boolean }[];
 }
@@ -120,6 +121,20 @@ export default function ProPlayer() {
                   <li key={i} className="flex items-center gap-2 px-3 py-1.5"><span className={`w-16 shrink-0 text-2xs ${/winner/i.test(t.place) ? 'font-semibold text-note' : 'text-chalk-500'}`}>{t.place}</span><span className="min-w-0 flex-1 truncate text-chalk-200">{t.league}</span><span className="shrink-0 text-2xs tnum text-chalk-500">{t.season}</span></li>
                 ))}
               </ul>
+            </Section>
+          )}
+          {(d.injury_history?.length ?? 0) > 0 && (
+            <Section title={<span className="flex items-center gap-2"><Ambulance size={16} aria-hidden className="text-loss" />Injury history</span>}>
+              <ul className="frame divide-y divide-field-700 text-sm">
+                {d.injury_history!.slice(0, 15).map((h, i) => (
+                  <li key={`${h.start}-${h.type}-${i}`} className="flex flex-wrap items-center gap-x-2 px-3 py-1.5">
+                    <span className="min-w-0 flex-1 truncate text-chalk-200">{h.type}</span>
+                    <span className="shrink-0 text-2xs tnum text-chalk-500">{fmt.date(h.start)} – {h.end ? fmt.date(h.end) : <span className="text-loss">now</span>}</span>
+                    <span className="w-full text-2xs text-chalk-500">{h.days} {h.days === 1 ? 'day' : 'days'}{h.matches_missed ? ` · ${h.matches_missed} ${h.matches_missed === 1 ? 'match' : 'matches'} missed` : ''}</span>
+                  </li>
+                ))}
+              </ul>
+              {d.injury_history!.length > 15 && <p className="text-2xs text-chalk-500">{d.injury_history!.length - 15} earlier spells not shown.</p>}
             </Section>
           )}
           <Section title="Transfers"><TransfersList rows={d.transfers} /></Section>

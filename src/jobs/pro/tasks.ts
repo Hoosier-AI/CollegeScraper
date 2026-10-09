@@ -14,15 +14,21 @@
 //   coach:<team>               the club's coaches and their careers
 //   injuries:<l>|<s>           current injuries and suspensions
 //   trophies:<player>          a player's honours
+//   team_stats:<l>|<s>|<team>  a club's season in one competition (teams/statistics)
+//   venues:<country>           every ground in a country
+//   sidelined:<player>         a player's injury, illness and suspension history
+//   coach_trophies:<coach>     a coach's honours
 import type { JobContext } from '../runner.js';
 import type { ApiFootball } from '../../sources/apiFootball/client.js';
 import {
-  parseCoaches, parseCountries, parseCountryTeams, parseInjuries, parseLeaguePlayers, parseProfile, parseProfilesPage, parseSquad, parseTransfers, parseTrophies,
-  type AfCoach, type AfCountry, type AfFixtureItem, type AfInjury, type AfLeaguePlayer, type AfProfile, type AfSquad, type AfTeamItem, type AfTransferItem, type AfTrophy,
+  parseCoaches, parseCountries, parseCountryTeams, parseInjuries, parseLeaguePlayers, parseProfile, parseProfilesPage, parseSidelined, parseSquad, parseTeamStatistics,
+  parseTransfers, parseTrophies, parseVenues,
+  type AfCoach, type AfCountry, type AfFixtureItem, type AfInjury, type AfLeaguePlayer, type AfProfile, type AfSquad, type AfTeamItem, type AfTeamStatistics,
+  type AfTransferItem, type AfTrophy, type AfVenue,
 } from '../../sources/apiFootball/parse.js';
 import {
-  insertTasks, markNoDetail, patchSeason, refreshAggregates, replaceInjuries, replaceSquad, replaceTrophies, upsertCoaches, upsertCountries, upsertLeagueTeams,
-  upsertProfiles, upsertSeasonStats, upsertTeamProfiles, upsertTransfers, type LeagueInfo, type TaskSeed,
+  insertTasks, markNoDetail, patchSeason, refreshAggregates, replaceInjuries, replaceSidelined, replaceSquad, replaceTrophies, upsertCoaches, upsertCountries,
+  upsertLeagueTeams, upsertProfiles, upsertSeasonStats, upsertTeamProfiles, upsertTeamSeasonDetail, upsertTransfers, upsertVenues, type LeagueInfo, type TaskSeed,
 } from '../../db/proRepo.js';
 import { storeFixtures } from './scoreboard.js';
 import { fetchDetails, pendingDetail } from './detail.js';
@@ -72,6 +78,8 @@ const handlers: Record<string, Handler> = {
   async country_teams(t) {
     const res = await t.api.get<AfTeamItem>('teams', { country: t.task.key }, 'backfill');
     const rows = parseCountryTeams(res.response, now());
+    const grounds = parseVenues(res.response.map((r) => r.venue ?? {}), now());
+    await t.pace.write(grounds.length, (chunk) => upsertVenues(t.ctx.db, grounds, chunk));
     await t.pace.write(rows.length, (chunk) => upsertTeamProfilesChunked(t, rows, chunk));
     t.ctx.inc('clubs', rows.length);
     return { done: true };
@@ -197,6 +205,42 @@ const handlers: Record<string, Handler> = {
     const rows = parseTrophies(res.response, 'player', id);
     await replaceTrophies(t.ctx.db, 'player', id, rows);
     t.ctx.inc('trophies', rows.length);
+    return { done: true };
+  },
+
+  async coach_trophies(t) {
+    const id = Number(t.task.key);
+    const res = await t.api.get<AfTrophy>('trophies', { coach: id }, 'backfill');
+    const rows = parseTrophies(res.response, 'coach', id);
+    await replaceTrophies(t.ctx.db, 'coach', id, rows);
+    t.ctx.inc('trophies', rows.length);
+    return { done: true };
+  },
+
+  async team_stats(t) {
+    const [league, season, team] = t.task.key.split('|').map(Number) as [number, number, number];
+    const res = await t.api.get<AfTeamStatistics>('teams/statistics', { league, season, team }, 'backfill');
+    // One object (the client hands it back as a list of one), or an empty list when the provider has nothing.
+    const row = parseTeamStatistics(res.response[0], team, league, season, now());
+    if (row) await upsertTeamSeasonDetail(t.ctx.db, [row]);
+    t.ctx.inc(row ? 'club_seasons' : 'club_seasons_empty');
+    return { done: true };
+  },
+
+  async venues(t) {
+    const res = await t.api.get<AfVenue>('venues', { country: t.task.key }, 'backfill');
+    const rows = parseVenues(res.response, now());
+    await t.pace.write(rows.length, (chunk) => upsertVenues(t.ctx.db, rows, chunk));
+    t.ctx.inc('grounds', rows.length);
+    return { done: true };
+  },
+
+  async sidelined(t) {
+    const id = Number(t.task.key);
+    const res = await t.api.get<{ type?: string | null; start?: string | null; end?: string | null }>('sidelined', { player: id }, 'backfill');
+    const rows = parseSidelined(res.response, id, now());
+    await replaceSidelined(t.ctx.db, id, rows);
+    t.ctx.inc('spells_out', rows.length);
     return { done: true };
   },
 };

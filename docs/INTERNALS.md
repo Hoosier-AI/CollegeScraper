@@ -174,8 +174,30 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     - every club (`teams?country`);
     - every player (`players/profiles` pages, 250 each, ~690k);
     - each league season's fixtures, provider season totals (`players?league&season`, paged) and match detail (3 seasons, 5 for T1);
-    - current squads, transfers, coaches, injuries (T1) and trophies (T1 players).
-  - `pro-plan` writes the work as rows in `pro_crawl_tasks`, ordered by tier: T1 = priority under 100, T2 = other leagues, T3 = cups. It adds missing tasks only.
+    - current squads, transfers, coaches, injuries (top competitions) and trophies (top players).
+  - **US first (migration 137):** the US scene is every competition in the USA, the amateur and pre-pro ones included
+    (USL League Two, USL W League, NPSL, WPSL, NISA, the MLS All-Star game), plus the international club competitions US
+    clubs play in (Leagues Cup, CONCACAF Champions Cup, Campeones Cup, CONCACAF W Champions Cup, Club World Cup and
+    play-in). `isUsScene` in `src/sources/apiFootball/leagues.ts` decides it, and `pro-catalog` enables it whatever its level.
+    - Its tasks hold priorities 11-19, ahead of every other competition (20 and up).
+    - Depth is every season the provider has: fixtures, tables, season totals, match detail and club season stats.
+    - Every club that ever played in a US competition gets squad, transfers and coach. Current pro clubs refresh every
+      3/7/30 days; amateur and former clubs refresh every 30-90 days.
+    - US players (minutes in the current or last season) get injury history (`sidelined`) and trophies. Coaches of US
+      clubs get coach trophies.
+    - Later waves plan themselves as the earlier ones land: club season stats need the season's clubs, and people
+      need minutes and careers.
+  - Every stat the provider has:
+    - `team_stats` (`teams/statistics`) fills `pro_team_season_detail`;
+    - `venues` fills `pro_venues` (grounds also come free with `teams?country`);
+    - `sidelined` fills `pro_sidelined`;
+    - `coach_trophies` fills `pro_trophies` (subject `coach`);
+    - match lines keep dribbled past and penalties won and committed;
+    - team match stats keep every other type in `extra`.
+  - `pro-plan` writes the work as rows in `pro_crawl_tasks`, by tier: 0 everyone (countries, clubs, profiles), 1 the US
+    scene, 2 top competitions (priority under 100), 3 other leagues, 4 cups.
+    - Every run upserts each planned task's priority, interval and tier; due dates and progress are kept.
+    - `pro_reschedule_tasks()` then brings due dates in line with any interval that changed.
   - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.
     - Failures back off: 1 h, 2 h, 4 h, up to a week.
     - Slow database writes halve the batch size and pause for 60 s (`Pace` in `src/jobs/pro/tasks.ts`).
