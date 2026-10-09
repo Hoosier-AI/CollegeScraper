@@ -1,7 +1,10 @@
 {
-  "_comment": "Hand-kept club matches another source's names miss: source -> { source club id or exact name: API-Football team id }. Verified rows in pro_source_ids work the same way.",
+  "_comment": "Hand-kept club matches another source's names miss: source -> { source club id or exact name: API-Football team id }. Verified rows in pro_source_ids work the same way. Defunct clubs API-Football never had are created by history-fill.",
   "asa": {
-    "Chivas USA": 13173
+    "Chivas USA": 13173,
+    "Sky Blue FC": 3003,
+    "OL Reign": 3002,
+    "Reign FC": 3002
   },
   "openfootball": {
     "CD Chivas": 13173,
@@ -9,5 +12,24 @@
     "Kansas City Wizards": 1611,
     "MetroStars": 1602,
     "New York RB": 1602
+  },
+  "wikipedia": {
+    "D.C. United": 1615,
+    "LA Galaxy": 1605,
+    "Los Angeles Galaxy": 1605,
+    "Montreal Impact": 1614,
+    "MetroStars": 1602,
+    "NY/NJ MetroStars": 1602,
+    "New York/New Jersey MetroStars": 1602,
+    "New York MetroStars": 1602,
+    "Kansas City Wizards": 1611,
+    "Kansas City Wiz": 1611,
+    "Dallas Burn": 1597,
+    "San Jose Clash": 1596,
+    "Chivas USA": 13173,
+    "Sky Blue FC": 3003,
+    "Seattle Reign FC": 3002,
+    "Reign FC": 3002,
+    "OL Reign": 3002
   }
 }

@@ -6,7 +6,7 @@
 import type { AdvPlayerSeasonRow, SrcGameRow } from '../../sources/asa/parse.js';
 
 export type CheckStatus = 'agree' | 'differ' | 'unmatched';
-export interface CheckRow { source: string; kind: 'game' | 'player_season'; key: string; field: string; league_id: number; season: number; pro_key: string | null; ours: number | null; api: number | null; status: CheckStatus; checked_at: string }
+export interface CheckRow { source: string; kind: 'game' | 'player_season' | 'standing'; key: string; field: string; league_id: number; season: number; pro_key: string | null; ours: number | null; api: number | null; status: CheckStatus; checked_at: string }
 
 export const minutesAgree = (ours: number, api: number) => ours >= api - 10 && ours <= api * 1.2 + 15;
 const countsAgree = (ours: number, api: number, current: boolean) => (current ? Math.abs(ours - api) <= 1 : ours === api);
@@ -32,6 +32,16 @@ export function checkPlayerSeason(r: AdvPlayerSeasonRow, api: { key: string; min
   if (api.minutes != null) out.push({ ...base, field: 'minutes', pro_key: api.key, ours: r.minutes, api: api.minutes, status: minutesAgree(r.minutes, api.minutes) ? 'agree' : 'differ' });
   if (r.goals != null && api.goals != null) out.push({ ...base, field: 'goals', pro_key: api.key, ours: r.goals, api: api.goals, status: countsAgree(r.goals, api.goals, current) ? 'agree' : 'differ' });
   if (r.assists != null && api.assists != null) out.push({ ...base, field: 'assists', pro_key: api.key, ours: r.assists, api: api.assists, status: countsAgree(r.assists, api.assists, current) ? 'agree' : 'differ' });
+  return out;
+}
+
+/** A club's line in a source's table against API-Football's: points and matches played must be equal. */
+export function checkStanding(r: { source: string; league_id: number; season: number; group_name: string; team_ext: string; points: number | null; played: number | null }, api: { key: string; points: number | null; played: number | null } | null, at = new Date().toISOString()): CheckRow[] {
+  const base = { source: r.source, kind: 'standing' as const, key: `${r.group_name}|${r.team_ext}`, league_id: r.league_id, season: r.season, checked_at: at };
+  if (!api) return [{ ...base, field: 'team', pro_key: null, ours: null, api: null, status: 'unmatched' }];
+  const out: CheckRow[] = [];
+  if (r.points != null && api.points != null) out.push({ ...base, field: 'points', pro_key: api.key, ours: r.points, api: api.points, status: r.points === api.points ? 'agree' : 'differ' });
+  if (r.played != null && api.played != null) out.push({ ...base, field: 'played', pro_key: api.key, ours: r.played, api: api.played, status: r.played === api.played ? 'agree' : 'differ' });
   return out;
 }
 

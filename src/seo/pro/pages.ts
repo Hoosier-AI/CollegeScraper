@@ -114,7 +114,7 @@ export function proLeagueBody(p: ProLeaguePage): string {
   const list = (title: string, ms: Q.ProMatchRow[]) => (ms.length ? `<h2>${esc(title)}</h2><ul>${ms.map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug), proIsFinal(m) ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>` : '');
   const leaders = p.scorers.length ? `<h2>Top scorers</h2>${table(`${l.name} top scorers`, ['Player', 'Club', 'Goals', 'Apps'], p.scorers.map((s) => tr([a(proPaths.player(s.player.slug), s.player.name), s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', n(s.goals), n(s.apps)])))}` : '';
   const inner = `<h1>${esc(l.name)}${p.season ? ` ${esc(p.season)}` : ''}</h1>
-<p>${esc(where(l))}, ${esc(genderWord(l.gender))} ${l.type === 'cup' ? 'cup competition' : 'league'}${p.teams ? `, ${esc(p.teams)} clubs` : ''}.${p.seasons.length > 1 ? ` Seasons: ${p.seasons.slice(0, 8).map((s) => a(proPaths.league(l.slug, s, l.current_season), String(s))).join(', ')}.` : ''}</p>${tables}${leaders}${list('Latest results', p.results.slice(0, 20))}${list('Upcoming fixtures', p.fixtures.slice(0, 20))}`;
+<p>${esc(where(l))}, ${esc(genderWord(l.gender))} ${l.type === 'cup' ? 'cup competition' : 'league'}${p.teams ? `, ${esc(p.teams)} clubs` : ''}.${p.seasons.length > 1 ? ` Seasons: ${p.seasons.slice(0, 8).map((s) => a(proPaths.league(l.slug, s, l.current_season), String(s))).join(', ')}.` : ''}</p>${tables}${p.history_sources?.length ? `<p>${p.history_sources.map((h) => `${esc(h.what)}: <a href="${esc(h.url)}" rel="noopener">${esc(h.name)}</a> (${esc(h.license)})`).join('; ')}.</p>` : ''}${leaders}${list('Latest results', p.results.slice(0, 20))}${list('Upcoming fixtures', p.fixtures.slice(0, 20))}`;
   return wrapBody('pro', [...crumbsHome, { name: 'Leagues', path: proPaths.leagues }, { name: l.name, path: proPaths.league(l.slug) }], inner);
 }
 
@@ -326,6 +326,8 @@ export const PRO_SOURCES = [
   { name: 'API-Football', url: 'https://www.api-football.com', what: 'Fixtures, results, tables, lineups, match events, player match stats, squads, transfers, injuries, coaches and honours for competitions worldwide.', terms: 'Licensed (paid plan).' },
   { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', what: 'Expected goals and assists, passing over expected, goals added, shot maps, attendance, referees and grounds for MLS, NWSL, USL Championship, USL League One, MLS Next Pro and USL Super League.', terms: 'Free public data, credited on every page that shows it.' },
   { name: 'Wikidata', url: 'https://www.wikidata.org', what: 'Which professional players played college soccer.', terms: 'Public domain (CC0).' },
+  { name: 'openfootball', url: 'https://github.com/openfootball/world', what: 'MLS results from 2005, used for the seasons before our main feed begins.', terms: 'Public domain (CC0).' },
+  { name: 'Wikipedia', url: 'https://en.wikipedia.org', what: 'League tables for early MLS, NWSL and USL seasons.', terms: 'CC BY-SA 4.0, credited on each table.' },
 ];
 
 export function proSourcesHead(ctx: HeadContext): HeadMeta {

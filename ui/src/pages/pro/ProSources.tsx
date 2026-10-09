@@ -5,6 +5,8 @@ const SOURCES = [
   { name: 'API-Football', url: 'https://www.api-football.com', what: 'Fixtures, results, tables, lineups, match events, player match stats, squads, transfers, injuries, coaches and honours for competitions worldwide.', terms: 'Licensed (paid plan).' },
   { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', what: 'Expected goals and assists, passing over expected, goals added, shot maps, attendance, referees and grounds for MLS, NWSL, USL Championship, USL League One, MLS Next Pro and USL Super League.', terms: 'Free public data, credited on every page that shows it.' },
   { name: 'Wikidata', url: 'https://www.wikidata.org', what: 'Which professional players played college soccer.', terms: 'Public domain (CC0).' },
+  { name: 'openfootball', url: 'https://github.com/openfootball/world', what: 'MLS results from 2005, used for the seasons before our main feed begins.', terms: 'Public domain (CC0).' },
+  { name: 'Wikipedia', url: 'https://en.wikipedia.org', what: 'League tables for early MLS, NWSL and USL seasons.', terms: 'CC BY-SA 4.0, credited on each table.' },
 ];
 
 export default function ProSources() {

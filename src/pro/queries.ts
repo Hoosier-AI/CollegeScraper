@@ -124,6 +124,19 @@ async function leadersFor(db: Db, league: number, season: number, stat: 'goals' 
   return rows.map((r) => ({ player: { id: r.player?.id, name: r.player?.display_name, slug: r.player?.slug, photo: r.player?.photo ?? null }, team: teams.get(r.team_id) ?? null, apps: r.apps, minutes: r.minutes, goals: r.goals, assists: r.assists, rating: r.rating == null ? null : Number(r.rating) }));
 }
 
+const HISTORY_CREDIT: Record<string, { name: string; url: string; license: string }> = {
+  openfootball: { name: 'openfootball', url: 'https://github.com/openfootball/world', license: 'public domain (CC0)' },
+  wikipedia: { name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0' },
+  asa: { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', license: 'credited' },
+};
+/** Credits for a history season: the results' source, and Wikipedia when its table replaced one worked out from them. */
+function historyCredits(source: string | null, hasResults: boolean) {
+  if (!source) return null;
+  const out = [{ what: hasResults ? 'Results' : 'Table', ...HISTORY_CREDIT[source]! }];
+  if (source !== 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
+  return out;
+}
+
 export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
   const uniq = [...new Set(ids.filter((n) => Number.isFinite(n)))];
   if (!uniq.length) return new Map();
@@ -143,7 +156,7 @@ export async function league(db: Db, slug: string, season?: number | null) {
   if (error) throw new Error(error.message);
   if (!l) return null;
   const lg = l as any;
-  const seasons = (await selectAll<{ season: number; starts_on: string | null; ends_on: string | null; backfilled_at: string | null; fixtures_synced_at: string | null }>(db, 'pro_seasons', 'season,starts_on,ends_on,backfilled_at,fixtures_synced_at', (q) => q.eq('league_id', lg.id).order('season', { ascending: false })));
+  const seasons = (await selectAll<{ season: number; starts_on: string | null; ends_on: string | null; backfilled_at: string | null; fixtures_synced_at: string | null; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,starts_on,ends_on,backfilled_at,fixtures_synced_at,coverage', (q) => q.eq('league_id', lg.id).order('season', { ascending: false })));
   const s = season ?? lg.current_season ?? seasons[0]?.season ?? null;
   if (s == null) return { league: { ...leagueRef(lg), enabled: lg.enabled as boolean, current_season: (lg.current_season ?? null) as number | null }, season: null, seasons: [] as number[], standings: [] as ProStandingGroup[], results: [] as ProMatchRow[], fixtures: [] as ProMatchRow[], scorers: [] as ProLeaderRow[], assists: [] as ProLeaderRow[], teams: 0, champions: [] as { season: number; teams: { team: ProTeamRef; group: string; points: number | null }[] }[], team_table: [] as any[] };
   const now = new Date().toISOString();
@@ -171,6 +184,8 @@ export async function league(db: Db, slug: string, season?: number | null) {
     scorers, assists: assisters, teams: teamCount.count ?? 0,
     champions: [...champions.values()].slice(0, 15), team_table: teamTable,
     advanced_leaders: await leagueAdvancedLeaders(db, lg.id, s ?? null),
+    // A season API-Football does not have: where its results and table came from (credited on the page).
+    history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0),
   };
 }
 

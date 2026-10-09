@@ -53,3 +53,12 @@ export async function replaceChecks(db: Db, source: string, league: number, seas
   if (error) throw new Error(`clear checks: ${error.message}`);
   return r.length ? upsertChunked(db, 'pro_source_checks', rows(r), { onConflict: 'source,league_id,season,kind,key,field' }) : 0;
 }
+
+export interface SrcStandingRow { source: string; league_id: number; season: number; group_name: string; team_ext: string; rank: number | null; played: number | null; win: number | null; draw: number | null; lose: number | null; shootout_wins: number | null; gf: number | null; ga: number | null; gd: number | null; points: number | null; updated_at: string }
+
+/** A league season's tables from a source are replaced whole. */
+export async function replaceSrcStandings(db: Db, source: string, league: number, season: number, r: SrcStandingRow[]): Promise<number> {
+  const { error } = await db.from('pro_src_standings').delete().eq('source', source).eq('league_id', league).eq('season', season);
+  if (error) throw new Error(`clear source standings: ${error.message}`);
+  return r.length ? upsertChunked(db, 'pro_src_standings', rows(r), { onConflict: 'source,league_id,season,group_name,team_ext' }) : 0;
+}

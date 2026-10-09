@@ -16,7 +16,8 @@ import { AdvancedLeaders, Credit, type AdvLeaderLine, type SourceCredit } from '
 interface TeamLine { team: ProTeamRef; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; shots: number | null; shots_on: number | null; corners: number | null; fouls: number | null; yellow: number | null; red: number | null; possession: number | null }
 interface LeagueData { league: ProLeagueRef & { current_season: number | null }; season: number | null; seasons: number[]; standings: { name: string; rows: ProStandingRow[] }[]; results: ProMatch[]; fixtures: ProMatch[]; scorers: ProLeader[]; assists: ProLeader[]; teams: number;
   champions: { season: number; teams: { team: ProTeamRef; group: string; points: number | null }[] }[]; team_table: TeamLine[];
-  advanced_leaders?: { credit: SourceCredit; xg: AdvLeaderLine[]; xa: AdvLeaderLine[]; g_plus: AdvLeaderLine[] } | null }
+  advanced_leaders?: { credit: SourceCredit; xg: AdvLeaderLine[]; xa: AdvLeaderLine[]; g_plus: AdvLeaderLine[] } | null;
+  history_sources?: { what: string; name: string; url: string; license: string }[] | null }
 type Tab = 'table' | 'results' | 'fixtures' | 'players' | 'stats' | 'history';
 
 /** Leaders on any stat for this league season, by position, totals or per 90 (pro_leaders). */
@@ -101,7 +102,8 @@ export default function ProLeague() {
       </PageHeader>
       <TabsNav label="League sections" tabs={tabs} value={tab as Tab} hrefFor={(t) => proPath.league(slug, d.season, l.current_season) + (t === 'table' ? '' : `${d.season && d.season !== l.current_season ? '&' : '?'}tab=${t}`)} />
       {tab === 'table' && (d.standings.length
-        ? <div className="space-y-4">{d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}</div>
+        ? <div className="space-y-4">{d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
+            {d.history_sources && <p className="text-2xs text-chalk-500">{d.history_sources.map((h, i) => <span key={i}>{i ? ' · ' : ''}{h.what}: <a href={h.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{h.name}</a> ({h.license})</span>)}. Checked against our main data feed on the seasons both cover.</p>}</div>
         : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Results and Fixtures.' : 'The table appears once the first matches have been played.'} />)}
       {tab === 'results' && (d.results.length ? <div className="frame divide-y divide-field-700">{d.results.map((m) => <ProMatchRow key={m.id} m={m} showDate />)}</div> : <EmptyState title="No results yet" />)}
       {tab === 'fixtures' && (d.fixtures.length ? <div className="frame divide-y divide-field-700">{d.fixtures.map((m) => <ProMatchRow key={m.id} m={m} showDate />)}</div> : <EmptyState title="No upcoming fixtures" body="The season may be over, or the next round is not scheduled yet." />)}

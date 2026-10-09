@@ -224,6 +224,15 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
       NWSL 2016-2018 from ASA. They get negative ids, `source` set to the source, an "Overall (from results)" table and
       `coverage.source` on the season, so the planner and backfill leave them alone.
     - It only runs while that source agrees with API-Football on 99%+ of the scores both have.
+  - **Wikipedia tables (migration 140):**
+    - `wikipedia-sync` reads season articles' league tables from the ordinary `/wiki/` pages (robots.txt allows them;
+      `/w/` and `/api/` are disallowed): MLS from 1996, NWSL from 2013, USL from 2011. Each finished season is read
+      once into `pro_src_standings`.
+    - Each table line's points and matches played are checked against API-Football's table.
+    - `history-fill` writes the official tables for seasons API-Football lacks, at 99%+ agreement, replacing a table
+      worked out from results.
+    - League pages credit the source of a history season's results and table.
+    - Renamed clubs are kept in `data/pro-source-aliases.json`.
   - `sidelined`, `trophies` and `coach_trophies` ask for 20 people a request (`players=` / `coachs=`). If an answer
     can't be split by person, the process goes back to one request each (`batchWorks` in `src/jobs/pro/tasks.ts`).
   - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.

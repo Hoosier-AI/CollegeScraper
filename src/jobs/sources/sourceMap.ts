@@ -13,7 +13,7 @@ import { ASA_LEAGUES } from '../../sources/asa/leagues.js';
 import { type AdvPlayerSeasonRow, type SrcGameRow } from '../../sources/asa/parse.js';
 import { mapGames, mapPlayer, mapTeams, type ApiPerson, type ApiFixture, type Mapped } from './mapping.js';
 import { bestOf, clubScore } from '../../sources/match.js';
-import { checkGame, checkPlayerSeason, type CheckRow } from './checks.js';
+import { checkGame, checkPlayerSeason, checkStanding, type CheckRow } from './checks.js';
 
 /** `.in()` over many values, a few hundred at a time (the filter travels in the URL). */
 async function selectIn<T>(db: Db, table: string, columns: string, column: string, values: (string | number)[], apply?: (q: any) => any): Promise<T[]> {
@@ -38,6 +38,7 @@ function fileAliases(source: string): Record<string, number> {
 export const MAPPED_SOURCES: { source: string; leagues: number[]; players: boolean }[] = [
   { source: 'asa', leagues: ASA_LEAGUES.map((l) => l.league), players: true },
   { source: 'openfootball', leagues: [253], players: false },
+  { source: 'wikipedia', leagues: [253, 254, 255], players: false },
 ];
 const sourcesFor = (p: Record<string, unknown>) => MAPPED_SOURCES.filter((x) => !p.source || x.source === String(p.source))
   .map((x) => ({ ...x, leagues: x.leagues.filter((l) => !Number(p.league) || l === Number(p.league)) })).filter((x) => x.leagues.length);
@@ -66,10 +67,12 @@ async function mapSource(ctx: JobContext, SOURCE: string, leagueIds: number[], w
   const best = new Map<string, Mapped>();
   for (const league of leagueIds) {
     const games = await selectAll<SrcGameRow>(db, 'pro_src_games', 'ext_id,kickoff,home_ext,away_ext,season', (q) => q.eq('source', SOURCE).eq('league_id', league));
-    if (!games.length) continue;
-    const used = new Set(games.flatMap((g) => [g.home_ext, g.away_ext]));
+    // A source with tables only (Wikipedia): its clubs come from the tables, matched by name.
+    const tableRows = await selectAll<{ team_ext: string; season: number }>(db, 'pro_src_standings', 'team_ext,season', (q) => q.eq('source', SOURCE).eq('league_id', league));
+    if (!games.length && !tableRows.length) continue;
+    const used = new Set([...games.flatMap((g) => [g.home_ext, g.away_ext]), ...tableRows.map((r) => r.team_ext)]);
     const srcTeams = (await selectAll<{ ext_id: string; name: string; short_name: string | null }>(db, 'pro_src_teams', 'ext_id,name,short_name', (q) => q.eq('source', SOURCE))).filter((t) => used.has(t.ext_id));
-    const seasons = [...new Set(games.map((g) => g.season))];
+    const seasons = [...new Set([...games.map((g) => g.season), ...tableRows.map((r) => r.season)])];
     const fixtures = await selectAll<ApiFixture>(db, 'pro_fixtures', 'id,kickoff,home_team_id,away_team_id', (q) => q.eq('league_id', league).eq('source', 'api-football').gte('season', Math.min(...seasons) - 1));
     const apiTeamIds = [...new Set([...fixtures.flatMap((f) => [f.home_team_id, f.away_team_id]),
       ...(await selectAll<{ team_id: number }>(db, 'pro_league_teams', 'team_id', (q) => q.eq('league_id', league))).map((r) => r.team_id)])];
@@ -176,6 +179,23 @@ async function checkSource(ctx: JobContext, SOURCE: string, leagueIds: number[],
           rows.push(...checkPlayerSeason(r, hit ? { key: `${p}|${t}`, minutes: hit.minutes, goals: hit.goals, assists: hit.assists } : null, at, season >= (currentOf.get(league) ?? 9999)));
         }
       } else ctx.inc(`${SOURCE}_player_checks_waiting_on_api`);
+    }
+    // Tables (Wikipedia): each club's points and matches played against API-Football's table, when it has one.
+    const tables = await selectAll<{ source: string; league_id: number; season: number; group_name: string; team_ext: string; points: number | null; played: number | null }>(db, 'pro_src_standings',
+      'source,league_id,season,group_name,team_ext,points,played', (x) => x.eq('source', SOURCE).eq('league_id', league).eq('season', season));
+    if (tables.length) {
+      const { data: seasonRow } = await db.from('pro_seasons').select('coverage').eq('league_id', league).eq('season', season).maybeSingle();
+      const apiTable = (seasonRow as { coverage?: { source?: string } } | null)?.coverage?.source ? [] : await selectAll<{ team_id: number; points: number | null; played: number | null }>(db, 'pro_standings', 'team_id,points,played', (x) => x.eq('league_id', league).eq('season', season));
+      if (apiTable.length) {
+        const byTeam = new Map(apiTable.map((r) => [r.team_id, r]));
+        // Conference tables when there are any (an overall table repeats the same clubs).
+        const groups = new Set(tables.map((r) => r.group_name));
+        const main = [...groups].some((g) => /conference|division|group/i.test(g)) ? tables.filter((r) => /conference|division|group/i.test(r.group_name)) : tables.filter((r) => r.group_name === [...groups][0]);
+        for (const r of main) {
+          const id = teams.get(r.team_ext); const a = id != null ? byTeam.get(id) : undefined;
+          rows.push(...checkStanding(r, a ? { key: String(id), points: a.points, played: a.played } : null, at));
+        }
+      }
     }
     await replaceChecks(db, SOURCE, league, season, rows);
     for (const st of ['agree', 'differ', 'unmatched'] as const) ctx.inc(`${SOURCE}_${st}`, rows.filter((r) => r.status === st).length);

@@ -94,6 +94,60 @@ export async function historyFill(ctx: JobContext): Promise<void> {
     if ((ctx.params.source && ctx.params.source !== t.source) || (Number(ctx.params.league) && Number(ctx.params.league) !== t.league)) continue;
     await fillFrom(ctx, t, agreement.filter((r) => r.source === t.source && r.league_id === t.league));
   }
+  // Then the official tables (Wikipedia) for the same and earlier seasons: they replace a table worked out from results.
+  const tableAgreement = ((data ?? []) as { source: string; league_id: number; kind: string; agree: number; differ: number }[]).filter((r) => r.kind === 'standing');
+  for (const t of TABLE_TARGETS) {
+    if ((ctx.params.source && ctx.params.source !== t.source) || (Number(ctx.params.league) && Number(ctx.params.league) !== t.league)) continue;
+    await fillTables(ctx, t, tableAgreement.filter((r) => r.source === t.source && r.league_id === t.league));
+  }
+}
+
+/** League tables from Wikipedia for seasons API-Football has none of (MLS 1996-2011, NWSL 2013-2018, USL 2011-2014). */
+export const TABLE_TARGETS: { source: string; league: number; minCompared: number }[] = [
+  { source: 'wikipedia', league: MLS, minCompared: 100 },
+  { source: 'wikipedia', league: 254, minCompared: 40 },
+  { source: 'wikipedia', league: 255, minCompared: 60 },
+];
+
+async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], agreement: { agree: number; differ: number }[]): Promise<void> {
+  const db = ctx.db;
+  const tag = `${t.source}_${t.league}_tables`;
+  const agree = agreement.reduce((n, r) => n + Number(r.agree), 0), compared = agree + agreement.reduce((n, r) => n + Number(r.differ), 0);
+  const rate = compared ? agree / compared : 0;
+  ctx.note(`${tag}_agreement`, `${(rate * 100).toFixed(2)}% of ${compared}`);
+  if (compared < t.minCompared || rate < HISTORY_TRUST) { ctx.note(`${tag}_skipped`, `needs ${HISTORY_TRUST * 100}% agreement on ${t.minCompared}+ compared table lines first`); return; }
+
+  const seasonRows = await selectAll<{ season: number; fixtures_synced_at: string | null; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,fixtures_synced_at,coverage', (q) => q.eq('league_id', t.league));
+  const apiSeasons = new Set(seasonRows.filter((r) => r.fixtures_synced_at && !r.coverage?.source).map((r) => r.season));
+  const rows = (await selectAll<any>(db, 'pro_src_standings', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((r) => !apiSeasons.has(r.season));
+  if (!rows.length) { ctx.note(`${tag}_idle`, 'no history tables to fill'); return; }
+
+  const teamMap = await sourceIdMap(db, t.source, 'team');
+  const missing = [...new Set(rows.map((r) => r.team_ext as string))].filter((n) => !teamMap.has(n));
+  if (missing.length) {
+    const at = new Date().toISOString();
+    const gender = t.league === 254 ? 'w' : 'm';
+    const clubs = missing.map((name) => ({ id: negativeId(`team|${t.source}|${name}`), name, display_name: teamDisplayName(name), country: 'USA', gender, national: false, source: t.source, updated_at: at }));
+    await upsertChunked(db, 'pro_teams', clubs, { onConflict: 'id' });
+    await upsertChunked(db, 'pro_source_ids', clubs.map((c) => ({ source: t.source, kind: 'team', ext_id: c.name, pro_id: c.id, method: 'created', confidence: 1, updated_at: at })), { onConflict: 'source,kind,ext_id' });
+    for (const c of clubs) teamMap.set(c.name, c.id);
+    ctx.inc('clubs_created', clubs.length);
+  }
+  const at = new Date().toISOString();
+  const existing = new Map(seasonRows.map((r) => [r.season, r]));
+  for (const season of [...new Set(rows.map((r) => r.season as number))].sort()) {
+    const lines: StandingRow[] = rows.filter((r) => r.season === season).map((r) => ({
+      league_id: t.league, season, group_name: r.group_name, team_id: teamMap.get(r.team_ext)!, rank: r.rank, points: r.points, played: r.played, win: r.win, draw: r.draw, lose: r.lose,
+      gf: r.gf, ga: r.ga, gd: r.gd, form: null, description: r.shootout_wins ? `${r.shootout_wins} shootout wins` : null,
+    }));
+    // Two lines for one club in one table cannot be stored: keep the first.
+    const uniq = [...new Map(lines.map((l) => [`${l.group_name}|${l.team_id}`, l])).values()];
+    await upsertStandings(db, uniq);
+    const prev = existing.get(season);
+    await patchSeason(db, t.league, season, { fixtures_synced_at: prev?.fixtures_synced_at ?? at, is_current: false, coverage: { source: prev?.coverage?.source ?? t.source }, backfilled_at: at });
+    ctx.inc('tables');
+    await ctx.heartbeat();
+  }
 }
 
 async function fillFrom(ctx: JobContext, t: (typeof HISTORY_TARGETS)[number], agreement: { agree: number; differ: number }[]): Promise<void> {
