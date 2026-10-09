@@ -237,6 +237,23 @@ export function tablesFromResults(games: { home: number; away: number; hg: numbe
   return sorted.flatMap((gs, i) => tableFromResults(gs, league, season, sorted.length === 1 ? 'Table (from results)' : `Group ${i + 1} (from results)`));
 }
 
+/**
+ * Names for groups worked out from results: the Wikipedia division or conference most of a group's clubs are listed in
+ * (more than half of them), else the group keeps its number. The numbers stay the results' own.
+ */
+export function nameGroups(rows: StandingRow[], wikiGroupOf: Map<number, string>): StandingRow[] {
+  const byGroup = new Map<string, StandingRow[]>();
+  for (const r of rows) byGroup.set(r.group_name, [...(byGroup.get(r.group_name) ?? []), r]);
+  const rename = new Map<string, string>(), used = new Set<string>();
+  for (const [g, list] of byGroup) {
+    const votes = new Map<string, number>();
+    for (const r of list) { const w = wikiGroupOf.get(r.team_id); if (w) votes.set(w, (votes.get(w) ?? 0) + 1); }
+    const best = [...votes].sort((a, b) => b[1] - a[1])[0];
+    if (best && best[1] > list.length / 2 && !used.has(best[0])) { rename.set(g, best[0]); used.add(best[0]); }
+  }
+  return rows.map((r) => (rename.has(r.group_name) ? { ...r, group_name: rename.get(r.group_name)! } : r));
+}
+
 /** params: { league?: number } — enabled leagues' seasons with results and no table from anywhere. */
 export async function resultsTables(ctx: JobContext): Promise<void> {
   const db = ctx.db;
@@ -261,7 +278,13 @@ export async function resultsTables(ctx: JobContext): Promise<void> {
       (q) => q.eq('league_id', s.league_id).eq('season', s.season).eq('status', 'final').eq('source', 'api-football')))
       .filter((g) => isRegularRound(g.round) && g.home_goals != null && g.away_goals != null);
     if (games.length < 10) continue;
-    const rows = tablesFromResults(games.map((g) => ({ home: g.home_team_id, away: g.away_team_id, hg: g.home_goals!, ag: g.away_goals! })), s.league_id, s.season);
+    let rows = tablesFromResults(games.map((g) => ({ home: g.home_team_id, away: g.away_team_id, hg: g.home_goals!, ag: g.away_goals! })), s.league_id, s.season);
+    // Division names from Wikipedia's tables for the season, when it has them.
+    const wiki = await selectAll<{ group_name: string; team_ext: string }>(db, 'pro_src_standings', 'group_name,team_ext', (q) => q.eq('source', 'wikipedia').eq('league_id', s.league_id).eq('season', s.season));
+    if (wiki.length) {
+      const ids = await sourceIdMap(db, 'wikipedia', 'team');
+      rows = nameGroups(rows, new Map(wiki.filter((w) => ids.has(w.team_ext)).map((w) => [ids.get(w.team_ext)!, w.group_name])));
+    }
     await upsertStandings(db, rows, undefined, 'results');
     ctx.inc('tables'); ctx.inc('rows', rows.length);
     await ctx.heartbeat();

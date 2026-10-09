@@ -35,7 +35,7 @@ describe('openfootball Football.TXT', () => {
   });
 });
 
-import { apiSeasonsOf, negativeId, tableFromResults, tablesFromResults, toSrcGame } from '../../src/jobs/sources/history.js';
+import { apiSeasonsOf, nameGroups, negativeId, tableFromResults, tablesFromResults, toSrcGame } from '../../src/jobs/sources/history.js';
 import { isRegularRound, recordsFromResults } from '../../src/jobs/sources/checks.js';
 
 describe('MLS history from openfootball', () => {
@@ -61,6 +61,11 @@ describe('MLS history from openfootball', () => {
     expect([...new Set(t.map((r) => r.group_name))]).toEqual(['Group 1 (from results)', 'Group 2 (from results)']);
     expect(t.filter((r) => r.group_name.startsWith('Group 1')).map((r) => r.team_id)).toEqual([1, 3, 2]);
     expect(tablesFromResults([{ home: 1, away: 2, hg: 1, ag: 0 }], 1, 2025)[0]!.group_name).toBe('Table (from results)');
+  });
+  it('groups take the Wikipedia division most of their clubs are in', () => {
+    const t = tablesFromResults([{ home: 1, away: 2, hg: 1, ag: 0 }, { home: 2, away: 3, hg: 0, ag: 0 }, { home: 10, away: 11, hg: 2, ag: 2 }], 256, 2026);
+    const named = nameGroups(t, new Map([[1, 'Great Lakes Division'], [2, 'Great Lakes Division'], [10, 'Heartland Division']]));
+    expect([...new Set(named.map((r) => r.group_name))]).toEqual(['Great Lakes Division', 'Group 2 (from results)']);
   });
   it('regular season only, and records from results', () => {
     expect(isRegularRound('Regular Season - 4')).toBe(true);

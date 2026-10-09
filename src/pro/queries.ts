@@ -133,11 +133,11 @@ const HISTORY_CREDIT: Record<string, { name: string; url: string | null; license
  * Credits for a season's results and table when they are not API-Football's: the results' source for a history
  * season, and the table's (Wikipedia's official one, or one worked out from the results).
  */
-function historyCredits(source: string | null, hasResults: boolean, tableSource: string | null) {
+function historyCredits(source: string | null, hasResults: boolean, tableSource: string | null, namedGroups = false) {
   const out: { what: string; name: string; url: string | null; license: string | null }[] = [];
   if (source && hasResults) out.push({ what: 'Results', ...HISTORY_CREDIT[source]! });
   if (tableSource === 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
-  else if (tableSource === 'results') out.push({ what: 'Table', name: 'worked out from the results', url: null, license: 'groups are the clubs that played each other' });
+  else if (tableSource === 'results') out.push({ what: 'Table', name: 'worked out from the results', url: null, license: namedGroups ? 'division names from Wikipedia, CC BY-SA 4.0' : 'groups are the clubs that played each other' });
   else if (source && !hasResults) out.push({ what: 'Table', ...HISTORY_CREDIT[source]! });
   return out.length ? out : null;
 }
@@ -191,7 +191,8 @@ export async function league(db: Db, slug: string, season?: number | null) {
     advanced_leaders: await leagueAdvancedLeaders(db, lg.id, s ?? null),
     // A season API-Football does not have: where its results and table came from (credited on the page).
     history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0,
-      ((await db.from('pro_standings').select('source').eq('league_id', lg.id).eq('season', s).limit(1)).data?.[0] as { source?: string } | undefined)?.source ?? null),
+      ((await db.from('pro_standings').select('source').eq('league_id', lg.id).eq('season', s).limit(1)).data?.[0] as { source?: string } | undefined)?.source ?? null,
+      standings.length > 0 && !standings.some((g) => /from results/i.test(g.name))),
   };
 }
 
