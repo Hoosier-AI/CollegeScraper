@@ -1,0 +1,4 @@
+{
+  "_comment": "Hand-kept club matches another source's names miss: source -> { source club id or exact name: API-Football team id }. Verified rows in pro_source_ids work the same way.",
+  "asa": {}
+}

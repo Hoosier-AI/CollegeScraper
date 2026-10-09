@@ -1,0 +1,135 @@
+// source-map: another source's clubs, games and players -> API-Football ids (pro_source_ids). Clubs and games per
+// league (all seasons at once: a club keeps its id across seasons), then players across every league (one person can
+// play in MLS and MLS Next Pro). Rows set by hand (verified / rejected) are kept; verified clubs act as aliases.
+// source-check: each collected number API-Football also has, side by side (pro_source_checks), per league season.
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { registerJob, type JobContext } from '../runner.js';
+import { selectAll, type Db } from '../../db/client.js';
+import { replaceChecks, sourceIdMap, writeSourceIds, type SourceIdRow } from '../../db/sourceRepo.js';
+import { ASA_LEAGUES } from '../../sources/asa/leagues.js';
+import { SOURCE, type AdvPlayerSeasonRow, type SrcGameRow } from '../../sources/asa/parse.js';
+import { mapGames, mapPlayer, mapTeams, type ApiPerson, type ApiFixture, type Mapped } from './mapping.js';
+import { checkGame, checkPlayerSeason, type CheckRow } from './checks.js';
+
+/** `.in()` over many values, a few hundred at a time (the filter travels in the URL). */
+async function selectIn<T>(db: Db, table: string, columns: string, column: string, values: (string | number)[], apply?: (q: any) => any): Promise<T[]> {
+  const out: T[] = [];
+  const uniq = [...new Set(values)];
+  for (let i = 0; i < uniq.length; i += 300) {
+    const part = uniq.slice(i, i + 300);
+    out.push(...await selectAll<T>(db, table, columns, (q) => (apply ? apply(q.in(column, part)) : q.in(column, part))));
+  }
+  return out;
+}
+
+function fileAliases(source: string): Record<string, number> {
+  const here = dirname(fileURLToPath(import.meta.url));
+  for (const f of [resolve(here, '../../../data/pro-source-aliases.json'), resolve(process.cwd(), 'data/pro-source-aliases.json')]) {
+    try { return (JSON.parse(readFileSync(f, 'utf8')) as Record<string, Record<string, number>>)[source] ?? {}; } catch { /* next */ }
+  }
+  return {};
+}
+
+const asRows = (kind: SourceIdRow['kind'], m: Map<string, Mapped>): SourceIdRow[] =>
+  [...m.entries()].map(([ext_id, x]) => ({ source: SOURCE, kind, ext_id, pro_id: x.pro_id, method: x.method, confidence: x.confidence, evidence: x.evidence ?? null }));
+const count = (m: Map<string, Mapped>) => [...m.values()].filter((x) => x.pro_id != null).length;
+
+const PERSON = 'id,first_name,last_name,display_name,birth_date';
+
+/** params: { league?: number } */
+export async function sourceMap(ctx: JobContext): Promise<void> {
+  const db = ctx.db;
+  const leagues = ASA_LEAGUES.filter((l) => !Number(ctx.params.league) || l.league === Number(ctx.params.league));
+  const verified = await selectAll<{ ext_id: string; pro_id: number }>(db, 'pro_source_ids', 'ext_id,pro_id', (q) => q.eq('source', SOURCE).eq('kind', 'team').eq('verified', true).not('pro_id', 'is', null));
+  const aliases = { ...fileAliases(SOURCE), ...Object.fromEntries(verified.map((v) => [v.ext_id, Number(v.pro_id)])) };
+  const teamMap = new Map<string, number>();
+
+  for (const l of leagues) {
+    const games = await selectAll<SrcGameRow>(db, 'pro_src_games', 'ext_id,kickoff,home_ext,away_ext,season', (q) => q.eq('source', SOURCE).eq('league_id', l.league));
+    if (!games.length) continue;
+    const used = new Set(games.flatMap((g) => [g.home_ext, g.away_ext]));
+    const srcTeams = (await selectAll<{ ext_id: string; name: string; short_name: string | null }>(db, 'pro_src_teams', 'ext_id,name,short_name', (q) => q.eq('source', SOURCE))).filter((t) => used.has(t.ext_id));
+    const seasons = [...new Set(games.map((g) => g.season))];
+    const fixtures = await selectAll<ApiFixture>(db, 'pro_fixtures', 'id,kickoff,home_team_id,away_team_id', (q) => q.eq('league_id', l.league).gte('season', Math.min(...seasons) - 1));
+    const apiTeamIds = [...new Set([...fixtures.flatMap((f) => [f.home_team_id, f.away_team_id]),
+      ...(await selectAll<{ team_id: number }>(db, 'pro_league_teams', 'team_id', (q) => q.eq('league_id', l.league))).map((r) => r.team_id)])];
+    const apiTeams = await selectIn<{ id: number; name: string; display_name: string }>(db, 'pro_teams', 'id,name,display_name', 'id', apiTeamIds);
+    const teams = mapTeams(srcTeams, apiTeams, games, fixtures, aliases);
+    await writeSourceIds(db, SOURCE, 'team', asRows('team', teams));
+    for (const [ext, m] of teams) if (m.pro_id != null) teamMap.set(ext, m.pro_id);
+    const gameMap = mapGames(games, fixtures, teams);
+    await writeSourceIds(db, SOURCE, 'game', asRows('game', gameMap));
+    ctx.inc('teams_mapped', count(teams)); ctx.inc('teams_unmatched', teams.size - count(teams));
+    ctx.inc('games_mapped', count(gameMap)); ctx.inc('games_unmatched', gameMap.size - count(gameMap));
+    await ctx.heartbeat();
+  }
+
+  // Players, across every league.
+  const adv = await selectIn<Pick<AdvPlayerSeasonRow, 'player_ext' | 'team_ext' | 'season' | 'league_id'>>(db, 'pro_adv_player_seasons', 'player_ext,team_ext,season,league_id', 'league_id', leagues.map((l) => l.league), (q) => q.eq('source', SOURCE));
+  if (!adv.length) return;
+  const people = await selectIn<{ ext_id: string; name: string; birth_date: string | null }>(db, 'pro_src_players', 'ext_id,name,birth_date', 'ext_id', adv.map((a) => a.player_ext), (q) => q.eq('source', SOURCE));
+  const byBirth = new Map<string, ApiPerson[]>();
+  for (const p of await selectIn<ApiPerson>(db, 'pro_players', PERSON, 'birth_date', people.map((p) => p.birth_date).filter(Boolean) as string[])) {
+    byBirth.set(p.birth_date!, [...(byBirth.get(p.birth_date!) ?? []), p]);
+  }
+  // Who API-Football has at each club and season, in these leagues.
+  const stints = await selectIn<{ player_id: number; team_id: number; season: number }>(db, 'pro_player_season_stats', 'player_id,team_id,season', 'league_id', leagues.map((l) => l.league));
+  const atClub = new Map<string, number[]>();
+  for (const s of stints) { const k = `${s.team_id}|${s.season}`; atClub.set(k, [...(atClub.get(k) ?? []), s.player_id]); }
+  const persons = new Map((await selectIn<ApiPerson>(db, 'pro_players', PERSON, 'id', stints.map((s) => s.player_id))).map((p) => [p.id, p]));
+  const stintsOf = new Map<string, { team: number; season: number }[]>();
+  for (const a of adv) {
+    const team = teamMap.get(a.team_ext);
+    if (team != null) stintsOf.set(a.player_ext, [...(stintsOf.get(a.player_ext) ?? []), { team, season: a.season }]);
+  }
+  const players = new Map<string, Mapped>();
+  for (const p of people) {
+    const club = (stintsOf.get(p.ext_id) ?? []).flatMap((s) => (atClub.get(`${s.team}|${s.season}`) ?? []).map((id) => persons.get(id)).filter(Boolean) as ApiPerson[]);
+    players.set(p.ext_id, mapPlayer(p, p.birth_date ? byBirth.get(p.birth_date) ?? [] : [], club));
+  }
+  await writeSourceIds(db, SOURCE, 'player', asRows('player', players));
+  ctx.inc('players_mapped', count(players)); ctx.inc('players_unmatched', players.size - count(players));
+  for (const [method, n] of Object.entries([...players.values()].reduce<Record<string, number>>((m, x) => ({ ...m, [x.method]: (m[x.method] ?? 0) + 1 }), {}))) ctx.inc(`players_by_${method}`, n);
+}
+
+/** params: { league?: number, season?: number } */
+export async function sourceCheck(ctx: JobContext): Promise<void> {
+  const db = ctx.db;
+  const [teams, games, players] = await Promise.all([sourceIdMap(db, SOURCE, 'team'), sourceIdMap(db, SOURCE, 'game'), sourceIdMap(db, SOURCE, 'player')]);
+  let q = (x: any) => x.eq('source', SOURCE).not('synced_at', 'is', null);
+  if (Number(ctx.params.league)) { const prev = q; q = (x) => prev(x).eq('league_id', Number(ctx.params.league)); }
+  if (Number(ctx.params.season)) { const prev = q; q = (x) => prev(x).eq('season', Number(ctx.params.season)); }
+  const seasons = await selectAll<{ league_id: number; season: number }>(db, 'pro_source_seasons', 'league_id,season', q);
+  const at = new Date().toISOString();
+  for (const { league_id: league, season } of seasons) {
+    const rows: CheckRow[] = [];
+    const src = await selectAll<SrcGameRow>(db, 'pro_src_games', '*', (x) => x.eq('source', SOURCE).eq('league_id', league).eq('season', season));
+    const fx = new Map((await selectIn<{ id: number; home_team_id: number; home_goals: number | null; away_goals: number | null; status: string }>(db, 'pro_fixtures', 'id,home_team_id,home_goals,away_goals,status', 'id',
+      src.map((g) => games.get(g.ext_id)).filter((x): x is number => x != null))).map((f) => [f.id, f]));
+    for (const g of src) {
+      const id = games.get(g.ext_id); const f = id != null ? fx.get(id) : undefined;
+      rows.push(...checkGame(g, f ? { ...f, swapped: f.home_team_id !== teams.get(g.home_ext) } : null, at));
+    }
+    const adv = await selectAll<AdvPlayerSeasonRow>(db, 'pro_adv_player_seasons', '*', (x) => x.eq('source', SOURCE).eq('league_id', league).eq('season', season));
+    const api = await selectAll<{ player_id: number; team_id: number; minutes: number | null; goals: number | null; assists: number | null; source: string }>(db, 'pro_player_season_stats', 'player_id,team_id,minutes,goals,assists,source',
+      (x) => x.eq('league_id', league).eq('season', season));
+    if (api.length) {
+      // The provider's own totals when it has them, else ours from its match lines.
+      const totals = new Map<string, (typeof api)[number]>();
+      for (const r of api) { const k = `${r.player_id}|${r.team_id}`; if (!totals.has(k) || r.source === 'provider') totals.set(k, r); }
+      for (const r of adv) {
+        const p = players.get(r.player_ext), t = teams.get(r.team_ext);
+        const hit = p != null && t != null ? totals.get(`${p}|${t}`) : undefined;
+        rows.push(...checkPlayerSeason(r, hit ? { key: `${p}|${t}`, minutes: hit.minutes, goals: hit.goals, assists: hit.assists } : null, at));
+      }
+    } else ctx.inc('player_checks_waiting_on_api');
+    await replaceChecks(db, SOURCE, league, season, rows);
+    for (const s of ['agree', 'differ', 'unmatched'] as const) ctx.inc(s, rows.filter((r) => r.status === s).length);
+    await ctx.heartbeat();
+  }
+}
+
+registerJob('source-map', sourceMap);
+registerJob('source-check', sourceCheck);

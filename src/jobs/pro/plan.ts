@@ -14,6 +14,7 @@ import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, type Db } from '../../db/client.js';
 import { insertTasks, leagueIndex, rescheduleTasks, type LeagueInfo, type TaskSeed } from '../../db/proRepo.js';
 import { isUsScene } from '../../sources/apiFootball/leagues.js';
+import { asaCovers } from '../../sources/asa/leagues.js';
 import { QuotaExhausted } from '../../sources/apiFootball/client.js';
 import { handlerFor, Pace, type TaskRow } from './tasks.js';
 import { withApi } from './shared.js';
@@ -26,7 +27,8 @@ export const tierOf = (l: LeagueTierInfo): Tier =>
 /** Tier 2, 3 or 4: the old three-way split for everything outside the US scene. */
 const by = <T>(tier: Tier, top: T, league: T, cup: T): T => (tier <= 2 ? top : tier === 3 ? league : cup);
 
-export interface SeasonCoverage { season: number; standings: boolean; players: boolean; injuries: boolean }
+/** playerLines: API-Football has per-player match stats for the season (its match detail fills cards, tackles, ratings). */
+export interface SeasonCoverage { season: number; standings: boolean; players: boolean; injuries: boolean; playerLines?: boolean }
 export interface PlanInput {
   leagues: Map<number, LeagueInfo>;
   /** League id -> seasons the provider has, with what it covers. */
@@ -83,10 +85,13 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const cov = new Map((input.seasons.get(l.id) ?? []).map((s) => [s.season, s]));
     const now = cov.get(c);
     // A club's season stats: every club of a US competition; in an international one, the US clubs.
+    // Season totals: American Soccer Analysis has minutes, goals, assists, shots and more for the leagues it covers;
+    // with API-Football's match lines filling the rest, its paged totals are not needed there.
+    const needTotals = (s: number) => !(asaCovers(l.id, s) && cov.get(s)?.playerLines === true);
     const statClubs = (s: number) => (teamsOf.get(k(s)) ?? []).filter((t) => l.country === 'USA' ? l.type === 'league' : usClubs.has(t));
     add('season_fixtures', k(c), 11, 3);
     if (now?.injuries !== false) add('injuries', k(c), 11, 1);
-    if (now?.players !== false) add('league_players', k(c), 12, pro ? 3 : 7);
+    if (now?.players !== false && needTotals(c)) add('league_players', k(c), 12, pro ? 3 : 7);
     add('detail', k(c), 13, 1);
     for (const t of statClubs(c)) add('team_stats', `${k(c)}|${t}`, 13, pro ? 7 : 30);
     for (const t of teamsOf.get(k(c)) ?? []) { if (!usClubs.has(t)) continue; active.add(t); if (pro) activePro.add(t); }
@@ -94,7 +99,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
       if (s.season >= c) continue;
       add('season_fixtures', k(s.season), 14, null);
       if (s.standings) add('standings', k(s.season), 14, null);
-      if (s.players) add('league_players', k(s.season), 15, null);
+      if (s.players && needTotals(s.season)) add('league_players', k(s.season), 15, null);
       add('detail', k(s.season), 15, null);
       for (const t of statClubs(s.season)) add('team_stats', `${k(s.season)}|${t}`, 16, null);
     }
@@ -180,12 +185,12 @@ export async function proPlan(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const leagues = await leagueIndex(db);
   const enabled = new Set([...leagues.values()].filter((l) => l.enabled).map((l) => l.id));
-  const seasonRows = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; players?: boolean; injuries?: boolean } | null }>(db, 'pro_seasons', 'league_id,season,coverage');
+  const seasonRows = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; players?: boolean; injuries?: boolean; fixtures?: { statistics_players?: boolean } } | null }>(db, 'pro_seasons', 'league_id,season,coverage');
   const seasons = new Map<number, SeasonCoverage[]>();
   for (const r of seasonRows) {
     if (!enabled.has(r.league_id)) continue;
     const c = r.coverage ?? {};
-    seasons.set(r.league_id, [...(seasons.get(r.league_id) ?? []), { season: r.season, standings: c.standings !== false, players: c.players !== false, injuries: c.injuries !== false }]);
+    seasons.set(r.league_id, [...(seasons.get(r.league_id) ?? []), { season: r.season, standings: c.standings !== false, players: c.players !== false, injuries: c.injuries !== false, playerLines: c.fixtures?.statistics_players === true }]);
   }
   const leagueTeams = await selectAll<{ league_id: number; season: number; team_id: number }>(db, 'pro_league_teams', 'league_id,season,team_id');
   const live = [...leagues.values()].filter((l) => l.enabled && l.current_season != null);
@@ -207,6 +212,14 @@ export async function proPlan(ctx: JobContext): Promise<void> {
   // New tasks are added; existing ones get their priority, interval and tier (their schedule and progress stay).
   ctx.inc('sent', await insertTasks(db, seeds));
   ctx.inc('rescheduled', await rescheduleTasks(db));
+  // US season totals another source now covers: drop the ones never run (a done one stays as a record).
+  const planned = new Set(seeds.filter((t) => t.kind === 'league_players').map((t) => t.key));
+  const stale = (await selectAll<{ key: string }>(db, 'pro_crawl_tasks', 'key', (q) => q.eq('kind', 'league_players').eq('tier', 1).is('last_done_at', null))).map((r) => r.key).filter((k) => !planned.has(k));
+  for (let i = 0; i < stale.length; i += 200) {
+    const { error } = await db.from('pro_crawl_tasks').delete().eq('kind', 'league_players').in('key', stale.slice(i, i + 200));
+    if (error) throw new Error(`prune totals: ${error.message}`);
+  }
+  ctx.inc('pruned', stale.length);
 }
 
 /** params: { max_minutes?: number (default 9), max_calls?: number, kinds?: string[] } */

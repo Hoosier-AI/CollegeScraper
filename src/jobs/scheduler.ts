@@ -48,6 +48,11 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'pro-rank', label: 'Pro: player ranks', cadence: 'daily 07:10 UTC', due: (c) => c.h === 7 && c.m === 10 },
   { job: 'pro-catalog', label: 'Pro: competition list', cadence: 'Mondays 06:00 UTC', due: (c) => c.dow === 1 && c.h === 6 && c.m === 0, gate: async () => proEnabled() },
   { job: 'pro-college-link', label: 'Pro: college links', cadence: 'Wednesdays 07:30 UTC', due: (c) => c.dow === 3 && c.h === 7 && c.m === 30 },
+  // Other sources, on their own lane: synced daily, then mapped onto API-Football and checked against it.
+  { job: 'asa-sync', label: 'Sources: American Soccer Analysis', cadence: 'daily 08:40 UTC', due: (c) => c.h === 8 && c.m === 40 },
+  { job: 'source-map', label: 'Sources: match to API-Football', cadence: 'daily 09:10 UTC', due: (c) => c.h === 9 && c.m === 10 },
+  { job: 'source-check', label: 'Sources: check against API-Football', cadence: 'daily 09:25 UTC', due: (c) => c.h === 9 && c.m === 25 },
+  { job: 'asa-shots', label: 'Sources: shot maps', cadence: 'every 30 minutes at :15 and :45, until every final has its shots', due: (c) => c.m === 15 || c.m === 45 },
 ];
 
 const proEnabled = () => !!loadConfig().API_FOOTBALL_KEY;

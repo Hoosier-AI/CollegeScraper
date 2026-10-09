@@ -42,6 +42,10 @@ export const JOB_META: Record<string, JobMeta> = {
   'pro-plan': { description: 'Pro: decides what the crawl holds (every club, player, squad, season total, match detail, transfer, coach, injury, trophy) as tasks in pro_crawl_tasks. No API requests.', lane: 'pro-bulk', params: [] },
   'pro-crawl': { description: 'Pro: works through the crawl tasks in priority order on the backfill quota floor, a time budget at a time; backs off when the database is slow.', lane: 'pro-bulk', params: [{ name: 'max_minutes', type: 'number', label: 'Time budget (minutes)', default: 9 }, { name: 'max_calls', type: 'number', label: 'At most N requests' }, { name: 'kinds', type: 'string[]', label: 'Only these kinds', help: 'e.g. squad, league_players' }] },
   'pro-rank': { description: 'Pro: nightly recent minutes (search order), indexable, current club and shirt number for every player.', lane: 'pro-bulk', params: [] },
+  'asa-sync': { description: 'Sources: American Soccer Analysis for MLS, NWSL, USL Championship, League One, MLS Next Pro and Super League: games, xG, shooting, passing, goals added, clubs, players, grounds (no API-Football requests).', lane: 'sources', params: [{ name: 'league', type: 'number', label: 'API-Football league id', help: 'e.g. 253 for MLS. All six when blank.' }, season, { name: 'history', type: 'boolean', label: 'Past seasons too', default: true }, { name: 'max_minutes', type: 'number', label: 'Time budget (minutes)', default: 9 }] },
+  'asa-shots': { description: 'Sources: every shot of each final game from American Soccer Analysis (one request a game), newest seasons first.', lane: 'sources', params: [{ name: 'league', type: 'number', label: 'API-Football league id' }, { name: 'max_minutes', type: 'number', label: 'Time budget (minutes)', default: 9 }] },
+  'source-map': { description: 'Sources: match other sources\' clubs, games and players to API-Football (by name, games played, birth date and club). Hand-verified rows are kept.', lane: 'sources', params: [{ name: 'league', type: 'number', label: 'API-Football league id' }] },
+  'source-check': { description: 'Sources: compare each collected score, minute total, goal and assist with API-Football and record agree / differ / unmatched.', lane: 'sources', params: [{ name: 'league', type: 'number', label: 'API-Football league id' }, season] },
   'hourly': { description: 'Every 30 minutes in season: recent scoreboard days, NCAA box scores, pending school box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season] },
   'nightly': { description: 'Daily: two-day sweep, NCAA re-fetch, school sync (no bios), orphans, reconcile, aggregates, standings, polls, quality, retention.', lane: 'crawl', composite: true, params: [season], dangerous: true },
   'standings': { description: 'Every 3 hours in season: membership verification, conference standings, polls.', lane: 'crawl', composite: true, params: [season] },
@@ -52,6 +56,8 @@ export const JOB_META: Record<string, JobMeta> = {
 
 /** The jobs the 'pro' worker lane claims (and the crawl lane leaves alone). */
 export const PRO_LANE_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'pro').map(([n]) => n);
+/** The jobs the 'sources' lane claims: other data sources and the checks against API-Football. */
+export const SOURCE_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'sources').map(([n]) => n);
 /** The jobs the 'pro-bulk' lane claims: the long crawl work, kept off both the college crawl and the pro scoreboard. */
 export const PRO_BULK_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'pro-bulk').map(([n]) => n);
 

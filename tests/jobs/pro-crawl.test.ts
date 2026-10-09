@@ -114,6 +114,22 @@ describe('crawl plan', () => {
   });
 });
 
+describe('season totals where American Soccer Analysis covers the season', () => {
+  const leagues = new Map([L(253, 1, 'league', true, 2026, 'USA'), L(256, 13, 'league', true, 2026, 'USA', 'amateur')]);
+  const seasons = new Map([
+    [253, [{ season: 2026, standings: true, players: true, injuries: true, playerLines: true }, { season: 2014, standings: true, players: true, injuries: false, playerLines: false }, { season: 2012, standings: true, players: true, injuries: false, playerLines: true }]],
+    [256, [{ season: 2026, standings: true, players: true, injuries: false, playerLines: true }]],
+  ]);
+  const tasks = planTasks({ leagues, seasons, leagueTeams: [], topPlayers: [], newPlayers: [] });
+  const has = (key: string) => tasks.some((t) => t.kind === 'league_players' && t.key === key);
+  it('skips API-Football\'s paged totals only when ASA has the season and API-Football has match lines', () => {
+    expect(has('253|2026')).toBe(false); // ASA + match lines
+    expect(has('253|2014')).toBe(true);  // ASA, but no match lines from API-Football
+    expect(has('253|2012')).toBe(true);  // before ASA's first MLS season
+    expect(has('256|2026')).toBe(true);  // a league ASA does not cover
+  });
+});
+
 describe('database pace', () => {
   it('halves the batch and asks for a pause when a batch is slow or fails, grows back when calm', async () => {
     const p = new Pace({ slowMs: 5 });
