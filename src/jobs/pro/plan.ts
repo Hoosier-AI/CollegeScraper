@@ -31,10 +31,11 @@ export interface PlanInput {
 /** Every task the crawl should have. Pure. */
 export function planTasks(input: PlanInput): TaskSeed[] {
   const out = new Map<string, TaskSeed>();
+  let tierNow = 0;
   const add = (kind: string, key: string | number, priority: number, every_days: number | null) => {
     const k = `${kind}|${key}`;
     const prev = out.get(k);
-    if (!prev || priority < prev.priority) out.set(k, { kind, key: String(key), priority, every_days });
+    if (!prev || priority < prev.priority) out.set(k, { kind, key: String(key), priority, every_days, tier: tierNow });
   };
   add('countries', 'all', 1, 30);
   add('profiles_page', 1, 10, 30);
@@ -43,6 +44,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
   for (const l of input.leagues.values()) {
     if (!l.enabled || l.current_season == null) continue;
     const tier = tierOf(l); const c = l.current_season;
+    tierNow = tier;
     const k = (s: number) => `${l.id}|${s}`;
     add('season_fixtures', k(c), by(tier, 20, 40, 60), by(tier, 7, 7, 14));
     add('league_players', k(c), by(tier, 30, 70, 110), by(tier, 7, 14, 30));
@@ -71,10 +73,12 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     teamTier.set(lt.team_id, Math.min(teamTier.get(lt.team_id) ?? 3, t) as Tier);
   }
   for (const [team, tier] of teamTier) {
+    tierNow = tier;
     add('squad', team, by(tier, 35, 80, 120), by(tier, 7, 30, 30));
     add('transfers', team, by(tier, 55, 150, 190), by(tier, 7, 60, 60));
     add('coach', team, by(tier, 58, 155, 195), by(tier, 30, 90, 90));
   }
+  tierNow = 1;
   for (const p of input.topPlayers) add('trophies', p, 400, 90);
   return [...out.values()];
 }

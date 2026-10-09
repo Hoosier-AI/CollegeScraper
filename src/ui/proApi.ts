@@ -3,6 +3,10 @@
 // data on, so pro data has no public API.
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getDb, kvGet, selectAll } from '../db/client.js';
+import { loadConfig } from '../config.js';
+import type { QuotaState } from '../sources/apiFootball/client.js';
+import { byKind, byTier, callsPerDay, etaDays, type ProgressRow, type RunCounters } from '../ops/proProgress.js';
+import { schedule as cqSchedule } from '../ops/consoleQueries.js';
 import * as pro from '../pro/queries.js';
 import { eastern } from '../jobs/seasons.js';
 import { SLUG } from '../seo/util.js';
@@ -93,26 +97,53 @@ export function registerProApi(app: FastifyInstance): void {
     return reply.header('Cache-Control', 'public, max-age=300').send({ pro: await pro.proCareerOfCollegePlayer(getDb(), req.params.id) });
   });
 
-  // Owner console (behind the trigger secret, like every /api/console route): the shared quota and the pipeline's size.
+  // Owner console (behind the trigger secret, like every /api/console route): the crawl's progress for the console and the
+  // PlaibookOS hub (Stats -> Pro). Counts are estimates on the big tables (exact on the small ones) so it stays cheap to poll.
   app.get('/api/console/pro', async () => {
     const db = getDb();
-    const count = (t: string, f?: (q: any) => any) => { let q = db.from(t).select('*', { count: 'exact', head: true }); if (f) q = f(q); return q.then((r: { count: number | null }) => r.count ?? 0); };
-    const [quota, leagues, enabled, fixtures, finals, detailed, players, profiled, links, seasonsDone, seasonsAll] = await Promise.all([
-      kvGet(db, PRO_QUOTA_KEY),
+    const cfg = loadConfig();
+    const count = (t: string, f?: (q: any) => any, mode: 'exact' | 'estimated' = 'exact') => { let q = db.from(t).select('*', { count: mode, head: true }); if (f) q = f(q); return q.then((r: { count: number | null }) => r.count ?? 0); };
+    const est = (t: string, f?: (q: any) => any) => count(t, f, 'estimated');
+    const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+    const [quota, progress, recent, last, sched, leagues, enabled, teams, players, profiled, fixtures, finals, detailed, provider, computed, squads, transfers, coaches, trophies, injuries, links, countries] = await Promise.all([
+      kvGet<QuotaState & { saved_at?: string }>(db, PRO_QUOTA_KEY),
+      db.rpc('pro_crawl_progress').then((r) => { if (r.error) throw new Error(r.error.message); return (r.data ?? []) as ProgressRow[]; }),
+      selectAll<RunCounters>(db, 'college_crawl_runs', 'job,finished_at,counters', (q) => q.like('job', 'pro-%').gte('finished_at', since)),
+      db.from('college_crawl_runs').select('id,job,status,created_at,started_at,finished_at,counters,error').in('job', ['pro-crawl', 'pro-plan', 'pro-rank', 'pro-scoreboard', 'pro-final-detail']).order('created_at', { ascending: false }).limit(60).then((r) => (r.data ?? []) as any[]),
+      cqSchedule(db),
       count('pro_leagues'), count('pro_leagues', (q) => q.eq('enabled', true)),
-      count('pro_fixtures'), count('pro_fixtures', (q) => q.eq('status', 'final')), count('pro_fixtures', (q) => q.not('detail_fetched_at', 'is', null)),
-      count('pro_players'), count('pro_players', (q) => q.not('profile_synced_at', 'is', null)),
-      count('pro_college_links', (q) => q.gte('confidence', 0.85).eq('rejected', false)),
-      count('pro_seasons', (q) => q.not('backfilled_at', 'is', null)), count('pro_seasons', (q) => q.not('fixtures_synced_at', 'is', null)),
+      est('pro_teams'), est('pro_players'), est('pro_players', (q) => q.not('profile_synced_at', 'is', null)),
+      est('pro_fixtures'), est('pro_fixtures', (q) => q.eq('status', 'final')), est('pro_fixtures', (q) => q.not('detail_fetched_at', 'is', null)),
+      est('pro_player_season_stats', (q) => q.eq('source', 'provider')), est('pro_player_season_stats', (q) => q.eq('source', 'computed')),
+      est('pro_squads'), est('pro_transfers'), count('pro_coaches'), est('pro_trophies'), count('pro_injuries'),
+      count('pro_college_links', (q) => q.gte('confidence', 0.85).eq('rejected', false)), count('pro_countries'),
     ]);
-    // The crawl queue: per kind, how many tasks, how many done at least once, how many due now, requests spent.
-    const tasks = await selectAll<{ kind: string; last_done_at: string | null; due_at: string; calls: number }>(db, 'pro_crawl_tasks', 'kind,last_done_at,due_at,calls');
-    const nowIso = new Date().toISOString();
-    const byKind: Record<string, { tasks: number; done: number; due: number; calls: number }> = {};
-    for (const t of tasks) {
-      const k = (byKind[t.kind] ??= { tasks: 0, done: 0, due: 0, calls: 0 });
-      k.tasks += 1; if (t.last_done_at) k.done += 1; if (t.due_at <= nowIso) k.due += 1; k.calls += t.calls ?? 0;
-    }
-    return { quota, leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links, seasons_backfilled: seasonsDone, seasons_started: seasonsAll, crawl: byKind };
+    const perDay = callsPerDay(recent, 7);
+    const kinds = byKind(progress).sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
+    const left = kinds.reduce((n, k) => n + k.calls_left, 0);
+    const tasks = kinds.reduce((n, k) => n + k.tasks, 0), done = kinds.reduce((n, k) => n + k.done, 0);
+    const budget = Math.max(0, (quota?.limit ?? 7500) - cfg.PRO_BACKFILL_RESERVE);
+    const lastRuns: Record<string, unknown> = {};
+    for (const r of last) if (!lastRuns[r.job] && r.status !== 'queued') lastRuns[r.job] = r;
+    const entry = (job: string) => sched.entries.find((e: { job: string }) => e.job === job) as { enabled: boolean; last_fired: string | null; next: string | null } | undefined;
+    return {
+      generated_at: new Date().toISOString(),
+      quota,
+      overall: { tasks, done, pct: tasks ? Math.round((done / tasks) * 1000) / 10 : 0, calls_left: left, eta_days: etaDays(left, perDay, budget) },
+      pace: { calls_today: quota?.day === new Date().toISOString().slice(0, 10) ? quota.usedToday : 0, crawl_budget_today: budget, per_day: perDay, calls_7d: perDay.reduce((n, d) => n + d.calls, 0) },
+      by_kind: kinds, by_tier: byTier(progress),
+      tables: { leagues, enabled, countries, teams, players, profiled, fixtures, finals, detailed, season_rows_provider: provider, season_rows_computed: computed, squads, transfers, coaches, trophies, injuries, college_links: links },
+      last_runs: lastRuns,
+      flags: {
+        key_set: !!cfg.API_FOOTBALL_KEY, blocked_until: quota?.blockedUntil ?? null, scheduler_paused: sched.paused,
+        crawl_enabled: entry('pro-crawl')?.enabled ?? false, plan_enabled: entry('pro-plan')?.enabled ?? false,
+        next_crawl: entry('pro-crawl')?.next ?? null, next_plan: entry('pro-plan')?.next ?? null,
+      },
+      // Kept for the Stats console's own Pro card (older shape).
+      leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links,
+    };
   });
 }
+
+/** Display order of the crawl kinds: what is crawled first, first. */
+const KIND_ORDER = ['countries', 'country_teams', 'profiles_page', 'profile', 'season_fixtures', 'standings', 'league_players', 'detail', 'squad', 'transfers', 'coach', 'injuries', 'trophies'];

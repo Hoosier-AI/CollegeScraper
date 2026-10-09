@@ -57,7 +57,8 @@ export async function schedule(db: Db) {
   };
 }
 
-export interface RunFilter { job?: string; status?: string; since?: string; hide_live?: boolean; limit?: number; offset?: number }
+/** group: 'pro' = Plaibook Stats Pro jobs (pro-*), 'college' = everything else. */
+export interface RunFilter { job?: string; status?: string; since?: string; hide_live?: boolean; limit?: number; offset?: number; group?: 'pro' | 'college' }
 
 export async function runsPage(db: Db, f: RunFilter) {
   const limit = Math.min(200, Math.max(1, f.limit ?? 50)), offset = Math.max(0, f.offset ?? 0);
@@ -66,6 +67,8 @@ export async function runsPage(db: Db, f: RunFilter) {
   if (f.status) q = q.eq('status', f.status);
   if (f.since) q = q.gte('created_at', f.since);
   if (f.hide_live && f.job !== 'live') q = q.neq('job', 'live');
+  if (f.group === 'pro') q = q.like('job', 'pro-%');
+  if (f.group === 'college') q = q.not('job', 'like', 'pro-%');
   const { data, error, count: total } = await q;
   if (error) { if (/416|range/i.test(error.message)) return { rows: [], total: 0, limit, offset }; throw new Error(error.message); }
   return { rows: data ?? [], total: total ?? 0, limit, offset };
@@ -159,4 +162,25 @@ export async function crawlHealth(db: Db) {
 export async function settings(db: Db) {
   const [live, paused, crawl, overrides, contact] = await Promise.all([liveSettings(db), schedulerPaused(db), crawlPaused(db), schedulerOverrides(db), cachedKv<string | null>(db, KV.contactEmail, null)]);
   return { live, scheduler_paused: paused, crawl_paused: crawl, overrides, contact_email: contact ?? loadConfig().contactEmail, jobs: Object.keys(JOB_META) };
+}
+
+/** College crawl progress for the hub: every stage's programs synced (by division), box-score coverage, quality, recent runs. */
+export async function collegeProgress(db: Db, season: number) {
+  const [stages, finals, boxFinals, snap, runs] = await Promise.all([
+    db.rpc('college_sync_progress', { p_season: season }).then((r) => { if (r.error) throw new Error(r.error.message); return (r.data ?? []) as any[]; }),
+    count(db, 'college_games', (x) => x.eq('season', season).eq('status', 'final')),
+    count(db, 'college_games', (x) => x.eq('season', season).eq('status', 'final').not('source_of_truth', 'is', null)),
+    db.from('college_quality_snapshots').select('taken_at,games,finals,checks').eq('season', season).order('taken_at', { ascending: false }).limit(1).maybeSingle().then((r) => r.data as any),
+    db.from('college_crawl_runs').select('id,job,status,started_at,finished_at,counters,error').in('job', ['nightly', 'weekly', 'hourly', 'backfill']).order('created_at', { ascending: false }).limit(40).then((r) => (r.data ?? []) as any[]),
+  ]);
+  const totals = stages.reduce((a, r) => { for (const k of ['programs', 'roster', 'schedule', 'stats', 'boxscores', 'roster_24h', 'schedule_24h', 'stats_24h', 'boxscores_24h', 'failing']) a[k] = (a[k] ?? 0) + Number(r[k] ?? 0); return a; }, {} as Record<string, number>);
+  const last: Record<string, unknown> = {};
+  for (const r of runs) if (!last[r.job]) last[r.job] = r;
+  const issues = Array.isArray(snap?.checks) ? (snap.checks as { count?: number }[]).reduce((n, c) => n + (Number(c.count) || 0), 0) : null;
+  return {
+    season, by_division: stages, totals,
+    games: { finals, finals_with_box: boxFinals, box_coverage: finals ? Math.round((boxFinals / finals) * 1000) / 10 : null },
+    quality: snap ? { taken_at: snap.taken_at, games: snap.games, finals: snap.finals, issues } : null,
+    last_runs: last, generated_at: new Date().toISOString(),
+  };
 }

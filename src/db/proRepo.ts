@@ -181,7 +181,8 @@ export async function replaceInjuries(db: Db, league: number, season: number, ro
   return rows.length ? upsertChunked(db, 'pro_injuries', asRows(rows), { onConflict: 'league_id,season,player_id,fixture_id' }) : 0;
 }
 
-export interface TaskSeed { kind: string; key: string; priority: number; every_days: number | null }
+/** tier: 0 everyone (clubs, profiles), 1 hand-picked competitions, 2 other leagues, 3 cups (progress views). */
+export interface TaskSeed { kind: string; key: string; priority: number; every_days: number | null; tier?: number }
 
 /** New tasks only: an existing task keeps its schedule and progress (its priority follows the tier, see plan.ts). */
 export async function insertTasks(db: Db, seeds: TaskSeed[]): Promise<number> {

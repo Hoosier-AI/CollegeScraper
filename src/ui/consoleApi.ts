@@ -35,7 +35,11 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   app.get<{ Querystring: Record<string, string> }>('/api/console/runs', async (req) => cq.runsPage(getDb(), {
     job: req.query.job || undefined, status: req.query.status || undefined, since: req.query.since || undefined,
     hide_live: req.query.hide_live !== '0', limit: Number(req.query.limit) || 50, offset: Number(req.query.offset) || 0,
+    group: req.query.group === 'pro' || req.query.group === 'college' ? req.query.group : undefined,
   }));
+
+  // College crawl progress for a season: each stage's programs, finals with box scores, the latest quality snapshot.
+  app.get<{ Querystring: Record<string, string> }>('/api/console/college-progress', async (req) => cq.collegeProgress(getDb(), Number(req.query.season) || currentSeason()));
   app.get('/api/console/jobs/catalogue', async () => ({ jobs: cq.catalogue(), rollup: await cq.jobRollup(getDb()) }));
 
   app.get('/api/console/schedule', async () => cq.schedule(getDb()));

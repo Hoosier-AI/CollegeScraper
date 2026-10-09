@@ -46,6 +46,14 @@ describe('crawl plan', () => {
     expect(get('transfers', '1')!.priority).toBeLessThan(get('transfers', '2')!.priority);
     expect(get('trophies', '7')).toMatchObject({ priority: 400, every_days: 90 });
   });
+  it('every task carries its tier for the progress views', () => {
+    expect(get('profiles_page', '1')!.tier).toBe(0);
+    expect(get('season_fixtures', '253|2026')!.tier).toBe(1);
+    expect(get('season_fixtures', '183|2026')!.tier).toBe(2);
+    expect(get('season_fixtures', '9001|2026')!.tier).toBe(3);
+    expect(get('squad', '2')!.tier).toBe(2);
+    expect(get('trophies', '7')!.tier).toBe(1);
+  });
   it('one task per kind and key', () => {
     expect(new Set(tasks.map((t) => `${t.kind}|${t.key}`)).size).toBe(tasks.length);
   });
