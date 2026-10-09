@@ -96,7 +96,8 @@ export async function markNoDetail(db: Db, leagueId: number, season: number, at 
   return data?.length ?? 0;
 }
 
-export async function upsertStandings(db: Db, rows: StandingRow[], at = new Date().toISOString()): Promise<number> {
+/** source: where the table came from (pro_standings.source, migration 141): API-Football unless another source's. */
+export async function upsertStandings(db: Db, rows: StandingRow[], at = new Date().toISOString(), source = 'api-football'): Promise<number> {
   if (!rows.length) return 0;
   // A table is replaced whole: a team relegated mid-season or moved between groups must not linger.
   const pairs = [...new Set(rows.map((r) => `${r.league_id}|${r.season}`))];
@@ -105,7 +106,7 @@ export async function upsertStandings(db: Db, rows: StandingRow[], at = new Date
     const { error } = await db.from('pro_standings').delete().eq('league_id', league!).eq('season', season!);
     if (error) throw new Error(`clear standings: ${error.message}`);
   }
-  return upsertChunked(db, 'pro_standings', rows.map((r) => ({ ...r, updated_at: at })), { onConflict: 'league_id,season,group_name,team_id' });
+  return upsertChunked(db, 'pro_standings', rows.map((r) => ({ ...r, source, updated_at: at })), { onConflict: 'league_id,season,group_name,team_id' });
 }
 
 export async function patchSeason(db: Db, leagueId: number, season: number, patch: Record<string, unknown>): Promise<void> {

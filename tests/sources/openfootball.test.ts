@@ -35,7 +35,8 @@ describe('openfootball Football.TXT', () => {
   });
 });
 
-import { apiSeasonsOf, negativeId, tableFromResults, toSrcGame } from '../../src/jobs/sources/history.js';
+import { apiSeasonsOf, negativeId, tableFromResults, tablesFromResults, toSrcGame } from '../../src/jobs/sources/history.js';
+import { isRegularRound, recordsFromResults } from '../../src/jobs/sources/checks.js';
 
 describe('MLS history from openfootball', () => {
   it('ids for things API-Football does not have: negative, stable, distinct', () => {
@@ -54,6 +55,18 @@ describe('MLS history from openfootball', () => {
   it('history never touches a season API-Football lists, crawled yet or not', () => {
     const seasons = apiSeasonsOf([{ season: 2019, coverage: {} }, { season: 2025, coverage: null }, { season: 2018, coverage: { source: 'asa' } }]);
     expect([...seasons].sort()).toEqual([2019, 2025]);
+  });
+  it('tables from results: one per group of clubs that played each other', () => {
+    const t = tablesFromResults([{ home: 1, away: 2, hg: 1, ag: 0 }, { home: 2, away: 3, hg: 0, ag: 0 }, { home: 10, away: 11, hg: 2, ag: 2 }], 1116, 2025);
+    expect([...new Set(t.map((r) => r.group_name))]).toEqual(['Group 1 (from results)', 'Group 2 (from results)']);
+    expect(t.filter((r) => r.group_name.startsWith('Group 1')).map((r) => r.team_id)).toEqual([1, 3, 2]);
+    expect(tablesFromResults([{ home: 1, away: 2, hg: 1, ag: 0 }], 1, 2025)[0]!.group_name).toBe('Table (from results)');
+  });
+  it('regular season only, and records from results', () => {
+    expect(isRegularRound('Regular Season - 4')).toBe(true);
+    expect(isRegularRound('Playoffs - Quarter-finals')).toBe(false);
+    expect(isRegularRound('Final')).toBe(false);
+    expect(Object.fromEntries(recordsFromResults([{ home_team_id: 1, away_team_id: 2, home_goals: 2, away_goals: 2 }, { home_team_id: 1, away_team_id: 3, home_goals: 1, away_goals: 0 }]))).toEqual({ 1: { played: 2, points: 4 }, 2: { played: 1, points: 1 }, 3: { played: 1, points: 0 } });
   });
   it('a table from results: 3 for a win, then goal difference, then goals', () => {
     const t = tableFromResults([{ home: 1, away: 2, hg: 2, ag: 0 }, { home: 2, away: 3, hg: 1, ag: 1 }, { home: 3, away: 1, hg: 3, ag: 0 }], 253, 2005);

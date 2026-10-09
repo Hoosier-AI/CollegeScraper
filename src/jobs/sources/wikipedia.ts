@@ -13,11 +13,15 @@ import { parseSeasonTables } from '../../sources/wikipedia/parse.js';
 export const WIKI_SOURCE = 'wikipedia';
 export const WIKI_CREDIT = { name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0' };
 
-export interface WikiTarget { league: number; first: number; title: (season: number) => string }
+/** current: also read the season in play (leagues that finish by summer: their table is final by the autumn). */
+export interface WikiTarget { league: number; first: number; title: (season: number) => string; current?: boolean }
 export const WIKI_TARGETS: WikiTarget[] = [
   { league: 253, first: 1996, title: (y) => `${y}_Major_League_Soccer_season` },
   { league: 254, first: 2013, title: (y) => `${y}_National_Women%27s_Soccer_League_season` },
   { league: 255, first: 2011, title: (y) => (y <= 2014 ? `${y}_USL_Pro_season` : y <= 2018 ? `${y}_United_Soccer_League_season` : `${y}_USL_Championship_season`) },
+  // Pre-pro leagues API-Football has no tables for: their division and conference tables.
+  { league: 256, first: 2017, title: (y) => (y >= 2019 ? `${y}_USL_League_Two_season` : `${y}_Premier_Development_League_season`), current: true },
+  { league: 1118, first: 2019, title: (y) => `${y}_National_Premier_Soccer_League_season`, current: true },
 ];
 
 /** params: { league?: number, season?: number, force?: boolean } */
@@ -27,10 +31,12 @@ export async function wikipediaSync(ctx: JobContext): Promise<void> {
     .map((r) => `${r.league_id}|${r.season}`));
   const current = new Map((await selectAll<{ id: number; current_season: number | null }>(ctx.db, 'pro_leagues', 'id,current_season', (q) => q.in('id', WIKI_TARGETS.map((t) => t.league)))).map((l) => [l.id, l.current_season ?? new Date().getUTCFullYear()]));
   for (const t of WIKI_TARGETS.filter((x) => !Number(ctx.params.league) || x.league === Number(ctx.params.league))) {
-    const last = (current.get(t.league) ?? new Date().getUTCFullYear()) - 1;
+    const cur = current.get(t.league) ?? new Date().getUTCFullYear();
+    const last = t.current ? cur : cur - 1;
     for (let season = t.first; season <= last; season += 1) {
       if (Number(ctx.params.season) && season !== Number(ctx.params.season)) continue;
-      if (done.has(`${t.league}|${season}`) && !ctx.params.force) continue;
+      // Finished seasons once; a current one every run (it can still change).
+      if (done.has(`${t.league}|${season}`) && season !== cur && !ctx.params.force) continue;
       if (await ctx.cancelled()) return;
       try {
         const res = await f.get(`https://en.wikipedia.org/wiki/${t.title(season)}`, { accept: 'text/html', noStore: true, skipCache: true, attempts: 2 });

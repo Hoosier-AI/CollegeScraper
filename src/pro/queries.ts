@@ -124,20 +124,22 @@ async function leadersFor(db: Db, league: number, season: number, stat: 'goals' 
   return rows.map((r) => ({ player: { id: r.player?.id, name: r.player?.display_name, slug: r.player?.slug, photo: r.player?.photo ?? null }, team: teams.get(r.team_id) ?? null, apps: r.apps, minutes: r.minutes, goals: r.goals, assists: r.assists, rating: r.rating == null ? null : Number(r.rating) }));
 }
 
-const HISTORY_CREDIT: Record<string, { name: string; url: string; license: string }> = {
+const HISTORY_CREDIT: Record<string, { name: string; url: string | null; license: string | null }> = {
   openfootball: { name: 'openfootball', url: 'https://github.com/openfootball/world', license: 'public domain (CC0)' },
   wikipedia: { name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0' },
   asa: { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', license: 'credited' },
 };
 /**
- * Credits for a history season: the results' source (whose table, worked out from them, it also is), and Wikipedia
- * when the table shown is its official one.
+ * Credits for a season's results and table when they are not API-Football's: the results' source for a history
+ * season, and the table's (Wikipedia's official one, or one worked out from the results).
  */
-function historyCredits(source: string | null, hasResults: boolean, wikipediaTable: boolean) {
-  if (!source) return null;
-  const out = [{ what: hasResults ? 'Results' : 'Table', ...HISTORY_CREDIT[source]! }];
-  if (wikipediaTable && source !== 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
-  return out;
+function historyCredits(source: string | null, hasResults: boolean, tableSource: string | null) {
+  const out: { what: string; name: string; url: string | null; license: string | null }[] = [];
+  if (source && hasResults) out.push({ what: 'Results', ...HISTORY_CREDIT[source]! });
+  if (tableSource === 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
+  else if (tableSource === 'results') out.push({ what: 'Table', name: 'worked out from the results', url: null, license: 'groups are the clubs that played each other' });
+  else if (source && !hasResults) out.push({ what: 'Table', ...HISTORY_CREDIT[source]! });
+  return out.length ? out : null;
 }
 
 export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
@@ -188,7 +190,8 @@ export async function league(db: Db, slug: string, season?: number | null) {
     champions: [...champions.values()].slice(0, 15), team_table: teamTable,
     advanced_leaders: await leagueAdvancedLeaders(db, lg.id, s ?? null),
     // A season API-Football does not have: where its results and table came from (credited on the page).
-    history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0, standings.length > 0 && !standings.some((g) => /from results/i.test(g.name))),
+    history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0,
+      ((await db.from('pro_standings').select('source').eq('league_id', lg.id).eq('season', s).limit(1)).data?.[0] as { source?: string } | undefined)?.source ?? null),
   };
 }
 

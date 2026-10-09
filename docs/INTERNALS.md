@@ -233,6 +233,15 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
       worked out from results.
     - League pages credit the source of a history season's results and table.
     - Renamed clubs are kept in `data/pro-source-aliases.json`.
+  - **Tables everywhere (migration 141):**
+    - The planner reads every current table: US daily, top competitions every 2 days, the rest weekly. The scoreboard
+      job still refreshes a table after each final.
+    - `season_fixtures` refreshes club records from results alone (played, W/D/L, goals, home and away).
+    - USL League Two and NPSL division tables come from Wikipedia, checked against records worked out from
+      API-Football's regular-season results (97% gate).
+    - `results-tables` covers leagues with no table anywhere (WPSL and others): it works one out from results, one
+      table per group of clubs that played each other. `pro_standings.source` says where each table came from.
+    - The expected table (xPts, xG) comes from American Soccer Analysis, behind the sources switch.
   - `sidelined`, `trophies` and `coach_trophies` ask for 20 people a request (`players=` / `coachs=`). If an answer
     can't be split by person, the process goes back to one request each (`batchWorks` in `src/jobs/pro/tasks.ts`).
   - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.

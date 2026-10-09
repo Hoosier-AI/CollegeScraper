@@ -45,6 +45,21 @@ export function checkStanding(r: { source: string; league_id: number; season: nu
   return out;
 }
 
+/** A regular-season round (not playoffs, finals, knockouts or wildcards), by the provider's round name. */
+export const isRegularRound = (round: string | null | undefined): boolean => !/play-?off|final|semi|quarter|round of|knockout|wild ?card|elimination/i.test(round ?? '');
+
+/** Each club's matches played and points (3 a win) from final results: a table to compare with when there is none. */
+export function recordsFromResults(games: { home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null }[]): Map<number, { played: number; points: number }> {
+  const out = new Map<number, { played: number; points: number }>();
+  const add = (id: number, pts: number) => { const r = out.get(id) ?? { played: 0, points: 0 }; r.played += 1; r.points += pts; out.set(id, r); };
+  for (const g of games) {
+    if (g.home_goals == null || g.away_goals == null) continue;
+    add(g.home_team_id, g.home_goals > g.away_goals ? 3 : g.home_goals === g.away_goals ? 1 : 0);
+    add(g.away_team_id, g.away_goals > g.home_goals ? 3 : g.home_goals === g.away_goals ? 1 : 0);
+  }
+  return out;
+}
+
 /** Agreement of a league season's compared fields (unmatched rows count against it). Null with nothing compared. */
 export function agreementRate(rows: { status: CheckStatus }[]): number | null {
   if (!rows.length) return null;

@@ -55,6 +55,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'openfootball-sync', label: 'Sources: openfootball MLS results', cadence: 'Mondays 08:30 UTC', due: (c) => c.dow === 1 && c.h === 8 && c.m === 30 },
   { job: 'wikipedia-sync', label: 'Sources: Wikipedia season tables', cadence: 'Mondays 08:35 UTC (new finished seasons only)', due: (c) => c.dow === 1 && c.h === 8 && c.m === 35 },
   { job: 'history-fill', label: 'Sources: MLS history before API-Football', cadence: 'Mondays 09:40 UTC (after the checks)', due: (c) => c.dow === 1 && c.h === 9 && c.m === 40 },
+  { job: 'results-tables', label: 'Sources: tables from results where none exist', cadence: 'daily 09:55 UTC (after history fill)', due: (c) => c.h === 9 && c.m === 55 },
   { job: 'asa-shots', label: 'Sources: shot maps', cadence: 'every 30 minutes at :15 and :45, until every final has its shots', due: (c) => c.m === 15 || c.m === 45 },
 ];
 

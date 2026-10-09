@@ -90,6 +90,8 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const needTotals = (s: number) => !(asaCovers(l.id, s) && cov.get(s)?.playerLines === true);
     const statClubs = (s: number) => (teamsOf.get(k(s)) ?? []).filter((t) => l.country === 'USA' ? l.type === 'league' : usClubs.has(t));
     add('season_fixtures', k(c), 11, 3);
+    // The table, every day (the scoreboard job also refreshes it after each final).
+    if (now?.standings !== false) add('standings', k(c), 11, 1);
     if (now?.injuries !== false) add('injuries', k(c), 11, 1);
     if (now?.players !== false && needTotals(c)) add('league_players', k(c), 12, pro ? 3 : 7);
     add('detail', k(c), 13, 1);
@@ -121,6 +123,8 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     tierNow = tier; const c = l.current_season!;
     const k = (s: number) => `${l.id}|${s}`;
     add('season_fixtures', k(c), by(tier, 20, 40, 60), by(tier, 7, 7, 14));
+    const nowCov = (input.seasons.get(l.id) ?? []).find((x) => x.season === c);
+    if (nowCov?.standings !== false) add('standings', k(c), by(tier, 21, 41, 61), by(tier, 2, 7, 7));
     add('league_players', k(c), by(tier, 30, 70, 110), by(tier, 7, 14, 30));
     add('detail', k(c), by(tier, 32, 75, 115), 7);
     if (tier === 2) {

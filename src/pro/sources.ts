@@ -146,8 +146,15 @@ export async function leagueAdvancedLeaders(db: Db, leagueId: number, season: nu
     const p = people.get(players.get(r.player_ext) ?? -1);
     return p ? { player: { name: p.display_name, slug: p.slug, photo: p.photo ?? null }, team: clubs.get(teams.get(r.team_ext) ?? -1) ?? null, minutes: r.minutes, goals: r.goals, assists: r.assists, value: Number(r[k]) } : null;
   };
+  // The expected table: each club's points against the points its chances were worth.
+  const clubRows = await selectAll<any>(db, 'pro_adv_team_seasons', 'team_ext,games,points,xpoints,xg_for,xg_against,g_plus_for,g_plus_against', (q) => q.eq('source', SOURCE).eq('league_id', leagueId).eq('season', season));
+  const clubIds = await proIdsOf(db, 'team', clubRows.map((r) => r.team_ext));
+  const clubRefs = await teamsById(db, [...clubIds.values()]);
+  const table = clubRows.map((r) => ({ team: clubRefs.get(clubIds.get(r.team_ext) ?? -1) ?? null, games: r.games, points: r.points, xpoints: n(r.xpoints), xg_for: n(r.xg_for), xg_against: n(r.xg_against), g_plus: r.g_plus_for != null && r.g_plus_against != null ? Math.round((Number(r.g_plus_for) - Number(r.g_plus_against)) * 100) / 100 : null }))
+    .filter((r) => r.team).sort((a, b) => (b.xpoints ?? 0) - (a.xpoints ?? 0));
   return {
     credit: SOURCE_CREDIT,
+    table,
     xg: picks.xg.map((r) => line(r, 'xg')).filter(Boolean),
     xa: picks.xa.map((r) => line(r, 'xa')).filter(Boolean),
     g_plus: picks.g_plus.map((r) => line(r, 'g_plus_total')).filter(Boolean),

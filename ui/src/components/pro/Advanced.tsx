@@ -136,6 +136,25 @@ export function MatchAdvancedFacts({ a }: { a: AdvMatch }) {
   return facts.length ? <p className="text-xs text-chalk-400">{facts.join(' · ')}</p> : null;
 }
 
+export interface ExpectedLine { team: ProTeamRef | null; games: number | null; points: number | null; xpoints: number | null; xg_for: number | null; xg_against: number | null; g_plus: number | null }
+
+/** Clubs by expected points: what their chances were worth against what they got. */
+export function ExpectedTable({ rows, season }: { rows: ExpectedLine[]; season: number | null }) {
+  const cols: Column<ExpectedLine>[] = [
+    { key: 'rank', label: '#', num: true, sortable: false, value: (r) => rows.indexOf(r) + 1 },
+    { key: 'team', label: 'Club', primary: true, value: (r) => r.team?.name ?? '', render: (r) => r.team ? <Link to={proPath.team(r.team.slug, season)} className="flex items-center gap-1.5 hover:text-pitch-300"><TeamLogo src={r.team.logo} name={r.team.name} size={18} /><span className="truncate">{r.team.name}</span></Link> : '–' },
+    { key: 'games', label: 'P', title: 'Matches', num: true, priority: 2, value: (r) => r.games },
+    { key: 'xpoints', label: 'xPts', title: 'Expected points', num: true, decimals: 1, value: (r) => r.xpoints },
+    { key: 'points', label: 'Pts', title: 'Points', num: true, value: (r) => r.points },
+    { key: 'diff', label: '+/-', title: 'Points above (or below) expected', num: true, decimals: 1, value: (r) => (r.points != null && r.xpoints != null ? Math.round((r.points - r.xpoints) * 10) / 10 : null),
+      render: (r) => { const d = r.points != null && r.xpoints != null ? r.points - r.xpoints : null; return d == null ? '–' : <span className={d >= 0 ? 'text-win' : 'text-loss'}>{d > 0 ? '+' : ''}{d.toFixed(1)}</span>; } },
+    { key: 'xg_for', label: 'xGF', title: 'Expected goals for', num: true, decimals: 1, priority: 2, value: (r) => r.xg_for },
+    { key: 'xg_against', label: 'xGA', title: 'Expected goals against', num: true, decimals: 1, priority: 2, value: (r) => r.xg_against },
+    { key: 'g_plus', label: 'g+', title: 'Goals added, for minus against', num: true, decimals: 1, priority: 3, value: (r) => r.g_plus },
+  ];
+  return <DataTable rows={rows} columns={cols} rowKey={(r) => String(r.team?.id)} caption={`Expected table ${season ?? ''}`} dense defaultSort={{ key: 'xpoints', dir: 'desc' }} />;
+}
+
 export function AdvancedLeaders({ data, season }: { data: { xg: AdvLeaderLine[]; xa: AdvLeaderLine[]; g_plus: AdvLeaderLine[] }; season: number | null }) {
   const list = (title: string, rows: AdvLeaderLine[], d = 1) => (
     <div className="min-w-0">

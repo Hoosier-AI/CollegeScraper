@@ -34,5 +34,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 138_pro_sources.sql | Other sources mapped onto API-Football and checked against it: `pro_source_seasons`, `pro_src_*` (games, teams, players, venues, officials keyed by the source's ids), `pro_adv_player_seasons` / `pro_adv_team_seasons` / `pro_adv_shots` (xG, xA, passing, goals added, shots), `pro_source_ids`, `pro_source_checks`, `pro_source_agreement()`; index on `pro_players.birth_date` | yes (2026-10-09) |
 | 139_pro_history.sql | History from other sources: `pro_src_games` gains round, half-time, extra-time and penalty scores; `pro_fixtures.source` / `pro_teams.source` ('api-football' or the source of a negative-id history row) | yes (2026-10-09) |
 | 140_pro_src_standings.sql | `pro_src_standings`: league tables from other sources (Wikipedia), keyed by the source's club names; checked against API-Football's tables and used for seasons it does not have | yes (2026-10-09) |
+| 141_pro_standings_source.sql | `pro_standings.source`: 'api-football', 'wikipedia' or 'results' (worked out from results, one table per group of clubs that played each other); league pages credit it | yes (2026-10-09) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

@@ -194,6 +194,9 @@ const handlers: Record<string, Handler> = {
     const teams = res.response.flatMap((f) => [f.teams.home.id, f.teams.away.id]);
     await t.pace.write(teams.length, (chunk) => upsertLeagueTeams(t.ctx.db, league, season, teams, chunk));
     await patchSeason(t.ctx.db, league, season, { fixtures_synced_at: now() });
+    // Club records for the season (played, won, drawn, lost, goals, home and away) from the results alone; match
+    // detail adds shots, cards and the rest when it arrives.
+    await refreshAggregates(t.ctx.db, league, season);
     t.ctx.inc('fixtures', r.stored);
     return { done: true };
   },

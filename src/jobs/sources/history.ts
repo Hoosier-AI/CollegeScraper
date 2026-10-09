@@ -12,6 +12,7 @@ import { selectAll, upsertChunked } from '../../db/client.js';
 import { patchSeason, refreshAggregates, upsertFixtures, upsertStandings } from '../../db/proRepo.js';
 import { patchSourceSeason, sourceIdMap, upsertSrcGames, upsertSrcTeams } from '../../db/sourceRepo.js';
 import { finalScore, parseSeasonFile, type OfMatch } from '../../sources/openfootball/parse.js';
+import { isRegularRound } from './checks.js';
 import type { SrcGameRow } from '../../sources/asa/parse.js';
 import type { FixtureRow, StandingRow } from '../../sources/apiFootball/parse.js';
 import { teamDisplayName } from '../../sources/apiFootball/leagues.js';
@@ -110,10 +111,14 @@ export async function historyFill(ctx: JobContext): Promise<void> {
 }
 
 /** League tables from Wikipedia for seasons API-Football has none of (MLS 1996-2011, NWSL 2013-2018, USL 2011-2014). */
-export const TABLE_TARGETS: { source: string; league: number; minCompared: number }[] = [
+export const TABLE_TARGETS: { source: string; league: number; minCompared: number; trust?: number }[] = [
   { source: 'wikipedia', league: MLS, minCompared: 100 },
   { source: 'wikipedia', league: 254, minCompared: 40 },
   { source: 'wikipedia', league: 255, minCompared: 60 },
+  // Pre-pro leagues: API-Football has their results but no table. Checked against those results (a forfeit or a
+  // points deduction can differ), so 97%.
+  { source: 'wikipedia', league: 256, minCompared: 100, trust: 0.97 },
+  { source: 'wikipedia', league: 1118, minCompared: 40, trust: 0.97 },
 ];
 
 async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], agreement: { agree: number; differ: number }[]): Promise<void> {
@@ -122,11 +127,15 @@ async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], ag
   const agree = agreement.reduce((n, r) => n + Number(r.agree), 0), compared = agree + agreement.reduce((n, r) => n + Number(r.differ), 0);
   const rate = compared ? agree / compared : 0;
   ctx.note(`${tag}_agreement`, `${(rate * 100).toFixed(2)}% of ${compared}`);
-  if (compared < t.minCompared || rate < HISTORY_TRUST) { ctx.note(`${tag}_skipped`, `needs ${HISTORY_TRUST * 100}% agreement on ${t.minCompared}+ compared table lines first`); return; }
+  const trust = t.trust ?? HISTORY_TRUST;
+  if (compared < t.minCompared || rate < trust) { ctx.note(`${tag}_skipped`, `needs ${trust * 100}% agreement on ${t.minCompared}+ compared table lines first`); return; }
 
-  const seasonRows = await selectAll<{ season: number; fixtures_synced_at: string | null; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,fixtures_synced_at,coverage', (q) => q.eq('league_id', t.league));
+  const seasonRows = await selectAll<{ season: number; fixtures_synced_at: string | null; coverage: { source?: string; standings?: boolean } | null }>(db, 'pro_seasons', 'season,fixtures_synced_at,coverage', (q) => q.eq('league_id', t.league));
   const apiSeasons = apiSeasonsOf(seasonRows);
-  const rows = (await selectAll<any>(db, 'pro_src_standings', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((r) => !apiSeasons.has(r.season));
+  // Also API-Football seasons it has no table for (results only): unless it has one after all.
+  const apiTables = new Set((await selectAll<{ season: number }>(db, 'pro_standings', 'season', (q) => q.eq('league_id', t.league).eq('source', 'api-football'))).map((r) => r.season));
+  const noTable = new Set(seasonRows.filter((r) => !r.coverage?.source && r.coverage?.standings === false && !apiTables.has(r.season)).map((r) => r.season));
+  const rows = (await selectAll<any>(db, 'pro_src_standings', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((r) => !apiSeasons.has(r.season) || noTable.has(r.season));
   if (!rows.length) { ctx.note(`${tag}_idle`, 'no history tables to fill'); return; }
 
   const teamMap = await sourceIdMap(db, t.source, 'team');
@@ -149,9 +158,10 @@ async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], ag
     }));
     // Two lines for one club in one table cannot be stored: keep the first.
     const uniq = [...new Map(lines.map((l) => [`${l.group_name}|${l.team_id}`, l])).values()];
-    await upsertStandings(db, uniq);
+    await upsertStandings(db, uniq, undefined, t.source);
     const prev = existing.get(season);
-    await patchSeason(db, t.league, season, { fixtures_synced_at: prev?.fixtures_synced_at ?? at, is_current: false, coverage: { source: prev?.coverage?.source ?? t.source }, backfilled_at: at });
+    // An API-Football season keeps its own season row; only a history season gets one marked with the source.
+    if (!noTable.has(season)) await patchSeason(db, t.league, season, { fixtures_synced_at: prev?.fixtures_synced_at ?? at, is_current: false, coverage: { source: prev?.coverage?.source ?? t.source }, backfilled_at: at });
     ctx.inc('tables');
     await ctx.heartbeat();
   }
@@ -202,7 +212,7 @@ async function fillFrom(ctx: JobContext, t: (typeof HISTORY_TARGETS)[number], ag
   ctx.inc('matches', await upsertFixtures(db, fixtures as unknown as FixtureRow[]));
   for (const season of [...new Set(games.map((g) => g.season))].sort()) {
     const regular = games.filter((g) => g.season === season && g.status === 'final' && !g.knockout && g.home_score != null);
-    await upsertStandings(db, tableFromResults(regular.map((g) => ({ home: teamMap.get(g.home_ext)!, away: teamMap.get(g.away_ext)!, hg: g.home_score, ag: g.away_score })), t.league, season, 'Overall (from results)'));
+    await upsertStandings(db, tableFromResults(regular.map((g) => ({ home: teamMap.get(g.home_ext)!, away: teamMap.get(g.away_ext)!, hg: g.home_score, ag: g.away_score })), t.league, season, 'Overall (from results)'), undefined, 'results');
     // coverage.source marks a season API-Football does not have: the planner and the backfill leave it alone.
     await patchSeason(db, t.league, season, { fixtures_synced_at: at, is_current: false, coverage: { source: t.source }, backfilled_at: at });
     await refreshAggregates(db, t.league, season);
@@ -211,5 +221,53 @@ async function fillFrom(ctx: JobContext, t: (typeof HISTORY_TARGETS)[number], ag
   }
 }
 
+/**
+ * Tables from results when no source has one (WPSL, and leagues API-Football has no table for): the clubs that met in
+ * the regular season, split into the groups they actually played in (regional conferences never meet before the
+ * playoffs), one table each. One group is "Table (from results)"; several are numbered, largest first.
+ */
+export function tablesFromResults(games: { home: number; away: number; hg: number; ag: number }[], league: number, season: number): StandingRow[] {
+  const parent = new Map<number, number>();
+  const find = (x: number): number => { let r = x; while (parent.get(r) !== r) r = parent.get(r)!; parent.set(x, r); return r; };
+  for (const g of games) for (const id of [g.home, g.away]) if (!parent.has(id)) parent.set(id, id);
+  for (const g of games) { const a = find(g.home), b = find(g.away); if (a !== b) parent.set(a, b); }
+  const groups = new Map<number, typeof games>();
+  for (const g of games) { const r = find(g.home); groups.set(r, [...(groups.get(r) ?? []), g]); }
+  const sorted = [...groups.values()].sort((a, b) => b.length - a.length);
+  return sorted.flatMap((gs, i) => tableFromResults(gs, league, season, sorted.length === 1 ? 'Table (from results)' : `Group ${i + 1} (from results)`));
+}
+
+/** params: { league?: number } — enabled leagues' seasons with results and no table from anywhere. */
+export async function resultsTables(ctx: JobContext): Promise<void> {
+  const db = ctx.db;
+  const leagues = await selectAll<{ id: number; type: string; current_season: number | null; country: string | null }>(db, 'pro_leagues', 'id,type,current_season,country', (q) => {
+    let x = q.eq('enabled', true).eq('type', 'league');
+    if (Number(ctx.params.league)) x = x.eq('id', Number(ctx.params.league));
+    return x;
+  });
+  const ids = leagues.map((l) => l.id);
+  const seasons = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; source?: string } | null }>(db, 'pro_seasons', 'league_id,season,coverage', (q) => q.in('league_id', ids.length ? ids : [-1]));
+  const byId = new Map(leagues.map((l) => [l.id, l]));
+  // US leagues every season; elsewhere the current and the last.
+  const want = seasons.filter((s) => s.coverage?.standings === false && !s.coverage?.source).filter((s) => {
+    const l = byId.get(s.league_id)!;
+    return l.country === 'USA' || (l.current_season != null && s.season >= l.current_season - 1);
+  });
+  for (const s of want) {
+    if (await ctx.cancelled()) return;
+    const { data: existing } = await db.from('pro_standings').select('source').eq('league_id', s.league_id).eq('season', s.season).neq('source', 'results').limit(1);
+    if ((existing ?? []).length) continue;
+    const games = (await selectAll<{ home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; round: string | null }>(db, 'pro_fixtures', 'home_team_id,away_team_id,home_goals,away_goals,round',
+      (q) => q.eq('league_id', s.league_id).eq('season', s.season).eq('status', 'final').eq('source', 'api-football')))
+      .filter((g) => isRegularRound(g.round) && g.home_goals != null && g.away_goals != null);
+    if (games.length < 10) continue;
+    const rows = tablesFromResults(games.map((g) => ({ home: g.home_team_id, away: g.away_team_id, hg: g.home_goals!, ag: g.away_goals! })), s.league_id, s.season);
+    await upsertStandings(db, rows, undefined, 'results');
+    ctx.inc('tables'); ctx.inc('rows', rows.length);
+    await ctx.heartbeat();
+  }
+}
+
+registerJob('results-tables', resultsTables);
 registerJob('openfootball-sync', openfootballSync);
 registerJob('history-fill', historyFill);
