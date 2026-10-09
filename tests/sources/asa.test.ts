@@ -117,3 +117,12 @@ describe('checks against API-Football', () => {
     expect(agreementRate([])).toBeNull();
   });
 });
+
+import { seasonRowFromAsa } from '../../src/jobs/sources/asaFill.js';
+describe('ASA season totals where API-Football has none', () => {
+  it('what ASA counts goes in; starts, cards and rating stay empty; keepers keep their saves', () => {
+    const r = seasonRowFromAsa({ minutes: 1634, games: 23, goals: 3, assists: 2, shots: 12, shots_on: 5, key_passes: 8, passes: 793, pass_pct: 0.8235, position: 'FB', gk_saves: null, gk_goals_conceded: null }, 9, 1595, 489, 2026, 't');
+    expect(r).toMatchObject({ player_id: 9, team_id: 1595, league_id: 489, season: 2026, apps: 23, starts: null, minutes: 1634, goals: 3, assists: 2, pass_accuracy: 82, yellow: null, red: null, position: 'Defender', source: 'asa', saves: null });
+    expect(seasonRowFromAsa({ minutes: 900, games: 10, goals: 0, assists: 0, shots: 0, shots_on: 0, key_passes: 0, passes: 300, pass_pct: 0.7, position: 'GK', gk_saves: 31, gk_goals_conceded: 12 }, 1, 2, 489, 2026)).toMatchObject({ position: 'Goalkeeper', saves: 31, conceded: 12 });
+  });
+});

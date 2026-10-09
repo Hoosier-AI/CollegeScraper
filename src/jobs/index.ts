@@ -29,5 +29,6 @@ import './sources/asaSync.js';
 import './sources/sourceMap.js';
 import './sources/history.js';
 import './sources/wikipedia.js';
+import './sources/asaFill.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

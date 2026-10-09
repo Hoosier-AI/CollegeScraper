@@ -36,5 +36,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 140_pro_src_standings.sql | `pro_src_standings`: league tables from other sources (Wikipedia), keyed by the source's club names; checked against API-Football's tables and used for seasons it does not have | yes (2026-10-09) |
 | 141_pro_standings_source.sql | `pro_standings.source`: 'api-football', 'wikipedia' or 'results' (worked out from results, one table per group of clubs that played each other); league pages credit it | yes (2026-10-09) |
 | 142_pro_common_names.sql | `pro_common_name()` ("L. Messi" -> "Lionel Messi"); player slugs no longer change with a name (pages keep their address). Display names rewritten in batches by script (80,756 players, 2026-10-09) | yes (2026-10-09) |
+| 143_pro_asa_season_rows.sql | `pro_player_season_stats.source` gains 'asa' (season totals where API-Football has none; starts and cards nullable); `pro_players.source`; `pro_adv_player_seasons.games` | yes (2026-10-09) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

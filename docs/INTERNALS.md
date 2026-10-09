@@ -242,6 +242,14 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     - `results-tables` covers leagues with no table anywhere (WPSL and others): it works one out from results, one
       table per group of clubs that played each other. `pro_standings.source` says where each table came from.
     - The expected table (xPts, xG) comes from American Soccer Analysis, behind the sources switch.
+  - **Season totals where API-Football has none (migration 143):**
+    - `asa-fill` writes ASA's minutes, appearances, goals, assists, shots, passes and saves into
+      `pro_player_season_stats` with source 'asa'. It does this for league seasons whose scores agree 97%+ with
+      API-Football (and ASA history seasons).
+    - It never writes over a provider row, and a provider row replaces an ASA one.
+    - Players API-Football doesn't know are created with negative ids (`pro_players.source = 'asa'`).
+    - API-Football has no player coverage at all for USL League One, USL Super League, USL W League and USL League
+      Two.
   - `sidelined`, `trophies` and `coach_trophies` ask for 20 people a request (`players=` / `coachs=`). If an answer
     can't be split by person, the process goes back to one request each (`batchWorks` in `src/jobs/pro/tasks.ts`).
   - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.

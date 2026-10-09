@@ -20,7 +20,7 @@ export interface AsaStadium { stadium_id: string; stadium_name: string; capacity
 export interface AsaPerson { manager_id?: string; referee_id?: string; manager_name?: string; referee_name?: string; birth_date?: string | null; nationality?: string | null }
 export interface AsaGplus { action_type: string; goals_added_raw?: number | null; goals_added_above_avg?: number | null; count_actions?: number | null }
 export interface AsaPlayerXg { player_id: string; team_id: string; general_position?: string | null; minutes_played?: number | null; shots?: number | null; shots_on_target?: number | null; goals?: number | null; xgoals?: number | null; xplace?: number | null; key_passes?: number | null; primary_assists?: number | null; xassists?: number | null }
-export interface AsaPlayerXpass { player_id: string; team_id: string; minutes_played?: number | null; attempted_passes?: number | null; pass_completion_percentage?: number | null; xpass_completion_percentage?: number | null; passes_completed_over_expected?: number | null }
+export interface AsaPlayerXpass { player_id: string; team_id: string; minutes_played?: number | null; count_games?: number | null; attempted_passes?: number | null; pass_completion_percentage?: number | null; xpass_completion_percentage?: number | null; passes_completed_over_expected?: number | null }
 export interface AsaPlayerGplus { player_id: string; team_id: string; general_position?: string | null; minutes_played?: number | null; data?: AsaGplus[] }
 export interface AsaKeeperXg { player_id: string; team_id: string; minutes_played?: number | null; shots_faced?: number | null; goals_conceded?: number | null; saves?: number | null; xgoals_gk_faced?: number | null; goals_minus_xgoals_gk?: number | null }
 export interface AsaTeamXg { team_id: string; count_games?: number | null; shots_for?: number | null; shots_against?: number | null; goals_for?: number | null; goals_against?: number | null; xgoals_for?: number | null; xgoals_against?: number | null; points?: number | null; xpoints?: number | null }
@@ -36,7 +36,7 @@ export interface SrcVenueRow { source: string; ext_id: string; name: string; cap
 export interface SrcOfficialRow { source: string; ext_id: string; role: 'manager' | 'referee'; name: string | null; birth_date: string | null; nationality: string | null; updated_at: string }
 export type GplusByAction = Record<string, { raw: number | null; above_avg: number | null; actions: number | null }>;
 export interface AdvPlayerSeasonRow {
-  source: string; league_id: number; season: number; player_ext: string; team_ext: string; position: string | null; minutes: number | null;
+  source: string; league_id: number; season: number; player_ext: string; team_ext: string; position: string | null; minutes: number | null; games: number | null;
   shots: number | null; shots_on: number | null; goals: number | null; xg: number | null; xplace: number | null; key_passes: number | null; assists: number | null; xa: number | null;
   passes: number | null; pass_pct: number | null; xpass_pct: number | null; passes_over_expected: number | null;
   g_plus: GplusByAction | null; g_plus_total: number | null;
@@ -124,7 +124,7 @@ export function mergePlayerSeasons(parts: { xgoals?: AsaPlayerXg[]; xpass?: AsaP
     const k = `${p.player_id}|${p.team_id}`;
     let r = rows.get(k);
     if (!r) {
-      r = { source: SOURCE, league_id: league, season, player_ext: p.player_id, team_ext: p.team_id, position: null, minutes: null, shots: null, shots_on: null, goals: null, xg: null, xplace: null, key_passes: null, assists: null, xa: null,
+      r = { source: SOURCE, league_id: league, season, player_ext: p.player_id, team_ext: p.team_id, position: null, minutes: null, games: null, shots: null, shots_on: null, goals: null, xg: null, xplace: null, key_passes: null, assists: null, xa: null,
         passes: null, pass_pct: null, xpass_pct: null, passes_over_expected: null, g_plus: null, g_plus_total: null, gk_shots_faced: null, gk_goals_conceded: null, gk_saves: null, gk_xg_faced: null, gk_goals_minus_xg: null, updated_at: at };
       rows.set(k, r);
     }
@@ -136,7 +136,7 @@ export function mergePlayerSeasons(parts: { xgoals?: AsaPlayerXg[]; xpass?: AsaP
   }
   for (const x of parts.xpass ?? []) {
     const r = row(x); if (!r) continue;
-    Object.assign(r, { minutes: r.minutes ?? int(x.minutes_played), passes: int(x.attempted_passes), pass_pct: round(x.pass_completion_percentage), xpass_pct: round(x.xpass_completion_percentage), passes_over_expected: round(x.passes_completed_over_expected, 2) });
+    Object.assign(r, { minutes: r.minutes ?? int(x.minutes_played), games: int(x.count_games), passes: int(x.attempted_passes), pass_pct: round(x.pass_completion_percentage), xpass_pct: round(x.xpass_completion_percentage), passes_over_expected: round(x.passes_completed_over_expected, 2) });
   }
   for (const x of [...(parts.gplus ?? []), ...(parts.keeperGplus ?? [])]) {
     const r = row(x); if (!r) continue;
