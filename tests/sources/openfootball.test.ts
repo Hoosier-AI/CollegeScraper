@@ -35,7 +35,7 @@ describe('openfootball Football.TXT', () => {
   });
 });
 
-import { negativeId, tableFromResults, toSrcGame } from '../../src/jobs/sources/history.js';
+import { apiSeasonsOf, negativeId, tableFromResults, toSrcGame } from '../../src/jobs/sources/history.js';
 
 describe('MLS history from openfootball', () => {
   it('ids for things API-Football does not have: negative, stable, distinct', () => {
@@ -50,6 +50,10 @@ describe('MLS history from openfootball', () => {
     expect(g).toMatchObject({ source: 'openfootball', league_id: 253, season: 2005, home_ext: 'FC Dallas', away_ext: 'Colorado Rapids', home_score: 2, away_score: 2, et_home: 2, et_away: 2, pen_home: 4, pen_away: 5, knockout: true, status: 'final' });
     expect(g.ext_id).toBe('2005|2005-10-29|FC Dallas|Colorado Rapids');
     expect(g.kickoff).toBe('2005-10-30T01:30:00.000Z');
+  });
+  it('history never touches a season API-Football lists, crawled yet or not', () => {
+    const seasons = apiSeasonsOf([{ season: 2019, coverage: {} }, { season: 2025, coverage: null }, { season: 2018, coverage: { source: 'asa' } }]);
+    expect([...seasons].sort()).toEqual([2019, 2025]);
   });
   it('a table from results: 3 for a win, then goal difference, then goals', () => {
     const t = tableFromResults([{ home: 1, away: 2, hg: 2, ag: 0 }, { home: 2, away: 3, hg: 1, ag: 1 }, { home: 3, away: 1, hg: 3, ag: 0 }], 253, 2005);

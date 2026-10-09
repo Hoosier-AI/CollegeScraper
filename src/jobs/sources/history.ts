@@ -78,6 +78,13 @@ export function tableFromResults(games: { home: number; away: number; hg: number
     .map((r, i) => ({ league_id: league, season, group_name: group, team_id: r.team_id, rank: i + 1, points: r.points, played: r.played, win: r.win, draw: r.draw, lose: r.lose, gf: r.gf, ga: r.ga, gd: r.gd, form: null, description: null }));
 }
 
+/**
+ * Seasons API-Football has: every season its catalog lists for the league (crawled yet or not), which history never
+ * touches. A season row another source created carries coverage.source and does not count.
+ */
+export const apiSeasonsOf = (rows: { season: number; coverage: { source?: string } | null }[]): Set<number> =>
+  new Set(rows.filter((r) => !r.coverage?.source).map((r) => r.season));
+
 /** Where history can come from: a source and a league it has seasons of that API-Football does not. */
 export const HISTORY_TARGETS: { source: string; league: number; minCompared: number }[] = [
   { source: OF_SOURCE, league: MLS, minCompared: 1000 },   // MLS 2005-2011 from openfootball
@@ -118,7 +125,7 @@ async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], ag
   if (compared < t.minCompared || rate < HISTORY_TRUST) { ctx.note(`${tag}_skipped`, `needs ${HISTORY_TRUST * 100}% agreement on ${t.minCompared}+ compared table lines first`); return; }
 
   const seasonRows = await selectAll<{ season: number; fixtures_synced_at: string | null; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,fixtures_synced_at,coverage', (q) => q.eq('league_id', t.league));
-  const apiSeasons = new Set(seasonRows.filter((r) => r.fixtures_synced_at && !r.coverage?.source).map((r) => r.season));
+  const apiSeasons = apiSeasonsOf(seasonRows);
   const rows = (await selectAll<any>(db, 'pro_src_standings', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((r) => !apiSeasons.has(r.season));
   if (!rows.length) { ctx.note(`${tag}_idle`, 'no history tables to fill'); return; }
 
@@ -159,9 +166,7 @@ async function fillFrom(ctx: JobContext, t: (typeof HISTORY_TARGETS)[number], ag
   ctx.note(`${tag}_agreement`, `${(rate * 100).toFixed(2)}% of ${compared}`);
   if (compared < t.minCompared || rate < HISTORY_TRUST) { ctx.note(`${tag}_skipped`, `needs ${HISTORY_TRUST * 100}% agreement on ${t.minCompared}+ compared scores first`); return; }
 
-  // Seasons API-Football has (its own fixtures), which history never touches.
-  const apiSeasons = new Set((await selectAll<{ season: number; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,coverage', (q) => q.eq('league_id', t.league).not('fixtures_synced_at', 'is', null)))
-    .filter((r) => !r.coverage?.source).map((r) => r.season));
+  const apiSeasons = apiSeasonsOf(await selectAll<{ season: number; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,coverage', (q) => q.eq('league_id', t.league)));
   const teamMap = await sourceIdMap(db, t.source, 'team');
   const games = (await selectAll<any>(db, 'pro_src_games', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((g) => !apiSeasons.has(g.season));
   if (!games.length) { ctx.note(`${tag}_idle`, 'no history seasons to fill'); return; }
