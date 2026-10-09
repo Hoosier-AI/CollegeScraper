@@ -248,6 +248,11 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     - its main league's season stats.
     It runs at most once every 14 days a club. Players and clubs share one on-view allowance, `PRO_ON_VIEW_PER_DAY`
     (default 600 requests), in `src/pro/onView.ts`.
+  - **Transfer lists** (club, feed and player) drop the provider's noise in `cleanMoves`/`isSelfNamed`
+    (`src/pro/queries.ts`): a club to itself, a placeholder club (id 0) named after the player, including by initial
+    ("P. Kingston" to "Kingston Peter"), and the same move listed twice.
+  - **Club Stats tab:** shots, possession, corners and cards tiles show only when match detail has them; goals by
+    period from our own events shows once they hold at least 60% of the season's goals (the provider's split always).
   - **Crawl order:** match detail comes first in every tier (US 11/12, top competitions 22, other leagues 42, cups 62),
     because a request buys 20 matches of lineups, events, player lines and team stats.
   - **Players on view (migration 144):** opening a player's page in the browser fetches their transfers, honours and

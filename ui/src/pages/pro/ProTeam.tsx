@@ -78,6 +78,9 @@ export default function ProTeam() {
       shots: add('shots'), shotsOn: add('shots_on'), corners: add('corners'), yellow: add('yellow'), red: add('red'),
       poss: possRows.length ? possRows.reduce((n, c) => n + c.possession! * c.played, 0) / possRows.reduce((n, c) => n + c.played, 0) : null };
   })() : null;
+  // Goals by period from our own match events only once they cover most of the season's goals (lower leagues have few).
+  const periodGoals = d.goals_by_period.reduce((n, r) => n + r.for + r.against, 0);
+  const periodShown = d.goals_by_period_source === 'provider' || (periodGoals > 0 && periodGoals >= 0.6 * (total.gf + total.ga));
   // Results oldest first, from this club's side.
   const formItems = [...d.results].filter((m) => m.status === 'final').reverse().map((m) => {
     const home = m.home.id === t.id; const us = (home ? m.home.score : m.away.score) ?? 0, them = (home ? m.away.score : m.home.score) ?? 0;
@@ -148,15 +151,15 @@ export default function ProTeam() {
       {tab === 'stats' && (
         <div className="space-y-5">
           {sum && (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+            <div className={`grid grid-cols-2 gap-2 sm:grid-cols-4 ${sum.shots != null || sum.poss != null ? 'lg:grid-cols-8' : ''}`}>
               <StatTile label="Matches" value={sum.p} sub={`${sum.w}-${sum.d}-${sum.l}`} />
               <StatTile label="Goals for" value={(sum.gf / sum.p).toFixed(2)} sub={`a match · ${sum.gf} in all`} accent />
               <StatTile label="Goals against" value={(sum.ga / sum.p).toFixed(2)} sub={`a match · ${sum.ga} in all`} />
               <StatTile label="Clean sheets" value={sum.cs} sub={`${Math.round((sum.cs / sum.p) * 100)}% of matches`} />
-              <StatTile label="Shots" value={sum.shots != null ? (sum.shots / sum.statP).toFixed(1) : '–'} sub={sum.shotsOn != null ? `a match · ${(sum.shotsOn / sum.statP).toFixed(1)} on target` : 'from match detail'} />
-              <StatTile label="Possession" value={sum.poss != null ? `${Math.round(sum.poss)}%` : '–'} sub="average" />
-              <StatTile label="Corners" value={sum.corners != null ? (sum.corners / sum.statP).toFixed(1) : '–'} sub="a match" />
-              <StatTile label="Cards" value={sum.yellow != null ? `${sum.yellow} / ${sum.red ?? 0}` : '–'} sub="yellow / red" />
+              {sum.shots != null && <StatTile label="Shots" value={sum.shots != null ? (sum.shots / sum.statP).toFixed(1) : '–'} sub={sum.shotsOn != null ? `a match · ${(sum.shotsOn / sum.statP).toFixed(1)} on target` : 'from match detail'} />}
+              {sum.poss != null && <StatTile label="Possession" value={sum.poss != null ? `${Math.round(sum.poss)}%` : '–'} sub="average" />}
+              {sum.corners != null && <StatTile label="Corners" value={sum.corners != null ? (sum.corners / sum.statP).toFixed(1) : '–'} sub="a match" />}
+              {sum.yellow != null && <StatTile label="Cards" value={sum.yellow != null ? `${sum.yellow} / ${sum.red ?? 0}` : '–'} sub="yellow / red" />}
             </div>
           )}
           {formItems.length > 0 && (
@@ -184,7 +187,8 @@ export default function ProTeam() {
           {d.advanced && d.advanced.competitions.length > 0 && <Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /><Credit credit={d.advanced.credit} /></Section>}
           {(d.season_detail?.length ?? 0) > 0 && <Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section>}
           <div className="grid gap-5 lg:grid-cols-2">
-            <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
+            {periodShown ? <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
+              : <Section title="Goals by period"><p className="text-sm text-chalk-400">Shows once goal times are in for most of the season's matches.</p></Section>}
             <Section title="Home and away">
               <div className="frame overflow-x-auto"><table className="w-full text-sm"><caption className="sr-only">Home and away record</caption>
                 <thead><tr className="text-2xs text-chalk-500"><th className="th text-left" scope="col"></th><th className="th text-right" scope="col">P</th><th className="th text-right" scope="col">W-D-L</th><th className="th text-right" scope="col">Goals</th><th className="th text-right" scope="col">Pts/game</th></tr></thead>
