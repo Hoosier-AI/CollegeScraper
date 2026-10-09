@@ -46,6 +46,13 @@ export interface ApiFootballOptions {
   reserve?: number;
   /** Floor for the history backfill. */
   backfillReserve?: number;
+  /**
+   * Requests an hour the everyday jobs (and the Plaibook app) may need. When set, the backfill floor comes down as the
+   * UTC day runs out: it only has to leave `reserve` plus what the rest of the day needs (at least `backfillMargin`),
+   * never more than `backfillReserve`. 0 keeps the backfill floor fixed.
+   */
+  everydayPerHour?: number;
+  backfillMargin?: number;
   /** Our own pace, requests per minute (the plan allows 300; the Plaibook app takes up to 60). */
   perMinute?: number;
   fetchImpl?: typeof fetch;
@@ -78,13 +85,20 @@ export class ApiFootball {
   constructor(opts: ApiFootballOptions) {
     // Unset options (undefined from an empty env var) keep their defaults.
     const given = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined)) as ApiFootballOptions;
-    this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
+    this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, everydayPerHour: 0, backfillMargin: 300, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
     this.queue = new PQueue({ concurrency: 4, interval: 60_000, intervalCap: this.o.perMinute });
     const now = this.o.now();
     this.quota = { remaining: null, limit: null, at: null, used: 0, usedToday: 0, day: utcDay(now), blockedUntil: null, lastError: null };
   }
 
-  floor(lane: Lane): number { return lane === 'backfill' ? this.o.backfillReserve : this.o.reserve; }
+  floor(lane: Lane): number {
+    if (lane !== 'backfill') return this.o.reserve;
+    if (!this.o.everydayPerHour) return this.o.backfillReserve;
+    // The quota resets at midnight UTC: requests the rest of today's everyday work cannot use would go to waste.
+    const now = this.o.now();
+    const hoursLeft = (nextUtcMidnight(now) - now) / 3600_000;
+    return Math.min(this.o.backfillReserve, this.o.reserve + Math.max(this.o.backfillMargin, Math.ceil(hoursLeft * this.o.everydayPerHour)));
+  }
 
   /** Requests the lane may still spend today (Infinity while the provider has not said). */
   headroom(lane: Lane = 'everyday'): number {

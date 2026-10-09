@@ -13,7 +13,7 @@ export function getApiFootball(): ApiFootball | null {
   if (shared) return shared;
   const cfg = loadConfig();
   if (!cfg.API_FOOTBALL_KEY) return null;
-  shared = new ApiFootball({ key: cfg.API_FOOTBALL_KEY, base: cfg.API_FOOTBALL_BASE, reserve: cfg.PRO_RESERVE, backfillReserve: cfg.PRO_BACKFILL_RESERVE, perMinute: cfg.PRO_PER_MIN });
+  shared = new ApiFootball({ key: cfg.API_FOOTBALL_KEY, base: cfg.API_FOOTBALL_BASE, reserve: cfg.PRO_RESERVE, backfillReserve: cfg.PRO_BACKFILL_RESERVE, everydayPerHour: cfg.PRO_EVERYDAY_PER_HOUR, perMinute: cfg.PRO_PER_MIN });
   return shared;
 }
 

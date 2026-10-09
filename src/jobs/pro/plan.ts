@@ -218,6 +218,8 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
     const leagues = await leagueIndex(ctx.db);
     const pace = new Pace();
     const startCalls = api.quota.used;
+    // Tasks another task's request already finished (people asked for 20 at a time).
+    const handled = new Set<string>();
     const spent = () => api.quota.used - startCalls;
     while (Date.now() < deadline && spent() < maxCalls) {
       if (api.headroom('backfill') < 1) { ctx.note('stopped', 'backfill quota floor'); return; }
@@ -231,6 +233,7 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
       if (!batch.length) { ctx.note('idle', 'nothing due'); return; }
       for (const task of batch) {
         if (Date.now() >= deadline || spent() >= maxCalls) break;
+        if (handled.has(`${task.kind}|${task.key}`)) continue;
         if (api.headroom('backfill') < 1) { ctx.note('stopped', 'backfill quota floor'); return; }
         const handler = handlerFor(task.kind);
         const before = api.quota.used;
@@ -243,6 +246,7 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
           else patch.page = res.page ?? task.page;
           await ctx.db.from('pro_crawl_tasks').update(patch).eq('kind', task.kind).eq('key', task.key);
           ctx.inc(res.done ? 'tasks_done' : 'tasks_partial');
+          for (const k of res.also ?? []) { handled.add(`${task.kind}|${k}`); ctx.inc('tasks_done'); ctx.inc(`kind_${task.kind}`); }
           ctx.inc(`kind_${task.kind}`);
         } catch (err) {
           if (err instanceof QuotaExhausted) throw err;

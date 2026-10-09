@@ -531,6 +531,23 @@ export function parseVenues(items: AfVenue[], at = new Date().toISOString()): Ve
   return [...out.values()];
 }
 
+/**
+ * A several-id answer (sidelined?players=a-b-c, trophies?players= / coachs=) split by person. Each entry must name one
+ * of the requested people and carry its list under `listKey`; anything else (a flat list nobody can be told apart in)
+ * gives null, and the caller goes back to one request per person. Requested people with no entry have nothing.
+ */
+export function splitByPerson(items: unknown[], ids: number[], listKey: string): Map<number, unknown[]> | null {
+  const want = new Set(ids);
+  const out = new Map<number, unknown[]>(ids.map((id) => [id, []]));
+  for (const it of items as Record<string, any>[]) {
+    const id = realId(it?.id) ?? realId(it?.player?.id) ?? realId(it?.coach?.id) ?? realId(it?.player) ?? realId(it?.coach);
+    const list = it?.[listKey];
+    if (id == null || !want.has(id) || !Array.isArray(list)) return null;
+    out.get(id)!.push(...list);
+  }
+  return out;
+}
+
 /** sidelined?player=: every spell out (injury, illness, suspension), with its dates. */
 export function parseSidelined(items: { type?: string | null; start?: string | null; end?: string | null }[], player: number, at = new Date().toISOString()): SidelinedRow[] {
   const out = new Map<string, SidelinedRow>();

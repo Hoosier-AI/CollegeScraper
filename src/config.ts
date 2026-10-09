@@ -38,6 +38,9 @@ const schema = z.object({
   API_FOOTBALL_BASE: z.string().url().optional(),
   PRO_RESERVE: z.coerce.number().int().nonnegative().default(1500),
   PRO_BACKFILL_RESERVE: z.coerce.number().int().nonnegative().default(2500),
+  // Late in the UTC day the backfill floor comes down to PRO_RESERVE plus this many requests an hour for the rest of the
+  // day (at least 300): what the everyday jobs and the app cannot use before the reset goes to the crawl. 0 = fixed floor.
+  PRO_EVERYDAY_PER_HOUR: z.coerce.number().int().nonnegative().default(100),
   PRO_PER_MIN: z.coerce.number().int().positive().default(120),
   // How many seasons back (the current one included) the backfill fills.
   PRO_BACKFILL_SEASONS: z.coerce.number().int().positive().default(3),
@@ -77,6 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     API_FOOTBALL_BASE: env.API_FOOTBALL_BASE || undefined,
     PRO_RESERVE: env.PRO_RESERVE || undefined,
     PRO_BACKFILL_RESERVE: env.PRO_BACKFILL_RESERVE || undefined,
+    PRO_EVERYDAY_PER_HOUR: env.PRO_EVERYDAY_PER_HOUR || undefined,
     PRO_PER_MIN: env.PRO_PER_MIN || undefined,
     PRO_BACKFILL_SEASONS: env.PRO_BACKFILL_SEASONS || undefined,
   });

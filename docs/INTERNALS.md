@@ -198,6 +198,11 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     scene, 2 top competitions (priority under 100), 3 other leagues, 4 cups.
     - Every run upserts each planned task's priority, interval and tier; due dates and progress are kept.
     - `pro_reschedule_tasks()` then brings due dates in line with any interval that changed.
+  - `sidelined`, `trophies` and `coach_trophies` ask for 20 people a request (`players=` / `coachs=`). If an answer
+    can't be split by person, the process goes back to one request each (`batchWorks` in `src/jobs/pro/tasks.ts`).
+  - The backfill floor is time-aware (`PRO_EVERYDAY_PER_HOUR`, default 100): `PRO_RESERVE` plus 100 requests per hour
+    left in the UTC day, at least 300 above `PRO_RESERVE`, at most `PRO_BACKFILL_RESERVE`. This spends what the
+    everyday jobs can't use before the midnight reset.
   - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.
     - Failures back off: 1 h, 2 h, 4 h, up to a week.
     - Slow database writes halve the batch size and pause for 60 s (`Pace` in `src/jobs/pro/tasks.ts`).
