@@ -13,6 +13,7 @@ import { ProForm } from '../../components/pro/LeagueTable';
 import { Flag, GoalsByPeriod, TransfersList, type TransferLine } from '../../components/pro/People';
 import { EmptyState, ErrorBox, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
+import { PointsLine, ResultStrip } from '../../components/pro/Charts';
 import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { ProHero, StatTile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
@@ -24,7 +25,7 @@ interface Split { played: number; w: number; d: number; l: number; gf: number; g
 interface TeamData {
   team: ProTeamRef & { founded: number | null; national: boolean; venue: Ground | null };
   season: number | null; seasons: number[];
-  competitions: { league: (ProLeagueRef & { priority: number }) | null; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; possession: number | null }[];
+  competitions: { league: (ProLeagueRef & { priority: number }) | null; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; possession: number | null; shots?: number | null; shots_on?: number | null; corners?: number | null; fouls?: number | null; yellow?: number | null; red?: number | null }[];
   standings: { league: ProLeagueRef | null; group: string; rank: number | null; points: number | null; played: number | null; form: string | null }[];
   squad: SquadRow[];
   coaches: { id: number; name: string; photo: string | null; nationality: string | null; birth_date: string | null; start: string | null; end: string | null; current: boolean; trophies?: number }[];
@@ -68,6 +69,30 @@ export default function ProTeam() {
     { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 3, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
   ];
   const tabs: { id: Tab; label: string; count?: number }[] = [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'transfers', label: 'Transfers', count: d.transfers.length }];
+  // The season across competitions: averages over the matches that have each number (shots and the rest need detail).
+  const sum = total.p > 0 ? (() => {
+    const withStats = d.competitions.filter((c) => c.shots != null);
+    const add = (k: 'shots' | 'shots_on' | 'corners' | 'yellow' | 'red') => (withStats.length ? withStats.reduce((n, c) => n + (c[k] ?? 0), 0) : null);
+    const possRows = d.competitions.filter((c) => c.possession != null && c.played);
+    return { ...total, cs: d.competitions.reduce((n, c) => n + c.clean_sheets, 0), statP: Math.max(1, withStats.reduce((n, c) => n + c.played, 0)),
+      shots: add('shots'), shotsOn: add('shots_on'), corners: add('corners'), yellow: add('yellow'), red: add('red'),
+      poss: possRows.length ? possRows.reduce((n, c) => n + c.possession! * c.played, 0) / possRows.reduce((n, c) => n + c.played, 0) : null };
+  })() : null;
+  // Results oldest first, from this club's side.
+  const formItems = [...d.results].filter((m) => m.status === 'final').reverse().map((m) => {
+    const home = m.home.id === t.id; const us = (home ? m.home.score : m.away.score) ?? 0, them = (home ? m.away.score : m.home.score) ?? 0;
+    const opp = home ? m.away : m.home;
+    return { result: (us > them ? 'W' : us < them ? 'L' : 'D') as 'W' | 'D' | 'L', title: `${fmt.date(m.kickoff)} ${home ? 'v' : '@'} ${opp.name} ${us}-${them}`, href: proPath.match(m.slug) };
+  });
+  const best = (pick: (r: SquadRow) => number | null, min = 0) => [...d.squad].filter((r) => (pick(r) ?? 0) > min).sort((a, b) => (pick(b) ?? 0) - (pick(a) ?? 0))[0] ?? null;
+  const performers = ([
+    ['Top scorer', best((r) => r.goals), (r: SquadRow) => `${r.goals} goals`],
+    ['Most assists', best((r) => r.assists), (r: SquadRow) => `${r.assists} assists`],
+    ['Most minutes', best((r) => r.minutes), (r: SquadRow) => `${fmt.num(r.minutes)} min`],
+    ['Best rated', best((r) => (r.minutes >= 450 ? r.rating : null)), (r: SquadRow) => (r.rating != null ? r.rating.toFixed(2) : '–')],
+    ['Most cards', best((r) => r.yellow + r.red * 2), (r: SquadRow) => `${r.yellow} yellow${r.red ? `, ${r.red} red` : ''}`],
+  ] as [string, SquadRow | null, (r: SquadRow) => string][]).filter(([, row]) => row).map(([label, row, value]) => ({ label, row: row!, value: value(row!) }));
+  const ins = d.transfers.filter((x) => x.direction === 'in'), outs = d.transfers.filter((x) => x.direction === 'out');
   const splitRow = (label: string, s: Split) => <tr className="border-t border-field-700"><th scope="row" className="td text-left font-normal text-chalk-300">{label}</th><td className="td text-right tnum">{s.played}</td><td className="td text-right tnum">{s.w}-{s.d}-{s.l}</td><td className="td text-right tnum">{s.gf}:{s.ga}</td><td className="td text-right tnum">{s.played ? ((s.w * 3 + s.d) / s.played).toFixed(2) : '–'}</td></tr>;
   return (
     <div className="space-y-5">
@@ -121,26 +146,68 @@ export default function ProTeam() {
         </div>
       )}
       {tab === 'stats' && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          {d.advanced && d.advanced.competitions.length > 0 && <div className="lg:col-span-2"><Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /><Credit credit={d.advanced.credit} /></Section></div>}
-          {(d.season_detail?.length ?? 0) > 0 && <div className="lg:col-span-2"><Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section></div>}
-          <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
-          <Section title="Home and away">
-            <div className="frame overflow-x-auto"><table className="w-full text-sm"><caption className="sr-only">Home and away record</caption>
-              <thead><tr className="text-2xs text-chalk-500"><th className="th text-left" scope="col"></th><th className="th text-right" scope="col">P</th><th className="th text-right" scope="col">W-D-L</th><th className="th text-right" scope="col">Goals</th><th className="th text-right" scope="col">Pts/game</th></tr></thead>
-              <tbody>{splitRow('Home', d.splits.home)}{splitRow('Away', d.splits.away)}</tbody></table></div>
-          </Section>
+        <div className="space-y-5">
+          {sum && (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+              <StatTile label="Matches" value={sum.p} sub={`${sum.w}-${sum.d}-${sum.l}`} />
+              <StatTile label="Scored a match" value={(sum.gf / sum.p).toFixed(2)} sub={`${sum.gf} goals`} accent />
+              <StatTile label="Conceded a match" value={(sum.ga / sum.p).toFixed(2)} sub={`${sum.ga} goals`} />
+              <StatTile label="Clean sheets" value={sum.cs} sub={`${Math.round((sum.cs / sum.p) * 100)}% of matches`} />
+              <StatTile label="Shots a match" value={sum.shots != null ? (sum.shots / sum.statP).toFixed(1) : '–'} sub={sum.shotsOn != null ? `${(sum.shotsOn / sum.statP).toFixed(1)} on target` : 'from match detail'} />
+              <StatTile label="Possession" value={sum.poss != null ? `${Math.round(sum.poss)}%` : '–'} sub="average" />
+              <StatTile label="Corners a match" value={sum.corners != null ? (sum.corners / sum.statP).toFixed(1) : '–'} />
+              <StatTile label="Cards" value={sum.yellow != null ? `${sum.yellow} / ${sum.red ?? 0}` : '–'} sub="yellow / red" />
+            </div>
+          )}
+          {formItems.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <ResultStrip items={formItems.slice(-15)} caption={`Last ${Math.min(15, formItems.length)} results`} />
+              <PointsLine results={formItems.map((f) => f.result)} caption={`Points over the ${d.season} season, every competition`} />
+            </div>
+          )}
+          {performers.length > 0 && (
+            <Section title="Top performers">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                {performers.map((p) => (
+                  <Link key={p.label} to={proPath.player(p.row.player.slug)} className="group flex items-center gap-2.5 rounded-lg border border-field-700 bg-field-900/60 p-2.5 hover:border-pitch-400/50">
+                    <PlayerAvatar src={p.row.player.photo} name={p.row.player.name} size={40} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-chalk-100 group-hover:text-pitch-300">{p.row.player.name}</span>
+                      <span className="block text-2xs uppercase tracking-wider text-chalk-500">{p.label}</span>
+                      <span className="display block text-lg tnum text-chalk-100">{p.value}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </Section>
+          )}
+          {d.advanced && d.advanced.competitions.length > 0 && <Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /><Credit credit={d.advanced.credit} /></Section>}
+          {(d.season_detail?.length ?? 0) > 0 && <Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section>}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
+            <Section title="Home and away">
+              <div className="frame overflow-x-auto"><table className="w-full text-sm"><caption className="sr-only">Home and away record</caption>
+                <thead><tr className="text-2xs text-chalk-500"><th className="th text-left" scope="col"></th><th className="th text-right" scope="col">P</th><th className="th text-right" scope="col">W-D-L</th><th className="th text-right" scope="col">Goals</th><th className="th text-right" scope="col">Pts/game</th></tr></thead>
+                <tbody>{splitRow('Home', d.splits.home)}{splitRow('Away', d.splits.away)}</tbody></table></div>
+            </Section>
+          </div>
           <Section title="By competition">
             <ul className="frame divide-y divide-field-700 text-sm">
               {d.competitions.map((c) => c.league && (
                 <li key={c.league.id} className="flex flex-wrap items-center gap-x-3 px-3 py-2"><Link to={proPath.league(c.league.slug, d.season)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.league.name}</Link>
-                  <span className="text-xs tnum text-chalk-300">{c.w}-{c.d}-{c.l} · {c.gf}:{c.ga} · {c.clean_sheets} clean sheets{c.possession != null ? ` · ${Math.round(c.possession)}% possession` : ''}</span></li>
+                  <span className="text-xs tnum text-chalk-300">{c.w}-{c.d}-{c.l} · {c.gf}:{c.ga} · {c.clean_sheets} clean sheets{c.possession != null ? ` · ${Math.round(c.possession)}% possession` : ''}{c.shots != null && c.played ? ` · ${(c.shots / c.played).toFixed(1)} shots a match` : ''}</span></li>
               ))}
             </ul>
           </Section>
+          {!sum && <EmptyState title="No season numbers yet" body="They arrive with this club's results; shots, possession and cards with match detail." />}
         </div>
       )}
-      {tab === 'transfers' && <Section title="Transfers in and out"><TransfersList rows={d.transfers} showPlayer empty="No transfers recorded for this club yet." /></Section>}
+      {tab === 'transfers' && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Section title={`In (${ins.length})`}><TransfersList rows={ins} showPlayer empty="No arrivals recorded yet." /></Section>
+          <Section title={`Out (${outs.length})`}><TransfersList rows={outs} showPlayer empty="No departures recorded yet." /></Section>
+        </div>
+      )}
     </div>
   );
 }

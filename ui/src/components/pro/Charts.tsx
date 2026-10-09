@@ -99,3 +99,43 @@ export function PercentileWheel({ rows, labels, caption }: { rows: { stat: strin
     </figure>
   );
 }
+
+/** The last results as W/D/L chips, oldest on the left, each linking to its match. */
+export function ResultStrip({ items, caption }: { items: { result: 'W' | 'D' | 'L'; title: string; href: string }[]; caption: string }) {
+  if (!items.length) return null;
+  const tone = { W: 'bg-win/20 text-win', D: 'bg-draw/20 text-draw', L: 'bg-loss/20 text-loss' } as const;
+  const w = items.filter((i) => i.result === 'W').length, d = items.filter((i) => i.result === 'D').length;
+  return (
+    <figure className="frame p-3">
+      <figcaption className="mb-2 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">{w}-{d}-{items.length - w - d}</span></figcaption>
+      <ol className="flex flex-wrap gap-1" aria-label={`${caption}: ${items.map((i) => i.result).join(' ')}`}>
+        {items.map((i, k) => <li key={k}><Link to={i.href} title={i.title} className={`grid h-7 w-7 place-items-center rounded text-xs font-semibold ${tone[i.result]} hover:ring-1 hover:ring-chalk-400`}>{i.result}</Link></li>)}
+      </ol>
+    </figure>
+  );
+}
+
+/** Points piling up over the season, match by match (3 a win, 1 a draw), against a points-a-match pace line. */
+export function PointsLine({ results, caption }: { results: ('W' | 'D' | 'L')[]; caption: string }) {
+  if (results.length < 3) return null;
+  const W = 600, H = 160, PAD = 26;
+  const pts: number[] = [];
+  for (const r of results) pts.push((pts[pts.length - 1] ?? 0) + (r === 'W' ? 3 : r === 'D' ? 1 : 0));
+  const max = Math.max(3, results.length * 2, pts[pts.length - 1]!);
+  const x = (i: number) => PAD + (i * (W - PAD * 2)) / Math.max(1, pts.length - 1);
+  const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);
+  const path = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const ppg = pts[pts.length - 1]! / pts.length;
+  return (
+    <figure className="frame p-3">
+      <figcaption className="mb-1 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">{pts[pts.length - 1]} pts · {ppg.toFixed(2)} a match</span></figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${caption}: ${pts[pts.length - 1]} points from ${pts.length} matches`}>
+        {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1={PAD} x2={W - PAD} y1={y(max * f)} y2={y(max * f)} className="stroke-field-700" strokeWidth={1} />)}
+        <line x1={x(0)} y1={y(0)} x2={x(pts.length - 1)} y2={y(2 * pts.length)} className="stroke-chalk-500" strokeDasharray="4 4" strokeWidth={1}><title>2 points a match</title></line>
+        <path d={`${path} L${x(pts.length - 1).toFixed(1)},${y(0)} L${x(0)},${y(0)} Z`} className="fill-pitch-400/10" />
+        <path d={path} className="fill-none stroke-pitch-300" strokeWidth={2.5} strokeLinejoin="round" />
+        <text x={x(pts.length - 1) - 4} y={y(pts[pts.length - 1]!) - 8} textAnchor="end" className="fill-chalk-100 text-[12px] font-semibold">{pts[pts.length - 1]}</text>
+      </svg>
+    </figure>
+  );
+}

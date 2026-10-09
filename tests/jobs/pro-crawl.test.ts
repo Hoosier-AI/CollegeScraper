@@ -41,21 +41,21 @@ describe('crawl plan', () => {
   it('US current seasons: fixtures every 3 days, injuries daily, totals and squads every 3 days, club stats weekly', () => {
     expect(get('season_fixtures', '253|2026')).toMatchObject({ priority: 11, every_days: 3, tier: 1 });
     expect(get('injuries', '253|2026')).toMatchObject({ priority: 11, every_days: 1 });
-    expect(get('league_players', '253|2026')).toMatchObject({ priority: 12, every_days: 3 });
+    expect(get('league_players', '253|2026')).toMatchObject({ priority: 14, every_days: 3 });
     expect(get('squad', '1')).toMatchObject({ priority: 12, every_days: 3, tier: 1 });
-    expect(get('detail', '253|2026')).toMatchObject({ priority: 13, every_days: 1 });
-    expect(get('team_stats', '253|2026|1')).toMatchObject({ priority: 13, every_days: 7 });
+    expect(get('detail', '253|2026')).toMatchObject({ priority: 11, every_days: 1 });
+    expect(get('team_stats', '253|2026|1')).toMatchObject({ priority: 14, every_days: 7 });
     expect(get('venues', 'USA')).toMatchObject({ priority: 11, tier: 1 });
     expect(get('standings', '253|2026')).toMatchObject({ priority: 11, every_days: 1 });
   });
   it('US history: every season the provider has, as deep as it goes', () => {
     for (const s of [2025, 2021, 2012]) {
-      expect(get('season_fixtures', `253|${s}`)).toMatchObject({ priority: 14, every_days: null });
-      expect(get('standings', `253|${s}`)!.priority).toBe(14);
+      expect(get('season_fixtures', `253|${s}`)).toMatchObject({ priority: 13, every_days: null });
+      expect(get('standings', `253|${s}`)!.priority).toBe(13);
       expect(get('league_players', `253|${s}`)!.priority).toBe(15);
-      expect(get('detail', `253|${s}`)!.priority).toBe(15);
+      expect(get('detail', `253|${s}`)!.priority).toBe(12);
     }
-    expect(get('team_stats', '253|2012|11')).toMatchObject({ priority: 16, every_days: null });
+    expect(get('team_stats', '253|2012|11')).toMatchObject({ priority: 15, every_days: null });
   });
   it('amateur US leagues are crawled too, skipping what the provider does not cover', () => {
     expect(get('season_fixtures', '256|2026')).toMatchObject({ priority: 11, tier: 1 });
@@ -111,6 +111,12 @@ describe('crawl plan', () => {
     expect(get('team_stats', '39|2026|30')).toMatchObject({ priority: 90, every_days: 14, tier: 2 });
     expect(get('team_stats', '183|2026|2')).toBeUndefined();
     expect(get('venues', 'England')).toMatchObject({ priority: 100, every_days: 180, tier: 0 });
+  });
+  it('match detail comes first in every tier (20 matches a request)', () => {
+    expect(get('detail', '253|2026')!.priority).toBeLessThan(get('league_players', '253|2026')!.priority);
+    expect(get('detail', '39|2026')).toMatchObject({ priority: 22 });
+    expect(get('detail', '39|2026')!.priority).toBeLessThan(get('league_players', '39|2026')!.priority);
+    expect(get('detail', '183|2026')!.priority).toBeLessThan(get('league_players', '183|2026')!.priority);
   });
   it('one task per kind and key', () => {
     expect(new Set(tasks.map((t) => `${t.kind}|${t.key}`)).size).toBe(tasks.length);

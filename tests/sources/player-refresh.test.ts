@@ -30,3 +30,15 @@ describe('transfers to a club named after the player', () => {
     expect(isSelfNamed(null, salah)).toBe(false);
   });
 });
+
+import { within } from '../../src/pro/onView.js';
+import { teamRefreshDue } from '../../src/pro/teamRefresh.js';
+describe('clubs fetched on view', () => {
+  it('a page waits a few seconds at most', async () => {
+    expect(await within(new Promise<string>((r) => setTimeout(() => r('done'), 50)), 5, 'late')).toBe('late');
+    expect(await within(Promise.resolve('done'), 50, 'late')).toBe('done');
+  });
+  it('clubs other sources created (negative ids) are never fetched', async () => {
+    expect(await teamRefreshDue({} as never, -5)).toBe(false);
+  });
+});

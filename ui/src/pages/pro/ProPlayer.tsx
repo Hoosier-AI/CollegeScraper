@@ -274,7 +274,7 @@ export default function ProPlayer() {
       {tab === 'matches' && (
         d.matches.length
           ? <DataTable rows={d.matches} columns={matchCols} rowKey={(m) => String(m.match.id)} caption={`${p.name} match log`} dense rowHref={(m) => proPath.match(m.match.slug)} />
-          : <EmptyState title="No match lines yet" body="Lineups and match stats arrive as the crawl reaches this player's matches." />
+          : <EmptyState title="No match lines yet" body="Opening this page fetches his club's latest matches: look again in a minute. Some lower leagues (USL League One, Super League, W League, League Two) have no player match lines from our data provider." />
       )}
 
       {tab === 'career' && (

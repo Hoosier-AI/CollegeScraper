@@ -242,6 +242,14 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     - `results-tables` covers leagues with no table anywhere (WPSL and others): it works one out from results, one
       table per group of clubs that played each other. `pro_standings.source` says where each table came from.
     - The expected table (xPts, xG) comes from American Soccer Analysis, behind the sources switch.
+  - **Clubs on view (migration 145, `src/pro/teamRefresh.ts`):** opening a club, or one of its players, fetches:
+    - match detail for this season's finals that lack it (20 a request), then the club's totals;
+    - transfers, squad and coaches;
+    - its main league's season stats.
+    It runs at most once every 14 days a club. Players and clubs share one on-view allowance, `PRO_ON_VIEW_PER_DAY`
+    (default 600 requests), in `src/pro/onView.ts`.
+  - **Crawl order:** match detail comes first in every tier (US 11/12, top competitions 22, other leagues 42, cups 62),
+    because a request buys 20 matches of lineups, events, player lines and team stats.
   - **Players on view (migration 144):** opening a player's page in the browser fetches their transfers, honours and
     this and last season in every competition (4 requests, `src/pro/playerRefresh.ts`). Limits:
     - at most once every 14 days a player;

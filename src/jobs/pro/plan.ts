@@ -5,9 +5,10 @@
 // the top competitions, other leagues, cups, then history.
 //   tiers: 0 everyone (countries, clubs, profiles), 1 US scene, 2 top competitions (priority under 100), 3 other
 //   leagues, 4 cups
-//   US priorities 11-19: current fixtures, injuries and grounds; current totals and squads; current detail and club
-//   season stats; past fixtures and tables; past totals and detail; past club season stats; transfers and coaches;
-//   injury history and trophies; coach trophies and new players' profiles
+//   US priorities 11-19, by what a request buys: current match detail (20 matches a request), fixtures, tables,
+//   injuries and grounds; past match detail, current squads and transfers; past fixtures and tables; current season
+//   totals (paged) and club season stats; past totals and club season stats; coaches and former clubs; injury history
+//   and trophies; coach trophies and new players' profiles
 // pro-crawl: drains the queue on the pro-bulk lane, within the backfill quota floor and a time budget.
 // pro-rank: nightly recent minutes, indexable, current club and number (pro_refresh_player_rank).
 import { registerJob, type JobContext } from '../runner.js';
@@ -93,17 +94,18 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     // The table, every day (the scoreboard job also refreshes it after each final).
     if (now?.standings !== false) add('standings', k(c), 11, 1);
     if (now?.injuries !== false) add('injuries', k(c), 11, 1);
-    if (now?.players !== false && needTotals(c)) add('league_players', k(c), 12, pro ? 3 : 7);
-    add('detail', k(c), 13, 1);
-    for (const t of statClubs(c)) add('team_stats', `${k(c)}|${t}`, 13, pro ? 7 : 30);
+    // Match detail first: 20 matches a request, and it fills match logs, lineups, events, cards, ratings and club stats.
+    add('detail', k(c), 11, 1);
+    if (now?.players !== false && needTotals(c)) add('league_players', k(c), 14, pro ? 3 : 7);
+    for (const t of statClubs(c)) add('team_stats', `${k(c)}|${t}`, 14, pro ? 7 : 30);
     for (const t of teamsOf.get(k(c)) ?? []) { if (!usClubs.has(t)) continue; active.add(t); if (pro) activePro.add(t); }
     for (const s of input.seasons.get(l.id) ?? []) {
       if (s.season >= c) continue;
-      add('season_fixtures', k(s.season), 14, null);
-      if (s.standings) add('standings', k(s.season), 14, null);
+      add('detail', k(s.season), 12, null);
+      add('season_fixtures', k(s.season), 13, null);
+      if (s.standings) add('standings', k(s.season), 13, null);
       if (s.players && needTotals(s.season)) add('league_players', k(s.season), 15, null);
-      add('detail', k(s.season), 15, null);
-      for (const t of statClubs(s.season)) add('team_stats', `${k(s.season)}|${t}`, 16, null);
+      for (const t of statClubs(s.season)) add('team_stats', `${k(s.season)}|${t}`, 15, null);
     }
   }
   for (const team of usClubs) {
@@ -126,7 +128,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const nowCov = (input.seasons.get(l.id) ?? []).find((x) => x.season === c);
     if (nowCov?.standings !== false) add('standings', k(c), by(tier, 21, 41, 61), by(tier, 2, 7, 7));
     add('league_players', k(c), by(tier, 30, 70, 110), by(tier, 7, 14, 30));
-    add('detail', k(c), by(tier, 32, 75, 115), 7);
+    add('detail', k(c), by(tier, 22, 42, 62), 7);
     if (tier === 2) {
       add('injuries', k(c), 25, 1);
       for (const t of teamsOf.get(k(c)) ?? []) add('team_stats', `${k(c)}|${t}`, 90, 14);

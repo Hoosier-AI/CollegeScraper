@@ -1,11 +1,11 @@
 // Players fetched when someone opens their page and we have little on them yet: transfers, honours, and this and last
-// season's numbers in every competition (4 API-Football requests). At most once every 14 days a player, within a
-// daily request cap (PRO_PLAYER_REFRESH_PER_DAY, default 400), on the everyday quota floor (live scores and the app
-// keep their share). The page waits for it a few seconds at most; anything slower lands for the next visit.
-// Only the page's API calls trigger it (the browser app), never the server-rendered pages search bots read.
+// season's numbers in every competition (4 API-Football requests). At most once every 14 days a player, within the
+// shared on-view cap (onView.ts), on the everyday quota floor (live scores and the app keep their share). The page
+// waits for it a few seconds at most; anything slower lands for the next visit. Only the page's API calls trigger it
+// (the browser app), never the server-rendered pages search bots read.
 import type { Db } from '../db/client.js';
-import { kvGet, kvSet } from '../db/client.js';
 import { getApiFootball, saveQuota } from '../jobs/pro/shared.js';
+import { reserveCalls, within } from './onView.js';
 import { replaceTrophies, upsertSeasonStats, upsertTransfers } from '../db/proRepo.js';
 import { parseLeaguePlayers, parseTransfers, parseTrophies, type AfLeaguePlayer, type AfTransferItem, type AfTrophy } from '../sources/apiFootball/parse.js';
 import { log } from '../log.js';
@@ -14,8 +14,6 @@ const EVERY_DAYS = 14;
 const CALLS = 4;
 const inFlight = new Map<number, Promise<string>>();
 
-const capPerDay = () => Number(process.env.PRO_PLAYER_REFRESH_PER_DAY) || 400;
-const dayKey = () => `pro:player_refresh:${new Date().toISOString().slice(0, 10)}`;
 
 /** Whether this player is due a refresh (never, or not in the last 14 days). */
 export async function refreshDue(db: Db, playerId: number): Promise<boolean> {
@@ -28,10 +26,7 @@ export async function refreshDue(db: Db, playerId: number): Promise<boolean> {
 async function refresh(db: Db, playerId: number): Promise<string> {
   const api = getApiFootball();
   if (!api) return 'no key';
-  if (api.headroom('everyday') < CALLS + 20) return 'quota floor';
-  const spent = Number((await kvGet<number>(db, dayKey())) ?? 0);
-  if (spent + CALLS > capPerDay()) return 'daily cap';
-  await kvSet(db, dayKey(), spent + CALLS);
+  if (!(await reserveCalls(db, api, CALLS))) return 'daily cap or quota floor';
   // Record the attempt first: a failure does not retry on every page view.
   await db.from('pro_player_refresh').upsert({ player_id: playerId, refreshed_at: new Date().toISOString(), calls: CALLS }, { onConflict: 'player_id' });
   const year = new Date().getUTCFullYear();
@@ -65,8 +60,7 @@ export async function refreshPlayerOnView(db: Db, playerId: number, waitMs = 500
     p = refresh(db, playerId).catch((err) => { log.warn({ playerId, err: String(err) }, 'player refresh failed'); return 'failed'; }).finally(() => inFlight.delete(playerId));
     inFlight.set(playerId, p);
   }
-  return Promise.race([p, new Promise<string>((r) => setTimeout(() => r('still running'), waitMs))]);
+  return within(p, waitMs, 'still running');
 }
 
-/** Search engines and link previews read the server-rendered pages; their API calls never spend requests. */
-export const isBot = (ua: string | undefined): boolean => !ua || /bot|crawl|spider|slurp|preview|facebookexternalhit|curl|wget|python|headless/i.test(ua);
+export { isBot } from './onView.js';
