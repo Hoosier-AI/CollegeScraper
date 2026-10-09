@@ -128,6 +128,12 @@ describe('parseFixtureDetail', () => {
     const t = d.teamStats.find((s) => s.team_id === 3001)!;
     expect(t).toMatchObject({ possession: 42, shots: 14, shots_on: 8, corners: 5, red: 1, passes: 317, passes_accurate: 240 });
   });
+  it('a provider id of 0 is no id (never a player row)', () => {
+    const d0 = parseFixtureDetail({ ...nwsl, lineups: [{ team: { id: 3001 }, startXI: [{ player: { id: 0, name: 'Nobody', number: 4, pos: 'D', grid: '2:1' } }] }], players: [], events: [{ time: { elapsed: 5, extra: null }, team: { id: 3001 }, player: { id: 0, name: 'Nobody' }, assist: { id: 0, name: null }, type: 'Card', detail: 'Yellow Card', comments: null }] }, 'w');
+    expect(d0.players[0]!.player_id).toBeNull();
+    expect(d0.events[0]!.player_id).toBeNull();
+    expect(d0.playerStubs).toHaveLength(0);
+  });
   it('a competition with lineups and events but no player stats still has detail', () => {
     const u = parseFixtureDetail(usl, 'm');
     expect(u.teamStats.length).toBe(0);

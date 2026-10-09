@@ -23,5 +23,6 @@ import './pro/detail.js';
 import './pro/standings.js';
 import './pro/backfill.js';
 import './pro/collegeLink.js';
+import './pro/plan.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

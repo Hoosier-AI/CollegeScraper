@@ -80,6 +80,8 @@ const num = (v: unknown): number | null => {
 };
 const int = (v: unknown): number | null => { const n = num(v); return n == null ? null : Math.round(n); };
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+/** The provider uses 0 (and sometimes null) for a person it has no id for. */
+const realId = (v: unknown): number | null => (Number.isInteger(v) && (v as number) > 0 ? (v as number) : null);
 
 /** The provider's status codes. SUSP/INT (suspended, interrupted) are still in progress as far as a scoreboard goes. */
 export function statusOf(short: string): FixtureStatus {
@@ -166,7 +168,7 @@ export function parseFixtureDetail(it: AfFixtureItem, gender: Gender | null): Fi
   const fixture_id = it.fixture.id;
   const events: EventRow[] = (it.events ?? []).map((e, i) => ({
     fixture_id, seq: i + 1, minute: int(e.time?.elapsed), extra: int(e.time?.extra), team_id: e.team?.id ?? null,
-    player_id: e.player?.id ?? null, player_name: str(e.player?.name), assist_id: e.assist?.id ?? null, assist_name: str(e.assist?.name),
+    player_id: realId(e.player?.id), player_name: str(e.player?.name), assist_id: realId(e.assist?.id), assist_name: str(e.assist?.name),
     type: EVENT_TYPE[String(e.type).toLowerCase()] ?? String(e.type).toLowerCase(), detail: str(e.detail), comments: str(e.comments),
   }));
 
@@ -180,13 +182,13 @@ export function parseFixtureDetail(it: AfFixtureItem, gender: Gender | null): Fi
     const lineup = (it.lineups ?? []).find((l) => l.team.id === team_id);
     const lines = (it.players ?? []).find((p) => p.team.id === team_id)?.players ?? [];
     const byId = new Map<number, AfPlayerLine>(); const byName = new Map<string, AfPlayerLine>();
-    for (const p of lines) { if (p.player.id != null) byId.set(p.player.id, p); if (p.player.name) byName.set(p.player.name, p); }
+    for (const p of lines) { const pid = realId(p.player.id); if (pid != null) byId.set(pid, p); if (p.player.name) byName.set(p.player.name, p); }
     const used = new Set<AfPlayerLine>();
     let slot = 0;
     const push = (lp: AfLineupPlayer | null, line: AfPlayerLine | null, starter: boolean) => {
       if (line) used.add(line);
       const st = line?.statistics?.[0] ?? {};
-      const id = lp?.id ?? line?.player.id ?? null;
+      const id = realId(lp?.id) ?? realId(line?.player.id);
       const name = str(lp?.name) ?? str(line?.player.name) ?? 'Unknown';
       slot += 1;
       players.push({
@@ -202,7 +204,7 @@ export function parseFixtureDetail(it: AfFixtureItem, gender: Gender | null): Fi
       });
       if (id != null && !stubs.has(id)) stubs.set(id, { id, name, display_name: name, photo: str(line?.player.photo), gender });
     };
-    const find = (lp: AfLineupPlayer) => (lp.id != null ? byId.get(lp.id) : undefined) ?? (lp.name ? byName.get(lp.name) : undefined) ?? null;
+    const find = (lp: AfLineupPlayer) => (realId(lp.id) != null ? byId.get(lp.id!) : undefined) ?? (lp.name ? byName.get(lp.name) : undefined) ?? null;
     for (const s of lineup?.startXI ?? []) push(s.player, find(s.player), true);
     for (const s of lineup?.substitutes ?? []) push(s.player, find(s.player), false);
     // No lineup (smaller competitions): the player block alone, starters being those not flagged as substitutes.
@@ -281,3 +283,164 @@ export function parseTeams(items: AfTeamItem[], gender: Gender | null, at = new 
 
 /** Loose key for matching people across sources: ASCII, lower case, letters only. */
 export const looseKey = (s: string): string => stripDiacritics(s).toLowerCase().replace(/[^a-z]/g, '');
+
+// ---------- v2: the bulk crawl (every club, player, squad, transfer, coach, trophy, injury) ----------
+export interface AfCountry { name: string; code?: string | null; flag?: string | null }
+export interface AfLeaguePlayer { player: AfProfile['player'] & { injured?: boolean }; statistics: AfSeasonStat[] }
+export interface AfSeasonStat {
+  team: { id: number | null; name?: string | null; logo?: string | null };
+  league: { id: number | null; season: number | null };
+  games?: { appearences?: number | null; lineups?: number | null; minutes?: number | null; number?: number | null; position?: string | null; rating?: string | number | null; captain?: boolean | null };
+  substitutes?: { in?: number | null; out?: number | null; bench?: number | null };
+  shots?: { total?: number | null; on?: number | null };
+  goals?: { total?: number | null; conceded?: number | null; assists?: number | null; saves?: number | null };
+  passes?: { total?: number | null; key?: number | null; accuracy?: number | string | null };
+  tackles?: { total?: number | null; blocks?: number | null; interceptions?: number | null };
+  duels?: { total?: number | null; won?: number | null };
+  dribbles?: { attempts?: number | null; success?: number | null; past?: number | null };
+  fouls?: { drawn?: number | null; committed?: number | null };
+  cards?: { yellow?: number | null; yellowred?: number | null; red?: number | null };
+  penalty?: { won?: number | null; commited?: number | null; scored?: number | null; missed?: number | null; saved?: number | null };
+}
+export interface AfSquad { team: { id: number; name?: string }; players: { id: number | null; name: string | null; age?: number | null; number?: number | null; position?: string | null; photo?: string | null }[] }
+interface AfTransferTeam { id: number | null; name?: string | null; logo?: string | null }
+export interface AfTransferItem { player: { id: number | null; name?: string | null }; transfers: { date?: string | null; type?: string | null; teams: { in?: AfTransferTeam | null; out?: AfTransferTeam | null } }[] }
+export interface AfCoach { id: number; name: string; firstname?: string | null; lastname?: string | null; birth?: { date?: string | null; country?: string | null }; nationality?: string | null; photo?: string | null; team?: { id?: number | null } | null; career?: { team: AfTransferTeam; start?: string | null; end?: string | null }[] }
+export interface AfTrophy { league?: string | null; country?: string | null; season?: string | null; place?: string | null }
+export interface AfInjury { player: { id: number | null; name?: string | null; type?: string | null; reason?: string | null }; team: { id: number | null }; fixture?: { id?: number | null; date?: string | null; timestamp?: number | null }; league: { id: number; season: number } }
+
+export interface CountryRow { name: string; code: string | null; flag: string | null }
+export interface SeasonStatRow {
+  player_id: number; league_id: number; season: number; team_id: number; source: 'provider';
+  apps: number; starts: number; lineups: number | null; minutes: number; goals: number; assists: number;
+  sub_in: number | null; sub_out: number | null; bench: number | null; captain: boolean | null; number: number | null; position: string | null; rating: number | null;
+  shots: number | null; shots_on: number | null; passes: number | null; key_passes: number | null; pass_accuracy: number | null;
+  tackles: number | null; blocks: number | null; interceptions: number | null; duels: number | null; duels_won: number | null;
+  dribbles: number | null; dribbles_won: number | null; dribbled_past: number | null; fouls_drawn: number | null; fouls_committed: number | null;
+  yellow: number; yellowred: number | null; red: number; saves: number | null; conceded: number | null;
+  pen_won: number | null; pen_committed: number | null; pen_scored: number | null; pen_missed: number | null; pen_saved: number | null; computed_at: string;
+}
+export interface SquadRow { team_id: number; player_id: number; number: number | null; position: string | null; updated_at: string }
+export interface TransferRow { player_id: number; date: string; from_team_id: number; to_team_id: number; type: string | null; player_name: string | null; from_name: string | null; from_logo: string | null; to_name: string | null; to_logo: string | null; updated_at: string }
+export interface CoachRow { id: number; name: string; display_name: string; first_name: string | null; last_name: string | null; birth_date: string | null; birth_country: string | null; nationality: string | null; photo: string | null; team_id: number | null; updated_at: string }
+export interface CoachCareerRow { coach_id: number; team_id: number; start: string; end: string | null; team_name: string | null; team_logo: string | null }
+export interface TrophyRow { subject: 'player' | 'coach'; subject_id: number; league: string; country: string; season: string; place: string }
+export interface InjuryRow { league_id: number; season: number; player_id: number; fixture_id: number; team_id: number | null; type: string | null; reason: string | null; date: string | null }
+
+const isoDate = (v: unknown): string | null => { const s = str(v); return s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null; };
+
+export const parseCountries = (items: AfCountry[]): CountryRow[] => items.filter((c) => str(c.name)).map((c) => ({ name: c.name.trim(), code: str(c.code), flag: str(c.flag) }));
+
+/** Clubs from teams?country=: the provider marks women's sides with a trailing " W". */
+export function parseCountryTeams(items: AfTeamItem[], at = new Date().toISOString()): TeamProfileRow[] {
+  return parseTeams(items, null, at).map((t) => ({ ...t, gender: /\sW$/.test(t.name) ? 'w' : 'm' }));
+}
+
+/** players/profiles?page=: a page of profiles (250), the same shape as one profile. */
+export const parseProfilesPage = (items: AfProfile[], at = new Date().toISOString()): PlayerProfileRow[] =>
+  items.filter((p) => Number.isInteger(p.player?.id) && p.player.id > 0 && str(p.player.name)).map((p) => parseProfile(p, at));
+
+/**
+ * players?league&season: each player's profile plus one season row per club in that competition. Rows with no
+ * appearance are dropped (a squad listing is not a season played), as are other competitions the answer may carry.
+ */
+export function parseLeaguePlayers(items: AfLeaguePlayer[], league: number, season: number, at = new Date().toISOString()): { profiles: PlayerProfileRow[]; stats: SeasonStatRow[] } {
+  const profiles: PlayerProfileRow[] = []; const stats: SeasonStatRow[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    const id = it.player?.id;
+    if (!Number.isInteger(id) || id <= 0 || !str(it.player.name)) continue;
+    profiles.push(parseProfile({ player: it.player }, at));
+    for (const s of it.statistics ?? []) {
+      if (s.league?.id !== league || Number(s.league?.season) !== season || !Number.isInteger(s.team?.id)) continue;
+      const apps = int(s.games?.appearences) ?? 0, minutes = int(s.games?.minutes) ?? 0;
+      if (apps <= 0 && minutes <= 0) continue;
+      const key = `${id}|${s.team.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      stats.push({
+        player_id: id, league_id: league, season, team_id: s.team.id!, source: 'provider',
+        apps, starts: int(s.games?.lineups) ?? 0, lineups: int(s.games?.lineups), minutes, goals: int(s.goals?.total) ?? 0, assists: int(s.goals?.assists) ?? 0,
+        sub_in: int(s.substitutes?.in), sub_out: int(s.substitutes?.out), bench: int(s.substitutes?.bench), captain: s.games?.captain ?? null,
+        number: int(s.games?.number), position: str(s.games?.position), rating: num(s.games?.rating) ? Math.round(num(s.games?.rating)! * 100) / 100 : null,
+        shots: int(s.shots?.total), shots_on: int(s.shots?.on), passes: int(s.passes?.total), key_passes: int(s.passes?.key), pass_accuracy: int(s.passes?.accuracy),
+        tackles: int(s.tackles?.total), blocks: int(s.tackles?.blocks), interceptions: int(s.tackles?.interceptions), duels: int(s.duels?.total), duels_won: int(s.duels?.won),
+        dribbles: int(s.dribbles?.attempts), dribbles_won: int(s.dribbles?.success), dribbled_past: int(s.dribbles?.past), fouls_drawn: int(s.fouls?.drawn), fouls_committed: int(s.fouls?.committed),
+        yellow: int(s.cards?.yellow) ?? 0, yellowred: int(s.cards?.yellowred), red: int(s.cards?.red) ?? 0,
+        saves: int(s.goals?.saves), conceded: int(s.goals?.conceded),
+        pen_won: int(s.penalty?.won), pen_committed: int(s.penalty?.commited), pen_scored: int(s.penalty?.scored), pen_missed: int(s.penalty?.missed), pen_saved: int(s.penalty?.saved),
+        computed_at: at,
+      });
+    }
+  }
+  return { profiles, stats };
+}
+
+/** players/squads?team: the current squad (the provider lists some players with id 0: skipped). */
+export function parseSquad(items: AfSquad[], at = new Date().toISOString()): { squad: SquadRow[]; stubs: PlayerStubRow[] } {
+  const squad: SquadRow[] = []; const stubs: PlayerStubRow[] = []; const seen = new Set<string>();
+  for (const it of items) for (const p of it.players ?? []) {
+    if (!Number.isInteger(p.id) || (p.id as number) <= 0 || !str(p.name)) continue;
+    const k = `${it.team.id}|${p.id}`; if (seen.has(k)) continue; seen.add(k);
+    squad.push({ team_id: it.team.id, player_id: p.id as number, number: int(p.number), position: str(p.position), updated_at: at });
+    stubs.push({ id: p.id as number, name: p.name!.trim(), display_name: p.name!.trim(), photo: str(p.photo), gender: null });
+  }
+  return { squad, stubs };
+}
+
+/** transfers?team (or ?player): every move of every player listed, one row per move. Undated moves are skipped. */
+export function parseTransfers(items: AfTransferItem[], at = new Date().toISOString()): TransferRow[] {
+  const out = new Map<string, TransferRow>();
+  for (const it of items) {
+    const pid = it.player?.id;
+    if (!Number.isInteger(pid) || (pid as number) <= 0) continue;
+    for (const t of it.transfers ?? []) {
+      const date = isoDate(t.date);
+      if (!date) continue;
+      const to = t.teams?.in ?? null, from = t.teams?.out ?? null;
+      const row: TransferRow = { player_id: pid as number, date, from_team_id: from?.id ?? 0, to_team_id: to?.id ?? 0, type: str(t.type) && !/^(n\/a|-)$/i.test(t.type!) ? t.type!.trim() : null,
+        player_name: str(it.player.name), from_name: str(from?.name), from_logo: str(from?.logo), to_name: str(to?.name), to_logo: str(to?.logo), updated_at: at };
+      out.set(`${row.player_id}|${row.date}|${row.from_team_id}|${row.to_team_id}`, row);
+    }
+  }
+  return [...out.values()];
+}
+
+export function parseCoaches(items: AfCoach[], at = new Date().toISOString()): { coaches: CoachRow[]; career: CoachCareerRow[] } {
+  const coaches: CoachRow[] = []; const career: CoachCareerRow[] = [];
+  for (const c of items) {
+    if (!Number.isInteger(c.id) || !str(c.name)) continue;
+    coaches.push({ id: c.id, name: c.name, display_name: personDisplayName(c.firstname, c.lastname, c.name), first_name: str(c.firstname), last_name: str(c.lastname),
+      birth_date: isoDate(c.birth?.date), birth_country: str(c.birth?.country), nationality: str(c.nationality), photo: str(c.photo), team_id: c.team?.id ?? null, updated_at: at });
+    const seen = new Set<string>();
+    for (const j of c.career ?? []) {
+      if (!Number.isInteger(j.team?.id)) continue;
+      const start = isoDate(j.start) ?? '1900-01-01';
+      const k = `${j.team.id}|${start}`; if (seen.has(k)) continue; seen.add(k);
+      career.push({ coach_id: c.id, team_id: j.team.id!, start, end: isoDate(j.end), team_name: str(j.team.name), team_logo: str(j.team.logo) });
+    }
+  }
+  return { coaches, career };
+}
+
+export function parseTrophies(items: AfTrophy[], subject: 'player' | 'coach', id: number): TrophyRow[] {
+  const out = new Map<string, TrophyRow>();
+  for (const t of items) {
+    const league = str(t.league); if (!league) continue;
+    const row: TrophyRow = { subject, subject_id: id, league, country: str(t.country) ?? '', season: str(t.season) ?? '', place: str(t.place) ?? '' };
+    out.set(`${row.league}|${row.country}|${row.season}|${row.place}`, row);
+  }
+  return [...out.values()];
+}
+
+export function parseInjuries(items: AfInjury[]): InjuryRow[] {
+  const out = new Map<string, InjuryRow>();
+  for (const i of items) {
+    const pid = i.player?.id;
+    if (!Number.isInteger(pid) || (pid as number) <= 0 || !Number.isInteger(i.league?.id)) continue;
+    const ts = i.fixture?.timestamp ? new Date(i.fixture.timestamp * 1000).toISOString().slice(0, 10) : isoDate(i.fixture?.date);
+    const row: InjuryRow = { league_id: i.league.id, season: i.league.season, player_id: pid as number, fixture_id: i.fixture?.id ?? 0, team_id: i.team?.id ?? null, type: str(i.player.type), reason: str(i.player.reason), date: ts };
+    out.set(`${row.player_id}|${row.fixture_id}`, row);
+  }
+  return [...out.values()];
+}

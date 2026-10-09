@@ -44,7 +44,8 @@ describe('pro schedule', () => {
     expect(SCHEDULE.find((e) => e.job === 'pro-scoreboard')!.due(march)).toBe(true);
     expect(SCHEDULE.find((e) => e.job === 'hourly')!.due({ ...march, m: 0 })).toBe(false);
     expect(PRO_LANE_JOBS.sort()).toEqual(['pro-final-detail', 'pro-live', 'pro-scoreboard', 'pro-standings']);
-    expect(JOB_META['pro-backfill']!.lane).toBe('crawl');
+    expect(JOB_META['pro-backfill']!.lane).toBe('pro-bulk');
+    expect(JOB_META['pro-crawl']!.lane).toBe('pro-bulk');
   });
 });
 

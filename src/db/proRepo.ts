@@ -1,6 +1,6 @@
 // Writes for the pro_* tables (migration 134). Upserts are keyed by the provider's ids, so re-running any step is safe.
 import { selectAll, upsertChunked, type Db } from './client.js';
-import type { FixtureDetail, FixtureRow, LeagueRow, PlayerProfileRow, PlayerStubRow, SeasonRow, StandingRow, TeamProfileRow, TeamRow } from '../sources/apiFootball/parse.js';
+import type { CoachCareerRow, CoachRow, CountryRow, FixtureDetail, FixtureRow, InjuryRow, LeagueRow, PlayerProfileRow, PlayerStubRow, SeasonRow, SeasonStatRow, SquadRow, StandingRow, TeamProfileRow, TeamRow, TransferRow, TrophyRow } from '../sources/apiFootball/parse.js';
 import type { Gender } from '../sources/apiFootball/leagues.js';
 
 export interface LeagueInfo { id: number; gender: Gender; enabled: boolean; priority: number; type: 'league' | 'cup'; current_season: number | null }
@@ -122,4 +122,68 @@ function dedupeById<T extends { id: number }>(rows: T[]): T[] {
   const m = new Map<number, T>();
   for (const r of rows) if (!m.has(r.id)) m.set(r.id, r);
   return [...m.values()];
+}
+
+// ---------- v2: the bulk crawl ----------
+type Rows = Record<string, unknown>[];
+const asRows = <T>(r: T[]) => r as unknown as Rows;
+
+export async function upsertCountries(db: Db, rows: CountryRow[]): Promise<number> {
+  return rows.length ? upsertChunked(db, 'pro_countries', asRows(rows), { onConflict: 'name' }) : 0;
+}
+
+/** Which clubs play in a league season (squad, transfer and coach tasks are planned from it). */
+export async function upsertLeagueTeams(db: Db, league: number, season: number, teamIds: number[], chunk = 250): Promise<number> {
+  const rows = [...new Set(teamIds.filter((t) => Number.isInteger(t) && t > 0))].map((team_id) => ({ league_id: league, season, team_id }));
+  return rows.length ? upsertChunked(db, 'pro_league_teams', rows, { onConflict: 'league_id,season,team_id', ignoreDuplicates: true, chunk }) : 0;
+}
+
+/** Full profiles (players/profiles pages and players?league&season): name, birth, nationality, size, photo. */
+export async function upsertProfiles(db: Db, rows: PlayerProfileRow[], chunk = 250): Promise<number> {
+  return rows.length ? upsertChunked(db, 'pro_players', asRows(rows), { onConflict: 'id', chunk }) : 0;
+}
+
+export async function upsertSeasonStats(db: Db, rows: SeasonStatRow[], chunk = 250): Promise<number> {
+  return rows.length ? upsertChunked(db, 'pro_player_season_stats', asRows(rows), { onConflict: 'player_id,league_id,season,team_id', chunk }) : 0;
+}
+
+/** A club's squad is replaced whole: players who left are gone from it. */
+export async function replaceSquad(db: Db, teamId: number, rows: SquadRow[], stubs: PlayerStubRow[], chunk = 250): Promise<number> {
+  await insertPlayerStubs(db, stubs);
+  const { error } = await db.from('pro_squads').delete().eq('team_id', teamId);
+  if (error) throw new Error(`clear squad ${teamId}: ${error.message}`);
+  return rows.length ? upsertChunked(db, 'pro_squads', asRows(rows), { onConflict: 'team_id,player_id', chunk }) : 0;
+}
+
+export async function upsertTransfers(db: Db, rows: TransferRow[], chunk = 250): Promise<number> {
+  return rows.length ? upsertChunked(db, 'pro_transfers', asRows(rows), { onConflict: 'player_id,date,from_team_id,to_team_id', chunk }) : 0;
+}
+
+export async function upsertCoaches(db: Db, coaches: CoachRow[], career: CoachCareerRow[]): Promise<number> {
+  if (!coaches.length) return 0;
+  await upsertChunked(db, 'pro_coaches', asRows(coaches), { onConflict: 'id' });
+  const ids = coaches.map((c) => c.id);
+  const { error } = await db.from('pro_coach_career').delete().in('coach_id', ids);
+  if (error) throw new Error(`clear coach career: ${error.message}`);
+  if (career.length) await upsertChunked(db, 'pro_coach_career', asRows(career), { onConflict: 'coach_id,team_id,start' });
+  return coaches.length;
+}
+
+export async function replaceTrophies(db: Db, subject: 'player' | 'coach', id: number, rows: TrophyRow[]): Promise<number> {
+  const { error } = await db.from('pro_trophies').delete().eq('subject', subject).eq('subject_id', id);
+  if (error) throw new Error(`clear trophies: ${error.message}`);
+  return rows.length ? upsertChunked(db, 'pro_trophies', asRows(rows), { onConflict: 'subject,subject_id,league,country,season,place' }) : 0;
+}
+
+export async function replaceInjuries(db: Db, league: number, season: number, rows: InjuryRow[]): Promise<number> {
+  const { error } = await db.from('pro_injuries').delete().eq('league_id', league).eq('season', season);
+  if (error) throw new Error(`clear injuries: ${error.message}`);
+  return rows.length ? upsertChunked(db, 'pro_injuries', asRows(rows), { onConflict: 'league_id,season,player_id,fixture_id' }) : 0;
+}
+
+export interface TaskSeed { kind: string; key: string; priority: number; every_days: number | null }
+
+/** New tasks only: an existing task keeps its schedule and progress (its priority follows the tier, see plan.ts). */
+export async function insertTasks(db: Db, seeds: TaskSeed[]): Promise<number> {
+  return seeds.length ? upsertChunked(db, 'pro_crawl_tasks', asRows(seeds), { onConflict: 'kind,key', ignoreDuplicates: true, chunk: 1000 }) : 0;
 }

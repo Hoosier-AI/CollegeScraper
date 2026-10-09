@@ -19,7 +19,7 @@ export interface Overview {
   generated_at: string;
 }
 export interface ParamSpec { name: string; type: 'number' | 'string' | 'boolean' | 'enum' | 'string[]' | 'json'; label: string; help?: string; default?: unknown; options?: string[]; required?: boolean }
-export interface CatalogueJob { name: string; description: string; lane: 'crawl' | 'live' | 'aux' | 'pro'; composite?: boolean; params: ParamSpec[]; dangerous?: boolean; scheduled: boolean }
+export interface CatalogueJob { name: string; description: string; lane: 'crawl' | 'live' | 'aux' | 'pro' | 'pro-bulk'; composite?: boolean; params: ParamSpec[]; dangerous?: boolean; scheduled: boolean }
 export interface Run { id: string; job: string; status: string; params: Record<string, unknown>; started_at: string | null; heartbeat_at: string | null; finished_at: string | null; counters: Record<string, unknown>; error: string | null; created_at: string }
 export interface RunsPage { rows: Run[]; total: number; limit: number; offset: number }
 export interface QualityCheck { id: string; title: string; description: string; count: number; sample: any[]; previous: number | null; delta: number | null }
