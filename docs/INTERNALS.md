@@ -169,6 +169,19 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
   - React pages: `ui/src/pages/pro/`. A College/Pro switch sits in the header.
   - Sitemaps: `pro-core`, `pro-teams-N`, `pro-matches-YEAR-N` (finals with detail only) and `pro-players-N` (players who have played).
 - **Env:** `API_FOOTBALL_KEY`, plus `PRO_RESERVE`, `PRO_BACKFILL_RESERVE`, `PRO_PER_MIN` and `PRO_BACKFILL_SEASONS`. Without the key, every pro job is a no-op.
+- **The bulk crawl (v2, migration 135):**
+  - What it holds:
+    - every club (`teams?country`);
+    - every player (`players/profiles` pages, 250 each, ~690k);
+    - each league season's fixtures, provider season totals (`players?league&season`, paged) and match detail (3 seasons, 5 for T1);
+    - current squads, transfers, coaches, injuries (T1) and trophies (T1 players).
+  - `pro-plan` writes the work as rows in `pro_crawl_tasks`, ordered by tier: T1 = priority under 100, T2 = other leagues, T3 = cups. It adds missing tasks only.
+  - `pro-crawl` works through them every 10 minutes on the `pro-bulk` lane, on the backfill quota floor. Paged tasks resume from `page`.
+    - Failures back off: 1 h, 2 h, 4 h, up to a week.
+    - Slow database writes halve the batch size and pause for 60 s (`Pace` in `src/jobs/pro/tasks.ts`).
+  - `pro-rank` (nightly) sets `minutes_recent` (search order), `indexable` (sitemaps), and each player's current club and number.
+  - On the Pro plan, the current season of everything takes about 4 weeks; the console's Pro view shows progress by kind.
+  - Provider season totals (`source = 'provider'`) win over our computed ones.
 
 ## Database
 

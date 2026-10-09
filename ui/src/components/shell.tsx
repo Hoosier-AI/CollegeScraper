@@ -2,7 +2,7 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useRef } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { CalendarDays, Gauge, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, Gauge, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users } from 'lucide-react';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
@@ -20,6 +20,9 @@ export const NAV = [
 export const PRO_NAV = [
   { to: '/pro/matches', label: 'Matches', icon: CalendarDays },
   { to: '/pro/leagues', label: 'Leagues', icon: Trophy },
+  { to: '/pro/players', label: 'Players', icon: Users },
+  { to: '/pro/leaders', label: 'Leaders', icon: BarChart3 },
+  { to: '/pro/college', label: 'College to Pro', icon: GraduationCap },
 ] as const;
 const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
 export const isProPath = (path: string) => path === '/pro' || path.startsWith('/pro/');
@@ -65,7 +68,8 @@ export function BottomBar() {
   const { pathname } = useLocation();
   const pro = isProPath(pathname);
   const items = pro
-    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV, { to: '/', label: 'College', icon: GraduationCap }]
+    // Phones: five slots; Leaders is a tab away on the players page, and the College/Pro switch stays in the top bar.
+    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => n.to !== '/pro/leaders')]
     : [...NAV, { to: '/search', label: 'Search', icon: Search }, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

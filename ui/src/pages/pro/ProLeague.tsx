@@ -1,16 +1,59 @@
-// One competition: its table (every group), results and fixtures, top scorers and assists, for a season.
+// One competition: its table (every group), results and fixtures, top scorers and assists, a stats tab (leaders on
+// 20+ stats, the clubs' attack and defence) and past champions, for a season.
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, ApiError, qs } from '../../lib/api';
 import { useUrlPatch, useUrlState } from '../../lib/urlState';
-import { proPath, genderWord, type ProLeader, type ProLeagueRef, type ProMatch, type ProStandingRow } from '../../lib/pro';
+import { proPath, genderWord, PRO_STATS, POSITIONS, type ProLeader, type ProLeagueRef, type ProMatch, type ProStandingRow, type ProTeamRef } from '../../lib/pro';
+import { DataTable, type Column } from '../../components/DataTable';
+import { LeadersTable, type LeaderRow } from '../../components/pro/People';
 import { LeagueTable } from '../../components/pro/LeagueTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
-import { EmptyState, ErrorBox, PageHeader, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, Field, PageHeader, PlayerAvatar, Section, SegmentedControl, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
 
-interface LeagueData { league: ProLeagueRef & { current_season: number | null }; season: number | null; seasons: number[]; standings: { name: string; rows: ProStandingRow[] }[]; results: ProMatch[]; fixtures: ProMatch[]; scorers: ProLeader[]; assists: ProLeader[]; teams: number }
-type Tab = 'table' | 'results' | 'fixtures' | 'players';
+interface TeamLine { team: ProTeamRef; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; shots: number | null; shots_on: number | null; corners: number | null; fouls: number | null; yellow: number | null; red: number | null; possession: number | null }
+interface LeagueData { league: ProLeagueRef & { current_season: number | null }; season: number | null; seasons: number[]; standings: { name: string; rows: ProStandingRow[] }[]; results: ProMatch[]; fixtures: ProMatch[]; scorers: ProLeader[]; assists: ProLeader[]; teams: number;
+  champions: { season: number; teams: { team: ProTeamRef; group: string; points: number | null }[] }[]; team_table: TeamLine[] }
+type Tab = 'table' | 'results' | 'fixtures' | 'players' | 'stats' | 'history';
+
+/** Leaders on any stat for this league season, by position, totals or per 90 (pro_leaders). */
+function StatsTab({ league, season, current, teams }: { league: number; season: number | null; current: number | null; teams: TeamLine[] }) {
+  const [stat, setStat] = useUrlState('stat', 'goals', { allow: PRO_STATS.map((x) => x.key) });
+  const [position, setPosition] = useUrlState('position', '', { allow: [...POSITIONS] });
+  const [rate, setRate] = useUrlState('per90', '', { allow: ['1'] });
+  const q = useQuery({
+    queryKey: ['pro-leaders', league, season, stat, position, rate],
+    queryFn: () => api<{ rows: LeaderRow[]; per90: boolean }>(`/api/pro/leaders${qs({ league, season: season !== current ? season : undefined, stat, position, per90: rate, limit: 25 })}`),
+    placeholderData: keepPreviousData,
+  });
+  const n = (v: number | null, d = 0) => (v == null ? null : Number(v.toFixed(d)));
+  const teamCols: Column<TeamLine>[] = [
+    { key: 'team', label: 'Club', primary: true, value: (r) => r.team.name, render: (r) => <span className="flex items-center gap-2"><TeamLogo src={r.team.logo} name={r.team.name} size={18} />{r.team.name}</span> },
+    { key: 'played', label: 'P', num: true, value: (r) => r.played },
+    { key: 'gf', label: 'GF', title: 'Goals for', num: true, value: (r) => r.gf },
+    { key: 'ga', label: 'GA', title: 'Goals against', num: true, value: (r) => r.ga },
+    { key: 'gfpg', label: 'GF/g', title: 'Goals for per game', num: true, decimals: 2, value: (r) => n(r.played ? r.gf / r.played : null, 2) },
+    { key: 'gapg', label: 'GA/g', title: 'Goals against per game', num: true, decimals: 2, value: (r) => n(r.played ? r.ga / r.played : null, 2) },
+    { key: 'cs', label: 'CS', title: 'Clean sheets', num: true, value: (r) => r.clean_sheets },
+    { key: 'possession', label: 'Poss %', title: 'Average possession', num: true, priority: 2, value: (r) => (r.possession == null ? null : Math.round(r.possession)) },
+    { key: 'shots', label: 'Sh/g', title: 'Shots per game', num: true, decimals: 1, priority: 2, value: (r) => n(r.shots != null && r.played ? r.shots / r.played : null, 1) },
+    { key: 'cards', label: 'YC', title: 'Yellow cards', num: true, priority: 3, value: (r) => r.yellow },
+  ];
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Stat">{(id) => <Select id={id} value={stat} onChange={setStat} options={PRO_STATS.map((x) => ({ value: x.key, label: x.label }))} />}</Field>
+        <Field label="Position">{() => <SegmentedControl label="Position" size="sm" value={position} onChange={setPosition} options={[{ value: '', label: 'All' }, { value: 'Goalkeeper', label: 'GK' }, { value: 'Defender', label: 'DF' }, { value: 'Midfielder', label: 'MF' }, { value: 'Attacker', label: 'FW' }]} />}</Field>
+        <Field label="Numbers">{() => <SegmentedControl label="Numbers" size="sm" value={rate} onChange={setRate} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>
+      </div>
+      {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
+      <LeadersTable rows={q.data?.rows ?? []} stat={stat} per90={!!rate} caption="Player leaders" loading={q.isPending} showLeague={false}
+        empty={<EmptyState title="No player stats yet" body="Season totals arrive as the crawl reaches this competition." />} />
+      {teams.length > 0 && <Section title="Clubs: attack and defence"><DataTable rows={teams} columns={teamCols} rowKey={(r) => String(r.team.id)} caption="Club stats" rowHref={(r) => proPath.team(r.team.slug, season)} dense defaultSort={{ key: 'gfpg', dir: 'desc' }} /></Section>}
+    </div>
+  );
+}
 
 function Leaders({ rows, stat, label }: { rows: ProLeader[]; stat: 'goals' | 'assists'; label: string }) {
   if (!rows.length) return <p className="text-sm text-chalk-400">No {label.toLowerCase()} recorded yet.</p>;
@@ -36,7 +79,7 @@ export default function ProLeague() {
   const { slug = '' } = useParams();
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
-  const [tab] = useUrlState('tab', 'table', { allow: ['table', 'results', 'fixtures', 'players'] });
+  const [tab] = useUrlState('tab', 'table', { allow: ['table', 'results', 'fixtures', 'players', 'stats', 'history'] });
   const q = useQuery({ queryKey: ['pro-league', slug, seasonParam], queryFn: () => api<LeagueData>(`/api/pro/leagues/${slug}${qs({ season: seasonParam })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="league" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
@@ -44,7 +87,8 @@ export default function ProLeague() {
   const d = q.data!;
   const l = d.league;
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'table', label: 'Table' }, { id: 'results', label: 'Results', count: d.results.length }, { id: 'fixtures', label: 'Fixtures', count: d.fixtures.length }, { id: 'players', label: 'Top players' },
+    { id: 'table', label: 'Table' }, { id: 'results', label: 'Results', count: d.results.length }, { id: 'fixtures', label: 'Fixtures', count: d.fixtures.length }, { id: 'players', label: 'Top players' }, { id: 'stats', label: 'Stats' },
+    ...(d.champions.length ? [{ id: 'history' as Tab, label: 'Past winners', count: d.champions.length }] : []),
   ];
   const where = l.country && l.country !== 'World' ? l.country : 'International';
   return (
@@ -64,6 +108,20 @@ export default function ProLeague() {
           <Section title="Top scorers"><Leaders rows={d.scorers} stat="goals" label="Goals" /></Section>
           <Section title="Most assists"><Leaders rows={d.assists} stat="assists" label="Assists" /></Section>
         </div>
+      )}
+      {tab === 'stats' && <StatsTab league={l.id} season={d.season} current={l.current_season} teams={d.team_table} />}
+      {tab === 'history' && (
+        <>
+        <p className="text-xs text-chalk-400">Top of the table at the end of each past season{d.champions.some((c) => c.teams.length > 1) ? ', per group or conference' : ''}. Where a title is decided in playoffs, the table winner and the champion can differ.</p>
+        <ol className="frame divide-y divide-field-700" aria-label="Top of the table each past season">
+          {d.champions.map((c) => (
+            <li key={c.season} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-sm">
+              <Link to={proPath.league(slug, c.season, l.current_season)} className="w-14 shrink-0 tnum text-chalk-400 hover:text-chalk-100">{c.season}</Link>
+              {c.teams.map((x) => <Link key={x.team.id + x.group} to={proPath.team(x.team.slug, c.season)} className="flex items-center gap-2 font-medium text-chalk-100 hover:text-pitch-300"><TeamLogo src={x.team.logo} name={x.team.name} size={20} />{x.team.name}{c.teams.length > 1 && x.group ? <span className="text-2xs font-normal text-chalk-500">{x.group}</span> : null}{x.points != null && <span className="text-2xs font-normal text-chalk-500">{x.points} pts</span>}</Link>)}
+            </li>
+          ))}
+        </ol>
+        </>
       )}
     </div>
   );

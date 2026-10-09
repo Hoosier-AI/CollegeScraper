@@ -8,9 +8,10 @@ import { proPath } from '../../lib/pro';
 import { PlayerAvatar, Spinner, TeamLogo } from '../primitives';
 
 interface HitRow { id: number; name: string; slug: string; sub: string | null; logo: string | null }
-type Hit = { key: string; kind: 'league' | 'team' | 'player'; label: string; sub: string; href: string; logo: string | null };
+export type Hit = { key: string; kind: 'league' | 'team' | 'player'; label: string; sub: string; href: string; logo: string | null; slug: string };
 
-export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club or player', examples, onNavigate }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void }) {
+/** `onPick`: choose instead of navigating (the compare page picks players with it). */
+export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club or player', examples, onNavigate, onPick }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void }) {
   const nav = useNavigate();
   const listId = useId();
   const [q, setQ] = useState('');
@@ -22,10 +23,10 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
   useEffect(() => { const t = setTimeout(() => setDebounced(q.trim()), 250); return () => clearTimeout(t); }, [q]);
   const hits = useQuery({ queryKey: ['pro-search', debounced], queryFn: () => api<{ leagues: HitRow[]; teams: HitRow[]; players: HitRow[] }>(`/api/pro/search${qs({ q: debounced, limit: 6 })}`), enabled: debounced.length >= 2 });
   const items = useMemo<Hit[]>(() => [
-    ...(hits.data?.leagues ?? []).map((h) => ({ key: `l${h.id}`, kind: 'league' as const, label: h.name, sub: h.sub ?? 'Competition', href: proPath.league(h.slug), logo: h.logo })),
-    ...(hits.data?.teams ?? []).map((h) => ({ key: `t${h.id}`, kind: 'team' as const, label: h.name, sub: h.sub ?? 'Club', href: proPath.team(h.slug), logo: h.logo })),
-    ...(hits.data?.players ?? []).map((h) => ({ key: `p${h.id}`, kind: 'player' as const, label: h.name, sub: h.sub ?? 'Player', href: proPath.player(h.slug), logo: h.logo })),
-  ], [hits.data]);
+    ...(onPick ? [] : (hits.data?.leagues ?? []).map((h) => ({ key: `l${h.id}`, kind: 'league' as const, label: h.name, sub: h.sub ?? 'Competition', href: proPath.league(h.slug), logo: h.logo, slug: h.slug }))),
+    ...(onPick ? [] : (hits.data?.teams ?? []).map((h) => ({ key: `t${h.id}`, kind: 'team' as const, label: h.name, sub: h.sub ?? 'Club', href: proPath.team(h.slug), logo: h.logo, slug: h.slug }))),
+    ...(hits.data?.players ?? []).map((h) => ({ key: `p${h.id}`, kind: 'player' as const, label: h.name, sub: h.sub ?? 'Player', href: proPath.player(h.slug), logo: h.logo, slug: h.slug })),
+  ], [hits.data, onPick]);
   useEffect(() => { setCursor(0); }, [items]);
   useEffect(() => {
     if (!open) return;
@@ -33,7 +34,7 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
-  const go = (h: Hit) => { setOpen(false); setQ(''); onNavigate?.(); nav(h.href); };
+  const go = (h: Hit) => { setOpen(false); setQ(''); if (onPick) { onPick(h); return; } onNavigate?.(); nav(h.href); };
   const listOpen = open && debounced.length >= 2;
   const big = size === 'lg';
   return (

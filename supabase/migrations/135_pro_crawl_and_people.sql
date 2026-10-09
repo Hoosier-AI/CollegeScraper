@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS public.pro_squads (
   PRIMARY KEY (team_id, player_id)
 );
 CREATE INDEX IF NOT EXISTS pro_squads_player_idx ON public.pro_squads(player_id);
+-- The squad pages join the player (the crawl creates the player row before the squad line).
+DELETE FROM public.pro_squads s WHERE NOT EXISTS (SELECT 1 FROM public.pro_players p WHERE p.id = s.player_id);
+DO $$ BEGIN
+  ALTER TABLE public.pro_squads ADD CONSTRAINT pro_squads_player_fkey FOREIGN KEY (player_id) REFERENCES public.pro_players(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS public.pro_transfers (
   player_id integer NOT NULL,

@@ -11,8 +11,8 @@ import { TeamMasthead } from './team/Masthead';
 import { RosterTable } from './team/RosterTable';
 import { GamesList } from './team/GamesList';
 
-type Tab = 'roster' | 'games' | 'season' | 'coaches' | 'honors';
-const TABS: Tab[] = ['roster', 'games', 'season', 'coaches', 'honors'];
+type Tab = 'roster' | 'games' | 'season' | 'coaches' | 'honors' | 'pros';
+const TABS: Tab[] = ['roster', 'games', 'season', 'coaches', 'honors', 'pros'];
 
 export default function Team() {
   // /teams/<uuid> (links inside the app) or /teams/<school>/<men|women> (the address search engines see).
@@ -30,6 +30,9 @@ export default function Team() {
   const roster = useQuery({ queryKey: ['roster', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/roster${qs({ season: f.season })}`), enabled: !!id });
   const games = useQuery({ queryKey: ['pgames', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/games${qs({ season: f.season })}`), enabled: !!id });
   const sync = useMutation({ mutationFn: (force: boolean) => api<{ id: string }>(`/api/programs/${id}/sync`, { method: 'POST', body: JSON.stringify({ season: f.season, force }) }), onSuccess: (r) => setRunId(r.id) });
+  // Plaibook Stats Pro: players from this program who play professionally (College to Pro links).
+  const prog = team.data?.program;
+  const alumni = useQuery({ queryKey: ['pro-alumni', prog?.school_seo, prog?.gender], queryFn: () => api<{ players: any[] }>(`/api/pro/college/${prog!.school_seo}/${prog!.gender}`), enabled: !!prog?.school_seo, staleTime: 600_000 });
   const refreshAll = () => { qc.invalidateQueries({ queryKey: ['program', id] }); qc.invalidateQueries({ queryKey: ['roster', id] }); qc.invalidateQueries({ queryKey: ['pgames', id] }); };
   if (entity.missing) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
@@ -44,6 +47,7 @@ export default function Team() {
     { id: 'games' as Tab, label: 'Matches', count: games.data?.length },
     { id: 'season' as Tab, label: 'Season profile' },
     { id: 'coaches' as Tab, label: 'Coaches', count: t.coaches?.length },
+    ...(alumni.data?.players.length ? [{ id: 'pros' as Tab, label: 'Pro alumni', count: alumni.data.players.length }] : []),
     { id: 'honors' as Tab, label: 'Honors', count: honors.length || undefined },
   ];
   return (
@@ -75,6 +79,9 @@ export default function Team() {
       {tab === 'coaches' && (t.coaches?.length
         ? <ul className="frame divide-y divide-field-700">{t.coaches.map((c: any) => <li key={c.college_coaches?.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={36} /><div><div className="font-medium text-chalk-100">{c.college_coaches?.name}</div><div className="text-xs text-chalk-400">{c.title}{c.is_head && <Badge tone="teal" className="ml-2">Head coach</Badge>}</div></div></li>)}</ul>
         : <EmptyState title="No coaches listed" body="The staff page has not been collected for this season." />)}
+      {tab === 'pros' && (alumni.data?.players.length
+        ? <ul className="frame divide-y divide-field-700">{alumni.data.players.map((a: any) => <li key={a.id}><Link to={`/pro/players/${a.slug}`} className="flex items-center gap-3 px-3 py-2 hover:bg-field-800"><PlayerAvatar src={a.photo} name={a.name} size={32} /><div className="min-w-0 flex-1"><div className="truncate font-medium text-chalk-100">{a.name}</div><div className="text-xs text-chalk-400">{[a.position, a.college_years?.length ? `here ${a.college_years.join('–')}` : null].filter(Boolean).join(' · ')}</div></div>{a.team && <span className="flex items-center gap-1.5 text-xs text-chalk-300"><TeamLogo src={a.team.logo} name={a.team.name} size={18} />{a.team.name}</span>}</Link></li>)}</ul>
+        : <EmptyState title="No pro alumni found yet" body="Links come from Wikidata and our rosters, matched by name and birth date." action={<Link className="btn-ghost btn-sm" to="/pro/college">College to Pro</Link>} />)}
       {tab === 'honors' && (honors.length
         ? <ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any, i: number) => <li key={i} className="flex flex-wrap gap-x-2 px-3 py-2"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={`/players/${h.id}`}>{h.player}</Link><span className="text-chalk-300">{h.text}</span></li>)}</ul>
         : <EmptyState title="No honors yet" body="Awards are read from player bios as they are published." />)}

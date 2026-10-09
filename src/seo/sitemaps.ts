@@ -62,7 +62,8 @@ export class Sitemaps {
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
     if (this.pro) {
-      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/matches' }, { path: '/pro/leagues' }, ...(await this.pro.sitemapLeagues())]);
+      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, ...(await this.pro.sitemapLeagues())]);
+      if (file === 'pro-countries.xml') return urlsetXml(this.baseUrl, await this.pro.sitemapCountries());
       const p = PRO_FILE.exec(file);
       if (p) {
         const [, kind, nStr, year, mStr] = p;
@@ -96,7 +97,7 @@ export class Sitemaps {
       for (let i = 0; i < Math.ceil(players / this.perFile); i += 1) out.push({ path: `/sitemaps/players-${s}-${i + 1}.xml` });
     }
     if (this.pro) {
-      out.push({ path: '/sitemaps/pro-core.xml' });
+      out.push({ path: '/sitemaps/pro-core.xml' }, { path: '/sitemaps/pro-countries.xml' });
       const [teams, players, years] = await Promise.all([this.pro.countTeams(), this.pro.countPlayers(), this.pro.matchYears()]);
       for (let i = 0; i < Math.ceil(teams / this.perFile); i += 1) out.push({ path: `/sitemaps/pro-teams-${i + 1}.xml` });
       for (const y of years) {

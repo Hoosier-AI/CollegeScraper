@@ -27,6 +27,12 @@ const ProLeague = lazy(() => import('./pages/pro/ProLeague'));
 const ProTeam = lazy(() => import('./pages/pro/ProTeam'));
 const ProPlayer = lazy(() => import('./pages/pro/ProPlayer'));
 const ProMatch = lazy(() => import('./pages/pro/ProMatch'));
+const ProDirectory = lazy(() => import('./pages/pro/ProDirectory'));
+const ProCountries = lazy(() => import('./pages/pro/ProCountries').then((m) => ({ default: m.ProCountries })));
+const ProCountry = lazy(() => import('./pages/pro/ProCountries').then((m) => ({ default: m.ProCountry })));
+const ProCompare = lazy(() => import('./pages/pro/ProCompare'));
+const ProTransfers = lazy(() => import('./pages/pro/ProTransfers'));
+const ProCollege = lazy(() => import('./pages/pro/ProCollege'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
 window.addEventListener('vite:preloadError', (e) => {
@@ -80,6 +86,13 @@ const router = createBrowserRouter([
           { path: 'pro/leagues/:slug', element: <ProLeague /> },
           { path: 'pro/teams/:slug', element: <ProTeam /> },
           { path: 'pro/players/:slug', element: <ProPlayer /> },
+          { path: 'pro/players', element: <ProDirectory key="players" mode="players" /> },
+          { path: 'pro/leaders', element: <ProDirectory key="leaders" mode="leaders" /> },
+          { path: 'pro/countries', element: <ProCountries /> },
+          { path: 'pro/countries/:slug', element: <ProCountry /> },
+          { path: 'pro/compare', element: <ProCompare /> },
+          { path: 'pro/transfers', element: <ProTransfers /> },
+          { path: 'pro/college', element: <ProCollege /> },
           { path: '*', element: <NotFound /> },
         ],
       },

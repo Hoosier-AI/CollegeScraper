@@ -224,3 +224,81 @@ export function proMatchBody(p: ProMatchPage): string {
   const inner = `<h1>${esc(h1)}</h1><p>${a(proPaths.team(m.home.slug), m.home.name)} vs ${a(proPaths.team(m.away.slug), m.away.name)}. ${facts}.</p>${events ? `<h2>Goals and cards</h2><ol>${events}</ol>` : ''}${stats}${p.home.starters.length || p.away.starters.length ? `<h2>Lineups</h2>${lineup(m.home.name, p.home)}${lineup(m.away.name, p.away)}` : ''}${h2h}`;
   return wrapBody('pro', [...crumbsHome, { name: m.league.name, path: proPaths.league(m.league.slug) }, { name: proMatchName(m), path: proPaths.match(m.slug) }], inner);
 }
+
+// ---------- v2: directory, leaders, countries, College to Pro, transfers ----------
+export type ProLeadersPage = Awaited<ReturnType<typeof Q.leaders>>;
+export type ProCountriesPage = Awaited<ReturnType<typeof Q.countries>>;
+export type ProCountryPage = NonNullable<Awaited<ReturnType<typeof Q.country>>>;
+export type ProCollegePage = Awaited<ReturnType<typeof Q.collegeHub>>;
+export type ProTransfersPage = Awaited<ReturnType<typeof Q.transfersFeed>>;
+
+const leaderRows = (rows: ProLeadersPage['rows'], valueLabel: string) => table(valueLabel, ['#', 'Player', 'Club', 'Competition', 'Apps', valueLabel],
+  rows.map((r) => tr([esc(r.rank), a(proPaths.player(r.player.slug), r.player.name), r.team ? a(proPaths.team(r.team.slug), r.team.name) : '', r.league ? a(proPaths.league(r.league.slug), r.league.name) : '', n(r.apps), n(r.value, r.value != null && r.value % 1 ? 2 : 0)])));
+
+export function proDirectoryHead(kind: 'players' | 'leaders', p: ProLeadersPage, ctx: HeadContext): HeadMeta {
+  const path = kind === 'players' ? '/pro/players' : '/pro/leaders';
+  const top = p.rows.slice(0, 3).map((r) => r.player.name).join(', ');
+  return {
+    title: kind === 'players' ? `Pro Soccer Players: Find Any Player by Nationality, Position and Age${SUFFIX}` : `Pro Soccer Leaders: Goals, Assists and 20+ Stats${SUFFIX}`,
+    description: clip(kind === 'players'
+      ? `Every professional soccer player we follow, men's and women's, filtered by nationality, position, age and competition. Most minutes this season: ${top}.`
+      : `This season's leaders across every professional competition: goals, assists, ratings, key passes, tackles, saves and more, in totals or per 90. Top scorers: ${top}.`),
+    canonical: abs(ctx, path), robots: null, ogType: 'website', image: ogImage(ctx),
+    jsonLd: [ld('ItemList', { name: kind === 'players' ? 'Pro soccer players' : 'Pro soccer leaders', itemListElement: p.rows.slice(0, 20).map((r, i) => ({ '@type': 'ListItem', position: i + 1, url: abs(ctx, proPaths.player(r.player.slug)), name: r.player.name })) }),
+      breadcrumbs(ctx, [...crumbsHome, { name: kind === 'players' ? 'Players' : 'Leaders', path }])],
+  };
+}
+export function proDirectoryBody(kind: 'players' | 'leaders', p: ProLeadersPage): string {
+  const label = kind === 'players' ? 'Minutes' : 'Goals';
+  return wrapBody('pro', [...crumbsHome, { name: kind === 'players' ? 'Players' : 'Leaders', path: `/pro/${kind}` }],
+    `<h1>${kind === 'players' ? 'Professional Soccer Players' : 'Professional Soccer Leaders'}</h1><p>${esc(p.total)} player seasons across every competition we follow.</p>${leaderRows(p.rows, label)}`);
+}
+
+export function proCountriesHead(cs: ProCountriesPage, ctx: HeadContext): HeadMeta {
+  return { title: `Soccer by Country: Leagues, Clubs and Players${SUFFIX}`, description: clip(`Professional soccer in ${cs.length} countries and regions: every league, club and national player we follow, and who plays abroad.`),
+    canonical: abs(ctx, '/pro/countries'), robots: null, ogType: 'website', image: ogImage(ctx), jsonLd: [breadcrumbs(ctx, [...crumbsHome, { name: 'Countries', path: '/pro/countries' }])] };
+}
+export function proCountriesBody(cs: ProCountriesPage): string {
+  return wrapBody('pro', [...crumbsHome, { name: 'Countries', path: '/pro/countries' }], `<h1>Soccer by Country</h1><ul>${cs.map((c) => `<li>${a(`/pro/countries/${c.slug}`, c.name)}${c.leagues ? ` (${esc(c.leagues)} competitions)` : ''}</li>`).join('')}</ul>`);
+}
+
+export function proCountryHead(p: ProCountryPage, ctx: HeadContext): HeadMeta {
+  const path = `/pro/countries/${p.country.slug}`;
+  const abroad = p.abroad.slice(0, 3).map((r) => r.player.name).join(', ');
+  return {
+    title: `${p.country.name} Soccer: Leagues, Clubs and ${p.country.name} Players Abroad${SUFFIX}`,
+    description: clip(`${p.country.name}: ${p.leagues.length} professional competitions and ${p.clubs.length} clubs we follow, and ${p.country.name} players at home and abroad${abroad ? `, including ${abroad}` : ''}.`),
+    canonical: abs(ctx, path), robots: !p.leagues.length && !p.players.length ? NOINDEX : null, ogType: 'website', image: ogImage(ctx),
+    jsonLd: [breadcrumbs(ctx, [...crumbsHome, { name: 'Countries', path: '/pro/countries' }, { name: p.country.name, path }])],
+  };
+}
+export function proCountryBody(p: ProCountryPage): string {
+  const c = p.country.name;
+  const leagues = p.leagues.length ? `<h2>Competitions</h2><ul>${p.leagues.map((l) => `<li>${a(proPaths.league(l.slug), l.name)}</li>`).join('')}</ul>` : '';
+  const clubs = p.clubs.length ? `<h2>Clubs</h2><ul>${p.clubs.slice(0, 200).map((t) => `<li>${a(proPaths.team(t.slug), t.name)}</li>`).join('')}</ul>` : '';
+  const abroad = p.abroad.length ? `<h2>${esc(c)} players abroad</h2>${leaderRows(p.abroad, 'Minutes')}` : '';
+  return wrapBody('pro', [...crumbsHome, { name: 'Countries', path: '/pro/countries' }, { name: c, path: `/pro/countries/${p.country.slug}` }], `<h1>${esc(c)} Soccer</h1>${leagues}${abroad}${clubs}`);
+}
+
+export function proCollegeHead(p: ProCollegePage, ctx: HeadContext): HeadMeta {
+  const top = p.groups.slice(0, 4).map((g) => g.school.name).join(', ');
+  return {
+    title: `College to Pro: ${p.total} Professional Soccer Players from NCAA Programs${SUFFIX}`,
+    description: clip(`${p.total} professional soccer players who played NCAA college soccer, from ${p.schools} schools${top ? ` including ${top}` : ''}. Their pro clubs, stats and college careers.`),
+    canonical: abs(ctx, '/pro/college'), robots: p.total ? null : NOINDEX, ogType: 'website', image: ogImage(ctx),
+    jsonLd: [ld('ItemList', { name: 'College to Pro', itemListElement: p.groups.flatMap((g) => g.players).slice(0, 30).map((pl, i) => ({ '@type': 'ListItem', position: i + 1, url: abs(ctx, proPaths.player(pl.slug)), name: pl.name })) }),
+      breadcrumbs(ctx, [...crumbsHome, { name: 'College to Pro', path: '/pro/college' }])],
+  };
+}
+export function proCollegeBody(p: ProCollegePage): string {
+  const groups = p.groups.map((g) => `<h2>${g.school.seo ? a(`/teams/${g.school.seo}/${g.players[0]?.gender === 'w' ? 'women' : 'men'}`, g.school.name) : esc(g.school.name)}</h2><ul>${g.players.map((pl) => `<li>${a(proPaths.player(pl.slug), pl.name)}${pl.team ? `, ${a(proPaths.team(pl.team.slug), pl.team.name)}` : ''}${pl.college_years.length ? ` (college ${esc(pl.college_years.join('-'))})` : ''}</li>`).join('')}</ul>`).join('');
+  return wrapBody('pro', [...crumbsHome, { name: 'College to Pro', path: '/pro/college' }], `<h1>College to Pro</h1><p>${esc(p.total)} professional players who played NCAA soccer, from ${esc(p.schools)} schools.</p>${groups}`);
+}
+
+export function proTransfersHead(rows: ProTransfersPage, ctx: HeadContext): HeadMeta {
+  return { title: `Latest Soccer Transfers${SUFFIX}`, description: clip(`The latest professional soccer transfers and loans${rows[0] ? `, most recently ${rows[0].player.name} to ${rows[0].to.name}` : ''}.`),
+    canonical: abs(ctx, '/pro/transfers'), robots: rows.length ? null : NOINDEX, ogType: 'website', image: ogImage(ctx), jsonLd: [breadcrumbs(ctx, [...crumbsHome, { name: 'Transfers', path: '/pro/transfers' }])] };
+}
+export function proTransfersBody(rows: ProTransfersPage): string {
+  return wrapBody('pro', [...crumbsHome, { name: 'Transfers', path: '/pro/transfers' }], `<h1>Latest Transfers</h1><ul>${rows.map((r) => `<li>${esc(longDate(r.date))}: ${r.player.slug ? a(proPaths.player(r.player.slug), r.player.name) : esc(r.player.name)} from ${esc(r.from.name ?? 'unknown')} to ${esc(r.to.name ?? 'unknown')}${r.type ? ` (${esc(r.type)})` : ''}</li>`).join('')}</ul>`);
+}

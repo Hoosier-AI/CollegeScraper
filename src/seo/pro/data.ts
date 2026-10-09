@@ -14,6 +14,12 @@ export interface ProSeoData {
   player(slug: string): ReturnType<typeof Q.player>;
   match(slug: string): ReturnType<typeof Q.match>;
   renamedSlug(kind: Q.ProKind, slug: string): Promise<string | null>;
+  leaders(f: Q.LeadersFilter): ReturnType<typeof Q.leaders>;
+  countries(): ReturnType<typeof Q.countries>;
+  country(slug: string): ReturnType<typeof Q.country>;
+  college(): ReturnType<typeof Q.collegeHub>;
+  transfers(): ReturnType<typeof Q.transfersFeed>;
+  sitemapCountries(): Promise<SitemapEntry[]>;
   // sitemaps
   sitemapLeagues(): Promise<SitemapEntry[]>;
   countTeams(): Promise<number>;
@@ -36,6 +42,14 @@ export class DbProSeoData implements ProSeoData {
   player(slug: string) { return Q.player(this.db, slug); }
   match(slug: string) { return Q.match(this.db, slug); }
   renamedSlug(kind: Q.ProKind, slug: string) { return Q.renamedSlug(this.db, kind, slug); }
+  leaders(f: Q.LeadersFilter) { return Q.leaders(this.db, f); }
+  countries() { return Q.countries(this.db); }
+  country(slug: string) { return Q.country(this.db, slug); }
+  college() { return Q.collegeHub(this.db); }
+  transfers() { return Q.transfersFeed(this.db, { limit: 100 }); }
+  async sitemapCountries(): Promise<SitemapEntry[]> {
+    return (await Q.countries(this.db)).filter((c) => c.leagues > 0).map((c) => ({ path: `/pro/countries/${c.slug}` }));
+  }
 
   async sitemapLeagues(): Promise<SitemapEntry[]> {
     const rows = await selectAll<{ slug: string }>(this.db, 'pro_leagues', 'slug', (q) => q.eq('enabled', true).not('slug', 'is', null).order('priority'));
@@ -71,13 +85,13 @@ export class DbProSeoData implements ProSeoData {
     if (error) throw new Error(error.message);
     return ((data ?? []) as { slug: string }[]).map((x) => ({ path: proPaths.match(x.slug) }));
   }
-  /** Players who have played (pro_players.appeared); the rest are noindex. */
+  /** Players who have played lately or are in a squad (pro_players.indexable, nightly); the rest stay out. */
   async countPlayers(): Promise<number> {
-    const { count } = await this.db.from('pro_players').select('id', { count: 'exact', head: true }).eq('appeared', true).eq('noindex', false);
+    const { count } = await this.db.from('pro_players').select('id', { count: 'exact', head: true }).eq('indexable', true).eq('noindex', false);
     return count ?? 0;
   }
   async players(offset: number, limit: number): Promise<SitemapEntry[]> {
-    const { data, error } = await this.db.from('pro_players').select('slug').eq('appeared', true).eq('noindex', false).order('id').range(offset, offset + limit - 1);
+    const { data, error } = await this.db.from('pro_players').select('slug').eq('indexable', true).eq('noindex', false).order('id').range(offset, offset + limit - 1);
     if (error) throw new Error(error.message);
     return ((data ?? []) as { slug: string }[]).map((x) => ({ path: proPaths.player(x.slug) }));
   }

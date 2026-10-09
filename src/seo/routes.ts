@@ -14,7 +14,7 @@ import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
-import { proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead } from './pro/pages.js';
+import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead } from './pro/pages.js';
 import { eastern } from '../jobs/seasons.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
@@ -47,7 +47,7 @@ export type CachedPage = { status: 200; html: string } | { status: 301; path: st
 type Outcome = { head: HeadMeta; body: string } | { redirect: string } | { shell: true } | null;
 
 /** Single-page-app routes that the server does not render but must still answer with 200 and the shell. */
-const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders|pro\/matches|pro\/leagues|pro\/teams|pro\/players)?\/?$/;
+const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders|pro\/matches|pro\/leagues|pro\/teams|pro\/players|pro\/compare)?\/?$/;
 const API_PATH = /^\/(?:api|v1)(?:\/|$)|^\/health(?:\/|$)/;
 
 const pathOf = (url: string) => url.split('?')[0] ?? url;
@@ -181,6 +181,16 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       const c = ctx(); const ls = await pro.leagues();
       return { head: proLeaguesHead(ls, c), body: proLeaguesBody(ls) };
     }));
+    app.get('/pro/players', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.leaders({ stat: 'minutes', limit: 50 }); return { head: proDirectoryHead('players', p, ctx()), body: proDirectoryBody('players', p) }; }));
+    app.get('/pro/leaders', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.leaders({ stat: 'goals', limit: 50 }); return { head: proDirectoryHead('leaders', p, ctx()), body: proDirectoryBody('leaders', p) }; }));
+    app.get('/pro/countries', (req, reply) => serve(req, reply, keyOf(req), async () => { const cs = await pro.countries(); return { head: proCountriesHead(cs, ctx()), body: proCountriesBody(cs) }; }));
+    app.get('/pro/countries/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+      if (!SLUG.test(req.params.slug)) return null;
+      const c = await pro.country(req.params.slug);
+      return c ? { head: proCountryHead(c, ctx()), body: proCountryBody(c) } : null;
+    }));
+    app.get('/pro/college', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await pro.college(); return { head: proCollegeHead(h, ctx()), body: proCollegeBody(h) }; }));
+    app.get('/pro/transfers', (req, reply) => serve(req, reply, keyOf(req), async () => { const t = await pro.transfers(); return { head: proTransfersHead(t, ctx()), body: proTransfersBody(t) }; }));
     // A slug page, or a 301 when the slug was renamed, or a real 404.
     const proPage = <T>(kind: 'league' | 'team' | 'player' | 'match', load: (slug: string, req: FastifyRequest) => Promise<T | null>, render: (page: T) => { head: HeadMeta; body: string }, path: (slug: string) => string) =>
       (req: P<{ slug: string }>, reply: FastifyReply) => serve(req, reply, keyOf(req), async () => {

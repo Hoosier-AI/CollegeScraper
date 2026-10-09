@@ -48,6 +48,12 @@ class FixtureProData implements ProSeoData {
     return null;
   }
   async renamedSlug(kind: string, slug: string) { return kind === 'player' && slug === 'sophia-smith-old-9' ? 'sophia-smith-9' : null; }
+  async leaders() { return { stat: 'goals', per90: false, min_minutes: 0, total: 1, limit: 50, offset: 0, rows: [{ rank: 1, player: { id: 9, name: 'Sophia Smith', slug: 'sophia-smith-9', photo: null, nationality: 'USA', birth_date: '2000-08-10', position: 'Attacker' }, team: thorns, league, season: 2026, apps: 20, minutes: 1700, goals: 11, assists: 4, rating: 7.4, value: 11 }] }; }
+  async countries() { return [{ name: 'USA', code: 'US', flag: null, slug: 'usa', leagues: 6 }]; }
+  async country(slug: string) { return slug === 'usa' ? { country: { name: 'USA', code: 'US', flag: null, slug: 'usa' }, leagues: [{ ...league, priority: 2, current_season: 2026 }], clubs: [{ ...thorns, founded: 2012, venue: null }], players: (await this.leaders()).rows, abroad: [] } : null; }
+  async college() { return { total: 1, schools: 1, groups: [{ school: { seo: 'stanford', name: 'Stanford', logo: null }, players: [{ id: 9, name: 'Sophia Smith', slug: 'sophia-smith-9', photo: null, nationality: 'USA', position: 'Attacker', gender: 'w', birth_date: '2000-08-10', minutes_recent: 1700, team: thorns, college_years: [2018, 2019] }] }] }; }
+  async transfers() { return [{ date: '2026-07-01', type: 'Loan', player: { id: 9, name: 'Sophia Smith', slug: 'sophia-smith-9', photo: null, nationality: 'USA', position: 'Attacker' }, from: { id: 3001, name: 'Portland Thorns', logo: null, slug: 'portland-thorns-women' }, to: { id: 3002, name: 'Boston Legacy', logo: null, slug: null } }]; }
+  async sitemapCountries() { return [{ path: '/pro/countries/usa' }]; }
   async sitemapLeagues() { return [{ path: '/pro/leagues/usa-nwsl-women' }]; }
   async countTeams() { return 3; }
   async teams() { return [{ path: '/pro/teams/portland-thorns-women' }]; }
@@ -119,9 +125,27 @@ describe('pro seo routes', () => {
     expect(between(h.body, '<section id="ssr">', '</section>')).toContain('640 professional competitions');
   });
 
+  it('directory, leaders, countries, College to Pro and transfers render on the server', async () => {
+    const pages: [string, RegExp, string][] = [
+      ['/pro/players', /^Pro Soccer Players/, 'Sophia Smith'], ['/pro/leaders', /^Pro Soccer Leaders/, 'Sophia Smith'],
+      ['/pro/countries', /^Soccer by Country/, '/pro/countries/usa'], ['/pro/countries/usa', /^USA Soccer/, 'Portland Thorns'],
+      ['/pro/college', /^College to Pro: 1 /, '<a href="/teams/stanford/women">Stanford</a>'], ['/pro/transfers', /^Latest Soccer Transfers/, 'from Portland Thorns to Boston Legacy (Loan)'],
+    ];
+    for (const [url, title, body] of pages) {
+      const r = await app.inject({ url, headers: HTML });
+      expect(r.statusCode, url).toBe(200);
+      expect(between(r.body, '<title>', '</title>'), url).toMatch(title);
+      expect(between(r.body, '<section id="ssr">', '</section>'), url).toContain(body);
+    }
+    expect((await app.inject({ url: '/pro/countries/atlantis', headers: HTML })).statusCode).toBe(404);
+    expect((await app.inject({ url: '/pro/compare?a=x&b=y', headers: HTML })).statusCode).toBe(200);
+  });
+
   it('the sitemap index lists the pro files; the files list only indexable pages', async () => {
     const idx = await app.inject({ url: '/sitemap.xml' });
     expect(idx.body).toContain('/sitemaps/pro-core.xml');
+    expect(idx.body).toContain('/sitemaps/pro-countries.xml');
+    expect((await app.inject({ url: '/sitemaps/pro-countries.xml' })).body).toContain('/pro/countries/usa');
     expect(idx.body).toContain('/sitemaps/pro-teams-1.xml');
     expect(idx.body).toContain('/sitemaps/pro-matches-2026-1.xml');
     expect(idx.body).not.toContain('/sitemaps/pro-matches-2025-1.xml');

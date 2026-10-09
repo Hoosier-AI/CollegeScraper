@@ -235,7 +235,10 @@ export async function team(db: Db, slug: string, season?: number | null) {
     return { played: g.length, w: g.filter((x) => us(x) > them(x)).length, d: g.filter((x) => us(x) === them(x)).length, l: g.filter((x) => us(x) < them(x)).length, gf: g.reduce((n, x) => n + us(x), 0), ga: g.reduce((n, x) => n + them(x), 0) };
   };
   const hurtIds = [...new Set(((hurt.data ?? []) as any[]).map((h) => h.player_id))];
-  const hurtPlayers = new Map((hurtIds.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,slug', (q) => q.in('id', hurtIds)) : []).map((p) => [p.id, p]));
+  const moveIds = [...new Set(((moves.data ?? []) as any[]).map((m) => m.player_id))];
+  const people = new Map((hurtIds.length + moveIds.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,slug', (q) => q.in('id', [...hurtIds, ...moveIds])) : []).map((p) => [p.id, p]));
+  const hurtPlayers = people;
+  const clubSlugs = await teamsById(db, ((moves.data ?? []) as any[]).flatMap((m) => [m.from_team_id, m.to_team_id]).filter((x) => x > 0));
   const coachSeen = new Set<number>();
   return {
     team: { ...teamRef(tm), founded: tm.founded, national: tm.national, venue: tm.venue_name ? { name: tm.venue_name, city: tm.venue_city, capacity: tm.venue_capacity } : null },
@@ -246,7 +249,9 @@ export async function team(db: Db, slug: string, season?: number | null) {
     squad: [...squad.values()].map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
     coaches: coachRows.filter((c) => c.coach && !coachSeen.has(c.coach.id) && coachSeen.add(c.coach.id)).slice(0, 8)
       .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: !c.end })),
-    transfers: ((moves.data ?? []) as any[]).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out' })),
+    transfers: ((moves.data ?? []) as any[]).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out',
+      player: { name: people.get(t.player_id)?.display_name ?? t.player_name ?? 'Unknown', slug: people.get(t.player_id)?.slug ?? null },
+      from_slug: clubSlugs.get(t.from_team_id)?.slug ?? null, to_slug: clubSlugs.get(t.to_team_id)?.slug ?? null })),
     injuries: ((hurt.data ?? []) as any[]).filter((h, i, all) => all.findIndex((x) => x.player_id === h.player_id) === i)
       .map((h) => ({ player: hurtPlayers.get(h.player_id) ? { name: hurtPlayers.get(h.player_id).display_name, slug: hurtPlayers.get(h.player_id).slug } : null, type: h.type, reason: h.reason, date: h.date })),
     goals_by_period: byPeriod,
@@ -290,6 +295,7 @@ export async function player(db: Db, slug: string) {
     percentiles = ((data ?? []) as any[]).map((r) => ({ stat: r.stat, value: Number(r.value), pct: Number(r.pct), peers: Number(r.peers) }));
   }
   const injury = ((hurt.data ?? []) as any[])[0] ?? null;
+  const moveClubs = await teamsById(db, ((moves.data ?? []) as any[]).flatMap((m) => [m.from_team_id, m.to_team_id]).filter((x) => x > 0));
   return {
     player: { id: pl.id, name: pl.display_name, slug: pl.slug, short_name: pl.name, first_name: pl.first_name, last_name: pl.last_name, birth_date: pl.birth_date, birth_place: pl.birth_place, birth_country: pl.birth_country, nationality: pl.nationality, height_cm: pl.height_cm, weight_kg: pl.weight_kg, position: pl.position, photo: pl.photo, gender: pl.gender, noindex: pl.noindex, number: pl.number ?? null, indexable: !!pl.indexable },
     team: club ? { id: club.id, name: club.name, slug: club.slug, logo: club.logo } : null,
@@ -299,7 +305,7 @@ export async function player(db: Db, slug: string) {
       rating: s.rating == null ? null : Number(s.rating) }))
       .sort((a, b) => b.season - a.season || (a.team?.national ? 1 : 0) - (b.team?.national ? 1 : 0) || (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     percentiles: ranked ? { league: lgs.get(ranked.league_id) ?? null, season: ranked.season, rows: percentiles } : null,
-    transfers: (moves.data ?? []) as any[],
+    transfers: ((moves.data ?? []) as any[]).map((m) => ({ ...m, from_slug: moveClubs.get(m.from_team_id)?.slug ?? null, to_slug: moveClubs.get(m.to_team_id)?.slug ?? null })),
     trophies: ((trophies.data ?? []) as any[]).sort((a, b) => String(b.season).localeCompare(String(a.season))),
     injury: injury ? { type: injury.type, reason: injury.reason, date: injury.date } : null,
     matches,
