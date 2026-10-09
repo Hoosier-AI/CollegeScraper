@@ -28,6 +28,10 @@ describe('transfers to a club named after the player', () => {
     expect(isSelfNamed('Liverpool', salah)).toBe(false);
     expect(isSelfNamed('Trabzonspor', salah)).toBe(false);
     expect(isSelfNamed(null, salah)).toBe(false);
+    expect(isSelfNamed('Kingston Peter', { display_name: 'P. Kingston' })).toBe(true);
+    expect(isSelfNamed('Lopez Antino', { display_name: 'A. Lopez' })).toBe(true);
+    expect(isSelfNamed('Washington Huskies', { display_name: 'Jacob Castro', first_name: 'Jacob Alex', last_name: 'Castro' })).toBe(false);
+    expect(isSelfNamed('Portland Timbers', { display_name: 'P. Kingston' })).toBe(false);
   });
 });
 

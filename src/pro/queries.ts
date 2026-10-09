@@ -148,7 +148,9 @@ export function isSelfNamed(club: string | null | undefined, p: { display_name?:
   const c = words(club);
   if (c.length < 2) return false;
   const own = new Set([...words(p.display_name), ...words(p.first_name), ...words(p.last_name)]);
-  return c.every((w) => own.has(w));
+  // "P. Kingston" moving to "Kingston Peter": a name word the player only has as an initial.
+  const initials = new Set(String(p.display_name ?? '').normalize('NFD').toLowerCase().match(/\b[a-z](?=\.)/g) ?? []);
+  return c.some((w) => own.has(w)) && c.every((w) => own.has(w) || initials.has(w[0]!));
 }
 
 /** Drops the provider's noise from a list of moves: a club to itself, a placeholder club named after the player, and the
