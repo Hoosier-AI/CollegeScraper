@@ -129,11 +129,14 @@ const HISTORY_CREDIT: Record<string, { name: string; url: string; license: strin
   wikipedia: { name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0' },
   asa: { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', license: 'credited' },
 };
-/** Credits for a history season: the results' source, and Wikipedia when its table replaced one worked out from them. */
-function historyCredits(source: string | null, hasResults: boolean) {
+/**
+ * Credits for a history season: the results' source (whose table, worked out from them, it also is), and Wikipedia
+ * when the table shown is its official one.
+ */
+function historyCredits(source: string | null, hasResults: boolean, wikipediaTable: boolean) {
   if (!source) return null;
   const out = [{ what: hasResults ? 'Results' : 'Table', ...HISTORY_CREDIT[source]! }];
-  if (source !== 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
+  if (wikipediaTable && source !== 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
   return out;
 }
 
@@ -185,7 +188,7 @@ export async function league(db: Db, slug: string, season?: number | null) {
     champions: [...champions.values()].slice(0, 15), team_table: teamTable,
     advanced_leaders: await leagueAdvancedLeaders(db, lg.id, s ?? null),
     // A season API-Football does not have: where its results and table came from (credited on the page).
-    history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0),
+    history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0, standings.length > 0 && !standings.some((g) => /from results/i.test(g.name))),
   };
 }
 
