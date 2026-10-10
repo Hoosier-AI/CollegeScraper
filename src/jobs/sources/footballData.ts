@@ -104,7 +104,8 @@ export async function footballDataFill(ctx: JobContext): Promise<void> {
     for (const [ext, id] of own) if (ownIds.has(id) && !games.has(ext)) games.set(ext, id);
     const matched = stats.filter((s) => games.has(s.ext_id));
     if (!matched.length) continue;
-    const src = new Map((await selectIn<{ ext_id: string; home_ext: string }>(db, 'pro_src_games', 'ext_id,home_ext', 'ext_id', matched.map((s) => s.ext_id), (q) => q.eq('source', FD_SOURCE))).map((g) => [g.ext_id, g.home_ext]));
+    // The league's games read whole (a list of tens of thousands of long ids does not fit in a request).
+    const src = new Map((await selectAll<{ ext_id: string; home_ext: string }>(db, 'pro_src_games', 'ext_id,home_ext', (q) => q.eq('source', FD_SOURCE).eq('league_id', l.league))).map((g) => [g.ext_id, g.home_ext]));
     const fixtureIds = matched.map((s) => games.get(s.ext_id)!);
     const fx = new Map((await selectIn<{ id: number; home_team_id: number; away_team_id: number; season: number }>(db, 'pro_fixtures', 'id,home_team_id,away_team_id,season', 'id', fixtureIds)).map((f) => [f.id, f]));
     // Matches that already have team stats (API-Football's match detail, or an earlier fill) are left alone.
