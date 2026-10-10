@@ -35,7 +35,7 @@ export async function crawlLeagues(db: Db, o: { scope: LeagueScope; seasons: 'cu
   return { generated_at: b.generated_at, scope: o.scope, seasons: o.seasons, total: b.leagues.length, leagues: rows };
 }
 
-export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?: string }) | null; overall: { tasks: number; done: number; pct: number; calls_left: number; eta_days: number | null } }, o: { leagues?: boolean } = {}) {
+export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?: string }) | null; overall: { tasks: number; done: number; pct: number; calls_left: number; eta_days: number | null }; perDay?: { day: string; calls: number }[] }, o: { leagues?: boolean } = {}) {
   const since = day(6);
   const jobs = [...new Set([...CRAWL_SITES.flatMap((s) => s.jobs), ...CHECK_JOBS])];
   const [visible, reqs, seasons, agreement, matrix, leagues, running, recent] = await Promise.all([
@@ -62,7 +62,9 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
   const sites = CRAWL_SITES.map((site) => {
     const mine = reqs.filter((r) => r.source === site.id);
     const today = mine.filter((r) => r.day === day());
-    const perDay = Array.from({ length: 7 }, (_, i) => day(6 - i)).map((d) => ({ day: d, requests: mine.filter((r) => r.day === d).reduce((n, r) => n + r.requests, 0) }));
+    // API-Football: its runs have counted requests all along (and the quota knows today's), so the larger number wins.
+    const apiDay = (d: string) => (site.id === 'api-football' ? Math.max(ctx.perDay?.find((p) => p.day === d)?.calls ?? 0, d === day() && ctx.quota?.day === d ? ctx.quota.usedToday : 0) : 0);
+    const perDay = Array.from({ length: 7 }, (_, i) => day(6 - i)).map((d) => ({ day: d, requests: Math.max(apiDay(d), mine.filter((r) => r.day === d).reduce((n, r) => n + r.requests, 0)) }));
     const last = mine.reduce<ReqRow | null>((a, r) => (!a || (r.last_at ?? '') > (a.last_at ?? '') ? r : a), null);
     const want = expected.filter((e) => e.source === site.id);
     const have = want.map((e) => synced.get(`${e.source}|${e.league_id}|${e.season}`));
@@ -81,7 +83,7 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
       ...site,
       on: site.scraped ? !!visible : true,
       status: isRunning ? 'crawling' : failed ? 'error' : 'idle',
-      requests: { today: today.reduce((n, r) => n + r.requests, 0), errors_today: today.reduce((n, r) => n + r.errors, 0), week: mine.reduce((n, r) => n + r.requests, 0), errors_week: mine.reduce((n, r) => n + r.errors, 0), bytes_week: mine.reduce((n, r) => n + Number(r.bytes), 0), per_day: perDay, last_at: last?.last_at ?? null, last_error: mine.find((r) => r.last_error)?.last_error ?? null },
+      requests: { today: perDay[6]!.requests, errors_today: today.reduce((n, r) => n + r.errors, 0), week: perDay.reduce((n, d) => n + d.requests, 0), errors_week: mine.reduce((n, r) => n + r.errors, 0), bytes_week: mine.reduce((n, r) => n + Number(r.bytes), 0), per_day: perDay, last_at: last?.last_at ?? null, last_error: mine.find((r) => r.last_error)?.last_error ?? null },
       seasons: site.scraped ? { done, total: want.length, errors } : null,
       rows: { games: mineSeasons.reduce((n, s) => n + (s.games ?? 0), 0), player_rows: mineSeasons.reduce((n, s) => n + (s.player_rows ?? 0), 0) },
       agreement: site.scraped ? { ...ag, rate: compared ? Math.round((ag.agree / compared) * 1000) / 1000 : null } : null,

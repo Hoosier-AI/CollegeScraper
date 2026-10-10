@@ -180,7 +180,7 @@ export function registerProApi(app: FastifyInstance): void {
       },
       sources: await sourcesBlock(db),
       // Every site the crawl reads, every league season's sources, and what is running (the hub's Crawling page).
-      crawl: await crawlBlock(db, { quota, overall }),
+      crawl: await crawlBlock(db, { quota, overall, perDay }),
       // Kept for the Stats console's own Pro card (older shape).
       leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links,
     };
