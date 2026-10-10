@@ -1,10 +1,11 @@
 // Advanced stats from American Soccer Analysis (xG, xA, passing over expected, goals added, shots), shown only where
 // the service has checked them against API-Football. Every block carries the credit line.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fmt } from '../../lib/api';
 import { proPath, type ProLeagueRef, type ProTeamRef } from '../../lib/pro';
 import { DataTable, type Column } from '../DataTable';
-import { PlayerAvatar, TeamLogo } from '../primitives';
+import { PlayerAvatar, SegmentedControl, TeamLogo } from '../primitives';
 
 export interface SourceCredit { name: string; url: string; label: string }
 type Gplus = Record<string, { raw: number | null; above_avg: number | null; actions: number | null }>;
@@ -19,7 +20,8 @@ export interface AdvTeamSeason {
   xg_for: number | null; xg_against: number | null; pass_pct_for: number | null; xpass_pct_for: number | null; pass_pct_against: number | null; xpass_pct_against: number | null;
   g_plus_for: number | null; g_plus_against: number | null; g_plus_by_action: Record<string, { for: number | null; against: number | null }> | null;
 }
-export interface AdvShot { side: 'home' | 'away'; minute: number | null; player: string | null; slug: string | null; x: number | null; y: number | null; xg: number | null; goal: boolean; own_goal: boolean; blocked: boolean; head: boolean; pattern: string | null }
+/** period: 1 and 2 the halves, 3 and 4 extra time. */
+export interface AdvShot { side: 'home' | 'away'; period?: number | null; minute: number | null; player: string | null; slug: string | null; x: number | null; y: number | null; xg: number | null; goal: boolean; own_goal: boolean; blocked: boolean; head: boolean; pattern: string | null }
 export interface AdvMatch { credit: SourceCredit; xg: [number | null, number | null]; attendance: number | null; referee: string | null; ground: { name: string; city: string | null; capacity: number | null } | null; shots: AdvShot[] }
 export interface AdvLeaderLine { player: { name: string; slug: string; photo: string | null }; team: ProTeamRef | null; minutes: number | null; goals: number | null; assists: number | null; value: number }
 
@@ -108,13 +110,29 @@ export function TeamAdvancedCards({ competitions }: { competitions: AdvTeamSeaso
  * left to right and y bottom to top (SVG counts y down, hence 100 - y); the away side is the same turned round.
  * Own goals are not shots: when the score has goals the map cannot show, the caption says so.
  */
-export function ShotMap({ shots, homeName, awayName, score }: { shots: AdvShot[]; homeName: string; awayName: string; score?: [number | null, number | null] }) {
-  if (!shots.length) return null;
+type ShotPeriod = 'all' | '1' | '2' | 'et';
+/** The source's period when it has one; else by minute (never extra time: stoppage time runs past 90 too). */
+const periodOf = (s: AdvShot): ShotPeriod => (s.period != null ? (s.period >= 3 ? 'et' : s.period === 2 ? '2' : '1') : (s.minute ?? 0) > 45 ? '2' : '1');
+
+export function ShotMap({ shots: all, homeName, awayName, score }: { shots: AdvShot[]; homeName: string; awayName: string; score?: [number | null, number | null] }) {
+  const [view, setView] = useState<ShotPeriod>('all');
+  if (!all.length) return null;
   const W = 105, H = 68, GOAL = 7.32;
-  const goals = { home: shots.filter((s) => s.side === 'home' && s.goal).length, away: shots.filter((s) => s.side === 'away' && s.goal).length };
+  const hasEt = all.some((s) => periodOf(s) === 'et');
+  const shots = view === 'all' ? all : all.filter((s) => periodOf(s) === view);
+  const goals = { home: all.filter((s) => s.side === 'home' && s.goal).length, away: all.filter((s) => s.side === 'away' && s.goal).length };
   const missing = score ? Math.max(0, (score[0] ?? 0) - goals.home) + Math.max(0, (score[1] ?? 0) - goals.away) : 0;
+  const tally = (side: 'home' | 'away') => {
+    const xs = shots.filter((s) => s.side === side);
+    return `${xs.length} shot${xs.length === 1 ? '' : 's'}, ${xs.filter((s) => s.goal).length} goal${xs.filter((s) => s.goal).length === 1 ? '' : 's'}, ${xs.reduce((n, s) => n + (s.xg ?? 0), 0).toFixed(2)} xG`;
+  };
+  const options: { value: ShotPeriod; label: string }[] = [{ value: 'all', label: 'Whole match' }, { value: '1', label: '1st half' }, { value: '2', label: '2nd half' }, ...(hasEt ? [{ value: 'et' as const, label: 'Extra time' }] : [])];
   return (
     <figure className="frame p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <SegmentedControl options={options} value={view} onChange={setView} label="Which part of the match" size="sm" />
+        <p className="text-2xs tnum text-chalk-400"><span className="text-pitch-300">{homeName}</span> {tally('home')} · <span className="text-note">{awayName}</span> {tally('away')}</p>
+      </div>
       <svg viewBox={`-3 -2 ${W + 6} ${H + 4}`} className="w-full" role="img" aria-label={`Shot map: ${shots.filter((s) => s.side === 'home').length} shots for ${homeName} attacking right, ${shots.filter((s) => s.side === 'away').length} for ${awayName} attacking left`}>
         <rect x={0} y={0} width={W} height={H} rx={1} className="fill-field-800 stroke-field-600" strokeWidth={0.4} />
         <line x1={W / 2} y1={0} x2={W / 2} y2={H} className="stroke-field-600" strokeWidth={0.4} />
@@ -139,8 +157,8 @@ export function ShotMap({ shots, homeName, awayName, score }: { shots: AdvShot[]
       <figcaption className="mt-2 flex flex-wrap gap-4 text-2xs text-chalk-400">
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full border border-pitch-300" />{homeName} attacking right</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full border border-note" />{awayName} attacking left</span>
-        <span>Bigger circle, better chance. Filled: goal.</span>
-        {missing > 0 && <span>{missing === 1 ? 'One goal was an own goal' : `${missing} goals were own goals`}, so not a shot on the map.</span>}
+        <span>Bigger circle, better chance. Filled: goal. Each side is shown attacking the same goal all match (the real ends swap at half-time).</span>
+        {missing > 0 && view === 'all' && <span>{missing === 1 ? 'One goal was an own goal' : `${missing} goals were own goals`}, so not a shot on the map.</span>}
       </figcaption>
     </figure>
   );

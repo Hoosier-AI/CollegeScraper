@@ -134,7 +134,7 @@ export async function matchAdvanced(db: Db, fixtureId: number, homeTeamId: numbe
     credit: SOURCE_CREDIT,
     xg: swapped ? [n(game.away_xg), n(game.home_xg)] : [n(game.home_xg), n(game.away_xg)],
     attendance: game.attendance ?? null, referee: ref, ground: ground ? { name: ground.name, city: ground.city ?? null, capacity: ground.capacity ?? null } : null,
-    shots: shots.map((s) => ({ side: s.team_ext === homeExt ? 'home' : 'away', minute: s.minute, player: s.shooter_name, slug: slugs.get(shooters.get(s.shooter_ext) ?? -1) ?? null,
+    shots: shots.map((s) => ({ side: s.team_ext === homeExt ? 'home' : 'away', period: s.period ?? null, minute: s.minute, player: s.shooter_name, slug: slugs.get(shooters.get(s.shooter_ext) ?? -1) ?? null,
       x: n(s.x), y: n(s.y), xg: n(s.xg), goal: !!s.goal, own_goal: !!s.own_goal, blocked: !!s.blocked, head: !!s.head, pattern: s.pattern })),
   };
 }
