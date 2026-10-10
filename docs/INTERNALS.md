@@ -292,6 +292,13 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
   - **Source workers:** two download (`sources-a`, `sources-b`: ASA, Wikipedia, openfootball side by side, each site
     on its own per-host limit) and one matches, checks and fills (`sources`), one job at a time. `h2h-detail` has its
     own lane.
+  - **Every pro club and player (Mega plan, 2026-10-10: 150,000 requests a day, 900 a minute):** the client paces at
+    two thirds of the plan's per-minute limit (`x-ratelimit-limit`; `PRO_PER_MIN` 600 is the ceiling), `pro-crawl` runs
+    8 tasks at once (the people kinds one at a time), and the planner runs hourly. Breadth first: every enabled
+    league's season in play at the top competitions' priorities (fixtures 20, table 21, detail 22, totals 30), every
+    club of a current league season (squad 35, transfers 55, coach 58), then last season everywhere (45-60), then older
+    seasons; injury history and honours for every player with minutes this or last season (420/430). The hub's
+    Crawling page shows the whole-world coverage (`pro_world_coverage()`, migration 149).
   - **Crawl order:** match detail comes first in every tier (US 11/12, top competitions 22, other leagues 42, cups 62),
     because a request buys 20 matches of lineups, events, player lines and team stats.
   - **Players on view (migration 144):** opening a player's page in the browser fetches their transfers, honours and

@@ -28,6 +28,20 @@ async function matrixRows(db: Db): Promise<MatrixRow[]> {
 
 export type LeagueScope = 'us' | 'top' | 'all';
 
+export interface WorldCoverage {
+  leagues_enabled: number; leagues_current_with_fixtures: number; clubs_total: number; clubs_in_current_seasons: number; clubs_with_squad: number;
+  players_total: number; players_in_squads: number; players_with_season_stats: number; finals: number; finals_detailed: number; transfers: number; db_bytes: number; at: string;
+}
+let world: { at: number; data: WorldCoverage } | null = null;
+/** How much of the pro football world the crawl has (pro_world_coverage, migration 149), cached 5 minutes. */
+async function worldCoverage(db: Db): Promise<WorldCoverage | null> {
+  if (world && Date.now() - world.at < 300_000) return world.data;
+  const { data, error } = await db.rpc('pro_world_coverage');
+  if (error) return world?.data ?? null;
+  world = { at: Date.now(), data: data as WorldCoverage };
+  return world.data;
+}
+
 /** The leagues list for the Crawling page, filtered (US scene, top competitions, or everything) and to current seasons unless asked. */
 export async function crawlLeagues(db: Db, o: { scope: LeagueScope; seasons: 'current' | 'all' }) {
   const b = await crawlBlock(db, { quota: null, overall: { tasks: 0, done: 0, pct: 0, calls_left: 0, eta_days: null } }, { leagues: true });
@@ -131,6 +145,7 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
 
   return {
     generated_at: new Date().toISOString(),
+    world: await worldCoverage(db),
     sites,
     scraped_share: tot,
     running: runningJobs.map((r) => ({ id: r.id, job: r.job, site: siteOfJob(r.job), league_id: Number(r.params?.league) || null, season: Number(r.params?.season) || null, started_at: r.started_at, heartbeat_at: r.heartbeat_at, counters: r.counters ?? {} })),

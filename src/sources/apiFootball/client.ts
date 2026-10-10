@@ -46,7 +46,7 @@ export interface ApiFootballOptions {
   reserve?: number;
   /** Floor for the history backfill. */
   backfillReserve?: number;
-  /** Our own pace, requests per minute (the plan allows 300; the Plaibook app takes up to 60). */
+  /** The most requests a minute we ever send; the pace itself is two thirds of the plan's per-minute limit. */
   perMinute?: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
@@ -76,12 +76,15 @@ export class ApiFootball {
   private queue: PQueue;
   private o: Required<Omit<ApiFootballOptions, 'userAgent' | 'onRequest'>> & Pick<ApiFootballOptions, 'userAgent' | 'onRequest'>;
   private statusCheckedAt = 0;
+  /** Requests a minute we pace at: two thirds of the provider's per-minute limit (900 on Mega), never above perMinute. */
+  pace: number;
 
   constructor(opts: ApiFootballOptions) {
     // Unset options (undefined from an empty env var) keep their defaults.
     const given = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined)) as ApiFootballOptions;
     this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
-    this.queue = new PQueue({ concurrency: 4, interval: 60_000, intervalCap: this.o.perMinute });
+    this.pace = this.o.perMinute;
+    this.queue = new PQueue({ concurrency: 12, interval: 60_000, intervalCap: this.pace });
     const now = this.o.now();
     this.quota = { remaining: null, limit: null, at: null, used: 0, usedToday: 0, day: utcDay(now), blockedUntil: null, lastError: null };
   }
@@ -224,5 +227,12 @@ export class ApiFootball {
       this.quota.at = new Date(this.o.now()).toISOString();
     }
     if (h.get('x-ratelimit-requests-limit') != null && Number.isFinite(lim)) this.quota.limit = lim;
+    // The plan's per-minute limit: pace at two thirds of it (the Plaibook app and the live jobs share it). A plan
+    // change shows here first; the queue is replaced since its cap is fixed (the old one drains what it holds).
+    const perMin = Number(h.get('x-ratelimit-limit'));
+    if (h.get('x-ratelimit-limit') != null && Number.isFinite(perMin) && perMin > 0) {
+      const target = Math.max(30, Math.min(this.o.perMinute, Math.floor((perMin * 2) / 3)));
+      if (target !== this.pace) { this.pace = target; this.queue = new PQueue({ concurrency: 12, interval: 60_000, intervalCap: target }); }
+    }
   }
 }

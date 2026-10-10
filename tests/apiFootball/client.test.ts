@@ -120,6 +120,22 @@ describe('ApiFootball client', () => {
     expect(api.quota.blockedUntil).toBeNull();
   });
 
+  it('paces at two thirds of the plan\'s per-minute limit, never above its own ceiling', async () => {
+    const mk = (perMin: string) => (async (url: string) => {
+      if (String(url).endsWith('/status')) return new Response(JSON.stringify({ response: { requests: { current: 0, limit_day: 150000 } } }), { status: 200 });
+      return new Response(JSON.stringify({ response: [], results: 0, paging: { current: 1, total: 1 }, errors: [] }), { status: 200, headers: { 'x-ratelimit-limit': perMin, 'x-ratelimit-requests-remaining': '149000' } });
+    }) as unknown as typeof fetch;
+    const mega = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: mk('900'), sleep: noSleep, perMinute: 600 });
+    await mega.get('fixtures');
+    expect(mega.pace).toBe(600);
+    const pro = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: mk('300'), sleep: noSleep, perMinute: 600 });
+    await pro.get('fixtures');
+    expect(pro.pace).toBe(200);
+    const capped = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: mk('900'), sleep: noSleep, perMinute: 120 });
+    await capped.get('fixtures');
+    expect(capped.pace).toBe(120);
+  });
+
   it('a new UTC day forgets yesterday\'s count', async () => {
     let now = Date.parse('2026-10-08T23:59:00Z');
     const f = fakeFetch([ok(1600)], { current: 5900, limit_day: 7500 });

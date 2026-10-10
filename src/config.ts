@@ -32,13 +32,14 @@ const schema = z.object({
   // AI crawler counts go to the Plaibook hub (SEO → Overview) with this bearer secret.
   SEO_BOT_URL: z.string().url().optional(),
   SEO_BOT_SECRET: z.string().min(32).optional(),
-  // Plaibook Stats Pro: API-Football (the Pro plan key Plaibook already uses; shared, so the crawler keeps a floor of
-  // requests untouched each day). PRO_RESERVE is the floor for everyday jobs, PRO_BACKFILL_RESERVE for the history backfill.
+  // Plaibook Stats Pro: API-Football (the key Plaibook already uses, Mega plan since 2026-10-10: 150,000 a day, 900 a
+  // minute; shared, so the crawler keeps a floor of requests untouched each day). PRO_RESERVE is the floor for everyday
+  // jobs, PRO_BACKFILL_RESERVE for the crawl. PRO_PER_MIN is a ceiling: the pace is two thirds of the plan's per-minute limit.
   API_FOOTBALL_KEY: z.string().min(10).optional(),
   API_FOOTBALL_BASE: z.string().url().optional(),
   PRO_RESERVE: z.coerce.number().int().nonnegative().default(1500),
   PRO_BACKFILL_RESERVE: z.coerce.number().int().nonnegative().default(2500),
-  PRO_PER_MIN: z.coerce.number().int().positive().default(120),
+  PRO_PER_MIN: z.coerce.number().int().positive().default(600),
   // How many seasons back (the current one included) the backfill fills.
   PRO_BACKFILL_SEASONS: z.coerce.number().int().positive().default(3),
 });

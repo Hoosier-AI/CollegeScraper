@@ -80,17 +80,22 @@ describe('crawl plan', () => {
     expect(get('trophies', '70')).toMatchObject({ priority: 18, tier: 1 });
     expect(get('coach_trophies', '80')).toMatchObject({ priority: 19, every_days: 180, tier: 1 });
   });
-  it('everyone else keeps the old order, one tier down', () => {
+  it('every league\'s season in play comes first, at the top competitions\' priorities (breadth first)', () => {
     expect(get('countries', 'all')!.priority).toBe(1);
     expect(get('profiles_page', '1')).toMatchObject({ priority: 10, every_days: 30, tier: 0 });
     expect(get('profile', '8')).toMatchObject({ priority: 19, every_days: null, tier: 0 });
     expect(get('season_fixtures', '39|2026')).toMatchObject({ priority: 20, every_days: 7, tier: 2 });
-    expect(get('season_fixtures', '183|2026')).toMatchObject({ priority: 40, tier: 3 });
-    expect(get('season_fixtures', '9001|2026')).toMatchObject({ priority: 60, every_days: 14, tier: 4 });
+    expect(get('season_fixtures', '183|2026')).toMatchObject({ priority: 20, tier: 3 });
+    expect(get('season_fixtures', '9001|2026')).toMatchObject({ priority: 20, every_days: 14, tier: 4 });
     expect(tasks.some((t) => t.key.startsWith('999|'))).toBe(false);
     expect(get('injuries', '39|2026')).toMatchObject({ priority: 25, every_days: 1 });
     expect(get('standings', '39|2026')).toMatchObject({ priority: 21, every_days: 2, tier: 2 });
-    expect(get('standings', '183|2026')).toMatchObject({ priority: 41, every_days: 7 });
+    expect(get('standings', '183|2026')).toMatchObject({ priority: 21, every_days: 7 });
+    // Last season, every league, next.
+    expect(get('season_fixtures', '183|2025')).toMatchObject({ priority: 45 });
+    expect(get('detail', '183|2025')).toMatchObject({ priority: 50 });
+    expect(get('league_players', '183|2025')).toMatchObject({ priority: 60 });
+    expect(get('season_fixtures', '39|2024')!.priority).toBeGreaterThan(100);
     expect(get('injuries', '183|2026')).toBeUndefined();
     expect(get('detail', '39|2022')).toBeDefined();
     expect(get('detail', '39|2021')).toBeUndefined();
@@ -102,14 +107,15 @@ describe('crawl plan', () => {
   });
   it('other clubs: the best tier of their current competitions; last season\'s clubs are not re-read', () => {
     expect(get('squad', '30')).toMatchObject({ priority: 35, every_days: 7, tier: 2 });
-    expect(get('squad', '2')).toMatchObject({ priority: 80, every_days: 30, tier: 3 });
+    expect(get('squad', '2')).toMatchObject({ priority: 35, every_days: 30, tier: 3 });
+    expect(get('transfers', '2')).toMatchObject({ priority: 55, tier: 3 });
     expect(get('squad', '3')).toBeUndefined();
     expect(get('trophies', '7')).toMatchObject({ priority: 400, every_days: 90, tier: 2 });
     expect(get('sidelined', '7')).toMatchObject({ priority: 410, tier: 2 });
   });
-  it('new stats beyond the US: top clubs\' season stats, grounds everywhere', () => {
+  it('club season stats for every league club, grounds everywhere', () => {
     expect(get('team_stats', '39|2026|30')).toMatchObject({ priority: 90, every_days: 14, tier: 2 });
-    expect(get('team_stats', '183|2026|2')).toBeUndefined();
+    expect(get('team_stats', '183|2026|2')).toMatchObject({ priority: 90, every_days: 30, tier: 3 });
     expect(get('venues', 'England')).toMatchObject({ priority: 100, every_days: 180, tier: 0 });
   });
   it('match detail comes first in every tier (20 matches a request)', () => {
@@ -162,5 +168,15 @@ describe('tables a scraped source supplies', () => {
     expect(has('253|2010')).toBe(false);
     expect(has('253|2009')).toBe(true);
     expect(has('253|2026')).toBe(true);
+  });
+});
+
+describe('everyone\'s injury history and honours', () => {
+  const leagues = new Map([L(183, 500)]);
+  const tasks = planTasks({ leagues, seasons: new Map([[183, cov(2026)]]), leagueTeams: [], topPlayers: [7], worldPlayers: [77], newPlayers: [] });
+  it('plans them for players of every league, after the top competitions\'', () => {
+    expect(tasks.find((t) => t.kind === 'trophies' && t.key === '77')).toMatchObject({ priority: 420, tier: 3 });
+    expect(tasks.find((t) => t.kind === 'sidelined' && t.key === '77')).toMatchObject({ priority: 430 });
+    expect(tasks.find((t) => t.kind === 'trophies' && t.key === '7')!.priority).toBeLessThan(420);
   });
 });

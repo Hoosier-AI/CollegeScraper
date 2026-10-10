@@ -39,6 +39,8 @@ export interface PlanInput {
   leagueTeams: { league_id: number; season: number; team_id: number }[];
   /** Players with minutes in a top competition's current or last season (trophies, injury history). */
   topPlayers: number[];
+  /** Players with minutes in any enabled league's current or last season (everyone else's trophies, injury history). */
+  worldPlayers?: number[];
   /** Players with minutes in a US-scene competition's current or last season. */
   usPlayers?: number[];
   /** Coaches who have managed a US club. */
@@ -121,32 +123,39 @@ export function planTasks(input: PlanInput): TaskSeed[] {
   tierNow = 0;
   for (const id of input.newPlayers) add('profile', id, 19, null);
 
-  // ---------- everyone else: current seasons, then history ----------
+  // ---------- everyone else: every league's season in play, then last season, then history ----------
+  // Breadth first (the Mega plan, 2026-10-10): every enabled league's current season gets the top competitions'
+  // priorities, and last season comes next for all of them; older seasons stay behind (top competitions first).
   for (const l of live) {
     const tier = tierOf(l);
     if (tier === 1) continue;
     tierNow = tier; const c = l.current_season!;
     const k = (s: number) => `${l.id}|${s}`;
-    add('season_fixtures', k(c), by(tier, 20, 40, 60), by(tier, 7, 7, 14));
+    add('season_fixtures', k(c), 20, by(tier, 7, 7, 14));
     const nowCov = (input.seasons.get(l.id) ?? []).find((x) => x.season === c);
-    if (nowCov?.standings !== false) add('standings', k(c), by(tier, 21, 41, 61), by(tier, 2, 7, 7));
-    add('league_players', k(c), by(tier, 30, 70, 110), by(tier, 7, 14, 30));
-    add('detail', k(c), by(tier, 22, 42, 62), 7);
-    if (tier === 2) {
-      add('injuries', k(c), 25, 1);
-      for (const t of teamsOf.get(k(c)) ?? []) add('team_stats', `${k(c)}|${t}`, 90, 14);
-    }
+    if (nowCov?.standings !== false) add('standings', k(c), 21, by(tier, 2, 7, 7));
+    add('detail', k(c), 22, 7);
+    add('league_players', k(c), 30, by(tier, 7, 14, 30));
+    if (tier === 2) add('injuries', k(c), 25, 1);
+    // A club's season stats in its league (formations, streaks, goals by minute): every club, current season.
+    if (tier === 2 || l.type === 'league') for (const t of teamsOf.get(k(c)) ?? []) add('team_stats', `${k(c)}|${t}`, 90, tier === 2 ? 14 : 30);
     const detailDepth = tier === 2 ? 4 : 2;
     for (const s of input.seasons.get(l.id) ?? []) {
       const back = c - s.season;
       if (back <= 0) continue;
-      if (back <= detailDepth) {
-        add('season_fixtures', k(s.season), by(tier, 45, 130, 150), null);
-        if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), by(tier, 46, 131, 151), null);
-        add('detail', k(s.season), back === 1 ? by(tier, 50, 140, 160) : tier === 2 ? 170 : 180, null);
+      if (back === 1) {
+        // Last season, every league.
+        add('season_fixtures', k(s.season), 45, null);
+        if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), 46, null);
+        add('detail', k(s.season), 50, null);
+        add('league_players', k(s.season), 60, null);
+      } else if (back <= detailDepth) {
+        add('season_fixtures', k(s.season), by(tier, 120, 130, 150), null);
+        if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), by(tier, 121, 131, 151), null);
+        add('detail', k(s.season), tier === 2 ? 170 : 180, null);
+        if (back <= 2) add('league_players', k(s.season), tier === 2 ? 200 : 220, null);
       }
-      if (back <= 2) add('league_players', k(s.season), tier === 2 ? 200 : 220, null);
-      else if (tier === 2 && s.season >= 2015) add('league_players', k(s.season), 300, null);
+      if (back > 2 && tier === 2 && s.season >= 2015) add('league_players', k(s.season), 300, null);
     }
   }
 
@@ -159,14 +168,19 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const t = Math.max(2, tierOf(l)) as Tier;
     teamTier.set(lt.team_id, Math.min(teamTier.get(lt.team_id) ?? 4, t) as Tier);
   }
+  // Every club in a current league season, whatever its tier: squad, transfers and coach (refreshed weekly for top
+  // clubs, monthly for the rest).
   for (const [team, tier] of teamTier) {
     tierNow = tier;
-    add('squad', team, by(tier, 35, 80, 120), by(tier, 7, 30, 30));
-    add('transfers', team, by(tier, 55, 150, 190), by(tier, 7, 60, 60));
-    add('coach', team, by(tier, 58, 155, 195), by(tier, 30, 90, 90));
+    add('squad', team, 35, by(tier, 7, 30, 30));
+    add('transfers', team, 55, by(tier, 7, 60, 60));
+    add('coach', team, 58, by(tier, 30, 90, 90));
   }
   tierNow = 2;
   for (const p of input.topPlayers) { add('trophies', p, 400, 90); add('sidelined', p, 410, 90); }
+  // Everyone else with minutes this or last season, in any league: after all of the above (batched 20 a request).
+  tierNow = 3;
+  for (const p of input.worldPlayers ?? []) { add('trophies', p, 420, 180); add('sidelined', p, 430, 180); }
   tierNow = 0;
   for (const c of input.countries ?? []) if (c !== 'USA') add('venues', c, 100, 180);
   return [...out.values()];
@@ -216,6 +230,7 @@ export async function proPlan(ctx: JobContext): Promise<void> {
   const seeds = planTasks({
     leagues, seasons, leagueTeams,
     topPlayers: await playersIn(db, live.filter((l) => tierOf(l) === 2)),
+    worldPlayers: await playersIn(db, live.filter((l) => tierOf(l) >= 3)),
     usPlayers: await playersIn(db, live.filter((l) => tierOf(l) === 1)),
     usCoaches: [...new Set([...careers.map((r) => r.coach_id), ...current.map((r) => r.id)])],
     countries: countries.map((c) => c.name),
@@ -244,6 +259,11 @@ export async function proPlan(ctx: JobContext): Promise<void> {
   ctx.inc('pruned_tables', tableKeys.length);
 }
 
+/** Tasks run at once in a crawl run. */
+const POOL = 8;
+/** Kinds that ask for 20 people at a time and mark the others done: one at a time, so two never ask for the same people. */
+const PEOPLE_KINDS = new Set(['sidelined', 'trophies', 'coach_trophies']);
+
 /** params: { max_minutes?: number (default 9), max_calls?: number, kinds?: string[] } */
 export async function proCrawl(ctx: JobContext): Promise<void> {
   const deadline = Date.now() + (Number(ctx.params.max_minutes) || 9) * 60_000;
@@ -260,16 +280,18 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
       if (api.headroom('backfill') < 1) { ctx.note('stopped', 'backfill quota floor'); return; }
       if (await ctx.cancelled()) return;
       let q = ctx.db.from('pro_crawl_tasks').select('kind,key,priority,every_days,page,pages,attempts,calls').lte('due_at', new Date().toISOString())
-        .order('priority').order('due_at').limit(25);
+        .order('priority').order('due_at').limit(40);
       if (kinds?.length) q = q.in('kind', kinds);
       const { data, error } = await q;
       if (error) throw new Error(`crawl queue: ${error.message}`);
       const batch = (data ?? []) as TaskRow[];
       if (!batch.length) { ctx.note('idle', 'nothing due'); return; }
-      for (const task of batch) {
-        if (Date.now() >= deadline || spent() >= maxCalls) break;
-        if (handled.has(`${task.kind}|${task.key}`)) continue;
-        if (api.headroom('backfill') < 1) { ctx.note('stopped', 'backfill quota floor'); return; }
+      // Up to POOL tasks at once (a request takes a few hundred milliseconds; one at a time spent ~110 a minute). The
+      // people kinds ask for 20 at a time and finish the others they picked up, so they run one at a time on their own.
+      const runOne = async (task: TaskRow): Promise<'stop' | void> => {
+        if (Date.now() >= deadline || spent() >= maxCalls) return 'stop';
+        if (handled.has(`${task.kind}|${task.key}`)) return;
+        if (api.headroom('backfill') < 1) return 'stop';
         const handler = handlerFor(task.kind);
         const before = api.quota.used;
         try {
@@ -284,7 +306,7 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
           for (const k of res.also ?? []) { handled.add(`${task.kind}|${k}`); ctx.inc('tasks_done'); ctx.inc(`kind_${task.kind}`); }
           ctx.inc(`kind_${task.kind}`);
         } catch (err) {
-          if (err instanceof QuotaExhausted) throw err;
+          if (err instanceof QuotaExhausted) return 'stop';
           const msg = err instanceof Error ? err.message : String(err);
           const attempts = task.attempts + 1;
           // Back off: 1 h, 2 h, 4 h ... up to a week.
@@ -293,14 +315,21 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
           ctx.inc('task_errors');
           log.warn({ kind: task.kind, key: task.key, err: msg }, 'pro crawl task failed');
         }
-        await ctx.heartbeat();
-        if (pace.pauseMs) {
-          ctx.inc('db_pauses');
-          ctx.note('batch_size', String(pace.chunk));
-          await new Promise((r) => setTimeout(r, Math.max(0, Math.min(pace.pauseMs, deadline - Date.now()))));
-          pace.pauseMs = 0;
-        } else pace.calm();
-      }
+      };
+      const people = batch.filter((t) => PEOPLE_KINDS.has(t.kind));
+      const rest = batch.filter((t) => !PEOPLE_KINDS.has(t.kind));
+      let stop = false;
+      const lane = async (list: TaskRow[]) => { for (const t of list) { if (stop) return; if ((await runOne(t)) === 'stop') { stop = true; return; } } };
+      // Spread the others over POOL lanes (each takes every POOL-th task), plus one lane for the people kinds.
+      await Promise.all([lane(people), ...Array.from({ length: POOL }, (_, i) => lane(rest.filter((_t, j) => j % POOL === i)))]);
+      await ctx.heartbeat();
+      if (stop) { ctx.note('stopped', api.headroom('backfill') < 1 ? 'backfill quota floor' : 'time or request budget'); return; }
+      if (pace.pauseMs) {
+        ctx.inc('db_pauses');
+        ctx.note('batch_size', String(pace.chunk));
+        await new Promise((r) => setTimeout(r, Math.max(0, Math.min(pace.pauseMs, deadline - Date.now()))));
+        pace.pauseMs = 0;
+      } else pace.calm();
     }
   });
 }
