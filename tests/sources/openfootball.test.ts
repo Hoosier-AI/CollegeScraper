@@ -79,3 +79,32 @@ describe('MLS history from openfootball', () => {
     expect(t[0]).toMatchObject({ rank: 1, played: 2, win: 1, draw: 1, lose: 0, gf: 4, ga: 1, group_name: 'Overall' });
   });
 });
+
+import { OF_LEAGUES, ofClub, ofLeagueFor } from '../../src/sources/openfootball/leagues.js';
+describe('openfootball worldwide', () => {
+  it('builds each league file path by season', () => {
+    expect(ofLeagueFor(39)!.path(2024)).toBe('england/master/2024-25/1-premierleague.txt');
+    expect(ofLeagueFor(61)!.path(2025)).toBe('europe/master/france/2025-26_fr1.txt');
+    expect(ofLeagueFor(2)!.path(2024)).toBe('champions-league/master/2024-25/cl.txt');
+    expect(ofLeagueFor(71)!.path(2024)).toBe('south-america/master/brazil/2024_br1.txt');
+    expect(ofLeagueFor(128)!.path(2019)).toBe('south-america/master/argentina/2019-20_ar1.txt');
+    expect(ofLeagueFor(128)!.path(2024)).toBe('south-america/master/argentina/2024_ar1.txt');
+    expect(ofLeagueFor(253)!.path(2010)).toBe('world/master/north-america/major-league-soccer/2010_mls.txt');
+    expect(new Set(OF_LEAGUES.map((l) => l.league)).size).toBe(OF_LEAGUES.length);
+  });
+
+  it('gives a club the same id in its league and in a European cup', () => {
+    expect(ofClub('Aston Villa FC', ofLeagueFor(39)!)).toEqual({ ext_id: 'eng:Aston Villa FC', name: 'Aston Villa FC' });
+    expect(ofClub('Aston Villa FC (ENG)', ofLeagueFor(2)!)).toEqual({ ext_id: 'eng:Aston Villa FC', name: 'Aston Villa FC' });
+    expect(ofClub('D.C. United', ofLeagueFor(253)!)).toEqual({ ext_id: 'D.C. United', name: 'D.C. United' });
+  });
+
+  it('keeps MLS ids as they were and dates European kickoffs in their own zone', () => {
+    const [m] = parseSeasonFile('▪ Matchday 1\n  Fri Aug 16 2024\n    21:00  Manchester United FC    v Fulham FC                1-0 (0-0)\n', 2024);
+    const g = toSrcGame(m!, '2026-10-10T00:00:00Z', ofLeagueFor(39)!);
+    expect(g).toMatchObject({ league_id: 39, home_ext: 'eng:Manchester United FC', away_ext: 'eng:Fulham FC', home_score: 1, away_score: 0, kickoff: '2024-08-16T21:00:00.000Z' });
+    expect(g.ext_id).toBe('39|2024|2024-08-16|eng:Manchester United FC|eng:Fulham FC');
+    const [mls] = parseSeasonFile('▪ Matchday 1\n  Sat Apr 2 2005\n    16:00  CD Chivas   v D.C. United   0-2 (0-1)\n', 2005);
+    expect(toSrcGame(mls!, '2026-10-10T00:00:00Z').ext_id).toBe('2005|2005-04-02|CD Chivas|D.C. United');
+  });
+});

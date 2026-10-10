@@ -1,5 +1,6 @@
 // Reads for Plaibook Stats Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
+import { sourcesOff } from './sources.js';
 import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { SHOW_AT } from '../jobs/pro/collegeMatch.js';
@@ -409,6 +410,34 @@ export async function player(db: Db, slug: string) {
     advanced: await playerAdvanced(db, pl.id),
     matches,
     college: shown.map((l) => ({ college_name: l.college_name, school_seo: l.school_seo, first_season: l.first_season, last_season: l.last_season, college_player_slug: l.college?.slug ?? null, verified: l.verified })),
+    career: await playerCareer(db, pl.wikidata_qid ?? null),
+  };
+}
+
+const CAREER_ORDER = ['youth', 'college', 'senior', 'international'];
+/**
+ * A player's career from their Wikipedia article (youth, college, senior, international: years, club, apps, goals,
+ * loans), found by Wikidata item; clubs we know link to their pages. Null when no article was read.
+ */
+export async function playerCareer(db: Db, qid: string | null) {
+  if (!qid) return null;
+  const off = await sourcesOff(db);
+  if (off.has('wikipedia') || off.has('wikidata')) return null;
+  const [{ data: rows }, { data: person }] = await Promise.all([
+    db.from('pro_src_spells').select('kind,seq,years,start_year,end_year,team,team_title,apps,goals,loan').eq('qid', qid),
+    db.from('pro_src_players').select('wiki_title,updated_at').eq('source', 'wikidata').eq('ext_id', qid).maybeSingle(),
+  ]);
+  const spells = (rows ?? []) as { kind: string; seq: number; years: string | null; start_year: number | null; end_year: number | null; team: string; team_title: string | null; apps: number | null; goals: number | null; loan: boolean }[];
+  if (!spells.length) return null;
+  const titles = [...new Set(spells.map((r) => r.team_title).filter(Boolean) as string[])];
+  const clubs = titles.length ? ((await db.from('pro_wiki_clubs').select('title,pro_team_id').in('title', titles).not('pro_team_id', 'is', null)).data ?? []) as { title: string; pro_team_id: number }[] : [];
+  const refs = await teamsById(db, clubs.map((c) => c.pro_team_id));
+  const byTitle = new Map(clubs.map((c) => [c.title, refs.get(c.pro_team_id) ?? null]));
+  const w = person as { wiki_title: string | null; updated_at: string } | null;
+  return {
+    rows: spells.sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind) || a.seq - b.seq)
+      .map((r) => ({ kind: r.kind, years: r.years, start_year: r.start_year, end_year: r.end_year, team: r.team, apps: r.apps, goals: r.goals, loan: r.loan, club: r.team_title ? byTitle.get(r.team_title) ?? null : null })),
+    credit: { name: 'Wikipedia', url: w?.wiki_title ? `https://en.wikipedia.org/wiki/${w.wiki_title}` : 'https://en.wikipedia.org', license: 'CC BY-SA 4.0', wikidata: `https://www.wikidata.org/wiki/${qid}`, read_at: w?.updated_at ?? null },
   };
 }
 

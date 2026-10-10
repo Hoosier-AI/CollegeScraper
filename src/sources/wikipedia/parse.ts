@@ -4,11 +4,25 @@
 // (Eastern Conference, Western Conference, Overall standings).
 import * as cheerio from 'cheerio';
 
-export interface WikiTableRow { rank: number | null; team: string; played: number | null; win: number | null; draw: number | null; lose: number | null; gf: number | null; ga: number | null; gd: number | null; points: number | null; shootout_wins: number | null }
+/** title: the club's article ("Arsenal_F.C."), when the table links it. */
+export interface WikiTableRow { rank: number | null; team: string; title?: string | null; played: number | null; win: number | null; draw: number | null; lose: number | null; gf: number | null; ga: number | null; gd: number | null; points: number | null; shootout_wins: number | null }
 export interface WikiTable { group: string; rows: WikiTableRow[] }
 
 const num = (s: string): number | null => { const t = s.replace(/[−–]/g, '-').replace(/[^\d+-]/g, ''); if (!t || t === '-' || t === '+') return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 const clean = (s: string) => s.replace(/\[[^\]]*\]/g, '').replace(/\([A-Z, ]+\)$/, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * An article title from a link ("https://en.wikipedia.org/wiki/Arsenal_F.C.", "/wiki/Arsenal_F.C.", "./Arsenal_F.C."),
+ * as it goes in a /wiki/ address. Null for files, other namespaces, missing pages and other sites.
+ */
+export function wikiTitle(href: string | undefined | null): string | null {
+  if (!href || /[?&](redlink|action)=/.test(href)) return null;
+  const m = /^(?:https?:\/\/en\.wikipedia\.org)?(?:\/wiki\/|\.\/)([^#?]+)/.exec(href);
+  if (!m) return null;
+  const title = m[1]!;
+  if (/^[A-Za-z_]+(:|%3A)/.test(title)) return null;
+  return title;
+}
 
 const COLS: Record<string, keyof WikiTableRow> = { pos: 'rank', team: 'team', club: 'team', pld: 'played', gp: 'played', w: 'win', d: 'draw', t: 'draw', l: 'lose', gf: 'gf', ga: 'ga', gd: 'gd', pts: 'points', sow: 'shootout_wins' };
 
@@ -32,7 +46,7 @@ export function parseSeasonTables(html: string): WikiTable[] {
       cells.forEach((c, i) => {
         const k = map[i]; if (!k) return;
         const text = clean($(c).text());
-        if (k === 'team') r.team = clean($(c).find('a').first().text() || text);
+        if (k === 'team') { const a = $(c).find('a').first(); r.team = clean(a.text() || text); r.title = wikiTitle(a.attr('href')); }
         else (r as unknown as Record<string, number | null>)[k] = num(text);
       });
       if (r.team && r.played != null && r.points != null) rows.push(r);

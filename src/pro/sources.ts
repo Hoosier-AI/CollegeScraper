@@ -1,7 +1,8 @@
 // Reads of other sources' numbers (American Soccer Analysis) for the pro pages, through the id map onto API-Football.
-// Nothing is shown unless the console switch is on (settings:pro_sources_visible) and the league season's checks
-// agree with API-Football: 97% or more of the compared fields equal (agree / (agree + differ)). A player row whose
-// minutes disagree with API-Football's is left out (most likely a wrong match).
+// Scraped sources are shown first, unless switched off in the hub (settings:pro_sources_off). A league season whose
+// checks clearly disagree with API-Football (under 90% of the compared fields: the matching went wrong) is left out,
+// and so is a player row whose minutes disagree with API-Football's (most likely a wrong match). Agreement is shown in
+// the hub's Crawling page rather than hidden behind a gate.
 import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { cachedKv, KV } from '../ops/settings.js';
@@ -10,6 +11,14 @@ import { leaguesById, teamsById } from './queries.js';
 
 const SOURCE = 'asa';
 export const TRUST_AT = 0.97;
+/** Below this a league season's matching is broken: its numbers are not shown. */
+export const BROKEN_AT = 0.9;
+
+/** The scraped sources switched off in the hub. */
+export async function sourcesOff(db: Db): Promise<Set<string>> {
+  const v = await cachedKv<string[]>(db, KV.proSourcesOff, []);
+  return new Set(Array.isArray(v) ? v : []);
+}
 export const SOURCE_CREDIT = { ...ASA_CREDIT, label: 'Advanced stats: American Soccer Analysis' };
 
 let trust: { at: number; rates: Map<string, number> } | null = null;
@@ -35,9 +44,9 @@ export function forgetAgreement(): void { trust = null; }
 
 /** Which league seasons may show another source's numbers right now (null: none at all). */
 async function gate(db: Db): Promise<((league: number, season: number) => boolean) | null> {
-  if (!(await cachedKv<boolean>(db, KV.proSourcesVisible, false))) return null;
+  if ((await sourcesOff(db)).has(SOURCE)) return null;
   const rates = await agreementRates(db);
-  return (league, season) => (rates.get(`${league}|${season}`) ?? 0) >= TRUST_AT;
+  return (league, season) => (rates.get(`${league}|${season}`) ?? 1) >= BROKEN_AT;
 }
 
 const extsOf = async (db: Db, kind: 'team' | 'player' | 'game', proId: number): Promise<string[]> =>

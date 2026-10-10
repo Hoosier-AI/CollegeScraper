@@ -1,6 +1,7 @@
 // The owner's console: /api/console/* — every route is admin-only (the onRequest gate in src/ui/api.ts covers
 // the prefix). Reads come from src/ops/consoleQueries.ts; writes are kv settings, job enqueues, API keys and the
 // Render service.
+import { CRAWL_SITES } from '../pro/crawlSites.js';
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
@@ -24,6 +25,8 @@ export interface ConsoleOptions {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SCRAPED_SOURCES = CRAWL_SITES.filter((s) => s.scraped).map((s) => s.id as string);
 
 export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): void {
   const cfg = loadConfig();
@@ -67,13 +70,14 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   app.get('/api/console/crawl', async () => cq.crawlHealth(getDb()));
 
   app.get('/api/console/settings', async () => cq.settings(getDb()));
-  app.put<{ Body: { live?: Partial<LiveSettings>; scheduler_paused?: boolean; crawl_paused?: boolean; contact_email?: string; pro_sources_visible?: boolean } | null }>('/api/console/settings', async (req) => {
+  app.put<{ Body: { live?: Partial<LiveSettings>; scheduler_paused?: boolean; crawl_paused?: boolean; contact_email?: string; pro_sources_visible?: boolean; pro_sources_off?: string[] } | null }>('/api/console/settings', async (req) => {
     const db = getDb(); const b = req.body ?? {};
     if (b.live) await setKv(db, KV.live, normalizeLive(b.live));
     if (typeof b.scheduler_paused === 'boolean') await setKv(db, KV.schedulerPaused, b.scheduler_paused);
     if (typeof b.crawl_paused === 'boolean') await setKv(db, KV.crawlPaused, b.crawl_paused);
     if (typeof b.contact_email === 'string') await setKv(db, KV.contactEmail, b.contact_email.trim() || null);
     if (typeof b.pro_sources_visible === 'boolean') await setKv(db, KV.proSourcesVisible, b.pro_sources_visible);
+    if (Array.isArray(b.pro_sources_off)) await setKv(db, KV.proSourcesOff, [...new Set(b.pro_sources_off.map(String).filter((s) => SCRAPED_SOURCES.includes(s)))]);
     forgetKv();
     return cq.settings(db);
   });

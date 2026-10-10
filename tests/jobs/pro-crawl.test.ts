@@ -152,3 +152,15 @@ describe('database pace', () => {
     expect(p.chunk).toBe(250);
   });
 });
+
+describe('tables a scraped source supplies', () => {
+  const leagues = new Map([L(253, 1, 'league', true, 2026, 'USA')]);
+  const seasons = new Map([[253, [{ season: 2026, standings: true, players: true, injuries: true, playerLines: true }, { season: 2010, standings: true, players: false, injuries: false }, { season: 2009, standings: true, players: false, injuries: false }]]]);
+  const tasks = planTasks({ leagues, seasons, leagueTeams: [], topPlayers: [], newPlayers: [], sourceTables: new Set(['253|2010']) });
+  const has = (key: string) => tasks.some((t) => t.kind === 'standings' && t.key === key);
+  it('asks API-Football only for the tables Wikipedia does not have (and always for the season in play)', () => {
+    expect(has('253|2010')).toBe(false);
+    expect(has('253|2009')).toBe(true);
+    expect(has('253|2026')).toBe(true);
+  });
+});

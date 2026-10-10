@@ -269,6 +269,26 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     running. `/api/console/pro/leagues?scope=us|top|all&seasons=current|all` is every league season with the source
     of each kind of data (`pro_crawl_matrix()`, migration 147). Sources first, API-Football fills the gaps: see the
     owner's standing preference.
+  - **Sources first (2026-10-10):** scraped and open sources are shown first; API-Football fills what they lack and
+    checks them. A source can be switched off in the hub (`settings:pro_sources_off`, `sourcesOff()` in
+    `src/pro/sources.ts`); a league season whose checks fall under `BROKEN_AT` (90%) is left out as broken matching.
+    - openfootball (`src/sources/openfootball/leagues.ts`, 32 leagues: MLS, England 1-5, Germany 1-3, Spain, Italy,
+      France, the Netherlands, Portugal, Scotland, Turkey, Belgium, Austria, the UEFA cups, Brazil, Argentina, Mexico).
+      Club ids carry a country prefix ("eng:Arsenal FC"; cup files' "(ENG)" tags give the same id); MLS keeps plain ids.
+    - Wikipedia tables worldwide (`WIKI_TARGETS`, club ids "39:Arsenal"). `history-fill` writes a Wikipedia table over
+      API-Football's for any season where every club is matched and the lines agree 90%+ (API-Football's form and
+      notes are kept); `upsertStandings` never replaces a scraped table, and the planner skips API-Football tables
+      for finished seasons Wikipedia covers.
+    - football-data.co.uk (`src/sources/footballData/parse.ts`, 20 European leagues since 2000): results plus shots,
+      on target, fouls, corners, cards and referee. `football-data-fill` copies the stats onto matched matches with no
+      team stats (`extra.source`), so club pages get shots and corners without match-detail requests. History seasons
+      API-Football lacks are filled from football-data first, then openfootball (never both for one season).
+    - Wikidata people (`wikidata-sync`, hourly, US clubs first): club article squads (from the tables' club links),
+      each player's article (career: youth, college, senior, international) and Wikidata item (birth date, height,
+      nationality, position). `wikidata-fill` matches them (birth date + name, the club's squad) and fills empty bio
+      fields; the player page's Career shows `pro_src_spells` by Wikidata item. Only `/wiki/` pages and
+      `Special:EntityData/<Q>.json` are read (robots.txt allows both; SPARQL and the APIs are not used).
+    - ASA season totals replace our match-line totals (ASA has every match); API-Football's own totals stay.
   - **Source workers:** two download (`sources-a`, `sources-b`: ASA, Wikipedia, openfootball side by side, each site
     on its own per-host limit) and one matches, checks and fills (`sources`), one job at a time. `h2h-detail` has its
     own lane.

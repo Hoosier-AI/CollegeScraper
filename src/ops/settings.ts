@@ -27,6 +27,8 @@ export const KV = {
   crawlPaused: 'crawl:paused',
   /** Show other sources' numbers (American Soccer Analysis) on the pro pages; off until their checks look right. */
   proSourcesVisible: 'settings:pro_sources_visible',
+  /** Scraped sources switched off in the hub (shown first otherwise): ['asa', 'wikipedia', ...]. */
+  proSourcesOff: 'settings:pro_sources_off',
   /** One key per lane per host, so a laptop running the service never masks a dead lane on Render. */
   heartbeat: (lane: string, host: string) => `worker:heartbeat:${lane}@${host}`,
   heartbeatPrefix: 'worker:heartbeat:',

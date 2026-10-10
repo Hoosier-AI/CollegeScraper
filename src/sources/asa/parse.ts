@@ -30,7 +30,7 @@ export interface AsaShot { game_id: string; period_id?: number; game_minute?: nu
 
 // ---------- our rows ----------
 export interface SrcGameRow { source: string; ext_id: string; league_id: number; season: number; kickoff: string; home_ext: string; away_ext: string; home_score: number | null; away_score: number | null; home_xg: number | null; away_xg: number | null; attendance: number | null; stadium_ext: string | null; referee_ext: string | null; home_manager_ext: string | null; away_manager_ext: string | null; matchday: number | null; knockout: boolean; status: 'final' | 'scheduled' | 'other'; updated_at: string }
-export interface SrcTeamRow { source: string; ext_id: string; league_id: number; name: string; short_name: string | null; abbr: string | null; updated_at: string }
+export interface SrcTeamRow { source: string; ext_id: string; league_id: number; name: string; short_name: string | null; abbr: string | null; updated_at: string; url?: string | null }
 export interface SrcPlayerRow { source: string; ext_id: string; name: string; birth_date: string | null; height_cm: number | null; weight_kg: number | null; nationality: string | null; position: string | null; seasons: number[]; updated_at: string }
 export interface SrcVenueRow { source: string; ext_id: string; name: string; capacity: number | null; year_built: number | null; roof: boolean | null; turf: boolean | null; street: string | null; city: string | null; province: string | null; country: string | null; postal_code: string | null; lat: number | null; lng: number | null; updated_at: string }
 export interface SrcOfficialRow { source: string; ext_id: string; role: 'manager' | 'referee'; name: string | null; birth_date: string | null; nationality: string | null; updated_at: string }

@@ -1,17 +1,21 @@
 // asa-fill: American Soccer Analysis season totals into pro_player_season_stats (source 'asa') for the league seasons
 // API-Football has no player totals for (USL League One and Super League always; the Championship and MLS Next Pro
-// until its crawl gets there), so club squads, player pages and leaders have them. Only league seasons whose scores
-// agree with API-Football (97%+ of 30 or more games), or that are history ASA filled, are used. A provider row is never
-// touched (and replaces the ASA one when it arrives). Players API-Football does not know are created from ASA's
-// profile (negative ids, source 'asa') and kept in the id map.
+// until its crawl gets there), so club squads, player pages and leaders have them. Scraped sources go first: every
+// league season ASA has is used, except one whose matched scores clearly disagree with API-Football's (under 90% of 30
+// or more games: the club or game matching went wrong), and none while ASA is switched off in the hub. ASA's totals
+// replace ours worked out from match lines (it has every match); API-Football's own totals stay (they carry starts,
+// cards and ratings ASA does not publish). Players API-Football does not know are created from ASA's profile (negative
+// ids, source 'asa') and kept in the id map.
 import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, upsertChunked } from '../../db/client.js';
 import { sourceIdMap } from '../../db/sourceRepo.js';
 import { ASA_LEAGUES } from '../../sources/asa/leagues.js';
 import { negativeId } from './history.js';
+import { sourcesOff } from '../../pro/sources.js';
 
 const SOURCE = 'asa';
-const TRUST = 0.97;
+/** Below this on 30+ compared games a season's matching is broken, not just a source's own count. */
+const BROKEN = 0.9;
 
 /** ASA's general positions as API-Football names them. */
 export const POSITION: Record<string, string> = { GK: 'Goalkeeper', CB: 'Defender', FB: 'Defender', DM: 'Midfielder', CM: 'Midfielder', AM: 'Midfielder', W: 'Attacker', ST: 'Attacker' };
@@ -33,11 +37,13 @@ export async function asaFill(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const { data, error } = await db.rpc('pro_source_agreement');
   if (error) throw new Error(error.message);
+  if ((await sourcesOff(db)).has(SOURCE)) { ctx.note('idle', 'American Soccer Analysis is switched off in the hub'); return; }
   const games = ((data ?? []) as { source: string; league_id: number; season: number; kind: string; agree: number; differ: number }[]).filter((r) => r.source === SOURCE && r.kind === 'game');
-  const trusted = new Set(games.filter((r) => Number(r.agree) + Number(r.differ) >= 30 && Number(r.agree) / (Number(r.agree) + Number(r.differ)) >= TRUST).map((r) => `${r.league_id}|${r.season}`));
-  // History seasons ASA itself filled (they passed the 99% gate on the seasons both have).
-  for (const s of await selectAll<{ league_id: number; season: number }>(db, 'pro_seasons', 'league_id,season', (q) => q.in('league_id', ASA_LEAGUES.map((l) => l.league)).eq('coverage->>source', SOURCE))) trusted.add(`${s.league_id}|${s.season}`);
-  if (!trusted.size) { ctx.note('idle', 'no league season trusted yet'); return; }
+  const broken = new Set(games.filter((r) => Number(r.agree) + Number(r.differ) >= 30 && Number(r.agree) / (Number(r.agree) + Number(r.differ)) < BROKEN).map((r) => `${r.league_id}|${r.season}`));
+  const trusted = new Set((await selectAll<{ league_id: number; season: number }>(db, 'pro_source_seasons', 'league_id,season', (q) => q.eq('source', SOURCE).not('synced_at', 'is', null)))
+    .map((s) => `${s.league_id}|${s.season}`).filter((k) => !broken.has(k)));
+  for (const k of broken) ctx.note(`skipped_${k.replace('|', '_')}`, 'scores disagree with API-Football: check the matching');
+  if (!trusted.size) { ctx.note('idle', 'no league season synced yet'); return; }
 
   const teams = await sourceIdMap(db, SOURCE, 'team');
   const players = await sourceIdMap(db, SOURCE, 'player');
@@ -65,9 +71,9 @@ export async function asaFill(ctx: JobContext): Promise<void> {
     const lines = rows.filter((r) => players.has(r.player_ext) && teams.has(r.team_ext)).map((r) => seasonRowFromAsa(r, players.get(r.player_ext)!, teams.get(r.team_ext)!, league, season, at));
     // One line per player and club (two ASA ids can map to one person).
     const uniq = [...new Map(lines.map((l) => [`${l.player_id}|${l.team_id}`, l])).values()];
-    // Never over a provider (or match-line) row: only where API-Football has nothing for that player and club.
+    // Over our own match-line totals (ASA has every match), never over API-Football's own totals.
     const existing = new Set((await selectAll<{ player_id: number; team_id: number; source: string }>(db, 'pro_player_season_stats', 'player_id,team_id,source', (q) => q.eq('league_id', league).eq('season', season)))
-      .filter((r) => r.source !== SOURCE).map((r) => `${r.player_id}|${r.team_id}`));
+      .filter((r) => r.source === 'provider').map((r) => `${r.player_id}|${r.team_id}`));
     const fresh = uniq.filter((l) => !existing.has(`${l.player_id}|${l.team_id}`));
     if (fresh.length) await upsertChunked(db, 'pro_player_season_stats', fresh, { onConflict: 'player_id,league_id,season,team_id' });
     // Which clubs played in the league season (squads, transfers and coaches are planned from it).

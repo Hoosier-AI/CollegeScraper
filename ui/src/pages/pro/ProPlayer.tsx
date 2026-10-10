@@ -43,6 +43,45 @@ export interface PlayerData {
   advanced?: { credit: SourceCredit; seasons: AdvPlayerSeason[] } | null;
   matches: MatchLine[];
   college: { college_name: string; school_seo: string | null; first_season: number | null; last_season: number | null; college_player_slug: string | null; verified: boolean }[];
+  career?: { rows: CareerRow[]; credit: CareerCredit } | null;
+}
+type CareerCredit = { name: string; url: string; license: string; wikidata?: string };
+type CareerRow = { kind: 'senior' | 'youth' | 'college' | 'international'; years: string | null; team: string; apps: number | null; goals: number | null; loan: boolean; club: ProTeamRef | null };
+const CAREER_TITLE: Record<CareerRow['kind'], string> = { senior: 'Senior career', youth: 'Youth career', college: 'College career', international: 'International career' };
+
+/** The career from the player's Wikipedia article: years, club, apps and goals, grouped (youth, college, senior, international). */
+function CareerTable({ rows, credit }: { rows: CareerRow[]; credit: CareerCredit }) {
+  const groups = (['senior', 'youth', 'college', 'international'] as const).map((k) => [k, rows.filter((r) => r.kind === k)] as const).filter(([, r]) => r.length);
+  return (
+    <div className="space-y-3">
+      {groups.map(([kind, list]) => (
+        <div key={kind}>
+          <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-chalk-500">{CAREER_TITLE[kind]}</p>
+          <table className="frame w-full text-sm">
+            <caption className="sr-only">{CAREER_TITLE[kind]}</caption>
+            <thead><tr className="text-2xs text-chalk-500"><th scope="col" className="th text-left">Years</th><th scope="col" className="th text-left">Club</th><th scope="col" className="th text-right">Apps</th><th scope="col" className="th text-right">Goals</th></tr></thead>
+            <tbody className="divide-y divide-field-700">
+              {list.map((r, i) => (
+                <tr key={i}>
+                  <td className="px-3 py-1.5 tnum text-chalk-400">{r.years ?? ''}</td>
+                  <td className="px-3 py-1.5 text-chalk-100">
+                    {r.club ? <Link to={proPath.team(r.club.slug)} className="hover:text-pitch-200">{r.team}</Link> : r.team}
+                    {r.loan && <span className="ml-1.5 rounded bg-field-700 px-1 text-2xs text-chalk-400">loan</span>}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tnum">{r.apps ?? '–'}</td>
+                  <td className="px-3 py-1.5 text-right tnum">{r.goals ?? '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <p className="text-2xs text-chalk-500">
+        Career from <a href={credit.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{credit.name}</a> ({credit.license})
+        {credit.wikidata && <>, details from <a href={credit.wikidata} target="_blank" rel="noopener" className="underline hover:text-pitch-300">Wikidata</a></>}. League appearances and goals; clubs we cover link to their pages.
+      </p>
+    </div>
+  );
 }
 
 type Tab = 'overview' | 'stats' | 'matches' | 'career';
@@ -295,6 +334,7 @@ export default function ProPlayer() {
                 </div>
               </aside>
             )}
+            {d.career && d.career.rows.length > 0 && <Section title="Career"><CareerTable rows={d.career.rows} credit={d.career.credit} /></Section>}
             <Section title="Transfers"><TransfersList rows={d.transfers} /></Section>
           </div>
           <div className="space-y-5">

@@ -15,6 +15,7 @@ import { cachedKv, KV } from '../ops/settings.js';
 import { isBot, refreshPlayerOnView } from '../pro/playerRefresh.js';
 import { refreshTeamOnView } from '../pro/teamRefresh.js';
 import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
+import { BROKEN_AT, sourcesOff } from '../pro/sources.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1900 && n < 2100 ? n : null; };
@@ -194,7 +195,7 @@ export function registerProApi(app: FastifyInstance): void {
 async function sourcesBlock(db: ReturnType<typeof getDb>) {
   const count = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);
   const [visible, seasons, agreement, runs, ...counts] = await Promise.all([
-    cachedKv<boolean>(db, KV.proSourcesVisible, false),
+    sourcesOff(db).then((off) => !off.has('asa')),
     selectAll<{ source: string; league_id: number; season: number; synced_at: string | null; games: number; player_rows: number; last_error: string | null }>(db, 'pro_source_seasons', 'source,league_id,season,synced_at,games,player_rows,last_error'),
     db.rpc('pro_source_agreement').then((r) => (r.data ?? []) as { source: string; league_id: number; season: number; kind: string; agree: number; differ: number; unmatched: number; checked_at: string }[]),
     db.from('college_crawl_runs').select('id,job,status,created_at,started_at,finished_at,counters,error').in('job', ['asa-sync', 'asa-shots', 'asa-fill', 'source-map', 'source-check', 'openfootball-sync', 'wikipedia-sync', 'history-fill', 'results-tables']).order('created_at', { ascending: false }).limit(20).then((r) => (r.data ?? []) as any[]),
@@ -216,12 +217,12 @@ async function sourcesBlock(db: ReturnType<typeof getDb>) {
   for (const r of runs) if (!lastRuns[r.job] && r.status !== 'queued') lastRuns[r.job] = r;
   const [teamOk, teamNo, playerOk, playerNo, gameOk, gameNo, finals, withShots] = counts as number[];
   return {
-    visible: !!visible, trust_at: 0.97,
+    visible: !!visible, trust_at: BROKEN_AT,
     seasons: seasons.map((s) => {
       const a = agree.get(`${s.source}|${s.league_id}|${s.season}`) ?? null;
       const compared = a ? a.agree + a.differ : 0;
       const rate = compared ? Math.round((a!.agree / compared) * 1000) / 1000 : null;
-      return { ...s, league: names.get(s.league_id) ?? String(s.league_id), agree: a?.agree ?? 0, differ: a?.differ ?? 0, unmatched: a?.unmatched ?? 0, checked_at: a?.checked_at ?? null, rate, shown: !!visible && rate != null && rate >= 0.97 };
+      return { ...s, league: names.get(s.league_id) ?? String(s.league_id), agree: a?.agree ?? 0, differ: a?.differ ?? 0, unmatched: a?.unmatched ?? 0, checked_at: a?.checked_at ?? null, rate, shown: !!visible && (rate == null || rate >= BROKEN_AT) };
     }).sort((x, y) => x.league_id - y.league_id || y.season - x.season),
     matched: { team: { matched: teamOk, unmatched: teamNo }, player: { matched: playerOk, unmatched: playerNo }, game: { matched: gameOk, unmatched: gameNo } },
     shots: { finals, with_shots: withShots },

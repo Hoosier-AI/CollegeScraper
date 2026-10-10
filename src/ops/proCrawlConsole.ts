@@ -38,8 +38,8 @@ export async function crawlLeagues(db: Db, o: { scope: LeagueScope; seasons: 'cu
 export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?: string }) | null; overall: { tasks: number; done: number; pct: number; calls_left: number; eta_days: number | null }; perDay?: { day: string; calls: number }[] }, o: { leagues?: boolean } = {}) {
   const since = day(6);
   const jobs = [...new Set([...CRAWL_SITES.flatMap((s) => s.jobs), ...CHECK_JOBS])];
-  const [visible, reqs, seasons, agreement, matrix, leagues, running, recent] = await Promise.all([
-    cachedKv<boolean>(db, KV.proSourcesVisible, false),
+  const [offList, reqs, seasons, agreement, matrix, leagues, running, recent] = await Promise.all([
+    cachedKv<string[]>(db, KV.proSourcesOff, []),
     selectAll<ReqRow>(db, 'pro_source_requests', 'day,source,host,requests,errors,not_modified,bytes,last_at,last_error', (q) => q.gte('day', since)),
     selectAll<SeasonRow>(db, 'pro_source_seasons', 'source,league_id,season,synced_at,games,player_rows,last_error'),
     db.rpc('pro_source_agreement').then((r) => (r.data ?? []) as { source: string; agree: number; differ: number; unmatched: number }[]),
@@ -48,6 +48,14 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
     db.from('college_crawl_runs').select('id,job,params,started_at,heartbeat_at,counters').eq('status', 'running').order('started_at').then((r) => (r.data ?? []) as any[]),
     db.from('college_crawl_runs').select('id,job,status,created_at,started_at,finished_at,counters,error').in('job', jobs).neq('status', 'queued').order('created_at', { ascending: false }).limit(150).then((r) => (r.data ?? []) as any[]),
   ]);
+  // People (Wikidata): club articles and player articles read, players matched to pro players.
+  const cnt = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);
+  const [clubsAll, clubsRead, playersAll, playersRead, playerErrors, playersMatched] = await Promise.all([
+    cnt('pro_wiki_clubs', (q) => q), cnt('pro_wiki_clubs', (q) => q.not('read_at', 'is', null)),
+    cnt('pro_wiki_players', (q) => q), cnt('pro_wiki_players', (q) => q.not('read_at', 'is', null).is('last_error', null)), cnt('pro_wiki_players', (q) => q.not('last_error', 'is', null)),
+    cnt('pro_source_ids', (q) => q.eq('source', 'wikidata').eq('kind', 'player').not('pro_id', 'is', null)),
+  ]);
+  const people = { clubs_read: clubsRead, clubs_total: clubsAll, players_read: playersRead, players_total: playersAll, players_errors: playerErrors, players_matched: playersMatched };
   const league = new Map(leagues.map((l) => [l.id, l]));
   const year = new Date().getUTCFullYear();
   const currentOf = (id: number) => league.get(id)?.current_season ?? year;
@@ -81,13 +89,14 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
     const left = want.length - done;
     return {
       ...site,
-      on: site.scraped ? !!visible : true,
+      on: !(Array.isArray(offList) && offList.includes(site.id)),
       status: isRunning ? 'crawling' : failed ? 'error' : 'idle',
       requests: { today: perDay[6]!.requests, errors_today: today.reduce((n, r) => n + r.errors, 0), week: perDay.reduce((n, d) => n + d.requests, 0), errors_week: mine.reduce((n, r) => n + r.errors, 0), bytes_week: mine.reduce((n, r) => n + Number(r.bytes), 0), per_day: perDay, last_at: last?.last_at ?? null, last_error: mine.find((r) => r.last_error)?.last_error ?? null },
-      seasons: site.scraped ? { done, total: want.length, errors } : null,
+      seasons: site.id === 'wikidata' ? null : site.scraped ? { done, total: want.length, errors } : null,
+      people: site.id === 'wikidata' ? people : null,
       rows: { games: mineSeasons.reduce((n, s) => n + (s.games ?? 0), 0), player_rows: mineSeasons.reduce((n, s) => n + (s.player_rows ?? 0), 0) },
       agreement: site.scraped ? { ...ag, rate: compared ? Math.round((ag.agree / compared) * 1000) / 1000 : null } : null,
-      eta_days: site.scraped ? (left <= 0 ? 0 : recentDone ? Math.ceil(left / (recentDone / 7)) : null) : ctx.overall.eta_days,
+      eta_days: site.id === 'wikidata' ? null : site.scraped ? (left <= 0 ? 0 : recentDone ? Math.ceil(left / (recentDone / 7)) : null) : ctx.overall.eta_days,
       tasks: site.scraped ? null : { tasks: ctx.overall.tasks, done: ctx.overall.done, pct: ctx.overall.pct, calls_left: ctx.overall.calls_left },
       quota: site.scraped ? null : ctx.quota ? { remaining: ctx.quota.remaining, limit: ctx.quota.limit, used_today: ctx.quota.usedToday, blocked_until: ctx.quota.blockedUntil } : null,
       last_runs: runs.map((r) => ({ id: r.id, job: r.job, status: r.status, started_at: r.started_at, finished_at: r.finished_at, error: r.error ?? null, counters: r.counters ?? {} })),

@@ -97,16 +97,31 @@ export async function markNoDetail(db: Db, leagueId: number, season: number, at 
 }
 
 /** source: where the table came from (pro_standings.source, migration 141): API-Football unless another source's. */
+/** Tables from scraped sources: shown first, so API-Football's table never replaces one (it only adds form and notes). */
+export const SCRAPED_TABLE_SOURCES = ['wikipedia'];
+
 export async function upsertStandings(db: Db, rows: StandingRow[], at = new Date().toISOString(), source = 'api-football'): Promise<number> {
   if (!rows.length) return 0;
   // A table is replaced whole: a team relegated mid-season or moved between groups must not linger.
   const pairs = [...new Set(rows.map((r) => `${r.league_id}|${r.season}`))];
+  const keep: StandingRow[] = [];
   for (const p of pairs) {
     const [league, season] = p.split('|').map(Number);
+    if (source === 'api-football') {
+      const { data: had } = await db.from('pro_standings').select('team_id,group_name,source').eq('league_id', league!).eq('season', season!).limit(1);
+      if ((had ?? []).some((r: { source: string | null }) => SCRAPED_TABLE_SOURCES.includes(r.source ?? ''))) {
+        // A scraped table stays: API-Football's form guide and notes (promotion, relegation) go onto its rows.
+        for (const r of rows.filter((x) => x.league_id === league && x.season === season && (x.form || x.description))) {
+          await db.from('pro_standings').update({ form: r.form, description: r.description }).eq('league_id', league!).eq('season', season!).eq('team_id', r.team_id);
+        }
+        continue;
+      }
+    }
     const { error } = await db.from('pro_standings').delete().eq('league_id', league!).eq('season', season!);
     if (error) throw new Error(`clear standings: ${error.message}`);
+    keep.push(...rows.filter((x) => x.league_id === league && x.season === season));
   }
-  return upsertChunked(db, 'pro_standings', rows.map((r) => ({ ...r, source, updated_at: at })), { onConflict: 'league_id,season,group_name,team_id' });
+  return keep.length ? upsertChunked(db, 'pro_standings', keep.map((r) => ({ ...r, source, updated_at: at })), { onConflict: 'league_id,season,group_name,team_id' }) : 0;
 }
 
 export async function patchSeason(db: Db, leagueId: number, season: number, patch: Record<string, unknown>): Promise<void> {

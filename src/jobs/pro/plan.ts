@@ -18,6 +18,7 @@ import { isUsScene } from '../../sources/apiFootball/leagues.js';
 import { asaCovers } from '../../sources/asa/leagues.js';
 import { QuotaExhausted } from '../../sources/apiFootball/client.js';
 import { handlerFor, Pace, type TaskRow } from './tasks.js';
+import { SCRAPED_TABLE_SOURCES } from '../../db/proRepo.js';
 import { withApi } from './shared.js';
 import { log } from '../../log.js';
 
@@ -46,6 +47,8 @@ export interface PlanInput {
   countries?: string[];
   /** Players first seen since the last full profile pass, with no profile yet. */
   newPlayers: number[];
+  /** "league|season" of finished seasons whose table a scraped source (Wikipedia) supplies: no API-Football table. */
+  sourceTables?: Set<string>;
 }
 
 /**
@@ -103,7 +106,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
       if (s.season >= c) continue;
       add('detail', k(s.season), 12, null);
       add('season_fixtures', k(s.season), 13, null);
-      if (s.standings) add('standings', k(s.season), 13, null);
+      if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), 13, null);
       if (s.players && needTotals(s.season)) add('league_players', k(s.season), 15, null);
       for (const t of statClubs(s.season)) add('team_stats', `${k(s.season)}|${t}`, 15, null);
     }
@@ -139,7 +142,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
       if (back <= 0) continue;
       if (back <= detailDepth) {
         add('season_fixtures', k(s.season), by(tier, 45, 130, 150), null);
-        if (s.standings) add('standings', k(s.season), by(tier, 46, 131, 151), null);
+        if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), by(tier, 46, 131, 151), null);
         add('detail', k(s.season), back === 1 ? by(tier, 50, 140, 160) : tier === 2 ? 170 : 180, null);
       }
       if (back <= 2) add('league_players', k(s.season), tier === 2 ? 200 : 220, null);
@@ -207,6 +210,9 @@ export async function proPlan(ctx: JobContext): Promise<void> {
   const current = await selectIn<{ id: number }>(db, 'pro_coaches', 'id', 'team_id', usClubs);
   const countries = await selectAll<{ name: string }>(db, 'pro_countries', 'name');
   const { data: fresh } = await db.from('pro_players').select('id').is('profile_synced_at', null).order('created_at', { ascending: false }).limit(500);
+  // Finished seasons a scraped source has the table of: API-Football's is not needed (sources first).
+  const sourceTables = new Set((await selectAll<{ league_id: number; season: number }>(db, 'pro_standings', 'league_id,season', (q) => q.in('source', SCRAPED_TABLE_SOURCES)))
+    .filter((r) => r.season < (leagues.get(r.league_id)?.current_season ?? 9999)).map((r) => `${r.league_id}|${r.season}`));
   const seeds = planTasks({
     leagues, seasons, leagueTeams,
     topPlayers: await playersIn(db, live.filter((l) => tierOf(l) === 2)),
@@ -214,6 +220,7 @@ export async function proPlan(ctx: JobContext): Promise<void> {
     usCoaches: [...new Set([...careers.map((r) => r.coach_id), ...current.map((r) => r.id)])],
     countries: countries.map((c) => c.name),
     newPlayers: ((fresh ?? []) as { id: number }[]).map((r) => r.id),
+    sourceTables,
   });
   ctx.inc('planned', seeds.length);
   ctx.inc('planned_us', seeds.filter((t) => t.tier === 1).length);
@@ -228,6 +235,13 @@ export async function proPlan(ctx: JobContext): Promise<void> {
     if (error) throw new Error(`prune totals: ${error.message}`);
   }
   ctx.inc('pruned', stale.length);
+  // Table tasks never run for seasons a scraped table now covers.
+  const tableKeys = (await selectAll<{ key: string }>(db, 'pro_crawl_tasks', 'key', (q) => q.eq('kind', 'standings').is('last_done_at', null))).map((r) => r.key).filter((key) => sourceTables.has(key));
+  for (let i = 0; i < tableKeys.length; i += 200) {
+    const { error } = await db.from('pro_crawl_tasks').delete().eq('kind', 'standings').in('key', tableKeys.slice(i, i + 200));
+    if (error) throw new Error(`prune tables: ${error.message}`);
+  }
+  ctx.inc('pruned_tables', tableKeys.length);
 }
 
 /** params: { max_minutes?: number (default 9), max_calls?: number, kinds?: string[] } */

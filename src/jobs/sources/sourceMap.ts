@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, type Db } from '../../db/client.js';
 import { replaceChecks, sourceIdMap, writeSourceIds, type SourceIdRow } from '../../db/sourceRepo.js';
+import { OF_LEAGUES } from '../../sources/openfootball/leagues.js';
+import { WIKI_TARGETS } from './wikipedia.js';
+import { FD_LEAGUES } from '../../sources/footballData/parse.js';
 import { ASA_LEAGUES } from '../../sources/asa/leagues.js';
 import { type AdvPlayerSeasonRow, type SrcGameRow } from '../../sources/asa/parse.js';
 import { mapGames, mapPlayer, mapTeams, type ApiPerson, type ApiFixture, type Mapped } from './mapping.js';
@@ -16,7 +19,7 @@ import { bestOf, clubScore } from '../../sources/match.js';
 import { checkGame, checkPlayerSeason, checkStanding, isRegularRound, recordsFromResults, type CheckRow } from './checks.js';
 
 /** `.in()` over many values, a few hundred at a time (the filter travels in the URL). */
-async function selectIn<T>(db: Db, table: string, columns: string, column: string, values: (string | number)[], apply?: (q: any) => any): Promise<T[]> {
+export async function selectIn<T>(db: Db, table: string, columns: string, column: string, values: (string | number)[], apply?: (q: any) => any): Promise<T[]> {
   const out: T[] = [];
   const uniq = [...new Set(values)];
   for (let i = 0; i < uniq.length; i += 300) {
@@ -37,8 +40,9 @@ function fileAliases(source: string): Record<string, number> {
 /** The sources that are mapped and checked, and the leagues each covers. */
 export const MAPPED_SOURCES: { source: string; leagues: number[]; players: boolean }[] = [
   { source: 'asa', leagues: ASA_LEAGUES.map((l) => l.league), players: true },
-  { source: 'openfootball', leagues: [253], players: false },
-  { source: 'wikipedia', leagues: [253, 254, 255, 256, 1118], players: false },
+  { source: 'openfootball', leagues: OF_LEAGUES.map((l) => l.league), players: false },
+  { source: 'wikipedia', leagues: WIKI_TARGETS.map((t) => t.league), players: false },
+  { source: 'football-data', leagues: FD_LEAGUES.map((l) => l.league), players: false },
 ];
 const sourcesFor = (p: Record<string, unknown>) => MAPPED_SOURCES.filter((x) => !p.source || x.source === String(p.source))
   .map((x) => ({ ...x, leagues: x.leagues.filter((l) => !Number(p.league) || l === Number(p.league)) })).filter((x) => x.leagues.length);

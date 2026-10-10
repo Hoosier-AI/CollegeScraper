@@ -43,11 +43,13 @@ describe('crawl sites', () => {
     expect(CRAWL_SITES.filter((s) => s.scraped).length).toBeGreaterThan(0);
   });
 
-  it('lists the seasons each source should have: ASA to the current season, openfootball finished ones only', () => {
+  it('lists the seasons each source should have: ASA and openfootball to the season in play, worldwide', () => {
     const seasons = expectedSeasons(() => 2026);
     const of = (src: string, league: number) => seasons.filter((s) => s.source === src && s.league_id === league).map((s) => s.season);
     expect(of('asa', 253)).toEqual(Array.from({ length: 14 }, (_, i) => 2013 + i));
-    expect(of('openfootball', 253).at(-1)).toBe(2025);
+    expect(of('openfootball', 253).at(-1)).toBe(2026);
+    expect(of('openfootball', 39)[0]).toBe(2010);
+    expect(of('wikipedia', 39).at(-1)).toBe(2026);
     expect(of('wikipedia', 253).at(-1)).toBe(2025);
     expect(of('wikipedia', 256).at(-1)).toBe(2026);
   });

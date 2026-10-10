@@ -1,6 +1,7 @@
-// openfootball-sync: MLS results from openfootball (github.com/openfootball/world, public domain) for every season it
-// has (2005 on), stored as source records (pro_src_games, clubs by name). source-map and source-check then match them to
-// API-Football and compare scores on the seasons both have (2012 on).
+// openfootball-sync: results from openfootball (github.com/openfootball, public domain) for every league in
+// OF_LEAGUES (MLS from 2005, the main European leagues and cups, Brazil, Argentina, Mexico), stored as source records
+// (pro_src_games, clubs by name). source-map and source-check then match them to API-Football and compare scores on
+// the seasons both have. Finished seasons are read once; the season in play on every run.
 // history-fill: seasons a source has and API-Football does not (MLS 2005-2011 from openfootball, NWSL 2016-2018 from
 // American Soccer Analysis) become ordinary pro matches (negative ids, fixtures.source = the source), with an overall
 // table from the results, but only while that source agrees with API-Football on 99%+ of the scores both have. Clubs
@@ -12,56 +13,74 @@ import { selectAll, upsertChunked } from '../../db/client.js';
 import { patchSeason, refreshAggregates, upsertFixtures, upsertStandings } from '../../db/proRepo.js';
 import { patchSourceSeason, sourceIdMap, upsertSrcGames, upsertSrcTeams } from '../../db/sourceRepo.js';
 import { finalScore, parseSeasonFile, type OfMatch } from '../../sources/openfootball/parse.js';
+import { OF_LEAGUES, OF_RAW, ofClub, type OfLeague } from '../../sources/openfootball/leagues.js';
+import { WIKI_TARGETS } from './wikipedia.js';
+import { FD_LEAGUES } from '../../sources/footballData/parse.js';
+import { sourcesOff } from '../../pro/sources.js';
 import { isRegularRound } from './checks.js';
 import type { SrcGameRow } from '../../sources/asa/parse.js';
 import type { FixtureRow, StandingRow } from '../../sources/apiFootball/parse.js';
 import { teamDisplayName } from '../../sources/apiFootball/leagues.js';
 
 export const OF_SOURCE = 'openfootball';
-const OF_BASE = 'https://raw.githubusercontent.com/openfootball/world/master/north-america/major-league-soccer';
 const MLS = 253;
-const FIRST = 2005;
 export const HISTORY_TRUST = 0.99;
 
 /** A stable negative id from a key (never clashes with API-Football's positive ids). */
 export const negativeId = (key: string, bits = 31): number => -(parseInt(createHash('sha1').update(key).digest('hex').slice(0, 8), 16) % 2 ** bits || 1);
 
-/** ISO kickoff: openfootball times are local and zoneless; US Eastern is close enough to keep the date right. */
-const kickoffOf = (m: OfMatch) => new Date(`${m.date}T${m.time ?? '19:00'}:00-05:00`).toISOString();
+/** ISO kickoff: openfootball times are local and zoneless; the league's usual offset keeps the date right. */
+const kickoffOf = (m: OfMatch, tz = '-05:00') => new Date(`${m.date}T${m.time ?? '19:00'}:00${tz}`).toISOString();
 
-export function toSrcGame(m: OfMatch, at: string): SrcGameRow & Record<string, unknown> {
+/** l: the league (MLS keeps its plain ids and names from before the worldwide sync). */
+export function toSrcGame(m: OfMatch, at: string, l: Pick<OfLeague, 'league' | 'country' | 'tz'> = { league: MLS, country: null, tz: '-05:00' }): SrcGameRow & Record<string, unknown> {
   const s = finalScore(m);
+  const home = ofClub(m.home, l).ext_id, away = ofClub(m.away, l).ext_id;
   return {
-    source: OF_SOURCE, ext_id: `${m.season}|${m.date}|${m.home}|${m.away}`, league_id: MLS, season: m.season, kickoff: kickoffOf(m), home_ext: m.home, away_ext: m.away,
+    source: OF_SOURCE, ext_id: l.league === MLS ? `${m.season}|${m.date}|${m.home}|${m.away}` : `${l.league}|${m.season}|${m.date}|${home}|${away}`,
+    league_id: l.league, season: m.season, kickoff: kickoffOf(m, l.tz), home_ext: home, away_ext: away,
     home_score: s?.[0] ?? null, away_score: s?.[1] ?? null, home_xg: null, away_xg: null, attendance: null, stadium_ext: null, referee_ext: null, home_manager_ext: null, away_manager_ext: null,
     matchday: null, knockout: m.playoffs, status: m.status === 'final' ? 'final' : m.status === 'cancelled' ? 'other' : 'scheduled', updated_at: at,
     round: m.round, ht_home: m.ht?.[0] ?? null, ht_away: m.ht?.[1] ?? null, et_home: m.aet?.[0] ?? null, et_away: m.aet?.[1] ?? null, pen_home: m.pen?.[0] ?? null, pen_away: m.pen?.[1] ?? null,
   };
 }
 
-/** params: { from?: number, to?: number } */
+/** params: { league?: number, from?: number, to?: number, force?: boolean } */
 export async function openfootballSync(ctx: JobContext): Promise<void> {
   const f = makeFetcher(ctx.db);
-  const to = Number(ctx.params.to) || new Date().getUTCFullYear();
-  for (let season = Number(ctx.params.from) || FIRST; season <= to; season += 1) {
-    if (await ctx.cancelled()) return;
-    let res: Awaited<ReturnType<typeof f.get>>;
-    try { res = await f.get(`${OF_BASE}/${season}_mls.txt`, { accept: 'text/plain', noStore: true, skipCache: true, attempts: 2 }); }
-    catch (err) {
-      // No file yet for a season (the current one until it is published) is not an error.
-      if ((err as { status?: number }).status === 404) { ctx.inc('seasons_missing'); continue; }
-      ctx.inc('errors');
-      await patchSourceSeason(ctx.db, OF_SOURCE, MLS, season, { last_error: String(err instanceof Error ? err.message : err).slice(0, 500) });
-      continue;
+  const targets = OF_LEAGUES.filter((l) => !Number(ctx.params.league) || l.league === Number(ctx.params.league));
+  const current = new Map((await selectAll<{ id: number; current_season: number | null }>(ctx.db, 'pro_leagues', 'id,current_season', (q) => q.in('id', targets.map((t) => t.league)))).map((l) => [l.id, l.current_season]));
+  const done = new Set((await selectAll<{ league_id: number; season: number }>(ctx.db, 'pro_source_seasons', 'league_id,season', (q) => q.eq('source', OF_SOURCE).not('synced_at', 'is', null))).map((r) => `${r.league_id}|${r.season}`));
+  for (const l of targets) {
+    const cur = current.get(l.league) ?? new Date().getUTCFullYear();
+    const to = Math.min(Number(ctx.params.to) || cur, cur);
+    for (let season = Math.max(Number(ctx.params.from) || l.first, l.first); season <= to; season += 1) {
+      if (await ctx.cancelled()) return;
+      // A finished season is read once; the season in play (and the one before, for late corrections) every run.
+      if (done.has(`${l.league}|${season}`) && season < cur - 1 && !ctx.params.force) continue;
+      let res: Awaited<ReturnType<typeof f.get>>;
+      try { res = await f.get(`${OF_RAW}/${l.path(season)}`, { accept: 'text/plain', noStore: true, skipCache: true, attempts: 2 }); }
+      catch (err) {
+        // No file for a season (not published yet, or never kept) is not an error.
+        // A finished season's file that is not there is recorded as read with nothing in it, so it is not asked again.
+        if ((err as { status?: number }).status === 404) {
+          ctx.inc('seasons_missing');
+          if (season < cur) await patchSourceSeason(ctx.db, OF_SOURCE, l.league, season, { synced_at: new Date().toISOString(), games: 0, player_rows: 0, calls: 1, last_error: null });
+          continue;
+        }
+        ctx.inc('errors');
+        await patchSourceSeason(ctx.db, OF_SOURCE, l.league, season, { last_error: String(err instanceof Error ? err.message : err).slice(0, 500) });
+        continue;
+      }
+      const at = new Date().toISOString();
+      const matches = parseSeasonFile(res.text, season);
+      const clubs = new Map(matches.flatMap((m) => [ofClub(m.home, l), ofClub(m.away, l)]).map((c) => [c.ext_id, c]));
+      await upsertSrcTeams(ctx.db, [...clubs.values()].map((c) => ({ source: OF_SOURCE, ext_id: c.ext_id, league_id: l.league, name: c.name, short_name: null, abbr: null, updated_at: at })));
+      await upsertSrcGames(ctx.db, matches.map((m) => toSrcGame(m, at, l)));
+      await patchSourceSeason(ctx.db, OF_SOURCE, l.league, season, { synced_at: at, games: matches.length, player_rows: 0, calls: 1, last_error: null });
+      ctx.inc('seasons'); ctx.inc('games', matches.length);
+      await ctx.heartbeat();
     }
-    const at = new Date().toISOString();
-    const matches = parseSeasonFile(res.text, season);
-    const names = [...new Set(matches.flatMap((m) => [m.home, m.away]))];
-    await upsertSrcTeams(ctx.db, names.map((n) => ({ source: OF_SOURCE, ext_id: n, league_id: MLS, name: n, short_name: null, abbr: null, updated_at: at })));
-    await upsertSrcGames(ctx.db, matches.map((m) => toSrcGame(m, at)));
-    await patchSourceSeason(ctx.db, OF_SOURCE, MLS, season, { synced_at: at, games: matches.length, player_rows: 0, calls: 1, last_error: null });
-    ctx.inc('seasons'); ctx.inc('games', matches.length);
-    await ctx.heartbeat();
   }
 }
 
@@ -87,9 +106,13 @@ export const apiSeasonsOf = (rows: { season: number; coverage: { source?: string
   new Set(rows.filter((r) => !r.coverage?.source).map((r) => r.season));
 
 /** Where history can come from: a source and a league it has seasons of that API-Football does not. */
-export const HISTORY_TARGETS: { source: string; league: number; minCompared: number }[] = [
+export const HISTORY_TARGETS: { source: string; league: number; minCompared: number; trust?: number }[] = [
   { source: OF_SOURCE, league: MLS, minCompared: 1000 },   // MLS 2005-2011 from openfootball
   { source: 'asa', league: 254, minCompared: 300 },        // NWSL 2016-2018 from American Soccer Analysis
+  // Worldwide: football-data.co.uk first (its matches carry shots and corners), then openfootball for the leagues and
+  // seasons it alone has. A season one source filled is never filled again by another.
+  ...FD_LEAGUES.map((l) => ({ source: 'football-data', league: l.league, minCompared: 300, trust: 0.98 })),
+  ...OF_LEAGUES.filter((l) => l.league !== MLS).map((l) => ({ source: OF_SOURCE, league: l.league, minCompared: 300, trust: 0.98 })),
 ];
 
 /** params: { source?: string, league?: number } */
@@ -98,19 +121,27 @@ export async function historyFill(ctx: JobContext): Promise<void> {
   if (error) throw new Error(error.message);
   // Scores only: history is results, so that is what the source has to get right.
   const agreement = ((data ?? []) as { source: string; league_id: number; kind: string; agree: number; differ: number }[]).filter((r) => r.kind === 'game');
+  const off = await sourcesOff(ctx.db);
   for (const t of HISTORY_TARGETS) {
+    if (off.has(t.source)) continue;
     if ((ctx.params.source && ctx.params.source !== t.source) || (Number(ctx.params.league) && Number(ctx.params.league) !== t.league)) continue;
     await fillFrom(ctx, t, agreement.filter((r) => r.source === t.source && r.league_id === t.league));
   }
   // Then the official tables (Wikipedia) for the same and earlier seasons: they replace a table worked out from results.
   const tableAgreement = ((data ?? []) as { source: string; league_id: number; kind: string; agree: number; differ: number }[]).filter((r) => r.kind === 'standing');
   for (const t of TABLE_TARGETS) {
+    if (off.has(t.source)) continue;
     if ((ctx.params.source && ctx.params.source !== t.source) || (Number(ctx.params.league) && Number(ctx.params.league) !== t.league)) continue;
     await fillTables(ctx, t, tableAgreement.filter((r) => r.source === t.source && r.league_id === t.league));
   }
 }
 
-/** League tables from Wikipedia for seasons API-Football has none of (MLS 1996-2011, NWSL 2013-2018, USL 2011-2014). */
+/**
+ * League tables from Wikipedia, shown first: for seasons API-Football has none of (MLS 1996-2011, NWSL 2013-2018, USL
+ * 2011-2014, the worldwide leagues before its catalog) and, once every club in it is matched, for seasons it has too
+ * (its table then only lends form and notes). History seasons need the league's tables to agree with API-Football's
+ * on the seasons both have; a season both have needs its own lines to agree (when compared) at TABLE_SEASON_TRUST.
+ */
 export const TABLE_TARGETS: { source: string; league: number; minCompared: number; trust?: number }[] = [
   { source: 'wikipedia', league: MLS, minCompared: 100 },
   { source: 'wikipedia', league: 254, minCompared: 40 },
@@ -119,7 +150,10 @@ export const TABLE_TARGETS: { source: string; league: number; minCompared: numbe
   // points deduction can differ), so 97%.
   { source: 'wikipedia', league: 256, minCompared: 100, trust: 0.97 },
   { source: 'wikipedia', league: 1118, minCompared: 40, trust: 0.97 },
+  // Worldwide (wikipedia-sync's other targets).
+  ...WIKI_TARGETS.filter((w) => w.byLeague).map((w) => ({ source: 'wikipedia', league: w.league, minCompared: 60, trust: 0.97 })),
 ];
+export const TABLE_SEASON_TRUST = 0.9;
 
 async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], agreement: { agree: number; differ: number }[]): Promise<void> {
   const db = ctx.db;
@@ -128,40 +162,65 @@ async function fillTables(ctx: JobContext, t: (typeof TABLE_TARGETS)[number], ag
   const rate = compared ? agree / compared : 0;
   ctx.note(`${tag}_agreement`, `${(rate * 100).toFixed(2)}% of ${compared}`);
   const trust = t.trust ?? HISTORY_TRUST;
-  if (compared < t.minCompared || rate < trust) { ctx.note(`${tag}_skipped`, `needs ${trust * 100}% agreement on ${t.minCompared}+ compared table lines first`); return; }
+  const historyOk = compared >= t.minCompared && rate >= trust;
+  // Each season's own table lines against API-Football's (when it has a table for that season).
+  const seasonRate = new Map<number, number>();
+  for (const r of agreement as { season?: number; agree: number; differ: number }[]) {
+    if (r.season == null) continue;
+    const n = Number(r.agree) + Number(r.differ);
+    if (n) seasonRate.set(r.season, Number(r.agree) / n);
+  }
 
   const seasonRows = await selectAll<{ season: number; fixtures_synced_at: string | null; coverage: { source?: string; standings?: boolean } | null }>(db, 'pro_seasons', 'season,fixtures_synced_at,coverage', (q) => q.eq('league_id', t.league));
   const apiSeasons = apiSeasonsOf(seasonRows);
   // Also API-Football seasons it has no table for (results only): unless it has one after all.
   const apiTables = new Set((await selectAll<{ season: number }>(db, 'pro_standings', 'season', (q) => q.eq('league_id', t.league).eq('source', 'api-football'))).map((r) => r.season));
   const noTable = new Set(seasonRows.filter((r) => !r.coverage?.source && r.coverage?.standings === false && !apiTables.has(r.season)).map((r) => r.season));
-  const rows = (await selectAll<any>(db, 'pro_src_standings', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((r) => !apiSeasons.has(r.season) || noTable.has(r.season));
-  if (!rows.length) { ctx.note(`${tag}_idle`, 'no history tables to fill'); return; }
-
+  const all = await selectAll<any>(db, 'pro_src_standings', '*', (q) => q.eq('source', t.source).eq('league_id', t.league));
   const teamMap = await sourceIdMap(db, t.source, 'team');
-  const missing = [...new Set(rows.map((r) => r.team_ext as string))].filter((n) => !teamMap.has(n));
+  const history = (season: number) => !apiSeasons.has(season) || noTable.has(season);
+  // A season API-Football has: Wikipedia's table goes first once every club in it is matched and its lines agree.
+  const bySeason = new Map<number, any[]>();
+  for (const r of all) bySeason.set(r.season, [...(bySeason.get(r.season) ?? []), r]);
+  const shared = [...bySeason].filter(([season, rs]) => !history(season) && rs.every((r) => teamMap.has(r.team_ext)) && (seasonRate.get(season) ?? 1) >= TABLE_SEASON_TRUST).map(([season]) => season);
+  if (!historyOk) ctx.note(`${tag}_history_skipped`, `history needs ${trust * 100}% agreement on ${t.minCompared}+ compared table lines first`);
+  const rows = all.filter((r) => (history(r.season) && historyOk) || shared.includes(r.season));
+  ctx.inc(`${tag}_shared_seasons`, shared.length);
+  if (!rows.length) { ctx.note(`${tag}_idle`, 'no tables to fill'); return; }
+
+  const missing = [...new Set(rows.filter((r) => history(r.season)).map((r) => r.team_ext as string))].filter((n) => !teamMap.has(n));
   if (missing.length) {
     const at = new Date().toISOString();
-    const gender = t.league === 254 ? 'w' : 'm';
-    const clubs = missing.map((name) => ({ id: negativeId(`team|${t.source}|${name}`), name, display_name: teamDisplayName(name), country: 'USA', gender, national: false, source: t.source, updated_at: at }));
-    await upsertChunked(db, 'pro_teams', clubs, { onConflict: 'id' });
-    await upsertChunked(db, 'pro_source_ids', clubs.map((c) => ({ source: t.source, kind: 'team', ext_id: c.name, pro_id: c.id, method: 'created', confidence: 1, updated_at: at })), { onConflict: 'source,kind,ext_id' });
-    for (const c of clubs) teamMap.set(c.name, c.id);
+    const lg = (await db.from('pro_leagues').select('country,gender').eq('id', t.league).maybeSingle()).data as { country: string | null; gender: string | null } | null;
+    const gender = lg?.gender === 'w' || t.league === 254 ? 'w' : 'm';
+    const clubName = (ext: string) => (/^\d+:/.test(ext) ? ext.slice(ext.indexOf(':') + 1) : ext);
+    const clubs = missing.map((ext) => ({ ext, row: { id: negativeId(`team|${t.source}|${ext}`), name: clubName(ext), display_name: teamDisplayName(clubName(ext)), country: lg?.country ?? 'USA', gender, national: false, source: t.source, updated_at: at } }));
+    await upsertChunked(db, 'pro_teams', clubs.map((c) => c.row), { onConflict: 'id' });
+    await upsertChunked(db, 'pro_source_ids', clubs.map((c) => ({ source: t.source, kind: 'team', ext_id: c.ext, pro_id: c.row.id, method: 'created', confidence: 1, updated_at: at })), { onConflict: 'source,kind,ext_id' });
+    for (const c of clubs) teamMap.set(c.ext, c.row.id);
     ctx.inc('clubs_created', clubs.length);
+  }
+  // API-Football's form guide and notes stay on a table Wikipedia now supplies.
+  const apiExtra = new Map<string, { form: string | null; description: string | null }>();
+  for (const season of shared) {
+    for (const r of await selectAll<{ team_id: number; form: string | null; description: string | null }>(db, 'pro_standings', 'team_id,form,description', (q) => q.eq('league_id', t.league).eq('season', season))) {
+      apiExtra.set(`${season}|${r.team_id}`, { form: r.form, description: r.description });
+    }
   }
   const at = new Date().toISOString();
   const existing = new Map(seasonRows.map((r) => [r.season, r]));
   for (const season of [...new Set(rows.map((r) => r.season as number))].sort()) {
     const lines: StandingRow[] = rows.filter((r) => r.season === season).map((r) => ({
       league_id: t.league, season, group_name: r.group_name, team_id: teamMap.get(r.team_ext)!, rank: r.rank, points: r.points, played: r.played, win: r.win, draw: r.draw, lose: r.lose,
-      gf: r.gf, ga: r.ga, gd: r.gd, form: null, description: r.shootout_wins ? `${r.shootout_wins} shootout wins` : null,
+      gf: r.gf, ga: r.ga, gd: r.gd, form: apiExtra.get(`${season}|${teamMap.get(r.team_ext)}`)?.form ?? null,
+      description: r.shootout_wins ? `${r.shootout_wins} shootout wins` : apiExtra.get(`${season}|${teamMap.get(r.team_ext)}`)?.description ?? null,
     }));
     // Two lines for one club in one table cannot be stored: keep the first.
     const uniq = [...new Map(lines.map((l) => [`${l.group_name}|${l.team_id}`, l])).values()];
     await upsertStandings(db, uniq, undefined, t.source);
     const prev = existing.get(season);
     // An API-Football season keeps its own season row; only a history season gets one marked with the source.
-    if (!noTable.has(season)) await patchSeason(db, t.league, season, { fixtures_synced_at: prev?.fixtures_synced_at ?? at, is_current: false, coverage: { source: prev?.coverage?.source ?? t.source }, backfilled_at: at });
+    if (history(season) && !noTable.has(season)) await patchSeason(db, t.league, season, { fixtures_synced_at: prev?.fixtures_synced_at ?? at, is_current: false, coverage: { source: prev?.coverage?.source ?? t.source }, backfilled_at: at });
     ctx.inc('tables');
     await ctx.heartbeat();
   }
@@ -174,11 +233,15 @@ async function fillFrom(ctx: JobContext, t: (typeof HISTORY_TARGETS)[number], ag
   const agree = agreement.reduce((n, r) => n + Number(r.agree), 0), compared = agree + agreement.reduce((n, r) => n + Number(r.differ), 0);
   const rate = compared ? agree / compared : 0;
   ctx.note(`${tag}_agreement`, `${(rate * 100).toFixed(2)}% of ${compared}`);
-  if (compared < t.minCompared || rate < HISTORY_TRUST) { ctx.note(`${tag}_skipped`, `needs ${HISTORY_TRUST * 100}% agreement on ${t.minCompared}+ compared scores first`); return; }
+  const trust = t.trust ?? HISTORY_TRUST;
+  if (compared < t.minCompared || rate < trust) { ctx.note(`${tag}_skipped`, `needs ${trust * 100}% agreement on ${t.minCompared}+ compared scores first`); return; }
 
-  const apiSeasons = apiSeasonsOf(await selectAll<{ season: number; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,coverage', (q) => q.eq('league_id', t.league)));
+  const seasonRows = await selectAll<{ season: number; coverage: { source?: string } | null }>(db, 'pro_seasons', 'season,coverage', (q) => q.eq('league_id', t.league));
+  const apiSeasons = apiSeasonsOf(seasonRows);
+  // A history season another source already filled stays that source's (no second copy of its matches).
+  const otherSource = new Set(seasonRows.filter((r) => r.coverage?.source && r.coverage.source !== t.source).map((r) => r.season));
   const teamMap = await sourceIdMap(db, t.source, 'team');
-  const games = (await selectAll<any>(db, 'pro_src_games', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((g) => !apiSeasons.has(g.season));
+  const games = (await selectAll<any>(db, 'pro_src_games', '*', (q) => q.eq('source', t.source).eq('league_id', t.league))).filter((g) => !apiSeasons.has(g.season) && !otherSource.has(g.season));
   if (!games.length) { ctx.note(`${tag}_idle`, 'no history seasons to fill'); return; }
 
   // Clubs API-Football does not know: one negative-id club each, kept in the id map so the next run finds them.
@@ -186,8 +249,11 @@ async function fillFrom(ctx: JobContext, t: (typeof HISTORY_TARGETS)[number], ag
   if (missing.length) {
     const at = new Date().toISOString();
     const names = new Map((await selectAll<{ ext_id: string; name: string }>(db, 'pro_src_teams', 'ext_id,name', (q) => q.eq('source', t.source))).map((r) => [r.ext_id, r.name]));
-    const gender = t.league === 254 ? 'w' : 'm';
-    const clubs = missing.map((ext) => { const name = names.get(ext) ?? ext; return { ext, row: { id: negativeId(`team|${t.source}|${ext}`), name, display_name: teamDisplayName(name), country: 'USA', gender, national: false, source: t.source, updated_at: at } }; });
+    const lg = (await db.from('pro_leagues').select('country,gender').eq('id', t.league).maybeSingle()).data as { country: string | null; gender: string | null } | null;
+    const gender = lg?.gender === 'w' || t.league === 254 ? 'w' : 'm';
+    // A European cup's clubs are from many countries: no country rather than a wrong one.
+    const country = lg?.country && lg.country !== 'World' ? lg.country : null;
+    const clubs = missing.map((ext) => { const name = names.get(ext) ?? ext; return { ext, row: { id: negativeId(`team|${t.source}|${ext}`), name, display_name: teamDisplayName(name), country, gender, national: false, source: t.source, updated_at: at } }; });
     await upsertChunked(db, 'pro_teams', clubs.map((c) => c.row), { onConflict: 'id' });
     await upsertChunked(db, 'pro_source_ids', clubs.map((c) => ({ source: t.source, kind: 'team', ext_id: c.ext, pro_id: c.row.id, method: 'created', confidence: 1, updated_at: at })), { onConflict: 'source,kind,ext_id' });
     for (const c of clubs) teamMap.set(c.ext, c.row.id);
