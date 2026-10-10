@@ -48,6 +48,8 @@ export interface HttpClientOptions {
   freshMs?: number;
   fetchImpl?: typeof undiciFetch;
   sleep?: (ms: number) => Promise<void>;
+  /** Called once per network attempt (the pro sources' request counts, src/ops/sourceRequests.ts). */
+  onRequest?: (e: { url: string; ok: boolean; status: number; bytes?: number; notModified?: boolean; error?: string | null }) => void;
 }
 
 export class HttpError extends Error {
@@ -64,7 +66,7 @@ export interface HttpStats { requests: number; cacheHits: number; notModified: n
 export class HttpClient implements Fetcher {
   private hostQueues = new Map<string, PQueue>();
   private global: PQueue;
-  private opts: Required<Omit<HttpClientOptions, 'cache' | 'robots' | 'contactEmail'>> & Pick<HttpClientOptions, 'cache' | 'robots' | 'contactEmail'>;
+  private opts: Required<Omit<HttpClientOptions, 'cache' | 'robots' | 'contactEmail' | 'onRequest'>> & Pick<HttpClientOptions, 'cache' | 'robots' | 'contactEmail' | 'onRequest'>;
   /** Process-wide counters (one client per process): totals plus a per-host breakdown the console shows. */
   public stats: HttpStats = { requests: 0, cacheHits: 0, notModified: 0, errors: 0, status429: 0, robotsBlocked: 0, byHost: new Map() };
   private hostStat(host: string): HostStats { let h = this.stats.byHost.get(host); if (!h) { h = { requests: 0, errors: 0, status429: 0, lastError: null, lastErrorAt: null }; this.stats.byHost.set(host, h); } return h; }
@@ -135,17 +137,20 @@ export class HttpClient implements Fetcher {
       } catch (err) {
         lastErr = err;
         this.stats.errors += 1; hs.errors += 1; hs.lastError = err instanceof Error ? err.message : String(err); hs.lastErrorAt = new Date().toISOString();
+        this.opts.onRequest?.({ url, ok: false, status: 0, error: hs.lastError });
         await this.backoff(attempt, null);
         continue;
       }
       if (res.status === 304 && cached?.body != null) {
         this.stats.notModified += 1;
+        this.opts.onRequest?.({ url, ok: true, status: 304, notModified: true });
         await this.opts.cache?.put({ ...cached.record, fetchedAt: new Date().toISOString(), attempts: attempt }, cached.body);
         return { status: 200, url: res.url || url, text: cached.body, notModified: true };
       }
       const text = await res.text();
       // PrestoSports answers 202 with an empty body while a page is being generated.
       const transient = res.status === 429 || res.status >= 500 || (res.status === 202 && text.trim().length === 0);
+      this.opts.onRequest?.({ url, ok: res.ok && !transient, status: res.status, bytes: text.length });
       if (transient) {
         lastErr = new HttpError(res.status, url);
         this.stats.errors += 1; hs.errors += 1; hs.lastError = `HTTP ${res.status}`; hs.lastErrorAt = new Date().toISOString();

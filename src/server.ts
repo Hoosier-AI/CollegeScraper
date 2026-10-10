@@ -6,6 +6,8 @@ import { getDb } from './db/client.js';
 import { jobNames, workerLoop } from './jobs/runner.js';
 import { registerAllJobs } from './jobs/index.js';
 import { startScheduler } from './jobs/scheduler.js';
+import { flushRequests, startRequestFlush } from './ops/sourceRequests.js';
+import { CHECK_JOBS } from './pro/crawlSites.js';
 import { registerUiApi } from './ui/api.js';
 import { registerPublicApi } from './api/v1.js';
 import { anonPrincipal, makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
@@ -148,13 +150,23 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather', 'h2h-detail'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
   // A fourth for Plaibook Stats Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
   // A fifth for the pro bulk crawl (minutes per run): never behind the college crawl, never in front of live pro scores.
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_BULK_JOBS, idleMs: 15_000, lane: 'pro-bulk' }).catch((err) => { log.error({ err: String(err) }, 'pro-bulk worker crashed'); process.exit(1); });
-  // A sixth for other data sources (American Soccer Analysis) and the checks against API-Football: never on its quota.
-  workerLoop(getDb(), { signal: controller.signal, jobs: SOURCE_JOBS, idleMs: 15_000, lane: 'sources' }).catch((err) => { log.error({ err: String(err) }, 'sources worker crashed'); process.exit(1); });
+  // Box scores for earlier meetings a match page asked for: their own lane, so a backlog never holds up final-detail.
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['h2h-detail'], idleMs: 15_000, lane: 'h2h' }).catch((err) => { log.error({ err: String(err) }, 'h2h worker crashed'); process.exit(1); });
+  // The scraped and open sources (ASA, Wikipedia, openfootball ...): two workers that download, side by side (each
+  // site keeps its own per-host limit in the shared client), and one that matches, checks and fills, one job at a
+  // time so a check never runs in the middle of a matching pass. Never on API-Football's quota.
+  const fetchJobs = SOURCE_JOBS.filter((j) => !CHECK_JOBS.includes(j) && j !== 'asa-fill');
+  const checkJobs = SOURCE_JOBS.filter((j) => !fetchJobs.includes(j));
+  for (const lane of ['sources-a', 'sources-b']) workerLoop(getDb(), { signal: controller.signal, jobs: fetchJobs, idleMs: 15_000, lane }).catch((err) => { log.error({ err: String(err), lane }, 'sources worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, jobs: checkJobs, idleMs: 15_000, lane: 'sources' }).catch((err) => { log.error({ err: String(err) }, 'sources worker crashed'); process.exit(1); });
   }
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
+  // Requests per site for the hub's Crawling page (pro_source_requests).
+  startRequestFlush(getDb());
+  controller.signal.addEventListener('abort', () => { void flushRequests(getDb()); });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });

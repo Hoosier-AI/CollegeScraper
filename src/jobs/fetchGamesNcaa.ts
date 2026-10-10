@@ -42,6 +42,12 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
   // Only games that should have a final box score: past dates, not already fetched (unless refetch), attempts < 3 for non-final.
   // Games the live job is following are its business until they end (it enqueues this job with contest_ids then).
   games = games.filter((g) => g.game_date <= today && (ctx.params.refetch || !g.ncaa_fetched_at) && (g.status !== 'postponed' && g.status !== 'cancelled') && (ctx.params.contest_ids || g.status !== 'live'));
+  // A game that cannot be over yet (kickoff plus 100 minutes still ahead) has no final box score to read: on a Saturday
+  // every hourly asked NCAA.com about ~600 of the day's games before they started. A kickoff at local midnight is the
+  // "time TBA" placeholder, so those are still asked.
+  const before = games.length;
+  games = games.filter((g) => !notOverYet(g));
+  ctx.inc('not_started_skipped', before - games.length);
   if (ctx.params.limit) games = games.slice(0, Number(ctx.params.limit));
   ctx.inc('games_selected', games.length);
   const candCache = new Map<string, Awaited<ReturnType<typeof statLineCandidates>>>();
@@ -71,6 +77,16 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
     }
     await ctx.heartbeat();
   }
+}
+
+/** True when the scoreboard has not closed the game and its kickoff plus 100 minutes is still ahead. */
+export function notOverYet(g: { status: string; start_epoch?: number | string | null }, now = Date.now()): boolean {
+  if (g.status === 'final' || g.start_epoch == null) return false;
+  const start = Number(g.start_epoch) * 1000;
+  if (!Number.isFinite(start)) return false;
+  const eastern = new Date(start).toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false });
+  if (eastern === '24:00' || eastern === '00:00') return false;
+  return start + 100 * 60_000 > now;
 }
 
 function daysAgo(iso: string): number { return (Date.now() - Date.parse(`${iso}T12:00:00Z`)) / 86400000; }

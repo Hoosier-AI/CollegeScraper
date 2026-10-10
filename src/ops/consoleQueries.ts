@@ -3,7 +3,7 @@
 import { hostname } from 'node:os';
 import { kvGet, selectAll, type Db } from '../db/client.js';
 import { jobNames, type WorkerHeartbeat } from '../jobs/runner.js';
-import { JOB_META, metaFor } from '../jobs/catalogue.js';
+import { JOB_META, metaFor, SOURCE_JOBS } from '../jobs/catalogue.js';
 import { SCHEDULE, nextFire, type SchedulerState } from '../jobs/scheduler.js';
 import { KV, liveSettings, schedulerOverrides, schedulerPaused, crawlPaused, cachedKv } from './settings.js';
 import { evaluateHealth, type Health } from './health.js';
@@ -11,7 +11,7 @@ import { getFetcherStats } from '../jobs/fetcher.js';
 import { currentSeason } from '../jobs/seasons.js';
 import { loadConfig } from '../config.js';
 
-export const LANES = ['crawl', 'live', 'aux', 'pro', 'pro-bulk', 'sources'];
+export const LANES = ['crawl', 'live', 'aux', 'h2h', 'pro', 'pro-bulk', 'sources', 'sources-a', 'sources-b'];
 
 const count = async (db: Db, table: string, apply: (x: any) => any): Promise<number> => {
   const { count: n, error } = await apply(db.from(table).select('*', { count: 'exact', head: true }));
@@ -57,7 +57,7 @@ export async function schedule(db: Db) {
   };
 }
 
-/** group: 'pro' = Plaibook Stats Pro jobs (pro-*), 'college' = everything else. */
+/** group: 'pro' = Plaibook Stats Pro jobs (pro-* and the sources lane), 'college' = everything else. */
 export interface RunFilter { job?: string; status?: string; since?: string; hide_live?: boolean; limit?: number; offset?: number; group?: 'pro' | 'college' }
 
 export async function runsPage(db: Db, f: RunFilter) {
@@ -67,8 +67,10 @@ export async function runsPage(db: Db, f: RunFilter) {
   if (f.status) q = q.eq('status', f.status);
   if (f.since) q = q.gte('created_at', f.since);
   if (f.hide_live && f.job !== 'live') q = q.neq('job', 'live');
-  if (f.group === 'pro') q = q.like('job', 'pro-%');
-  if (f.group === 'college') q = q.not('job', 'like', 'pro-%');
+  // Pro includes the source jobs (ASA, Wikipedia, openfootball, matching and checks): they feed the pro pages.
+  const sourceList = `(${SOURCE_JOBS.map((j) => `"${j}"`).join(',')})`;
+  if (f.group === 'pro') q = q.or(`job.like.pro-%,job.in.${sourceList}`);
+  if (f.group === 'college') q = q.not('job', 'like', 'pro-%').not('job', 'in', sourceList);
   const { data, error, count: total } = await q;
   if (error) { if (/416|range/i.test(error.message)) return { rows: [], total: 0, limit, offset }; throw new Error(error.message); }
   return { rows: data ?? [], total: total ?? 0, limit, offset };

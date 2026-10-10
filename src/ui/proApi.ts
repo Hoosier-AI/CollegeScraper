@@ -14,6 +14,7 @@ import { PRO_QUOTA_KEY } from '../jobs/pro/shared.js';
 import { cachedKv, KV } from '../ops/settings.js';
 import { isBot, refreshPlayerOnView } from '../pro/playerRefresh.js';
 import { refreshTeamOnView } from '../pro/teamRefresh.js';
+import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1900 && n < 2100 ? n : null; };
@@ -129,6 +130,13 @@ export function registerProApi(app: FastifyInstance): void {
 
   // Owner console (behind the trigger secret, like every /api/console route): the crawl's progress for the console and the
   // PlaibookOS hub (Stats -> Pro). Counts are estimates on the big tables (exact on the small ones) so it stays cheap to poll.
+  // The Crawling page's leagues list (every league season and the source of each kind of data), apart from the main
+  // document so the 30-second poll stays small. ?scope=us|top|all&seasons=current|all
+  app.get<{ Querystring: Record<string, string> }>('/api/console/pro/leagues', async (req) => {
+    const scope = (['us', 'top', 'all'] as const).find((x) => x === req.query.scope) ?? 'us';
+    return crawlLeagues(getDb(), { scope, seasons: req.query.seasons === 'all' ? 'all' : 'current' });
+  });
+
   app.get('/api/console/pro', async () => {
     const db = getDb();
     const cfg = loadConfig();
@@ -155,11 +163,12 @@ export function registerProApi(app: FastifyInstance): void {
     const budget = Math.max(0, (quota?.limit ?? 7500) - cfg.PRO_BACKFILL_RESERVE);
     const lastRuns: Record<string, unknown> = {};
     for (const r of last) if (!lastRuns[r.job] && r.status !== 'queued') lastRuns[r.job] = r;
+    const overall = { tasks, done, pct: tasks ? Math.round((done / tasks) * 1000) / 10 : 0, calls_left: left, eta_days: etaDays(left, perDay, budget) };
     const entry = (job: string) => sched.entries.find((e: { job: string }) => e.job === job) as { enabled: boolean; last_fired: string | null; next: string | null } | undefined;
     return {
       generated_at: new Date().toISOString(),
       quota,
-      overall: { tasks, done, pct: tasks ? Math.round((done / tasks) * 1000) / 10 : 0, calls_left: left, eta_days: etaDays(left, perDay, budget) },
+      overall,
       pace: { calls_today: quota?.day === new Date().toISOString().slice(0, 10) ? quota.usedToday : 0, crawl_budget_today: budget, per_day: perDay, calls_7d: perDay.reduce((n, d) => n + d.calls, 0) },
       by_kind: kinds, by_tier: byTier(progress),
       tables: { leagues, enabled, countries, teams, players, profiled, fixtures, finals, detailed, season_rows_provider: provider, season_rows_computed: computed, squads, transfers, coaches, trophies, injuries, college_links: links },
@@ -170,6 +179,8 @@ export function registerProApi(app: FastifyInstance): void {
         next_crawl: entry('pro-crawl')?.next ?? null, next_plan: entry('pro-plan')?.next ?? null,
       },
       sources: await sourcesBlock(db),
+      // Every site the crawl reads, every league season's sources, and what is running (the hub's Crawling page).
+      crawl: await crawlBlock(db, { quota, overall }),
       // Kept for the Stats console's own Pro card (older shape).
       leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links,
     };
@@ -186,7 +197,7 @@ async function sourcesBlock(db: ReturnType<typeof getDb>) {
     cachedKv<boolean>(db, KV.proSourcesVisible, false),
     selectAll<{ source: string; league_id: number; season: number; synced_at: string | null; games: number; player_rows: number; last_error: string | null }>(db, 'pro_source_seasons', 'source,league_id,season,synced_at,games,player_rows,last_error'),
     db.rpc('pro_source_agreement').then((r) => (r.data ?? []) as { source: string; league_id: number; season: number; kind: string; agree: number; differ: number; unmatched: number; checked_at: string }[]),
-    db.from('college_crawl_runs').select('id,job,status,created_at,started_at,finished_at,counters,error').in('job', ['asa-sync', 'asa-shots', 'source-map', 'source-check', 'openfootball-sync', 'history-fill']).order('created_at', { ascending: false }).limit(20).then((r) => (r.data ?? []) as any[]),
+    db.from('college_crawl_runs').select('id,job,status,created_at,started_at,finished_at,counters,error').in('job', ['asa-sync', 'asa-shots', 'asa-fill', 'source-map', 'source-check', 'openfootball-sync', 'wikipedia-sync', 'history-fill', 'results-tables']).order('created_at', { ascending: false }).limit(20).then((r) => (r.data ?? []) as any[]),
     ...(['team', 'player', 'game'] as const).flatMap((k) => [count('pro_source_ids', (q) => q.eq('kind', k).not('pro_id', 'is', null)), count('pro_source_ids', (q) => q.eq('kind', k).is('pro_id', null))]),
     count('pro_src_games', (q) => q.eq('status', 'final')), count('pro_src_games', (q) => q.eq('status', 'final').not('shots_at', 'is', null)),
   ]);

@@ -262,6 +262,16 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     ("P. Kingston" to "Kingston Peter"), and the same move listed twice.
   - **Club Stats tab:** shots, possession, corners and cards tiles show only when match detail has them; goals by
     period from our own events shows once they hold at least 60% of the season's goals (the provider's split always).
+  - **Crawling page (hub Stats → Pro → Crawling):** `crawl` in `/api/console/pro` (`src/ops/proCrawlConsole.ts`) lists
+    every site from `CRAWL_SITES` (`src/pro/crawlSites.ts`): requests today and over 7 days (`pro_source_requests`,
+    counted by both HTTP clients' `onRequest` hook in `src/ops/sourceRequests.ts` and flushed every 30 s), seasons
+    synced of the seasons it should have (`expectedSeasons`), rows, agreement with API-Football, status and what is
+    running. `/api/console/pro/leagues?scope=us|top|all&seasons=current|all` is every league season with the source
+    of each kind of data (`pro_crawl_matrix()`, migration 147). Sources first, API-Football fills the gaps: see the
+    owner's standing preference.
+  - **Source workers:** two download (`sources-a`, `sources-b`: ASA, Wikipedia, openfootball side by side, each site
+    on its own per-host limit) and one matches, checks and fills (`sources`), one job at a time. `h2h-detail` has its
+    own lane.
   - **Crawl order:** match detail comes first in every tier (US 11/12, top competitions 22, other leagues 42, cups 62),
     because a request buys 20 matches of lineups, events, player lines and team stats.
   - **Players on view (migration 144):** opening a player's page in the browser fetches their transfers, honours and

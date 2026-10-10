@@ -3,6 +3,7 @@ import { HttpClient, type HostStats } from '../http/client.js';
 import { RobotsCache } from '../http/robots.js';
 import { DbFetchCache, type Db } from '../db/client.js';
 import type { Fetcher } from '../model.js';
+import { recordRequest } from '../ops/sourceRequests.js';
 
 let shared: HttpClient | null = null;
 
@@ -18,6 +19,7 @@ export function makeFetcher(db: Db, opts: { freshMs?: number } = {}): HttpClient
     cache: new DbFetchCache(db),
     robots: new RobotsCache(cfg.userAgent),
     freshMs: opts.freshMs ?? 0,
+    onRequest: recordRequest,
   });
   return shared;
 }

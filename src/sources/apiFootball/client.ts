@@ -52,6 +52,8 @@ export interface ApiFootballOptions {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   userAgent?: string;
+  /** Called once per request sent (the hub's per-site request counts). */
+  onRequest?: (e: { url: string; ok: boolean; status: number; error?: string | null }) => void;
 }
 
 const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -72,7 +74,7 @@ export function errorText(errors: unknown): string | null {
 export class ApiFootball {
   readonly quota: QuotaState;
   private queue: PQueue;
-  private o: Required<Omit<ApiFootballOptions, 'userAgent'>> & { userAgent?: string };
+  private o: Required<Omit<ApiFootballOptions, 'userAgent' | 'onRequest'>> & Pick<ApiFootballOptions, 'userAgent' | 'onRequest'>;
   private statusCheckedAt = 0;
 
   constructor(opts: ApiFootballOptions) {
@@ -166,9 +168,11 @@ export class ApiFootball {
       try {
         res = await this.o.fetchImpl(url, { headers: this.headers(), signal: AbortSignal.timeout(30_000) });
       } catch (err) {
-        lastErr = err; await this.o.sleep(2_000 * attempt); continue;
+        lastErr = err; this.o.onRequest?.({ url, ok: false, status: 0, error: err instanceof Error ? err.message : String(err) });
+        await this.o.sleep(2_000 * attempt); continue;
       }
       this.quota.used += 1; this.quota.usedToday += 1;
+      this.o.onRequest?.({ url, ok: res.ok, status: res.status });
       this.observe(res.headers);
       if (res.status === 429 || res.status >= 500) {
         lastErr = new ApiFootballError(res.status, `HTTP ${res.status} for ${url}`);

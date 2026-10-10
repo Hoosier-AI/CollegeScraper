@@ -6,6 +6,7 @@ import { kvSet, type Db } from '../../db/client.js';
 import { ApiFootball, QuotaExhausted, type QuotaState } from '../../sources/apiFootball/client.js';
 import type { JobContext } from '../runner.js';
 import { log } from '../../log.js';
+import { recordRequest } from '../../ops/sourceRequests.js';
 
 let shared: ApiFootball | null = null;
 
@@ -13,7 +14,7 @@ export function getApiFootball(): ApiFootball | null {
   if (shared) return shared;
   const cfg = loadConfig();
   if (!cfg.API_FOOTBALL_KEY) return null;
-  shared = new ApiFootball({ key: cfg.API_FOOTBALL_KEY, base: cfg.API_FOOTBALL_BASE, reserve: cfg.PRO_RESERVE, backfillReserve: cfg.PRO_BACKFILL_RESERVE, perMinute: cfg.PRO_PER_MIN });
+  shared = new ApiFootball({ key: cfg.API_FOOTBALL_KEY, base: cfg.API_FOOTBALL_BASE, reserve: cfg.PRO_RESERVE, backfillReserve: cfg.PRO_BACKFILL_RESERVE, perMinute: cfg.PRO_PER_MIN, onRequest: recordRequest });
   return shared;
 }
 
