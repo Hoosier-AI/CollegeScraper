@@ -36,20 +36,27 @@ export async function wikidataSync(ctx: JobContext): Promise<void> {
   const deadline = Date.now() + (Number(ctx.params.max_minutes) || 9) * 60_000;
   await seedClubs(ctx);
   const leagues = new Map((await selectAll<{ id: number; country: string | null; priority: number }>(ctx.db, 'pro_leagues', 'id,country,priority')).map((l) => [l.id, l]));
-  // US clubs first, then the top competitions, then everyone else; never-read before stale.
-  const rank = (league: number | null) => { const l = league != null ? leagues.get(league) : undefined; return !l ? 9 : isUsScene(l.id, l.country) ? 0 : l.priority < 100 ? 1 : 2; };
-  const clubs = (await selectAll<{ title: string; league_id: number | null; read_at: string | null }>(ctx.db, 'pro_wiki_clubs', 'title,league_id,read_at', (q) => q.or(`read_at.is.null,read_at.lt.${ago(CLUB_DAYS)}`)))
-    .sort((a, b) => rank(a.league_id) - rank(b.league_id) || Number(!!a.read_at) - Number(!!b.read_at));
+  // US pro clubs first (MLS, NWSL, the USL pro leagues: their articles list squads; amateur clubs' rarely do), then the
+  // top competitions, then everyone else, by league importance; never-read before stale; matched clubs first.
+  const rank = (league: number | null) => { const l = league != null ? leagues.get(league) : undefined; return !l ? 9 : isUsScene(l.id, l.country) && l.priority < 100 ? 0 : l.priority < 100 ? 1 : isUsScene(l.id, l.country) ? 2 : 3; };
+  const prio = (league: number | null) => (league != null ? leagues.get(league)?.priority ?? 9999 : 9999);
+  const clubs = (await selectAll<{ title: string; league_id: number | null; pro_team_id: number | null; read_at: string | null }>(ctx.db, 'pro_wiki_clubs', 'title,league_id,pro_team_id,read_at', (q) => q.or(`read_at.is.null,read_at.lt.${ago(CLUB_DAYS)}`)))
+    .sort((a, b) => rank(a.league_id) - rank(b.league_id) || Number(!!a.read_at) - Number(!!b.read_at) || Number(a.pro_team_id == null) - Number(b.pro_team_id == null) || prio(a.league_id) - prio(b.league_id));
 
-  // Clubs, a few per run (each opens up its squad), then players until the time is up.
-  for (const c of clubs.slice(0, 6)) {
-    if (Date.now() > deadline - 60_000 || (await ctx.cancelled())) break;
+  // Clubs first (one request each opens a whole squad), until a few hundred players are waiting or a third of the
+  // time is gone; then players until the time is up.
+  const { count: waiting } = await ctx.db.from('pro_wiki_players').select('title', { count: 'exact', head: true }).is('read_at', null);
+  let queued = waiting ?? 0;
+  const clubDeadline = Date.now() + (deadline - Date.now()) / 3;
+  for (const c of clubs) {
+    if (queued >= 400 || Date.now() > clubDeadline || (await ctx.cancelled())) break;
     try {
       const page = parseClubPage((await get(ctx, `${WIKI}/${c.title}`)).text);
       const at = new Date().toISOString();
       await upsertChunked(ctx.db, 'pro_wiki_clubs', [{ title: c.title, qid: page.qid, players: page.players.length, read_at: at, last_error: null, updated_at: at }], { onConflict: 'title' });
       if (page.players.length) await upsertChunked(ctx.db, 'pro_wiki_players', page.players.map((p) => ({ title: p.title, club_title: c.title, updated_at: at })), { onConflict: 'title' });
       ctx.inc('clubs_read'); ctx.inc('squad_players', page.players.length);
+      queued += page.players.length;
     } catch (err) {
       ctx.inc('errors');
       await upsertChunked(ctx.db, 'pro_wiki_clubs', [{ title: c.title, read_at: new Date().toISOString(), last_error: String(err instanceof Error ? err.message : err).slice(0, 300) }], { onConflict: 'title' });

@@ -32,7 +32,8 @@ export function recordRequest(e: RequestEvent, now = new Date()): void {
   const k = `${day}|${s.source}|${s.host}`;
   const t = pending.get(k) ?? { day, ...s, requests: 0, errors: 0, not_modified: 0, bytes: 0, last_at: now.toISOString(), last_error: null };
   t.requests += 1;
-  if (!e.ok) { t.errors += 1; t.last_error = (e.error ?? `HTTP ${e.status}`).slice(0, 300); }
+  // A 404 is an answer ("not published"), not a failure: openfootball and Wikipedia have seasons they never kept.
+  if (!e.ok && e.status !== 404) { t.errors += 1; t.last_error = (e.error ?? `HTTP ${e.status}`).slice(0, 300); }
   if (e.notModified) t.not_modified += 1;
   t.bytes += e.bytes ?? 0;
   t.last_at = now.toISOString();

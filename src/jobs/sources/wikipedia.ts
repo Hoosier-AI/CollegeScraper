@@ -49,12 +49,14 @@ export const WIKI_TARGETS: WikiTarget[] = [
   world(2000, 88, euro('Eredivisie')),
   world(2000, 94, euro('Primeira_Liga')),
   world(2013, 179, euro('Scottish_Premiership')),
-  world(2020, 144, euro('Belgian_Pro_League')),
-  world(2000, 203, euro('S%C3%BCper_Lig')),
+  // Belgian First Division A until 2021-22, Belgian Pro League from 2022-23.
+  world(2016, 144, (y) => euro(y >= 2022 ? 'Belgian_Pro_League' : 'Belgian_First_Division_A')(y)),
+  world(2001, 203, euro('S%C3%BCper_Lig')),
   world(2000, 218, euro('Austrian_Football_Bundesliga')),
   world(2003, 71, (y) => `${y}_Campeonato_Brasileiro_S%C3%A9rie_A`),
   world(2006, 72, (y) => `${y}_Campeonato_Brasileiro_S%C3%A9rie_B`),
-  world(2019, 44, euro('Women%27s_Super_League')),
+  // "2011 FA WSL" (calendar years to 2016), "2017–18 FA WSL", then "2022–23 Women's Super League".
+  world(2011, 44, (y) => (y <= 2016 ? `${y}_FA_WSL` : euro(y >= 2022 ? 'Women%27s_Super_League' : 'FA_WSL')(y))),
   world(2010, 82, euro('Frauen-Bundesliga')),
 ];
 

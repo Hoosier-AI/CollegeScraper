@@ -15,7 +15,7 @@ export class RobotsCache implements RobotsPolicy {
     if (!p) { p = this.load(u.origin); this.rules.set(key, p); }
     const r = await p;
     const path = u.pathname + u.search;
-    const match = (list: string[]) => list.filter((d) => d && path.startsWith(d)).sort((a, b) => b.length - a.length)[0] ?? null;
+    const match = (list: string[]) => list.filter((d) => d && ruleMatches(d, path)).sort((a, b) => b.length - a.length)[0] ?? null;
     const dis = match(r.disallow);
     const allow = match(r.allow);
     if (!dis) return true;
@@ -31,6 +31,18 @@ export class RobotsCache implements RobotsPolicy {
       return { disallow: [], allow: [] };
     }
   }
+}
+
+/**
+ * A robots.txt rule against a path: a prefix, where "*" stands for any run of characters and a final "$" ends the
+ * path (Wikidata allows "/wiki/Special:EntityData/*." under a Disallow of "/wiki/Special:EntityData/"). The longest
+ * matching rule wins, as before.
+ */
+export function ruleMatches(rule: string, path: string): boolean {
+  if (!rule.includes('*') && !rule.endsWith('$')) return path.startsWith(rule);
+  const anchored = rule.endsWith('$');
+  const body = (anchored ? rule.slice(0, -1) : rule).split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+  return new RegExp(`^${body}${anchored ? '$' : ''}`).test(path);
 }
 
 export function parseRobots(text: string, userAgent: string): Rules {
