@@ -61,12 +61,12 @@ export default function ProMatch() {
       <Scoreline m={m} />
       <p className="text-center text-xs text-chalk-400">{kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}</p>
       {d.advanced && d.advanced.xg[0] != null && <p className="text-center text-sm tnum text-chalk-300" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}</p>}
-      {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} /></div>}
+      {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
       {m.status === 'final' && !m.detail && !d.events.length && <p className="text-center text-sm text-chalk-400">Lineups and match stats arrive shortly after full time.</p>}
       <div className="grid gap-5 lg:grid-cols-12">
         <div className="space-y-5 lg:col-span-7">
           {d.events.length > 0 && <Section title="Match events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>}
-          {d.advanced && d.advanced.shots.length > 0 && <Section title="Shot map"><ShotMap shots={d.advanced.shots} homeName={m.home.name} awayName={m.away.name} /><Credit credit={d.advanced.credit} /></Section>}
+          {d.advanced && d.advanced.shots.length > 0 && <Section title="Shot map"><ShotMap shots={d.advanced.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced.credit} /></Section>}
           {(d.home.stats || d.away.stats) && <Section title="Team stats"><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
           {hasLineups && (
             <Section title="Lineups">

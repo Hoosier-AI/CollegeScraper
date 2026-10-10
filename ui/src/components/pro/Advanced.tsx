@@ -28,7 +28,7 @@ const pct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round
 const signed = (v: number | null | undefined, d = 2) => (v == null ? '–' : `${v > 0 ? '+' : ''}${v.toFixed(d)}`);
 
 export function Credit({ credit }: { credit: SourceCredit }) {
-  return <p className="text-2xs text-chalk-500">Advanced stats: <a href={credit.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{credit.name}</a>. Checked against our match data before they are shown. <Link to="/pro/sources" className="underline hover:text-pitch-300">Sources</Link></p>;
+  return <p className="text-2xs text-chalk-500">Advanced stats: <a href={credit.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{credit.name}</a>, checked against our match data. <Link to="/pro/sources" className="underline hover:text-pitch-300">Sources</Link></p>;
 }
 
 /** Goals added (above average) by action: bars either side of zero. */
@@ -101,38 +101,54 @@ export function TeamAdvancedCards({ competitions }: { competitions: AdvTeamSeaso
 }
 
 /** Both sides' shots on one pitch: home attacks right, away attacks left; size is xG, filled is a goal. */
-export function ShotMap({ shots, homeName, awayName }: { shots: AdvShot[]; homeName: string; awayName: string }) {
+/**
+ * Every shot of a match on one pitch, the home side attacking right. ASA's shot locations are Opta-style: x runs 0-100
+ * from the shooter's own goal to the goal attacked (checked against its distance-from-goal: 0.31 yards off on a
+ * 115 x 75 yard pitch), y from the attacking side's right touchline (0) to its left (100). So for the home side x maps
+ * left to right and y bottom to top (SVG counts y down, hence 100 - y); the away side is the same turned round.
+ * Own goals are not shots: when the score has goals the map cannot show, the caption says so.
+ */
+export function ShotMap({ shots, homeName, awayName, score }: { shots: AdvShot[]; homeName: string; awayName: string; score?: [number | null, number | null] }) {
   if (!shots.length) return null;
-  const W = 105, H = 68;
+  const W = 105, H = 68, GOAL = 7.32;
+  const goals = { home: shots.filter((s) => s.side === 'home' && s.goal).length, away: shots.filter((s) => s.side === 'away' && s.goal).length };
+  const missing = score ? Math.max(0, (score[0] ?? 0) - goals.home) + Math.max(0, (score[1] ?? 0) - goals.away) : 0;
   return (
     <figure className="frame p-3">
-      <svg viewBox={`-2 -2 ${W + 4} ${H + 4}`} className="w-full" role="img" aria-label={`Shot map: ${shots.filter((s) => s.side === 'home').length} shots for ${homeName}, ${shots.filter((s) => s.side === 'away').length} for ${awayName}`}>
+      <svg viewBox={`-3 -2 ${W + 6} ${H + 4}`} className="w-full" role="img" aria-label={`Shot map: ${shots.filter((s) => s.side === 'home').length} shots for ${homeName} attacking right, ${shots.filter((s) => s.side === 'away').length} for ${awayName} attacking left`}>
         <rect x={0} y={0} width={W} height={H} rx={1} className="fill-field-800 stroke-field-600" strokeWidth={0.4} />
         <line x1={W / 2} y1={0} x2={W / 2} y2={H} className="stroke-field-600" strokeWidth={0.4} />
         <circle cx={W / 2} cy={H / 2} r={9.15} className="fill-none stroke-field-600" strokeWidth={0.4} />
         {[0, W - 16.5].map((x) => <rect key={x} x={x} y={(H - 40.3) / 2} width={16.5} height={40.3} className="fill-none stroke-field-600" strokeWidth={0.4} />)}
+        {[0, W - 5.5].map((x) => <rect key={`six${x}`} x={x} y={(H - 18.32) / 2} width={5.5} height={18.32} className="fill-none stroke-field-600" strokeWidth={0.4} />)}
+        {/* The goals: the home side shoots at the right one. */}
+        <rect x={-1.6} y={(H - GOAL) / 2} width={1.6} height={GOAL} className="fill-field-600" />
+        <rect x={W} y={(H - GOAL) / 2} width={1.6} height={GOAL} className="fill-chalk-400" />
         {shots.filter((s) => s.x != null && s.y != null).map((s, i) => {
           const home = s.side === 'home';
-          const cx = ((home ? s.x! : 100 - s.x!) / 100) * W, cy = ((home ? s.y! : 100 - s.y!) / 100) * H;
+          const cx = ((home ? s.x! : 100 - s.x!) / 100) * W;
+          const cy = ((home ? 100 - s.y! : s.y!) / 100) * H;
           const r = 0.8 + Math.sqrt(s.xg ?? 0.02) * 3.2;
           return (
             <circle key={i} cx={cx} cy={cy} r={r} strokeWidth={0.5} className={`${home ? 'stroke-pitch-300' : 'stroke-note'} ${s.goal ? (home ? 'fill-pitch-400' : 'fill-note') : 'fill-transparent'}`}>
-              <title>{`${s.minute ?? '?'}' ${s.player ?? 'Unknown'}: ${s.goal ? 'goal' : s.blocked ? 'blocked' : 'no goal'}, ${dec(s.xg)} xG${s.head ? ', header' : ''}`}</title>
+              <title>{`${s.minute ?? '?'}' ${s.player ?? 'Unknown'}: ${s.goal ? 'goal' : s.blocked ? 'blocked' : 'no goal'}, ${dec(s.xg)} xG${s.head ? ', header' : ''}${s.pattern && s.pattern !== 'Regular' ? `, ${s.pattern.toLowerCase()}` : ''}`}</title>
             </circle>
           );
         })}
       </svg>
       <figcaption className="mt-2 flex flex-wrap gap-4 text-2xs text-chalk-400">
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full border border-pitch-300" />{homeName} (attacking right)</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full border border-note" />{awayName}</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full border border-pitch-300" />{homeName} attacking right</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full border border-note" />{awayName} attacking left</span>
         <span>Bigger circle, better chance. Filled: goal.</span>
+        {missing > 0 && <span>{missing === 1 ? 'One goal was an own goal' : `${missing} goals were own goals`}, so not a shot on the map.</span>}
       </figcaption>
     </figure>
   );
 }
 
-export function MatchAdvancedFacts({ a }: { a: AdvMatch }) {
-  const facts = [a.attendance ? `Attendance ${fmt.num(a.attendance)}` : null, a.ground ? `${a.ground.name}${a.ground.city ? `, ${a.ground.city}` : ''}` : null, a.referee ? `Referee ${a.referee}` : null].filter(Boolean);
+/** What the source adds to the match header: the attendance, and the ground or referee only when the header has none. */
+export function MatchAdvancedFacts({ a, hasVenue = false, hasReferee = false }: { a: AdvMatch; hasVenue?: boolean; hasReferee?: boolean }) {
+  const facts = [a.attendance ? `Attendance ${fmt.num(a.attendance)}` : null, a.ground && !hasVenue ? `${a.ground.name}${a.ground.city ? `, ${a.ground.city}` : ''}` : null, a.referee && !hasReferee ? `Referee ${a.referee}` : null].filter(Boolean);
   return facts.length ? <p className="text-xs text-chalk-400">{facts.join(' · ')}</p> : null;
 }
 
