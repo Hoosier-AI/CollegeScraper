@@ -93,6 +93,12 @@ export class ApiFootball {
     return this.quota.remaining == null ? Number.POSITIVE_INFINITY : Math.max(0, this.quota.remaining - this.floor(lane));
   }
 
+  /** Re-reads /status (throttled) when the count is unknown or at the lane's floor; jobs call it before checking headroom. */
+  async refreshIfLow(lane: Lane = 'backfill'): Promise<void> {
+    this.rollDay();
+    if (this.quota.remaining == null || this.quota.remaining <= this.floor(lane)) await this.refreshStatus();
+  }
+
   private rollDay(): void {
     const day = utcDay(this.o.now());
     if (day !== this.quota.day) {
@@ -140,8 +146,11 @@ export class ApiFootball {
   async get<T>(path: string, params: Record<string, string | number | undefined | null> = {}, lane: Lane = 'everyday'): Promise<ApiEnvelope<T>> {
     this.rollDay();
     if (this.blocked()) throw new QuotaExhausted(this.quota.remaining, this.floor(lane), `API-Football refused us until ${this.quota.blockedUntil}: ${this.quota.lastError ?? ''}`);
-    if (this.quota.remaining == null) await this.refreshStatus();
     const floor = this.floor(lane);
+    // Unknown, or at the floor: ask /status again (at most every 10 minutes). A count read just after midnight can
+    // still be yesterday's (the provider resets a little late), and with no request going out nothing else would
+    // ever correct it: on 2026-10-10 every pro job stood still all day on a stale "1500 left".
+    if (this.quota.remaining == null || this.quota.remaining <= floor) await this.refreshStatus();
     if (this.quota.remaining != null && this.quota.remaining <= floor) throw new QuotaExhausted(this.quota.remaining, floor);
     const qs = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
     const url = `${this.o.base}/${path.replace(/^\//, '')}${qs ? `?${qs}` : ''}`;

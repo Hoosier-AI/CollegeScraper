@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
 import * as q from './queries.js';
+import { isBot } from '../pro/onView.js';
 import { eastern } from '../jobs/seasons.js';
 import { registerProApi } from './proApi.js';
 
@@ -106,7 +107,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   });
   app.get<{ Params: { id: string } }>('/api/matches/:id/preview', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
-    const r = await q.matchPreview(getDb(), req.params.id);
+    const r = await q.matchPreview(getDb(), req.params.id, { queue: !isBot(req.headers['user-agent']) });
     return r ?? reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/conferences', async (req, reply) => {

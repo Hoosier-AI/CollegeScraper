@@ -108,6 +108,15 @@ The hourly job is deliberately narrow — sweep recent scoreboards, fetch NCAA b
 only for programs whose new finals lack one, reconcile, recompute aggregates. Re-fetching schedules and
 conference standings pages for ~1,300 programs turned it into a multi-hour crawl, so those run nightly.
 
+Season totals (`college_refresh_season_aggregates`, migration 146) go through PostgREST, so a call has to finish
+inside the API gateway's limit (about a minute). A full season takes ~31 s; one program's refresh (final-detail runs
+one per program after every final) takes ~1 s because it skips the season-wide ranks and percentiles, which the next
+full refresh redoes. Refreshes of one season queue on an advisory lock (133).
+
+Match pages queue NCAA.com box scores for earlier meetings without scorers (`h2h-detail`, aux lane). Only real
+views queue them (not bots), with a plain insert, and nothing is queued while `H2H_QUEUE_CAP` (200) are waiting:
+bots walking every match page had queued ~7,000 by 2026-10-10.
+
 For a new season, run `discover-teams` and `detect-sites` once (Jobs page or CLI), then sync teams on demand.
 Seasons from 2025 use the NCAA GraphQL scoreboard; the old casablanca JSON feed ended with 2024 data.
 
@@ -140,7 +149,7 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
 
 - **Source:** `src/sources/apiFootball/`
   - `client.ts` is its own small client: an API-key header, the provider's quota headers, no fetch cache.
-  - Quota guard: everyday jobs stop when `PRO_RESERVE` (1,500) requests are left for the day; the backfill stops at `PRO_BACKFILL_RESERVE` (2,500). So the Plaibook app always has headroom. `/status` reads the day's usage for free.
+  - Quota guard: everyday jobs stop when `PRO_RESERVE` (1,500) requests are left for the day; the backfill stops at `PRO_BACKFILL_RESERVE` (2,500). So the Plaibook app always has headroom. `/status` reads the day's usage for free, and is re-read (at most every 10 minutes) whenever the count is at a floor: a count read just after midnight can still be yesterday's, and with nothing being spent nothing else would correct it (on 2026-10-10 every pro job stood still all day on a stale "1500 left").
   - `parse.ts` turns API answers into rows (pure, tested against `fixtures/apiFootball/`).
   - `leagues.ts` sets gender, level (pro, youth, friendly, amateur) and crawl priority: the US pyramid first.
 - **Tables:** migration 134 creates the `pro_*` tables, keyed by the provider's own ids.

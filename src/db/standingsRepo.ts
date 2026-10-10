@@ -22,7 +22,11 @@ export interface StandingRow {
 }
 
 export async function writeStandings(db: Db, rows: StandingRow[]): Promise<number> {
-  return upsertChunked(db, 'college_standings', rows as unknown as Record<string, unknown>[], { onConflict: 'season,program_id' });
+  // One row per program: a page that lists a club twice (two tables, or a heading repeated) made the whole upsert fail
+  // with "ON CONFLICT DO UPDATE command cannot affect row a second time" (2026-10-09). The first listing wins.
+  const seen = new Set<string>();
+  const uniq = rows.filter((r) => { const k = `${r.season}|${r.program_id}`; return !seen.has(k) && !!seen.add(k); });
+  return upsertChunked(db, 'college_standings', uniq as unknown as Record<string, unknown>[], { onConflict: 'season,program_id' });
 }
 
 export interface StandingsCheck { season: number; program_id: string; field: string; official: string | null; computed: string | null; checked_at: string }

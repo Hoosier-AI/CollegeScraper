@@ -12,6 +12,7 @@ const dayKey = () => `pro:on_view:${new Date().toISOString().slice(0, 10)}`;
 /** Reserve `calls` requests from today's on-view allowance and the everyday quota; false when either is spent. */
 export async function reserveCalls(db: Db, api: ApiFootball, calls: number): Promise<boolean> {
   if (calls <= 0) return true;
+  await api.refreshIfLow('everyday');
   if (api.headroom('everyday') < calls + 20) return false;
   const spent = Number((await kvGet<number>(db, dayKey())) ?? 0);
   if (spent + calls > capPerDay()) return false;

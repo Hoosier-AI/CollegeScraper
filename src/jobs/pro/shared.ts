@@ -36,6 +36,7 @@ export async function withApi(ctx: JobContext, body: (api: ApiFootball) => Promi
   if (!api) { ctx.note('skipped', 'API_FOOTBALL_KEY is not set'); return; }
   const before = api.quota.used;
   try {
+    await api.refreshIfLow();
     await body(api);
   } catch (err) {
     if (!(err instanceof QuotaExhausted)) throw err;

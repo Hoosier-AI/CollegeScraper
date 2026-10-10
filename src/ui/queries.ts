@@ -2,7 +2,6 @@
 import type { Db } from '../db/client.js';
 import { selectAll, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
-import { enqueue } from '../jobs/runner.js';
 import { teamCategories } from '../normalize/logos.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
 
@@ -432,7 +431,8 @@ function buildLineup(lines: any[], source: 'site' | 'ncaa'): Lineup {
 const LINE_COLS = 'program_id,source,player_season_id,first_name,last_name,jersey,position,starter,participated,minutes,goals,assists,shots,yellow_cards,red_cards,is_goalie,saves,goals_allowed,college_player_seasons(player_id,headshot_url,college_players(suppress))';
 
 /** Everything a coach wants around one match: head-to-head, form, standing, poll rank, key players, lineups. */
-export async function matchPreview(db: Db, id: string) {
+/** queue: false for bots and crawlers, which must not queue box-score fetches for every page they walk. */
+export async function matchPreview(db: Db, id: string, opts: { queue?: boolean } = {}) {
   const { data: g, error } = await db.from('college_v_schedule').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!g) return null;
@@ -515,21 +515,29 @@ export async function matchPreview(db: Db, id: string) {
   }
   // Earlier meetings stored as results only (the 2024/2025 backfill) have no scorers: fetch their NCAA.com box
   // scores once, on the side lane, the first time a match page asks. The page shows them on its next load.
-  const scorersPending = await requestMeetingDetail(db, h2hGames.filter((m) => !(scorersByGame.get(m.id) ?? []).length && m.ncaa_contest_id != null && (m.home.score ?? 0) + (m.away.score ?? 0) > 0));
+  const scorersPending = await requestMeetingDetail(db, opts.queue !== false, h2hGames.filter((m) => !(scorersByGame.get(m.id) ?? []).length && m.ncaa_contest_id != null && (m.home.score ?? 0) + (m.away.score ?? 0) > 0));
   const h2h = { ...h2hSummary(h2hGames.map((m) => ({ ...m, scorers: scorersByGame.get(m.id) ?? [] })), A), scorers_pending: scorersPending };
   return { game, head_to_head: h2h, sides: { home, away } };
 }
 
 const requestedDetail = new Set<string>();
-/** Queue NCAA.com box scores for meetings never fetched; true when any are on their way. */
-async function requestMeetingDetail(db: Db, games: MatchRow[]): Promise<boolean> {
+/** The most h2h-detail jobs waiting at once; past it a page view queues nothing (the meetings stay pending). */
+export const H2H_QUEUE_CAP = 200;
+/** Queue NCAA.com box scores for meetings never fetched; true when any are on their way. Bots walking every match
+ *  page queued ~7,000 of these by 2026-10-10, so only real views queue, and never past the cap. */
+async function requestMeetingDetail(db: Db, queue: boolean, games: MatchRow[]): Promise<boolean> {
   if (!games.length) return false;
   const { data } = await db.from('college_games').select('id,season,ncaa_contest_id,ncaa_fetched_at').in('id', games.map((g) => g.id));
   const todo = (data ?? []).filter((r: any) => !r.ncaa_fetched_at && r.ncaa_contest_id != null);
-  const fresh = todo.filter((r: any) => !requestedDetail.has(String(r.ncaa_contest_id)));
+  const fresh = queue ? todo.filter((r: any) => !requestedDetail.has(String(r.ncaa_contest_id))) : [];
+  if (fresh.length) {
+    const { count } = await db.from('college_crawl_runs').select('id', { count: 'exact', head: true }).eq('job', 'h2h-detail').eq('status', 'queued');
+    if ((count ?? 0) >= H2H_QUEUE_CAP) return todo.length > 0;
+  }
   const bySeason = new Map<number, string[]>();
   for (const r of fresh as any[]) { requestedDetail.add(String(r.ncaa_contest_id)); bySeason.set(r.season, [...(bySeason.get(r.season) ?? []), String(r.ncaa_contest_id)]); }
-  for (const [season, ids] of bySeason) await enqueue(db, 'h2h-detail', { season, contest_ids: ids.sort() }).catch(() => {});
+  // A plain insert: enqueue() reads every waiting run of the job to find an identical one, and these never are.
+  for (const [season, ids] of bySeason) await db.from('college_crawl_runs').insert({ job: 'h2h-detail', params: { season, contest_ids: ids.sort() }, status: 'queued' }).then(() => {}, () => {});
   return todo.length > 0;
 }
 

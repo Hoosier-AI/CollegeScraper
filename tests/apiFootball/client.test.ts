@@ -78,6 +78,28 @@ describe('ApiFootball client', () => {
     expect(res.results).toBe(1);
   });
 
+  it('a stale count at the floor heals from /status instead of blocking all day', async () => {
+    let now = Date.parse('2026-10-10T00:00:20Z');
+    let status = { current: 6000, limit_day: 7500 }; // the provider has not reset its day yet
+    const calls: string[] = [];
+    const impl = (async (url: string) => {
+      calls.push(String(url));
+      if (String(url).endsWith('/status')) return new Response(JSON.stringify({ response: { requests: status } }), { status: 200 });
+      return new Response(JSON.stringify({ response: [], results: 0, paging: { current: 1, total: 1 }, errors: [] }), { status: 200, headers: { 'x-ratelimit-requests-remaining': '7400' } });
+    }) as unknown as typeof fetch;
+    const api = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: impl, sleep: noSleep, now: () => now, reserve: 1500, backfillReserve: 2500 });
+    await expect(api.get('fixtures', { ids: '1' })).rejects.toBeInstanceOf(QuotaExhausted);
+    status = { current: 12, limit_day: 7500 };
+    now += 5 * 60_000; // inside the 10-minute throttle: still the old number, no extra /status call
+    await expect(api.get('fixtures', { ids: '1' })).rejects.toBeInstanceOf(QuotaExhausted);
+    expect(calls.filter((c) => c.endsWith('/status'))).toHaveLength(1);
+    now += 6 * 60_000;
+    await api.refreshIfLow();
+    expect(api.headroom('backfill')).toBe(7488 - 2500);
+    await api.get('fixtures', { ids: '1' }, 'backfill');
+    expect(calls.filter((c) => !c.endsWith('/status'))).toHaveLength(1);
+  });
+
   it('a new UTC day forgets yesterday\'s count', async () => {
     let now = Date.parse('2026-10-08T23:59:00Z');
     const f = fakeFetch([ok(1600)], { current: 5900, limit_day: 7500 });

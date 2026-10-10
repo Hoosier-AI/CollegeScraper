@@ -39,5 +39,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 143_pro_asa_season_rows.sql | `pro_player_season_stats.source` gains 'asa' (season totals where API-Football has none; starts and cards nullable); `pro_players.source`; `pro_adv_player_seasons.games` | yes (2026-10-09) |
 | 144_pro_player_refresh.sql | `pro_player_refresh`: players fetched on demand when someone opens their page (transfers, honours, this and last season in every competition), at most every 14 days | yes (2026-10-09) |
 | 145_pro_team_refresh.sql | `pro_team_refresh`: clubs fetched on demand when someone opens their page or a player's (match detail for this season's finals, transfers, squad, coaches, season stats), at most every 14 days | yes (2026-10-09) |
+| 146_college_aggregates_fast.sql | `college_refresh_season_aggregates`: the other-source player line through a hash join of the season's lines, a goal-events index, and one program's refresh skips the season-wide ranks (full ~31 s instead of ~53 s, one program ~1 s instead of 7-17 s). Indexes are CONCURRENTLY: apply statement by statement | yes (2026-10-10) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
