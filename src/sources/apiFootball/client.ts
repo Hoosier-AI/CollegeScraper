@@ -98,7 +98,19 @@ export class ApiFootball {
   /** Re-reads /status (throttled) when the count is unknown or at the lane's floor; jobs call it before checking headroom. */
   async refreshIfLow(lane: Lane = 'backfill'): Promise<void> {
     this.rollDay();
+    await this.liftBlockIfRenewed();
     if (this.quota.remaining == null || this.quota.remaining <= this.floor(lane)) await this.refreshStatus();
+  }
+
+  /**
+   * A "limit reached" or lapsed-plan answer blocks us until midnight (or an hour). When the plan is renewed or raised
+   * mid-day, /status (re-read at most every 10 minutes) shows the room again and the block lifts: on 2026-10-10 a
+   * renewal at 19:56 was ignored until a restart.
+   */
+  private async liftBlockIfRenewed(): Promise<void> {
+    if (!this.blocked()) return;
+    await this.refreshStatus();
+    if (this.quota.remaining != null && this.quota.remaining > this.o.reserve) { this.quota.blockedUntil = null; this.quota.lastError = null; }
   }
 
   private rollDay(): void {
@@ -147,6 +159,7 @@ export class ApiFootball {
    */
   async get<T>(path: string, params: Record<string, string | number | undefined | null> = {}, lane: Lane = 'everyday'): Promise<ApiEnvelope<T>> {
     this.rollDay();
+    await this.liftBlockIfRenewed();
     if (this.blocked()) throw new QuotaExhausted(this.quota.remaining, this.floor(lane), `API-Football refused us until ${this.quota.blockedUntil}: ${this.quota.lastError ?? ''}`);
     const floor = this.floor(lane);
     // Unknown, or at the floor: ask /status again (at most every 10 minutes). A count read just after midnight can

@@ -100,6 +100,26 @@ describe('ApiFootball client', () => {
     expect(calls.filter((c) => !c.endsWith('/status'))).toHaveLength(1);
   });
 
+  it('a block from a lapsed plan lifts once /status shows room (a renewal mid-day)', async () => {
+    let now = Date.parse('2026-10-10T19:00:00Z');
+    let status = { current: 100, limit_day: 100 };
+    let answer: unknown = { errors: { requests: 'You have reached the request limit for the day' }, response: [], results: 0 };
+    const impl = (async (url: string) => {
+      if (String(url).endsWith('/status')) return new Response(JSON.stringify({ response: { requests: status } }), { status: 200 });
+      return new Response(JSON.stringify(answer), { status: 200 });
+    }) as unknown as typeof fetch;
+    const api = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: impl, sleep: noSleep, now: () => now, reserve: 10, backfillReserve: 20 });
+    status = { current: 0, limit_day: 100 };
+    await expect(api.get('fixtures')).rejects.toBeInstanceOf(ApiFootballError);
+    expect(api.quota.blockedUntil).toBe('2026-10-11T00:00:00.000Z');
+    status = { current: 5040, limit_day: 7500 };
+    answer = { errors: [], response: [{ x: 1 }], results: 1, paging: { current: 1, total: 1 } };
+    now += 11 * 60_000;
+    const r = await api.get('fixtures');
+    expect(r.results).toBe(1);
+    expect(api.quota.blockedUntil).toBeNull();
+  });
+
   it('a new UTC day forgets yesterday\'s count', async () => {
     let now = Date.parse('2026-10-08T23:59:00Z');
     const f = fakeFetch([ok(1600)], { current: 5900, limit_day: 7500 });
