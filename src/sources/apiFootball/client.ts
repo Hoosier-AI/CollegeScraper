@@ -84,9 +84,17 @@ export class ApiFootball {
     const given = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined)) as ApiFootballOptions;
     this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
     this.pace = this.o.perMinute;
-    this.queue = new PQueue({ concurrency: 12, interval: 60_000, intervalCap: this.pace });
+    this.queue = ApiFootball.queueFor(this.pace);
     const now = this.o.now();
     this.quota = { remaining: null, limit: null, at: null, used: 0, usedToday: 0, day: utcDay(now), blockedUntil: null, lastError: null };
+  }
+
+  /**
+   * A queue paced per second, not per minute: a 60-second window lets its whole allowance go in the first second, and
+   * the provider refused that burst (2026-10-10). perMinute / 60 a second, at least one.
+   */
+  private static queueFor(perMinute: number): PQueue {
+    return new PQueue({ concurrency: 12, interval: 1_000, intervalCap: Math.max(1, Math.floor(perMinute / 60)) });
   }
 
   floor(lane: Lane): number { return lane === 'backfill' ? this.o.backfillReserve : this.o.reserve; }
@@ -201,10 +209,13 @@ export class ApiFootball {
       const err = errorText(body.errors);
       if (err) {
         this.quota.lastError = err;
+        // Too many a minute ("rateLimit: Too many requests ... per minute"): wait a minute and try again. It has to be
+        // told apart first, since it also says "requests" and "limit": on 2026-10-10 it was read as a spent day and
+        // stopped every pro job until midnight.
+        if (/ratelimit|per minute|too many/i.test(err)) { await this.o.sleep(60_000); continue; }
         // A spent day, a bad key or a lapsed plan: stop until tomorrow (or an hour, for key/plan trouble).
         if (/request|limit|quota/i.test(err)) this.quota.blockedUntil = new Date(nextUtcMidnight(this.o.now())).toISOString();
         else if (/token|key|subscription|suspend|account/i.test(err)) this.quota.blockedUntil = new Date(this.o.now() + 3600_000).toISOString();
-        else if (/rate/i.test(err)) { await this.o.sleep(60_000); continue; }
         throw new ApiFootballError(200, `API-Football: ${err}`);
       }
       // A few endpoints (teams/statistics) answer with one object: it comes back as a list of one.
@@ -232,7 +243,7 @@ export class ApiFootball {
     const perMin = Number(h.get('x-ratelimit-limit'));
     if (h.get('x-ratelimit-limit') != null && Number.isFinite(perMin) && perMin > 0) {
       const target = Math.max(30, Math.min(this.o.perMinute, Math.floor((perMin * 2) / 3)));
-      if (target !== this.pace) { this.pace = target; this.queue = new PQueue({ concurrency: 12, interval: 60_000, intervalCap: target }); }
+      if (target !== this.pace) { this.pace = target; this.queue = ApiFootball.queueFor(target); }
     }
   }
 }

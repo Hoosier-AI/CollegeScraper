@@ -136,6 +136,23 @@ describe('ApiFootball client', () => {
     expect(capped.pace).toBe(120);
   });
 
+  it('a per-minute rate limit waits and retries; it never blocks the day', async () => {
+    let n = 0;
+    const slept: number[] = [];
+    const impl = (async (url: string) => {
+      if (String(url).endsWith('/status')) return new Response(JSON.stringify({ response: { requests: { current: 0, limit_day: 150000 } } }), { status: 200 });
+      n += 1;
+      const body = n === 1 ? { errors: { rateLimit: 'Too many requests. You have exceeded the limit of requests per minute of your subscription.' }, response: [], results: 0 }
+        : { errors: [], response: [{ x: 1 }], results: 1, paging: { current: 1, total: 1 } };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    const api = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: impl, sleep: async (ms) => { slept.push(ms); } });
+    const r = await api.get('fixtures');
+    expect(r.results).toBe(1);
+    expect(slept).toContain(60_000);
+    expect(api.quota.blockedUntil).toBeNull();
+  });
+
   it('a new UTC day forgets yesterday\'s count', async () => {
     let now = Date.parse('2026-10-08T23:59:00Z');
     const f = fakeFetch([ok(1600)], { current: 5900, limit_day: 7500 });
