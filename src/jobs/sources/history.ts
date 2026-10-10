@@ -111,8 +111,10 @@ export const HISTORY_TARGETS: { source: string; league: number; minCompared: num
   { source: 'asa', league: 254, minCompared: 300 },        // NWSL 2016-2018 from American Soccer Analysis
   // Worldwide: football-data.co.uk first (its matches carry shots and corners), then openfootball for the leagues and
   // seasons it alone has. A season one source filled is never filled again by another.
-  ...FD_LEAGUES.map((l) => ({ source: 'football-data', league: l.league, minCompared: 300, trust: 0.98 })),
-  ...OF_LEAGUES.filter((l) => l.league !== MLS).map((l) => ({ source: OF_SOURCE, league: l.league, minCompared: 300, trust: 0.98 })),
+  // API-Football has only the season in play crawled for most of these, so 60 compared scores (at 98%+) are the
+  // evidence: on 2026-10-10 every one of them agreed (70 to 554 per league, no difference at all).
+  ...FD_LEAGUES.map((l) => ({ source: 'football-data', league: l.league, minCompared: 60, trust: 0.98 })),
+  ...OF_LEAGUES.filter((l) => l.league !== MLS).map((l) => ({ source: OF_SOURCE, league: l.league, minCompared: 60, trust: 0.98 })),
 ];
 
 /** params: { source?: string, league?: number } */
