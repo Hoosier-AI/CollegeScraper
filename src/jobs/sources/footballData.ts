@@ -114,7 +114,9 @@ export async function footballDataFill(ctx: JobContext): Promise<void> {
     const seasons = new Set<number>();
     for (const s of matched) {
       const id = games.get(s.ext_id)!; const f = fx.get(id);
-      if (!f || has.has(id)) continue;
+      // Once per match (two source rows can point at one match), and never a match with one club on both sides.
+      if (!f || has.has(id) || f.home_team_id === f.away_team_id) continue;
+      has.add(id);
       // Home and away as API-Football has them (a swapped fixture keeps each club's own numbers).
       const swapped = teams.get(src.get(s.ext_id) ?? '') === f.away_team_id;
       const side = (home: boolean) => ({ shots: home ? s.home_shots : s.away_shots, shots_on: home ? s.home_shots_on : s.away_shots_on, fouls: home ? s.home_fouls : s.away_fouls, corners: home ? s.home_corners : s.away_corners, yellow: home ? s.home_yellow : s.away_yellow, red: home ? s.home_red : s.away_red });
