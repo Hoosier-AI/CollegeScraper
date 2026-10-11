@@ -6,23 +6,29 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 export type Patch = Record<string, string | number | boolean | null | undefined>;
 
+// One queue for the whole page, not one per hook: each useUrlState/useUrlNumber has its own useUrlPatch, and two of
+// them set in one handler (a filter and "back to page 1") must land in one navigate, or the second, built from the
+// old URL, drops the first (the Pro position filter did nothing).
+let pending: { sp: URLSearchParams; replace: boolean } | null = null;
+
 export function useUrlPatch() {
   const navigate = useNavigate();
   const location = useLocation();
-  const pending = useRef<{ sp: URLSearchParams; replace: boolean } | null>(null);
   const loc = useRef(location);
   loc.current = location;
   return useCallback((patch: Patch, opts: { replace?: boolean; resetPage?: boolean } = {}) => {
-    const cur = pending.current ?? { sp: new URLSearchParams(loc.current.search), replace: true };
+    const first = !pending;
+    const cur = pending ?? { sp: new URLSearchParams(loc.current.search), replace: true };
     for (const [k, v] of Object.entries(patch)) {
       if (v === null || v === undefined || v === '' || v === false) cur.sp.delete(k); else cur.sp.set(k, String(v));
     }
-    if (opts.resetPage !== false) cur.sp.delete('page');
+    // A filter change goes back to page 1; a change that sets the page itself (the pager) keeps it.
+    if (opts.resetPage !== false && !('page' in patch)) cur.sp.delete('page');
     cur.replace = cur.replace && !!opts.replace;
-    if (!pending.current) {
-      pending.current = cur;
+    if (first) {
+      pending = cur;
       queueMicrotask(() => {
-        const p = pending.current; pending.current = null;
+        const p = pending; pending = null;
         if (!p) return;
         const s = p.sp.toString();
         navigate({ pathname: loc.current.pathname, search: s ? `?${s}` : '' }, { replace: p.replace });
