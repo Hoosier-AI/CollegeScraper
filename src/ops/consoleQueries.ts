@@ -78,6 +78,14 @@ export async function runsPage(db: Db, f: RunFilter) {
 
 /** Per job: the newest done and the newest failed run, plus queued/running counts. */
 export async function jobRollup(db: Db) {
+  // One query in the database (migration 153); reading 14 days of runs here took 5-9 s.
+  const { data, error } = await db.rpc('college_job_rollup');
+  if (!error && data) {
+    const by: Record<string, { last_done: any | null; last_failed: any | null; queued: number; running: number }> = {};
+    for (const name of jobNames()) by[name] = { last_done: null, last_failed: null, queued: 0, running: 0 };
+    for (const r of data as { job: string; last_done: any; last_failed: any; queued: number; running: number }[]) by[r.job] = { last_done: r.last_done ?? null, last_failed: r.last_failed ?? null, queued: r.queued, running: r.running };
+    return by;
+  }
   const recent = await selectAll<any>(db, 'college_crawl_runs', 'id,job,status,created_at,started_at,finished_at,error,counters', (q) => q.gte('created_at', new Date(Date.now() - 14 * 86400_000).toISOString()).order('created_at', { ascending: false }));
   const by: Record<string, { last_done: any | null; last_failed: any | null; queued: number; running: number }> = {};
   for (const name of jobNames()) by[name] = { last_done: null, last_failed: null, queued: 0, running: 0 };

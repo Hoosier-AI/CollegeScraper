@@ -46,5 +46,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 150_pro_leaders_per_player.sql | `pro_leaders`: one row per player in a league season (summed over clubs, the club with most minutes, minutes-weighted rating); our match-line totals only while the league season has no provider or ASA totals | yes (2026-10-11) |
 | 151_pro_tables_behind.sql | `pro_tables_behind()`: league seasons whose stored table is behind their own results (most clubs 2+ matches short), worked out from results by results-tables | yes (2026-10-11) |
 | 152_pro_implausible_seasons.sql | `pro_leaders` and player pages leave out provider season rows filed under the wrong competition (more appearances than the club's fixtures there, plus 2): Mitrovic's 28 "Club World Cup" games | yes (2026-10-11) |
+| 153_college_job_rollup.sql | `college_job_rollup()`: each job's last success, last failure and queue over 14 days in one query, for the console overview (was 35k rows read in the service; the hub timed out) | yes (2026-10-11) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
