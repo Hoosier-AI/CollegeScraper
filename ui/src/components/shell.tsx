@@ -1,8 +1,9 @@
 // The frame around every page: a one-line top bar, a bottom tab bar on phones, the season/gender controls,
 // and the pages shown when a route is missing or throws.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { BarChart3, CalendarDays, Gauge, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, Gauge, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users, X } from 'lucide-react';
+import { PRO_GENDER_PAGES, useProGender } from '../lib/proGender';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
@@ -46,6 +47,13 @@ export function TopBar() {
   // Season and gender are college filters; pro pages carry their own season pickers.
   const showFilters = !pro && !FILTERLESS.includes(pathname);
   const nav = pro ? PRO_NAV : NAV;
+  // Pro: men's or women's across the list pages, like the college toggle; a league, club, player or match is one already.
+  const proGender = pro && PRO_GENDER_PAGES.test(pathname);
+  // Pro search: a box on wide screens; below that an icon opening a full-width row, so the toggle fits.
+  const [searching, setSearching] = useState(false);
+  useEffect(() => { setSearching(false); }, [pathname]);
+  const searchRow = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (searching) searchRow.current?.querySelector('input')?.focus(); }, [searching]);
   return (
     <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950">
       <div className="mx-auto flex h-14 max-w-page items-center gap-3 px-4 sm:gap-4 sm:px-6">
@@ -55,12 +63,21 @@ export function TopBar() {
           {nav.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{n.label}</NavLink>)}
           {admin && ADMIN_NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-note/80 hover:text-note'}`}>{n.label}</NavLink>)}
         </nav>
-        <div className="ml-auto hidden w-64 md:block lg:w-72">{pro ? <ProSearchBox /> : <SearchBox />}</div>
-        {/* Phones: college has a Search tab below; Pro has no room there, so its search sits up here. */}
-        {pro && <div className="ml-auto min-w-0 max-w-[13rem] flex-1 md:hidden"><ProSearchBox placeholder="Search" wideMenu /></div>}
+        {pro ? <>
+          <div className="ml-auto hidden w-72 xl:block"><ProSearchBox /></div>
+          <button type="button" className="btn-ghost btn-icon ml-auto shrink-0 xl:hidden" aria-label={searching ? 'Close search' : 'Search'} aria-expanded={searching} aria-controls="pro-search-row" onClick={() => setSearching((v) => !v)}>
+            {searching ? <X size={18} /> : <Search size={18} />}
+          </button>
+          {proGender && <ProGenderToggle />}
+        </> : <div className="ml-auto hidden w-64 md:block lg:w-72"><SearchBox /></div>}
         {showFilters && <GlobalFilters />}
         {admin && <button className="btn-quiet btn-sm hidden md:inline-flex" onClick={() => clearToken()}><Shield size={14} /> Sign out</button>}
       </div>
+      {pro && searching && (
+        <div id="pro-search-row" ref={searchRow} className="mx-auto max-w-page border-t border-field-700 px-4 py-2 sm:px-6 xl:hidden" onKeyDown={(e) => { if (e.key === 'Escape') setSearching(false); }}>
+          <ProSearchBox />
+        </div>
+      )}
     </header>
   );
 }
@@ -84,6 +101,11 @@ export function BottomBar() {
       </div>
     </nav>
   );
+}
+
+function ProGenderToggle() {
+  const [gender, setGender] = useProGender();
+  return <SegmentedControl label="Men's or women's" size="sm" value={gender} onChange={setGender} options={[{ value: 'm', label: 'Men' }, { value: 'w', label: 'Women' }]} />;
 }
 
 function GlobalFilters() {

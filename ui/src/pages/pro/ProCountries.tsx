@@ -2,12 +2,13 @@
 // follow, its players at home and abroad.
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
 import { useUrlText } from '../../lib/urlState';
 import { proPath, proPaths2, useCountries, type ProLeagueRef, type ProTeamRef } from '../../lib/pro';
 import { LeadersTable, type LeaderRow } from '../../components/pro/People';
 import { EmptyState, ErrorBox, Field, PageHeader, Section, Skeleton, TeamLogo } from '../../components/primitives';
+import { useProGender } from '../../lib/proGender';
 
 export function ProCountries() {
   const { list } = useCountries();
@@ -39,7 +40,8 @@ interface CountryData { country: { name: string; code: string | null; flag: stri
 
 export function ProCountry() {
   const { slug = '' } = useParams();
-  const q = useQuery({ queryKey: ['pro-country', slug], queryFn: () => api<CountryData>(`/api/pro/countries/${slug}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
+  const [gender] = useProGender();
+  const q = useQuery({ queryKey: ['pro-country', slug, gender], queryFn: () => api<CountryData>(`/api/pro/countries/${slug}?gender=${gender}`), placeholderData: keepPreviousData, retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   if (q.error instanceof ApiError && q.error.status === 404) return <EmptyState title="No such country" action={<Link className="btn-ghost btn-sm" to={proPaths2.countries}>All countries</Link>} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
@@ -48,7 +50,7 @@ export function ProCountry() {
   return (
     <div className="space-y-5">
       <PageHeader title={<span className="flex items-center gap-3">{c.flag && <img src={c.flag} alt="" width={44} height={32} className="h-8 w-11 rounded object-cover" />}{c.name}</span>}
-        meta={`${d.leagues.length} competitions, ${d.clubs.length} clubs we follow`}>
+        meta={`${d.leagues.length} ${gender === 'w' ? "women's" : "men's"} competitions, ${d.clubs.length} clubs we follow`}>
         <Link to={`${proPaths2.players}?nationality=${encodeURIComponent(c.name)}`} className="btn-ghost btn-sm">All {c.name} players</Link>
       </PageHeader>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">

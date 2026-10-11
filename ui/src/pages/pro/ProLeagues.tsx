@@ -3,15 +3,16 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
-import { useUrlState, useUrlText } from '../../lib/urlState';
+import { useUrlText } from '../../lib/urlState';
 import { proPath, type ProLeagueRef } from '../../lib/pro';
-import { EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Skeleton, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, TeamLogo } from '../../components/primitives';
+import { useProGender } from '../../lib/proGender';
 
 type Row = ProLeagueRef & { priority: number; current_season: number | null };
 
 export default function ProLeagues() {
   const q = useQuery({ queryKey: ['pro-leagues'], queryFn: () => api<Row[]>('/api/pro/leagues'), staleTime: 300_000 });
-  const [gender, setGender] = useUrlState('gender', '', { allow: ['m', 'w'] });
+  const [gender] = useProGender();
   const search = useUrlText('q');
   const term = search.value.trim().toLowerCase();
   const byCountry = useMemo(() => {
@@ -24,8 +25,7 @@ export default function ProLeagues() {
   const total = byCountry.reduce((n, [, l]) => n + l.length, 0);
   return (
     <div className="space-y-4">
-      <PageHeader title="Pro competitions" meta={q.data ? `${total} competitions in ${byCountry.length} countries and regions` : undefined}>
-        <Field label="Show">{() => <SegmentedControl label="Gender" size="sm" value={gender} onChange={setGender} options={[{ value: '', label: 'All' }, { value: 'm', label: "Men's" }, { value: 'w', label: "Women's" }]} />}</Field>
+      <PageHeader title="Pro competitions" meta={q.data ? `${total} ${gender === 'w' ? "women's" : "men's"} competitions in ${byCountry.length} countries and regions` : undefined}>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="League or country" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}

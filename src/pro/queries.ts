@@ -579,22 +579,23 @@ export async function countries(db: Db) {
   return list.map((c) => ({ ...c, leagues: counts.get(c.name) ?? 0 }));
 }
 
-export async function country(db: Db, slug: string) {
+/** gender: men's or women's competitions, clubs and players only (the Pro toggle); both when absent. */
+export async function country(db: Db, slug: string, gender?: 'm' | 'w') {
   const { data: c } = await db.from('pro_countries').select('name,code,flag,slug').eq('slug', slug).maybeSingle();
   if (!c) return null;
   const name = (c as any).name as string;
   const [leagueRows, clubs, home, abroad] = await Promise.all([
-    selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority,current_season', (q) => q.eq('enabled', true).eq('country', name).order('priority').order('name')),
+    selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority,current_season', (q) => { const b = q.eq('enabled', true).eq('country', name); return (gender ? b.eq('gender', gender) : b).order('priority').order('name'); }),
     // Clubs that play in a competition we follow; a country's full club list (967 in the USA) is mostly amateur sides.
     selectAll<any>(db, 'pro_teams', TEAM_COLS + ',founded,venue_name,venue_city', (q) => q.eq('country', name).eq('national', false).not('profile_synced_at', 'is', null).order('display_name')),
-    leaders(db, { stat: 'minutes', nationality: name, limit: 30 }),
-    leaders(db, { stat: 'minutes', nationality: name, abroad: name, limit: 30 }),
+    leaders(db, { stat: 'minutes', nationality: name, gender, limit: 30 }),
+    leaders(db, { stat: 'minutes', nationality: name, abroad: name, gender, limit: 30 }),
   ]);
   const active = new Set((await selectAll<{ team_id: number }>(db, 'pro_league_teams', 'team_id', (q) => q.in('league_id', leagueRows.map((l) => l.id).concat([-1])))).map((r) => r.team_id));
   return {
     country: c as { name: string; code: string | null; flag: string | null; slug: string },
     leagues: leagueRows.map((l) => ({ ...leagueRef(l), priority: l.priority, current_season: l.current_season })),
-    clubs: clubs.filter((t) => active.has(t.id)).map((t) => ({ ...teamRef(t), founded: t.founded ?? null, venue: t.venue_name ?? null })),
+    clubs: clubs.filter((t) => active.has(t.id) && (!gender || (t.gender ?? 'm') === gender)).map((t) => ({ ...teamRef(t), founded: t.founded ?? null, venue: t.venue_name ?? null })),
     players: home.rows, abroad: abroad.rows,
   };
 }

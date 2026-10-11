@@ -102,9 +102,10 @@ export function registerProApi(app: FastifyInstance): void {
     }));
   });
   app.get('/api/pro/countries', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=3600').send(await pro.countries(getDb())));
-  app.get<{ Params: { slug: string } }>('/api/pro/countries/:slug', async (req, reply) => {
+  app.get<{ Params: { slug: string }; Querystring: { gender?: string } }>('/api/pro/countries/:slug', async (req, reply) => {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
-    const r = await pro.country(getDb(), req.params.slug);
+    const g = req.query.gender === 'm' || req.query.gender === 'w' ? req.query.gender : undefined;
+    const r = await pro.country(getDb(), req.params.slug, g);
     return r ? reply.header('Cache-Control', 'public, max-age=600').send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/compare', async (req, reply) => {

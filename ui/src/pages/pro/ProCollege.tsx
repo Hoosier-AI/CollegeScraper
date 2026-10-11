@@ -4,16 +4,17 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { GraduationCap } from 'lucide-react';
 import { api, fmt, qs } from '../../lib/api';
-import { useUrlState, useUrlText } from '../../lib/urlState';
+import { useUrlText } from '../../lib/urlState';
 import { ageFrom, positionShort, proPath, proPaths2, type ProTeamRef } from '../../lib/pro';
 import { Flag } from '../../components/pro/People';
-import { EmptyState, ErrorBox, Field, PageHeader, PlayerAvatar, SegmentedControl, Skeleton, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, Field, PageHeader, PlayerAvatar, Skeleton, TeamLogo } from '../../components/primitives';
+import { useProGender } from '../../lib/proGender';
 
 interface Alum { id: number; name: string; slug: string; photo: string | null; nationality: string | null; position: string | null; gender: 'm' | 'w' | null; birth_date: string | null; minutes_recent: number; team: ProTeamRef | null; college_years: number[] }
 interface Hub { total: number; schools: number; groups: { school: { seo: string | null; name: string; logo: string | null }; players: Alum[] }[] }
 
 export default function ProCollege() {
-  const [gender, setGender] = useUrlState('gender', '', { allow: ['m', 'w'] });
+  const [gender] = useProGender();
   const search = useUrlText('q');
   const q = useQuery({ queryKey: ['pro-college', gender], queryFn: () => api<Hub>(`/api/pro/college${qs({ gender })}`) });
   const term = search.value.trim().toLowerCase();
@@ -21,8 +22,7 @@ export default function ProCollege() {
   return (
     <div className="space-y-5">
       <PageHeader title={<span className="flex items-center gap-3"><GraduationCap size={28} aria-hidden className="text-pitch-300" />College to Pro</span>}
-        meta={q.data ? `${fmt.num(q.data.total)} professional players from ${fmt.num(q.data.schools)} colleges` : 'Professional players who played NCAA soccer'}>
-        <Field label="Game">{() => <SegmentedControl label="Men's or women's" size="sm" value={gender} onChange={setGender} options={[{ value: '', label: 'Both' }, { value: 'm', label: "Men's" }, { value: 'w', label: "Women's" }]} />}</Field>
+        meta={q.data ? `${fmt.num(q.data.total)} ${gender === 'w' ? "women's" : "men's"} professional players from ${fmt.num(q.data.schools)} colleges` : 'Professional players who played NCAA soccer'}>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="School or player" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
       <p className="text-sm text-chalk-400">Matched from Wikidata's education records and our own college rosters, by birth date and name; only confident or checked links are shown. See also <Link to={`${proPaths2.country('usa')}`} className="text-pitch-300 hover:text-pitch-200">American players abroad</Link>.</p>

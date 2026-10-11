@@ -51,7 +51,7 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
             else if (e.key === 'Escape') setOpen(false);
           }}
           role="combobox" aria-expanded={listOpen} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={listOpen && items[cursor] ? `${listId}-${items[cursor]!.key}` : undefined}
-          aria-label="Search pro leagues, clubs and players" placeholder={placeholder} className={`input w-full ${big ? 'h-12 pl-11 pr-10 text-base' : 'pl-8 pr-8'}`} />
+          aria-label="Search pro leagues, clubs and players" placeholder={placeholder} className={`input w-full [&::-webkit-search-cancel-button]:appearance-none ${big ? 'h-12 pl-11 pr-10 text-base' : 'pl-8 pr-8'}`} />
         {q && <button type="button" aria-label="Clear search" onClick={() => { setQ(''); input.current?.focus(); }} className={`absolute top-1/2 -translate-y-1/2 rounded p-1 text-chalk-500 hover:text-chalk-100 ${big ? 'right-3' : 'right-1.5'}`}><X size={16} /></button>}
       </div>
       {!q && examples && big && (
