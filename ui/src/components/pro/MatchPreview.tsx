@@ -33,8 +33,8 @@ function resultFor(m: ProMatch, teamId: number) {
 function FormRow({ team, form }: { team: ProMatch['home']; form: ProMatch[] }) {
   const list = [...form].reverse();
   return (
-    <div className="flex items-center gap-3">
-      <Link to={proPath.team(team.slug)} className="flex w-36 min-w-0 shrink-0 items-center gap-2 text-sm font-medium text-chalk-100 hover:text-pitch-300">
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+      <Link to={proPath.team(team.slug)} className="flex min-w-0 shrink-0 items-center gap-2 sm:w-36 text-sm font-medium text-chalk-100 hover:text-pitch-300">
         <TeamLogo src={team.logo} name={team.name} size={20} /><span className="truncate">{team.name}</span>
       </Link>
       {list.length ? (
@@ -43,7 +43,7 @@ function FormRow({ team, form }: { team: ProMatch['home']; form: ProMatch[] }) {
             const x = resultFor(m, team.id);
             return (
               <li key={m.id}>
-                <Link to={proPath.match(m.slug)} className="flex w-11 flex-col items-center gap-1 rounded-md py-1 hover:bg-field-800"
+                <Link to={proPath.match(m.slug)} className="flex w-12 flex-col items-center gap-1 rounded-md py-1 hover:bg-field-800 coarse:py-1.5"
                   title={`${shortDate(m.kickoff)}: ${m.home.name} ${m.home.score}–${m.away.score} ${m.away.name} (${m.league.name})`}
                   aria-label={`${x.r === 'W' ? 'Won' : x.r === 'L' ? 'Lost' : 'Drew'} ${x.us}–${x.them} ${x.home ? 'v' : 'at'} ${x.opp.name}`}>
                   <TeamLogo src={x.opp.logo} name={x.opp.name} size={18} />
