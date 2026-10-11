@@ -15,7 +15,6 @@ import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, type Db } from '../../db/client.js';
 import { insertTasks, leagueIndex, rescheduleTasks, type LeagueInfo, type TaskSeed } from '../../db/proRepo.js';
 import { isUsScene } from '../../sources/apiFootball/leagues.js';
-import { asaCovers } from '../../sources/asa/leagues.js';
 import { QuotaExhausted } from '../../sources/apiFootball/client.js';
 import { handlerFor, Pace, type TaskRow } from './tasks.js';
 import { SCRAPED_TABLE_SOURCES } from '../../db/proRepo.js';
@@ -91,9 +90,10 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const cov = new Map((input.seasons.get(l.id) ?? []).map((s) => [s.season, s]));
     const now = cov.get(c);
     // A club's season stats: every club of a US competition; in an international one, the US clubs.
-    // Season totals: American Soccer Analysis has minutes, goals, assists, shots and more for the leagues it covers;
-    // with API-Football's match lines filling the rest, its paged totals are not needed there.
-    const needTotals = (s: number) => !(asaCovers(l.id, s) && cov.get(s)?.playerLines === true);
+    // Season totals from API-Football wherever it has player data, ASA's leagues included: ASA counts the regular
+    // season only and API-Football the playoffs too (MLS 2025: Denkey 16 against 26), and one league's leaders must
+    // not mix the two. ASA fills the leagues API-Football has no player data for (asa-fill never replaces its rows).
+    const needTotals = (_s: number) => true;
     const statClubs = (s: number) => (teamsOf.get(k(s)) ?? []).filter((t) => l.country === 'USA' ? l.type === 'league' : usClubs.has(t));
     add('season_fixtures', k(c), 11, 3);
     // The table, every day (the scoreboard job also refreshes it after each final).
@@ -101,7 +101,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     if (now?.injuries !== false) add('injuries', k(c), 11, 1);
     // Match detail first: 20 matches a request, and it fills match logs, lineups, events, cards, ratings and club stats.
     add('detail', k(c), 11, 1);
-    if (now?.players !== false && needTotals(c)) add('league_players', k(c), 14, pro ? 3 : 7);
+    if (now?.players !== false && needTotals(c)) add('league_players', k(c), 14, pro ? 1 : 3);
     for (const t of statClubs(c)) add('team_stats', `${k(c)}|${t}`, 14, pro ? 7 : 30);
     for (const t of teamsOf.get(k(c)) ?? []) { if (!usClubs.has(t)) continue; active.add(t); if (pro) activePro.add(t); }
     for (const s of input.seasons.get(l.id) ?? []) {
@@ -135,7 +135,9 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const nowCov = (input.seasons.get(l.id) ?? []).find((x) => x.season === c);
     if (nowCov?.standings !== false) add('standings', k(c), 21, by(tier, 2, 7, 7));
     add('detail', k(c), 22, 7);
-    add('league_players', k(c), 30, by(tier, 7, 14, 30));
+    // This season's totals daily for top competitions (a goal behind is a wrong leader), every 3 days for other
+    // leagues, weekly for cups.
+    add('league_players', k(c), 30, by(tier, 1, 3, 7));
     if (tier === 2) add('injuries', k(c), 25, 1);
     // A club's season stats in its league (formations, streaks, goals by minute): every club, current season.
     if (tier === 2 || l.type === 'league') for (const t of teamsOf.get(k(c)) ?? []) add('team_stats', `${k(c)}|${t}`, 90, tier === 2 ? 14 : 30);

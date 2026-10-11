@@ -107,6 +107,16 @@ export async function upsertStandings(db: Db, rows: StandingRow[], at = new Date
   const keep: StandingRow[] = [];
   for (const p of pairs) {
     const [league, season] = p.split('|').map(Number);
+    const mine = rows.filter((x) => x.league_id === league && x.season === season);
+    // Never a table with fewer games than the one there (a provider table behind its own results, or an empty one,
+    // must not replace a table worked out from the results): its form and notes still go onto the rows.
+    const { data: had0 } = await db.from('pro_standings').select('played').eq('league_id', league!).eq('season', season!);
+    const playedNow = ((had0 ?? []) as { played: number | null }[]).reduce((n, r) => n + (r.played ?? 0), 0);
+    const playedNew = mine.reduce((n, r) => n + (r.played ?? 0), 0);
+    if (playedNow > playedNew) {
+      for (const r of mine.filter((x) => x.form || x.description)) await db.from('pro_standings').update({ form: r.form, description: r.description }).eq('league_id', league!).eq('season', season!).eq('team_id', r.team_id);
+      continue;
+    }
     if (source === 'api-football') {
       const { data: had } = await db.from('pro_standings').select('team_id,group_name,source').eq('league_id', league!).eq('season', season!).limit(1);
       if ((had ?? []).some((r: { source: string | null }) => SCRAPED_TABLE_SOURCES.includes(r.source ?? ''))) {

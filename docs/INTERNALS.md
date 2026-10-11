@@ -299,6 +299,14 @@ Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaiboo
     club of a current league season (squad 35, transfers 55, coach 58), then last season everywhere (45-60), then older
     seasons; injury history and honours for every player with minutes this or last season (420/430). The hub's
     Crawling page shows the whole-world coverage (`pro_world_coverage()`, migration 149).
+  - **Tables and leaders checked (2026-10-11)** against API-Football's top-scorer lists and our own results:
+    - Leaders (`pro_leaders`, migration 150) are one row per player per league season, summed over his clubs, and
+      leave out our match-line totals where the league season has complete ones.
+    - Season totals come from API-Football wherever it has player data, ASA's leagues included: ASA counts the
+      regular season only, API-Football the playoffs too, and a league's leaders must not mix them. This season's
+      totals refresh daily for the US scene and top competitions, every 3 days elsewhere, weekly for cups.
+    - A table never gives way to one with fewer games (`upsertStandings`), and a table behind its own results
+      (`pro_tables_behind()`, migration 151) is worked out from the results by `results-tables`.
   - **Crawl order:** match detail comes first in every tier (US 11/12, top competitions 22, other leagues 42, cups 62),
     because a request buys 20 matches of lineups, events, player lines and team stats.
   - **Players on view (migration 144):** opening a player's page in the browser fetches their transfers, honours and

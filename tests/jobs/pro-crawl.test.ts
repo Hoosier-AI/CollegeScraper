@@ -38,10 +38,10 @@ describe('crawl plan', () => {
     expect(Math.max(...us.map((t) => t.priority))).toBeLessThan(Math.min(...rest.map((t) => t.priority)));
     expect(us.every((t) => t.priority >= 11 && t.priority <= 19)).toBe(true);
   });
-  it('US current seasons: fixtures every 3 days, injuries daily, totals and squads every 3 days, club stats weekly', () => {
+  it('US current seasons: fixtures every 3 days, injuries daily, totals daily, squads every 3 days, club stats weekly', () => {
     expect(get('season_fixtures', '253|2026')).toMatchObject({ priority: 11, every_days: 3, tier: 1 });
     expect(get('injuries', '253|2026')).toMatchObject({ priority: 11, every_days: 1 });
-    expect(get('league_players', '253|2026')).toMatchObject({ priority: 14, every_days: 3 });
+    expect(get('league_players', '253|2026')).toMatchObject({ priority: 14, every_days: 1 });
     expect(get('squad', '1')).toMatchObject({ priority: 12, every_days: 3, tier: 1 });
     expect(get('detail', '253|2026')).toMatchObject({ priority: 11, every_days: 1 });
     expect(get('team_stats', '253|2026|1')).toMatchObject({ priority: 14, every_days: 7 });
@@ -59,7 +59,7 @@ describe('crawl plan', () => {
   });
   it('amateur US leagues are crawled too, skipping what the provider does not cover', () => {
     expect(get('season_fixtures', '256|2026')).toMatchObject({ priority: 11, tier: 1 });
-    expect(get('league_players', '256|2026')).toMatchObject({ every_days: 7 });
+    expect(get('league_players', '256|2026')).toMatchObject({ every_days: 3 });
     expect(get('league_players', '256|2025')).toBeUndefined();
     expect(get('standings', '256|2025')).toBeUndefined();
     expect(get('season_fixtures', '256|2025')).toBeDefined();
@@ -137,8 +137,8 @@ describe('season totals where American Soccer Analysis covers the season', () =>
   ]);
   const tasks = planTasks({ leagues, seasons, leagueTeams: [], topPlayers: [], newPlayers: [] });
   const has = (key: string) => tasks.some((t) => t.kind === 'league_players' && t.key === key);
-  it('skips API-Football\'s paged totals only when ASA has the season and API-Football has match lines', () => {
-    expect(has('253|2026')).toBe(false); // ASA + match lines
+  it('asks API-Football for its totals wherever it has player data, ASA\'s leagues too (one definition per league)', () => {
+    expect(has('253|2026')).toBe(true);  // ASA + match lines: API-Football's totals still (playoffs counted)
     expect(has('253|2014')).toBe(true);  // ASA, but no match lines from API-Football
     expect(has('253|2012')).toBe(true);  // before ASA's first MLS season
     expect(has('256|2026')).toBe(true);  // a league ASA does not cover

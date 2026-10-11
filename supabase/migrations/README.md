@@ -43,5 +43,7 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 147_pro_crawl_sites.sql | `pro_source_requests` (requests per day, source and host, added every 30 s by `pro_source_requests_add`) and `pro_crawl_matrix()` (per league season: fixtures, tables and player rows by source, detail, club stats, each scraped source's sync) for the hub's Crawling page | yes (2026-10-10) |
 | 148_pro_src_game_stats.sql | `pro_src_game_stats` (football-data.co.uk match stats); Wikipedia/Wikidata people: `pro_src_teams.url`, `pro_src_players` bio columns, `pro_wiki_clubs` / `pro_wiki_players` read queues, `pro_src_spells` (careers), `pro_wikidata_labels`, `pro_fill_from_wikidata()` | yes (2026-10-10) |
 | 149_pro_world_coverage.sql | `pro_world_coverage()`: leagues whose season in play has matches, clubs with a squad, players in a squad or with season stats, finished matches with detail, database size (the hub's "Whole world" meters) | yes (2026-10-10) |
+| 150_pro_leaders_per_player.sql | `pro_leaders`: one row per player in a league season (summed over clubs, the club with most minutes, minutes-weighted rating); our match-line totals only while the league season has no provider or ASA totals | yes (2026-10-11) |
+| 151_pro_tables_behind.sql | `pro_tables_behind()`: league seasons whose stored table is behind their own results (most clubs 2+ matches short), worked out from results by results-tables | yes (2026-10-11) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

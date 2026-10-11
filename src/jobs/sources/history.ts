@@ -333,15 +333,27 @@ export async function resultsTables(ctx: JobContext): Promise<void> {
   const ids = leagues.map((l) => l.id);
   const seasons = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; source?: string } | null }>(db, 'pro_seasons', 'league_id,season,coverage', (q) => q.in('league_id', ids.length ? ids : [-1]));
   const byId = new Map(leagues.map((l) => [l.id, l]));
-  // US leagues every season; elsewhere the current and the last.
+  // Tables the provider does not have: US leagues every season; elsewhere the current and the last.
   const want = seasons.filter((s) => s.coverage?.standings === false && !s.coverage?.source).filter((s) => {
     const l = byId.get(s.league_id)!;
     return l.country === 'USA' || (l.current_season != null && s.season >= l.current_season - 1);
   });
+  // And tables behind their own results (most clubs two or more matches short: USL W League 2026, MLS Next Pro 2022-23,
+  // NWSL 2020's empty one): worked out from the results instead (upsertStandings keeps the one with more games).
+  const { data: behindRows, error: behindErr } = await db.rpc('pro_tables_behind');
+  if (behindErr) throw new Error(`tables behind: ${behindErr.message}`);
+  const behind = new Set(((behindRows ?? []) as { league_id: number; season: number }[]).filter((r) => byId.has(r.league_id)).map((r) => `${r.league_id}|${r.season}`));
+  for (const k of behind) {
+    const [league_id, season] = k.split('|').map(Number) as [number, number];
+    if (!want.some((s) => s.league_id === league_id && s.season === season)) want.push({ league_id, season, coverage: null });
+  }
+  ctx.inc('tables_behind_results', behind.size);
   for (const s of want) {
     if (await ctx.cancelled()) return;
-    const { data: existing } = await db.from('pro_standings').select('source').eq('league_id', s.league_id).eq('season', s.season).neq('source', 'results').limit(1);
-    if ((existing ?? []).length) continue;
+    if (!behind.has(`${s.league_id}|${s.season}`)) {
+      const { data: existing } = await db.from('pro_standings').select('source').eq('league_id', s.league_id).eq('season', s.season).neq('source', 'results').limit(1);
+      if ((existing ?? []).length) continue;
+    }
     const games = (await selectAll<{ home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; round: string | null }>(db, 'pro_fixtures', 'home_team_id,away_team_id,home_goals,away_goals,round',
       (q) => q.eq('league_id', s.league_id).eq('season', s.season).eq('status', 'final').eq('source', 'api-football')))
       .filter((g) => isRegularRound(g.round) && g.home_goals != null && g.away_goals != null);
