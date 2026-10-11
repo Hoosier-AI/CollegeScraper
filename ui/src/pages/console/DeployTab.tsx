@@ -24,7 +24,7 @@ export default function DeployTab() {
   const pendingEdit = confirm === 'env' ? (remove ? { remove: [remove] } : { set: { [editKey.trim()]: editVal } }) : null;
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Service" value={s.name} sub={`${s.serviceDetails?.plan ?? ''} · ${s.serviceDetails?.region ?? ''}`} tone={s.suspended === 'suspended' ? 'bad' : 'ok'} />
         <StatTile label="Latest deploy" value={latest ? <Badge tone={deployTone(latest.status)}>{latest.status}</Badge> : '—'} sub={latest ? `${agoShort(latest.createdAt, now)}${latest.commit?.id ? ` · ${latest.commit.id.slice(0, 7)}` : ''}` : ''} />
         <StatTile label="Branch" value={s.branch ?? '—'} sub={s.autoDeploy === 'yes' ? 'auto-deploys on push' : 'manual deploys'} />

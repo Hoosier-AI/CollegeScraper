@@ -168,6 +168,39 @@ export function cleanMoves<T extends { player_id: number; date: string | null; p
   });
 }
 
+const nameWords = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
+/** Two squad entries that are the same person under two records ("C. Gaffney" and "Charles Gaffney", "Nouhou" and
+ *  "Nouhou Tolo"): the same surname with a matching first initial, or a one-word name inside the other, and birth dates
+ *  that do not disagree. */
+export function samePerson(a: { name?: string | null; birth_date?: string | null }, b: { name?: string | null; birth_date?: string | null }): boolean {
+  if (a.birth_date && b.birth_date && String(a.birth_date).slice(0, 10) !== String(b.birth_date).slice(0, 10)) return false;
+  const x = nameWords(a.name), y = nameWords(b.name);
+  if (!x.length || !y.length) return false;
+  if (x.length === 1 || y.length === 1) {
+    const [one, other] = x.length === 1 ? [x[0]!, y] : [y[0]!, x];
+    return other.includes(one) && !!(a.birth_date && b.birth_date);
+  }
+  if (x[x.length - 1] !== y[y.length - 1]) return false;
+  // First names: the same, or one an initial of the other ("C." and "Charles"), never two different full names.
+  const f = x[0]!, g = y[0]!;
+  return f === g || ((f.length === 1 || g.length === 1) && f[0] === g[0]);
+}
+
+/** One row per person in a squad: the fuller record names him (birth date, longer name), the row with more minutes
+ *  gives the numbers (never summed: both records count the same matches). */
+export function mergeSquadDuplicates<T extends { player: { id: number; name?: string | null; birth_date?: string | null; photo?: string | null; nationality?: string | null }; number: number | null; listed: boolean; minutes: number }>(rows: T[]): T[] {
+  const kept: T[] = [];
+  for (const r of [...rows].sort((a, b) => b.minutes - a.minutes)) {
+    const twin = kept.find((k) => samePerson(k.player, r.player));
+    if (!twin) { kept.push(r); continue; }
+    const fuller = (p: T['player']) => (p.birth_date ? 2 : 0) + (String(p.name ?? '').length > 4 && !/^\w\. /.test(String(p.name)) ? 1 : 0);
+    if (fuller(r.player) > fuller(twin.player)) twin.player = { ...r.player, photo: r.player.photo ?? twin.player.photo, nationality: r.player.nationality ?? twin.player.nationality };
+    twin.number = twin.number ?? r.number;
+    twin.listed = twin.listed || r.listed;
+  }
+  return kept;
+}
+
 export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
   const uniq = [...new Set(ids.filter((n) => Number.isFinite(n)))];
   if (!uniq.length) return new Map();
@@ -318,7 +351,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
       shots: x.shots ?? null, shots_on: x.shots_on ?? null, corners: x.corners ?? null, fouls: x.fouls ?? null, yellow: x.yellow ?? null, red: x.red ?? null }))
       .sort((a, b) => (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     standings: standingRows.map((x) => ({ league: lgs.get(x.league_id) ?? null, group: x.group_name, rank: x.rank, points: x.points, played: x.played, win: x.win, draw: x.draw, lose: x.lose, gf: x.gf, ga: x.ga, gd: x.gd, form: x.form })),
-    squad: [...squad.values()].map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
+    squad: mergeSquadDuplicates([...squad.values()]).map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
     coaches: coachRows.filter((c) => c.coach && !coachSeen.has(c.coach.id) && coachSeen.add(c.coach.id)).slice(0, 8)
       .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: !c.end, ...honoursOf(c.coach.id) })),
     transfers: cleanMoves((moves.data ?? []) as any[], people).slice(0, 80).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out',
@@ -346,7 +379,7 @@ export async function player(db: Db, slug: string) {
   if (!p) return null;
   const pl = p as any;
   const recentInjury = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
-  const [seasons, recent, links, moves, trophies, hurt, spells, missed] = await Promise.all([
+  const [allSeasons, recent, links, moves, trophies, hurt, spells, missed, implausible] = await Promise.all([
     selectAll<any>(db, 'pro_player_season_stats', '*', (q) => q.eq('player_id', pl.id).order('season', { ascending: false })),
     db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,conceded,pos,shots,shots_on,key_passes,passes,pass_accuracy,tackles,interceptions,duels,duels_won,dribbles,dribbles_won,fouls_drawn,fouls_committed,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
     db.from('pro_college_links').select('college_name,school_seo,college_player_id,first_season,last_season,confidence,verified,rejected,method,college:college_players(slug,display_name)').eq('pro_player_id', pl.id).eq('rejected', false),
@@ -355,7 +388,11 @@ export async function player(db: Db, slug: string) {
     db.from('pro_injuries').select('type,reason,date,team_id').eq('player_id', pl.id).gte('date', recentInjury).order('date', { ascending: false }).limit(1),
     db.from('pro_sidelined').select('type,start,end').eq('player_id', pl.id).order('start', { ascending: false }).limit(80),
     db.from('pro_injuries').select('date').eq('player_id', pl.id).eq('type', 'Missing Fixture').limit(1000),
+    // Season rows the provider filed under the wrong competition (migration 152); none if the check fails.
+    db.rpc('pro_implausible_seasons', { p_player: pl.id }),
   ]);
+  const wrong = new Set(((implausible.data ?? []) as { league_id: number; season: number; team_id: number }[]).map((r) => `${r.league_id}-${r.season}-${r.team_id}`));
+  const seasons = allSeasons.filter((s) => !wrong.has(`${s.league_id}-${s.season}-${s.team_id}`));
   // Matches missed in a spell: the provider's per-fixture absences that fall inside it (known for covered leagues).
   const missedDates = ((missed.data ?? []) as { date: string | null }[]).map((m) => m.date).filter(Boolean) as string[];
   const todayIso = new Date().toISOString().slice(0, 10);

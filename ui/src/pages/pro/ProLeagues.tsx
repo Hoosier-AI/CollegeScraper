@@ -31,7 +31,7 @@ export default function ProLeagues() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-64" />}
       {q.data && !total && <EmptyState title="No competitions match" body="Try a country name, or clear the filter." action={<button className="btn-ghost btn-sm" onClick={search.clear}>Clear</button>} />}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {byCountry.map(([country, list]) => (
           <section key={country} className="frame" aria-label={country}>
             <h2 className="px-3 py-2 text-sm font-semibold text-chalk-100">{country}</h2>

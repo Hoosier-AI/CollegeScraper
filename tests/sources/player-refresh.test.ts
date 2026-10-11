@@ -61,3 +61,23 @@ describe('club transfer lists', () => {
     expect(cleanMoves(rows, names).map((r) => `${r.date} ${r.from_name}>${r.to_name}`)).toEqual(['2026-01-05 Seattle Sounders>Austin', '2026-02-01 Austin>Seattle Sounders']);
   });
 });
+
+import { samePerson, mergeSquadDuplicates } from '../../src/pro/queries.js';
+describe('one row per person in a squad', () => {
+  it('knows a short and a full record of one player, and two different players apart', () => {
+    expect(samePerson({ name: 'C. Gaffney' }, { name: 'Charles Gaffney', birth_date: '2003-07-29' })).toBe(true);
+    expect(samePerson({ name: 'Nouhou', birth_date: '1997-06-23' }, { name: 'Nouhou Tolo', birth_date: '1997-06-23' })).toBe(true);
+    expect(samePerson({ name: 'Nouhou' }, { name: 'Nouhou Tolo', birth_date: '1997-06-23' })).toBe(false);
+    expect(samePerson({ name: 'Alex Roldan', birth_date: '1996-07-28' }, { name: 'Cristian Roldan', birth_date: '1995-06-03' })).toBe(false);
+    expect(samePerson({ name: 'Jordan Morris' }, { name: 'Jaylin Morris' })).toBe(false);
+    expect(samePerson({ name: 'P. Kingston' }, { name: 'Peter Kingston' })).toBe(true);
+  });
+  it('keeps the fuller record and the numbers of the row with more minutes', () => {
+    const row = (id: number, name: string, minutes: number, extra: Record<string, unknown> = {}) => ({ player: { id, name, birth_date: null as string | null, ...extra }, number: null as number | null, listed: false, minutes });
+    const out = mergeSquadDuplicates([row(1, 'P. Kingston', 1229, {}), { ...row(2, 'Peter Kingston', 1086, { birth_date: '2001-07-14' }), number: 45 }, row(3, 'Paul Arriola', 793)]);
+    expect(out).toHaveLength(2);
+    const pk = out.find((r) => r.minutes === 1229)!;
+    expect(pk.player).toMatchObject({ id: 2, name: 'Peter Kingston' });
+    expect(pk.number).toBe(45);
+  });
+});

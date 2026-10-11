@@ -125,7 +125,7 @@ function EnqueueForm({ jobs, season, gender, onEnqueue, busy, result, error }: {
   const submit = () => { setLocalErr(null); try { const p = build(); if (meta?.dangerous && !confirm) { setConfirm(true); return; } onEnqueue({ job, params: p }); setConfirm(false); } catch (e) { setLocalErr(e instanceof Error ? e.message : String(e)); } };
   return (
     <Section title="Queue a job">
-      <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
         <div className="space-y-2">
           <Field label="Job">{(id) => <Select id={id} value={job} onChange={(v) => { setJob(v); setParams({}); }} options={jobs.map((j) => ({ value: j.name, label: j.name, group: j.composite ? 'Composites' : j.lane === 'live' ? 'Live' : 'Jobs' }))} />}</Field>
           {meta && <p className="text-xs text-chalk-400">{meta.description}</p>}

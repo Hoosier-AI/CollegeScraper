@@ -27,9 +27,9 @@ export function ConferenceCards() {
         <Chip to={href('/rankings', { view: 'standings', all: 1 })}>Compare all tables</Chip>
       </PageHeader>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
-      {q.isPending && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40" />)}</div>}
+      {q.isPending && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40" />)}</div>}
       {q.data && !rows.length && <EmptyState title={term ? `No conference matches “${search.value}”` : `No conferences for ${scope}`} action={term ? <button className="btn-ghost btn-sm" onClick={search.clear}>Clear search</button> : undefined} />}
-      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((c) => {
           const t = c.table?.[f.gender] ?? { top: [], source: 'none' };
           return (

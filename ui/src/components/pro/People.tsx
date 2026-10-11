@@ -106,7 +106,8 @@ export function LeadersTable({ rows, stat, per90, caption, loading, showLeague =
     { key: 'player', label: 'Player', primary: true, sortable: false, render: (r) => <span className="flex items-center gap-2"><PlayerAvatar src={r.player.photo} name={r.player.name} size={24} /><span className="truncate">{r.player.name}</span><Flag country={r.player.nationality} size={11} /></span> },
     { key: 'pos', label: 'Pos', sortable: false, priority: 2, render: (r) => positionShort(r.player.position) },
     { key: 'age', label: 'Age', num: true, sortable: false, priority: 2, value: (r) => ageFrom(r.player.birth_date) },
-    { key: 'team', label: 'Club', sortable: false, render: (r) => r.team ? <span className="flex items-center gap-1.5"><TeamLogo src={r.team.logo} name={r.team.name} size={18} /><span className="truncate">{r.team.name}</span></span> : '–' },
+    // Phones: the crest alone, so the ranked stat stays on screen.
+    { key: 'team', label: 'Club', sortable: false, render: (r) => r.team ? <span className="flex items-center gap-1.5" title={r.team.name}><TeamLogo src={r.team.logo} name={r.team.name} size={18} /><span className="hidden truncate sm:inline">{r.team.name}</span><span className="sr-only sm:hidden">{r.team.name}</span></span> : '–' },
     ...(showLeague ? [{ key: 'league', label: 'Competition', sortable: false, priority: 2 as const, render: (r: LeaderRow) => r.league?.name ?? '–' }] : []),
     { key: 'apps', label: 'Apps', num: true, sortable: false, priority: 2, value: (r) => r.apps },
     { key: 'minutes', label: 'Min', num: true, sortable: false, priority: 3, value: (r) => r.minutes },

@@ -30,7 +30,7 @@ export function liveMinute(live: { period: string | null; clock: string | null }
 function Side({ s, winner, loser, home }: { s: MatchLike['home']; winner: boolean; loser: boolean; home?: boolean }) {
   return (
     <span className={`flex min-w-0 items-center gap-2 ${loser ? 'text-chalk-400' : 'text-chalk-100'}`}>
-      <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={22} />
+      <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={20} />
       {s.rank && <span className="shrink-0 text-2xs text-chalk-500 tnum">No. {s.rank}</span>}
       <span className={`truncate ${winner ? 'font-semibold' : 'font-medium'}`}>{s.name ?? 'TBD'}</span>
       {home && <span className="shrink-0 text-2xs text-chalk-500">home</span>}
@@ -48,13 +48,15 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
   const when = live ? liveMinute(g.live) : final ? 'FT' : pending ? 'No result' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ?? 'TBD') : g.status === 'postponed' ? 'PPD' : g.status === 'cancelled' ? 'CANC' : g.status;
   const tag = g.tournament ?? (g.conference_game ? (g.home.conference?.short ?? g.home.conference?.name ?? 'Conference') : null);
   return (
-    <Link to={href(`/matches/${g.id}`)} className={`flex items-center gap-3 px-3 transition-colors duration-150 hover:bg-field-800 coarse:min-h-[64px] ${dense ? 'py-1.5' : 'py-2.5'}`} aria-label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${when}`}>
+    <Link to={href(`/matches/${g.id}`)} className={`flex items-center gap-3 px-3 transition-colors duration-150 hover:bg-field-800 coarse:min-h-[60px] ${dense ? 'py-1.5' : 'py-2'}`} aria-label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${when}`}>
       <span className={`w-14 shrink-0 text-center text-xs tnum ${live ? 'font-semibold text-win' : pending ? 'text-note' : 'text-chalk-500'}`} title={pending ? 'The result has not been reported yet' : g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined}>
-        {live && <span aria-hidden className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-win align-middle motion-reduce:animate-none" />}
         {showDate && !live ? <span className="block text-2xs">{fmt.day(g.game_date)}</span> : null}
-        <span className="block">{when}</span>
+        <span className="flex items-center justify-center gap-1 whitespace-nowrap">
+          {live && <span aria-hidden className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-win motion-reduce:animate-none" />}
+          {when}
+        </span>
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
         <Side s={g.home} winner={homeWin} loser={awayWin} home={!g.neutral_site} />
         <Side s={g.away} winner={awayWin} loser={homeWin} />
       </span>
@@ -63,7 +65,7 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
         {!tag && g.neutral_site && <span>Neutral site</span>}
         {(g.venue?.city || (g.weather && !final)) && <span className="inline-flex items-center gap-2">{g.venue?.city && <span>{g.venue.city}</span>}{g.weather && !final && !live && <WeatherMini w={g.weather} />}</span>}
       </span>
-      <span className="flex shrink-0 flex-col items-end gap-1 text-sm tnum">
+      <span className="flex w-5 shrink-0 flex-col items-end gap-0.5 text-sm tnum">
         {live || final ? <>
           <span className={homeWin ? 'font-semibold text-chalk-100' : awayWin ? 'text-chalk-400' : 'text-chalk-100'}>{hs ?? '–'}</span>
           <span className={awayWin ? 'font-semibold text-chalk-100' : homeWin ? 'text-chalk-400' : 'text-chalk-100'}>{as ?? '–'}</span>

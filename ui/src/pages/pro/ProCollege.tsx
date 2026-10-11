@@ -29,7 +29,7 @@ export default function ProCollege() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-96" />}
       {q.data && !groups.length && <EmptyState title="No links yet" body="Links appear as player profiles with birth dates arrive and the weekly college match runs." />}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {groups.map((g) => (
           <section key={g.school.seo ?? g.school.name} className="frame" aria-label={g.school.name}>
             <h2 className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-chalk-100">

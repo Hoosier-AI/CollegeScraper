@@ -84,13 +84,22 @@ export function mapGames(games: SrcGame[], fixtures: ApiFixture[], teams: Map<st
  * Players: name and birth date (0.95); else name among the people API-Football has at the mapped club that season
  * (0.8), never one whose known birth date differs.
  */
+const normName = (s: string | null | undefined): string[] => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 1);
+
 export function mapPlayer(p: SrcPerson, byBirthAll: ApiPerson[], atClubAll: ApiPerson[]): Mapped {
   // The same person can come from several lists: one candidate each, or a tie would hide the match.
   const uniq = (xs: ApiPerson[]) => [...new Map(xs.map((x) => [x.id, x])).values()];
   const byBirth = uniq(byBirthAll), atClub = uniq(atClubAll);
   if (p.birth_date) {
-    const best = bestOf(byBirth.filter((c) => c.birth_date === p.birth_date), (c) => personScore(p.name, c), 0.9);
+    const sameDay = byBirth.filter((c) => c.birth_date === p.birth_date);
+    const best = bestOf(sameDay, (c) => personScore(p.name, c), 0.9);
     if (best) return { pro_id: best.item.id, method: 'name+birth', confidence: 0.95 };
+    // A one-word name ("Nouhou") that is one of exactly one same-birthday player's names ("Nouhou Tolo").
+    const one = normName(p.name);
+    if (one.length === 1) {
+      const hits = sameDay.filter((c) => [c.display_name, c.first_name, c.last_name].some((n) => normName(n).includes(one[0]!)));
+      if (hits.length === 1) return { pro_id: hits[0]!.id, method: 'name+birth', confidence: 0.9 };
+    }
   }
   const club = atClub.filter((c) => !p.birth_date || !c.birth_date || c.birth_date === p.birth_date);
   const best = bestOf(club, (c) => personScore(p.name, c), 0.9);

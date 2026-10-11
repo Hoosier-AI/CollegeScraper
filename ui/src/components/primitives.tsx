@@ -30,9 +30,9 @@ export function PageHeader({ title, meta, children, as = 'h1' }: { title: ReactN
   );
 }
 
-export function Section({ title, children, right, id }: { title: ReactNode; children: ReactNode; right?: ReactNode; id?: string }) {
+export function Section({ title, children, right, id, className = '' }: { title: ReactNode; children: ReactNode; right?: ReactNode; id?: string; className?: string }) {
   return (
-    <section className="min-w-0 space-y-2" id={id}>
+    <section className={`min-w-0 space-y-2 ${className}`} id={id}>
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-chalk-100">{title}</h2>{right}</div>
       {children}
     </section>
@@ -42,12 +42,31 @@ export function Section({ title, children, right, id }: { title: ReactNode; chil
 /* ---------- media ---------- */
 
 const NCAA_LOGO = (seo: string) => `https://www.ncaa.com/sites/default/files/images/logos/schools/bgl/${seo}.svg`;
-/** A team crest on a light chip, so navy-on-transparent logos (Notre Dame, California) stay visible on the dark page. */
-export function TeamLogo({ src, name, seo, size = 24, fallback = 'initials', chip = true }: { src?: string | null; name?: string | null; seo?: string | null; size?: number; fallback?: 'initials' | 'blank'; chip?: boolean }) {
+/** Two letters for a club with no usable crest ("Seattle Sounders" -> "SS", "Arsenal" -> "AR"). */
+const initialsOf = (name: string | null | undefined) => {
+  const words = (name ?? '').replace(/\b(FC|SC|CF|AFC|FK|SK|AC|CD|SD|AS|SS|US|II|U\d+)\b/g, '').split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words[0]![0]! + words[1]![0]! : (words[0] ?? name ?? '?').slice(0, 2)).toUpperCase();
+};
+
+/**
+ * A team crest on a light chip, so navy-on-transparent logos (Notre Dame, California) stay visible on the dark page.
+ * Until it loads, and when it is missing, fails or is a placeholder (a tiny image), the club's initials on a quiet
+ * tile show instead: never an empty white square.
+ */
+export function TeamLogo({ src, name, seo, size = 24, chip = true }: { src?: string | null; name?: string | null; seo?: string | null; size?: number; fallback?: 'initials' | 'blank'; chip?: boolean }) {
   const [broken, setBroken] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<string | null>(null);
   const url = src || (seo && !seo.startsWith('x-') ? NCAA_LOGO(seo) : null);
-  if (!url || broken === url) return <span aria-hidden className={`inline-flex shrink-0 items-center justify-center rounded text-2xs font-medium text-chalk-400 ${fallback === 'blank' ? '' : 'bg-field-800'}`} style={{ width: size, height: size }}>{fallback === 'blank' ? '' : (name ?? '?').slice(0, 2)}</span>;
-  return <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden ${chip ? 'rounded bg-white' : ''}`} style={{ width: size, height: size, padding: chip ? Math.max(1, Math.round(size / 12)) : 0 }}><img src={url} alt="" width={size} height={size} className="h-full w-full object-contain" onError={() => setBroken(url)} loading="lazy" /></span>;
+  const tile = <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded bg-field-800 font-semibold text-chalk-400" style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size / 2.6)) }}>{size >= 16 ? initialsOf(name) : ''}</span>;
+  if (!url || broken === url) return tile;
+  const ready = loaded === url;
+  return (
+    <span className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded ${chip && ready ? 'bg-white' : ''}`} style={{ width: size, height: size, padding: chip && ready ? Math.max(1, Math.round(size / 12)) : 0 }}>
+      {!ready && <span className="absolute inset-0">{tile}</span>}
+      <img src={url} alt="" width={size} height={size} className={`h-full w-full object-contain ${ready ? '' : 'opacity-0'}`} loading="lazy"
+        onError={() => setBroken(url)} onLoad={(e) => (e.currentTarget.naturalWidth < 8 ? setBroken(url) : setLoaded(url))} />
+    </span>
+  );
 }
 
 /** PrestoSports photos (any `/sports/…` path, or its CDN) sit behind a bot challenge and cannot be hotlinked; placeholders
@@ -129,7 +148,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
       onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(1); } if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(-1); } }}>
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={o.value === value} tabIndex={o.value === value ? 0 : -1} title={o.title}
-          className={`rounded px-2.5 font-medium transition-colors duration-150 ${size === 'sm' ? 'py-1 coarse:min-h-8' : 'py-1.5 coarse:min-h-10'} ${o.value === value ? 'bg-field-700 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}
+          className={`rounded px-2.5 font-medium transition-colors duration-150 ${size === 'sm' ? 'py-1 coarse:min-h-11' : 'py-1.5 coarse:min-h-11'} ${o.value === value ? 'bg-field-700 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}
           onClick={() => onChange(o.value)}>{o.label}</button>
       ))}
     </div>

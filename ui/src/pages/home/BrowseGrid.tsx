@@ -8,7 +8,7 @@ export function BrowseGrid({ className }: { className?: string }) {
   const link = (path: string, p: Record<string, string>) => `${path}?${new URLSearchParams({ season: String(season), ...p })}`;
   return (
     <Panel className={className} title="Browse" meta="Teams, conference tables and leaders for every division">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {(['m', 'w'] as const).map((g) => (
           <div key={g}>
             <h3 className="mb-1.5 text-xs font-medium text-chalk-400">{g === 'm' ? "Men's" : "Women's"}</h3>

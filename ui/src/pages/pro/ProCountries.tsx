@@ -20,7 +20,7 @@ export function ProCountries() {
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="Country" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
       {!list.length && <Skeleton className="h-64" />}
-      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map((c) => (
           <li key={c.name}>
             <Link to={proPaths2.country(c.slug)} className="card flex items-center gap-2 px-3 py-2 text-sm hover:bg-field-800">
@@ -51,7 +51,7 @@ export function ProCountry() {
         meta={`${d.leagues.length} competitions, ${d.clubs.length} clubs we follow`}>
         <Link to={`${proPaths2.players}?nationality=${encodeURIComponent(c.name)}`} className="btn-ghost btn-sm">All {c.name} players</Link>
       </PageHeader>
-      <div className="grid gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <div className="space-y-5 lg:col-span-8">
           <Section title={`${c.name} players abroad`}><LeadersTable rows={d.abroad} stat="minutes" caption={`${c.name} players abroad`} empty={<p className="px-3 py-4 text-sm text-chalk-400">No players of this nationality abroad in our records yet.</p>} /></Section>
           <Section title={`Most-used ${c.name} players`}><LeadersTable rows={d.players} stat="minutes" caption={`${c.name} players by minutes`} empty={<p className="px-3 py-4 text-sm text-chalk-400">No season stats yet.</p>} /></Section>

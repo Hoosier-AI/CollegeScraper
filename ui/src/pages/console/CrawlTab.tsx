@@ -30,14 +30,14 @@ export default function CrawlTab() {
   const p = d.process;
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label={`Fetches, ${win}`} value={fmt.num(totals.fetches)} sub={`${rows.length} hosts`} />
         <StatTile label="Errors" value={fmt.num(totals.errors)} sub={totals.fetches ? `${((totals.errors / totals.fetches) * 100).toFixed(2)}% — expect under 2%` : ''} tone={totals.fetches && totals.errors / totals.fetches > 0.02 ? 'warn' : undefined} />
         <StatTile label="429 Too Many Requests" value={fmt.num(totals.s429)} tone={totals.s429 ? 'bad' : 'ok'} sub={totals.s429 ? 'a host is asking us to slow down' : 'nobody is asking us to slow down'} />
         <StatTile label="Stored pages" value={fmt.num(d.cache_rows)} sub="fetch cache rows" />
       </div>
       <Section title="Pauses">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="frame flex items-center justify-between gap-3 p-3"><div><div className="text-sm font-medium text-chalk-100">Crawling</div><div className="text-xs text-chalk-400">Paused: the crawl worker claims no runs; queued runs wait. Live scores keep going.</div></div><Toggle on={!d.flags.crawl_paused} label="Crawling on" busy={flags.isPending} onChange={(v) => flags.mutate({ crawl_paused: !v })} /></div>
           <div className="frame flex items-center justify-between gap-3 p-3"><div><div className="text-sm font-medium text-chalk-100">Scheduler</div><div className="text-xs text-chalk-400">Paused: nothing is queued on a timer, including live.</div></div><Toggle on={!d.flags.scheduler_paused} label="Scheduler on" busy={flags.isPending} onChange={(v) => flags.mutate({ scheduler_paused: !v })} /></div>
         </div>

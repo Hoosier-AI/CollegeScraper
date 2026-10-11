@@ -18,7 +18,7 @@ export default function SettingsTab() {
   return (
     <div className="space-y-6">
       <Section title="Live scores and stats">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Scoreboard every (min)" hint="1 = every minute during game hours">{(id) => <input id={id} type="number" min={1} max={10} className="input w-full" value={live.scoreboard_every_min} onChange={(e) => num('scoreboard_every_min', e.target.value)} />}</Field>
           <Field label="Stats snapshot every (min)" hint="per live match, box score + play-by-play">{(id) => <input id={id} type="number" min={1} max={15} className="input w-full" value={live.detail_every_min} onChange={(e) => num('detail_every_min', e.target.value)} />}</Field>
           <Field label="Matches per tick" hint="two requests each on ncaa.com">{(id) => <input id={id} type="number" min={0} max={60} className="input w-full" value={live.detail_budget} onChange={(e) => num('detail_budget', e.target.value)} />}</Field>
@@ -33,7 +33,7 @@ export default function SettingsTab() {
       </Section>
 
       <Section title="Pauses">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="frame flex items-center justify-between gap-3 p-3"><div><div className="text-sm font-medium text-chalk-100">Scheduler</div><div className="text-xs text-chalk-400">Off: nothing is queued on a timer, including live scores. Manual runs still work.</div></div><Toggle on={!d.scheduler_paused} label="Scheduler on" busy={save.isPending} onChange={(v) => save.mutate({ scheduler_paused: !v })} /></div>
           <div className="frame flex items-center justify-between gap-3 p-3"><div><div className="text-sm font-medium text-chalk-100">Crawling</div><div className="text-xs text-chalk-400">Off: the crawl worker claims nothing; queued runs wait. Live scores keep going.</div></div><Toggle on={!d.crawl_paused} label="Crawling on" busy={save.isPending} onChange={(v) => save.mutate({ crawl_paused: !v })} /></div>
         </div>

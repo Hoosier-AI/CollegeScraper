@@ -8,7 +8,7 @@ const pitch = { 300: '#5EEAD4', 400: '#2DD4BF', 500: '#14B8A6', 600: '#0F9F8F' }
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
-    screens: { sm: '640px', md: '768px', lg: '1024px', xl: '1280px' },
+    screens: { sm: '640px', md: '768px', lg: '1024px', xl: '1280px', '2xl': '1536px' },
     extend: {
       colors: {
         field, chalk, pitch,
@@ -30,10 +30,12 @@ export default {
         lg: ['1.125rem', { lineHeight: '1.5rem' }],
         xl: ['1.375rem', { lineHeight: '1.75rem' }],
         '2xl': ['1.75rem', { lineHeight: '2rem' }],
-        '3xl': ['2.5rem', { lineHeight: '2.5rem' }],
-        '4xl': ['3.25rem', { lineHeight: '3.25rem' }],
+        // Page titles: 36 and 44 (were 40 and 52, which pushed every page's content below the fold).
+        '3xl': ['2.25rem', { lineHeight: '2.5rem' }],
+        '4xl': ['2.75rem', { lineHeight: '3rem' }],
       },
-      maxWidth: { page: '80rem' },
+      // Wide enough for a table beside a side column on a 1440px screen.
+      maxWidth: { page: '88rem' },
       keyframes: { shimmer: { '0%': { opacity: '0.5' }, '50%': { opacity: '1' }, '100%': { opacity: '0.5' } } },
       animation: { shimmer: 'shimmer 1.6s ease-in-out infinite' },
     },

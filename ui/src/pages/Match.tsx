@@ -40,7 +40,7 @@ export default function Match() {
   const refetch = useMutation({ mutationFn: () => api(`/api/games/${id}/refetch`, { method: 'POST' }) });
   if (entity.missing) return <EmptyState title="No such match" body="The link may be out of date." />;
   if (entity.error) return <ErrorBox error={entity.error} />;
-  if (preview.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-44" /><Skeleton className="h-10 w-96" /><Skeleton className="h-64" /></div>;
+  if (preview.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-44" /><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-64" /></div>;
   if (preview.error) return <ErrorBox error={preview.error} retry={() => preview.refetch()} />;
   if (!preview.data?.game) return <EmptyState title="No such match" body="The link may be out of date." />;
   const p = preview.data; const g = p.game; const sides = p.sides;
@@ -109,7 +109,7 @@ export default function Match() {
           )}
           {g.status === 'live' && players.length > 0 && (
             <Section title="On the pitch">
-              <div className="grid gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
             </Section>
           )}
           {periodLines && (
@@ -141,11 +141,11 @@ export default function Match() {
             <SegmentedControl label="Lineup view" size="sm" value={view as 'pitch' | 'list'} onChange={setView} options={[{ value: 'pitch', label: 'Pitch' }, { value: 'list', label: 'List' }]} />
           </div>
           {view === 'list'
-            ? <div className="grid gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
+            ? <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
             : (
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,28rem)_1fr]">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,28rem)_1fr]">
                 <Pitch home={homeLu} away={awayLu} homeName={g.home.name} awayName={g.away.name} />
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">
                   <LineupColumn title={g.home.name ?? 'Home'} side={homeLu} benchOnly />
                   <LineupColumn title={g.away.name ?? 'Away'} side={awayLu} benchOnly />
                 </div>

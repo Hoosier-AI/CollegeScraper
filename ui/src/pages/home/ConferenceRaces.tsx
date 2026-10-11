@@ -19,8 +19,8 @@ export function ConferenceRaces({ scope, className }: { scope: Scope; className?
   return (
     <Panel className={className} title="Conference races" meta={q.data ? `Top three in ${picked.length} of ${q.data.filter((c) => (c.members?.[scope.gender] ?? 0) > 0).length} conferences, most games played first` : undefined}
       footer={{ to: href('/rankings', { view: 'standings', gender: scope.gender, division: scope.division }), label: 'All conference tables' }}>
-      {q.isPending && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-32" />)}</div>}
-      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {q.isPending && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-32" />)}</div>}
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {picked.map((c) => {
           const t = c.table?.[scope.gender] ?? { top: [], source: 'none' };
           return (

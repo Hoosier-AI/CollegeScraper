@@ -10,7 +10,7 @@ export interface ProEvent { seq: number; minute: number | null; extra: number | 
 export interface ProLine { slot: number; player_id: number | null; name: string; display: string; slug: string | null; photo: string | null; number: number | null; pos: string | null; grid: string | null; starter: boolean; captain: boolean; minutes: number | null; rating: number | null; goals: number | null; assists: number | null; yellow: number | null; red: number | null; saves: number | null; conceded: number | null; shots: number | null; shots_on: number | null; passes: number | null; key_passes: number | null; tackles: number | null }
 export interface ProSideDetail { formation: string | null; coach: string | null; starters: ProLine[]; bench: ProLine[]; stats: Record<string, number | null> | null }
 
-const minute = (e: Pick<ProEvent, 'minute' | 'extra'>) => (e.minute == null ? '' : `${e.minute}${e.extra ? `+${e.extra}` : ''}′`);
+const minute = (e: Pick<ProEvent, 'minute' | 'extra'>) => (e.minute == null ? '' : e.minute < 0 ? 'Pre' : `${e.minute}${e.extra ? `+${e.extra}` : ''}′`);
 
 function EventIcon({ e }: { e: ProEvent }) {
   if (e.type === 'goal') return <span className={e.detail === 'Missed Penalty' ? 'opacity-40' : ''}><Goals n={1} size={14} /></span>;
@@ -34,11 +34,12 @@ export function EventTimeline({ events, homeName, awayName }: { events: ProEvent
   if (!events.length) return <p className="text-sm text-chalk-400">No events recorded for this match.</p>;
   return (
     <ol className="frame divide-y divide-field-700" aria-label="Match events">
-      {events.map((e) => {
+      {/* In match order: the feed lists late cards and stoppage-time events out of turn (90+9 before 90+6, a 90th-minute goal last). */}
+      {[...events].sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999) || (a.extra ?? 0) - (b.extra ?? 0) || a.seq - b.seq).map((e) => {
         const label = `${minute(e)} ${e.type === 'goal' ? 'Goal' : e.type === 'card' ? e.detail : e.type === 'subst' ? 'Substitution' : 'VAR'}, ${e.side === 'home' ? homeName : e.side === 'away' ? awayName : ''}: ${eventText(e)}`;
         const text = e.player_slug && e.type !== 'subst' ? <Link to={proPath.player(e.player_slug)} className="hover:text-pitch-300">{eventText(e)}</Link> : eventText(e);
         return (
-          <li key={e.seq} className={`flex items-center gap-2 px-3 py-2 text-sm ${e.side === 'away' ? 'flex-row-reverse text-right' : ''} ${e.type === 'goal' ? 'text-chalk-100' : 'text-chalk-300'}`} aria-label={label}>
+          <li key={e.seq} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${e.side === 'away' ? 'flex-row-reverse text-right' : ''} ${e.type === 'goal' ? 'text-chalk-100' : 'text-chalk-300'}`} aria-label={label}>
             <span className="w-12 shrink-0 text-center text-xs tnum text-chalk-500">{minute(e)}</span>
             <span className="flex w-5 shrink-0 justify-center"><EventIcon e={e} /></span>
             <span className="min-w-0 truncate">{text}</span>
@@ -67,7 +68,7 @@ function place(lines: ProLine[]): { line: ProLine; x: number; y: number }[] {
   const rows = Math.max(...parsed.map((p) => p!.row));
   const perRow = new Map<number, number>();
   for (const p of parsed) perRow.set(p!.row, Math.max(perRow.get(p!.row) ?? 0, p!.col));
-  return parsed.map((p) => ({ line: p!.line, x: 1 - p!.col / ((perRow.get(p!.row) ?? 1) + 1), y: rows === 1 ? 0.5 : 0.08 + (0.84 * (p!.row - 1)) / (rows - 1) }));
+  return parsed.map((p) => ({ line: p!.line, x: 1 - p!.col / ((perRow.get(p!.row) ?? 1) + 1), y: rows === 1 ? 0.5 : 0.15 + (0.71 * (p!.row - 1)) / (rows - 1) }));
 }
 
 function Token({ line, x, y, top }: { line: ProLine; x: number; y: number; top: boolean }) {
@@ -136,15 +137,20 @@ export function TeamStatsCompare({ home, away, homeName, awayName }: { home: Pro
   if (!home && !away) return null;
   const rows = STAT_ROWS.filter(([k]) => home?.[k] != null || away?.[k] != null);
   return (
-    <div className="frame divide-y divide-field-700">
-      <div className="flex justify-between px-3 py-1.5 text-2xs font-medium text-chalk-500"><span>{homeName}</span><span>{awayName}</span></div>
+    <div className="frame py-1">
+      <div className="flex justify-between px-3 pb-1 pt-0.5 text-2xs font-medium text-chalk-500"><span className="truncate">{homeName}</span><span className="truncate">{awayName}</span></div>
+      {/* One line a stat: value, a bar growing toward the label from each side, value. The larger value reads brighter. */}
       {rows.map(([k, label, f]) => {
         const h = home?.[k] ?? null, a = away?.[k] ?? null; const total = (h ?? 0) + (a ?? 0);
-        const share = total > 0 ? (h ?? 0) / total : 0.5;
+        const hs = total > 0 ? (h ?? 0) / total : 0, as = total > 0 ? (a ?? 0) / total : 0;
+        const tone = (mine: number | null, theirs: number | null) => ((mine ?? 0) > (theirs ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-400');
         return (
-          <div key={k} className="px-3 py-2 text-sm">
-            <div className="flex items-center justify-between tnum"><span className="font-medium text-chalk-100">{f(h)}</span><span className="text-xs text-chalk-400">{label}</span><span className="font-medium text-chalk-100">{f(a)}</span></div>
-            <div className="mt-1 flex h-1.5 overflow-hidden rounded bg-field-700" aria-hidden><span className="bg-pitch-400" style={{ width: `${share * 100}%` }} /><span className="flex-1 bg-sky-400/70" /></div>
+          <div key={k} className="grid grid-cols-[2.75rem_minmax(0,1fr)_minmax(6rem,8.5rem)_minmax(0,1fr)_2.75rem] items-center gap-2 px-3 py-1 text-sm tnum">
+            <span className={tone(h, a)}>{f(h)}</span>
+            <span className="flex h-1.5 justify-end overflow-hidden rounded-full bg-field-800" aria-hidden><span className="rounded-full bg-pitch-400" style={{ width: `${hs * 100}%` }} /></span>
+            <span className="truncate text-center text-xs text-chalk-400">{label}</span>
+            <span className="flex h-1.5 overflow-hidden rounded-full bg-field-800" aria-hidden><span className="rounded-full bg-sky-400/80" style={{ width: `${as * 100}%` }} /></span>
+            <span className={`text-right ${tone(a, h)}`}>{f(a)}</span>
           </div>
         );
       })}
@@ -157,7 +163,7 @@ export function TeamStatsCompare({ home, away, homeName, awayName }: { home: Pro
 
 export function LineupList({ side, title }: { side: ProSideDetail; title: string }) {
   const row = (l: ProLine) => (
-    <li key={l.slot} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+    <li key={l.slot} className="flex items-center gap-2 px-3 py-1 text-sm">
       <span className="w-6 shrink-0 text-right text-xs tnum text-chalk-500">{l.number ?? ''}</span>
       {l.slug ? <Link to={proPath.player(l.slug)} className="min-w-0 truncate text-chalk-100 hover:text-pitch-300">{l.display}</Link> : <span className="min-w-0 truncate text-chalk-200">{l.display}</span>}
       {l.captain && <span className="text-2xs text-chalk-500" title="Captain">(c)</span>}

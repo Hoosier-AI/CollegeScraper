@@ -214,7 +214,7 @@ export function AdvancedLeaders({ data, season }: { data: { xg: AdvLeaderLine[];
     </div>
   );
   return (
-    <div className="grid gap-4 md:grid-cols-3" aria-label={`Advanced leaders ${season ?? ''}`}>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3" aria-label={`Advanced leaders ${season ?? ''}`}>
       {list('Expected goals (xG)', data.xg)}
       {list('Expected assists (xA)', data.xa)}
       {list('Goals added (g+)', data.g_plus, 2)}

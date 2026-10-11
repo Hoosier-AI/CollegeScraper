@@ -22,14 +22,14 @@ export default function Overview() {
       {!d.health.ok && <Note tone="warn">{d.health.problems.join('; ')}. Render restarts the service when /health keeps failing.</Note>}
       {d.flags.crawl_paused && <Note tone="warn">Crawling is paused: the crawl lane claims nothing until it is resumed in Settings.</Note>}
       {d.flags.scheduler_paused && <Note tone="warn">The scheduler is paused: nothing is queued automatically until it is resumed in Settings.</Note>}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Service" value={<HealthDot ok={d.health.ok} label={d.health.ok ? 'Healthy' : 'Problem'} />} sub={`database ${d.health.db.ok ? 'reachable' : 'unreachable'}`} tone={d.health.ok ? 'ok' : 'bad'} />
         {lanes.map(([lane, l]) => <StatTile key={lane} label={`${lane} worker`} value={<HealthDot ok={l.alive} label={l.alive ? 'Alive' : 'Silent'} />} sub={l.job ? `running ${l.job}` : l.age_s != null ? `idle, beat ${l.age_s} s ago` : 'no heartbeat yet'} tone={l.alive ? 'ok' : 'bad'} />)}
         <StatTile label="Queue" value={`${d.queue.running.length} running`} sub={`${d.queue.queued} queued`} />
       </div>
       {d.other_hosts.some((o) => o.alive) && <Note>Another copy of the service is also working this database: {d.other_hosts.filter((o) => o.alive).map((o) => `${o.lane} lane on ${o.host}${o.job ? ` (running ${o.job})` : ''}`).join(', ')}. It shares the job queue.</Note>}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Live right now">
           <div className="grid grid-cols-3 gap-3">
             <StatTile label="Matches live" value={d.live.games_live} />
@@ -78,7 +78,7 @@ export default function Overview() {
         </Section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Jobs, last outcome">
           <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Last outcome per job</caption>
             <thead><tr><th scope="col" className="th">Job</th><th scope="col" className="th">Last success</th><th scope="col" className="th">Last failure</th></tr></thead>

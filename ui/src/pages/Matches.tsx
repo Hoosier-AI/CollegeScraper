@@ -55,7 +55,8 @@ export default function Matches() {
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); if (conference) setConference(''); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[220px]" />}</Field>
       </PageHeader>
-      <DateStrip date={date} today={today} onChange={setDate} counts={counts} />
+      {/* The day stays in reach while scrolling a long matchday. */}
+      <div className="sticky top-14 z-20 -mx-4 bg-field-950/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"><DateStrip date={date} today={today} onChange={setDate} counts={counts} /></div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Show only">
         <Chip on={only === 'conf'} onClick={() => setOnly(only === 'conf' ? '' : 'conf')}>Conference games</Chip>
         <Chip on={only === 'ranked'} onClick={() => setOnly(only === 'ranked' ? '' : 'ranked')}>Ranked teams</Chip>
@@ -80,9 +81,12 @@ export default function Matches() {
               </h2>
               {grp.note && <p className="text-xs text-chalk-400">{grp.note}</p>}
               {[...byDiv.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([div, list]) => (
-                <div key={div} className="frame divide-y divide-field-700">
-                  {!division && <div className="px-3 py-1.5 text-2xs font-medium text-chalk-500">{divisionLabel(div)}</div>}
-                  {list.map((g) => <MatchRow key={g.id} g={g} />)}
+                <div key={div} className="space-y-1.5">
+                  {!division && <h3 className="text-xs font-medium text-chalk-400">{divisionLabel(div)}</h3>}
+                  {/* Two columns from large screens up: half the scrolling on a 300-match day. */}
+                  <div className="frame grid grid-cols-1 overflow-hidden lg:grid-cols-2 [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 lg:[&>*:nth-child(odd)]:border-r">
+                    {list.map((g) => <MatchRow key={g.id} g={g} />)}
+                  </div>
                 </div>
               ))}
             </section>

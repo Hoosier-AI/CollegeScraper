@@ -30,7 +30,7 @@ export default function ApiTab() {
   };
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatTile label="Named key limit" value={`${fmt.num(d.limits.key)}/min`} sub="per key" />
         <StatTile label="Free tier" value={`${fmt.num(d.limits.anon)}/min`} sub="per IP, no key" />
         <StatTile label="Site reads" value={`${fmt.num(d.limits.site)}/min`} sub="the viewer's own /api calls, per IP" />
@@ -38,7 +38,7 @@ export default function ApiTab() {
 
       <Section title="Plaibook connection">
         {d.plaibook ? (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatTile label="Key in use" value={d.plaibook.name} sub={d.keys.find((k) => k.name === d.plaibook!.name)?.source === 'env' ? 'from COLLEGE_API_KEYS on the service' : 'created in this console'} />
             <StatTile label="Last request" value={d.plaibook.last_seen_at ? agoShort(d.plaibook.last_seen_at, now) : 'never'} tone={d.plaibook.last_seen_at && now - Date.parse(d.plaibook.last_seen_at) < 86400_000 ? 'ok' : 'warn'} />
             <StatTile label="Requests today" value={fmt.num(d.plaibook.today)} />

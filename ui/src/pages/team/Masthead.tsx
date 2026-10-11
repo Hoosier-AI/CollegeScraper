@@ -70,7 +70,7 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
         ) : <p className="text-sm text-chalk-500">No results stored for this season yet.</p>}
       </div>
       {(last || next) && (
-        <div className="grid border-t border-field-700 sm:grid-cols-2">
+        <div className="grid grid-cols-1 border-t border-field-700 sm:grid-cols-2">
           {last ? <GameStrip label="Last match" g={last} id={id} href={href} /> : <div className="p-4 text-sm text-chalk-500">No matches played yet.</div>}
           {next ? <GameStrip label="Next match" g={next} id={id} href={href} /> : <div className="border-t border-field-700 p-4 text-sm text-chalk-500 sm:border-l sm:border-t-0">No matches scheduled.</div>}
         </div>

@@ -36,7 +36,7 @@ export default function QualityTab() {
         <div className="flex items-center gap-2">{run.data && <RunProgress runId={run.data.id} compact />}{runButton}</div>
       </div>
       {run.data?.existing && <Note>A quality run is already queued or running.</Note>}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{d.latest.checks.map((c) => {
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{d.latest.checks.map((c) => {
         const hist = (d.history[c.id] ?? []).map((h) => h.count);
         const fixRun = fixing[c.id];
         return (

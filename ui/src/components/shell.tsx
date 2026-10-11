@@ -56,6 +56,8 @@ export function TopBar() {
           {admin && ADMIN_NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-note/80 hover:text-note'}`}>{n.label}</NavLink>)}
         </nav>
         <div className="ml-auto hidden w-64 md:block lg:w-72">{pro ? <ProSearchBox /> : <SearchBox />}</div>
+        {/* Phones: college has a Search tab below; Pro has no room there, so its search sits up here. */}
+        {pro && <div className="ml-auto min-w-0 max-w-[13rem] flex-1 md:hidden"><ProSearchBox placeholder="Search" wideMenu /></div>}
         {showFilters && <GlobalFilters />}
         {admin && <button className="btn-quiet btn-sm hidden md:inline-flex" onClick={() => clearToken()}><Shield size={14} /> Sign out</button>}
       </div>

@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 export function SeasonBars({ rows, a, b, caption }: { rows: { label: string; a: number; b: number }[]; a: string; b: string; caption: string }) {
   if (!rows.length || !rows.some((r) => r.a || r.b)) return null;
   const max = Math.max(1, ...rows.map((r) => r.a + r.b));
-  const H = 120;
+  const H = 84;
   return (
     <figure className="frame p-3">
       <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-chalk-400">
@@ -33,8 +33,8 @@ const ratingTone = (v: number) => (v >= 8 ? 'fill-win' : v >= 7 ? 'fill-pitch-40
 
 /** Match ratings over the last matches, oldest on the left; the dashed line is the average. */
 export function FormLine({ points, caption }: { points: { label: string; value: number; href?: string; title: string }[]; caption: string }) {
-  if (points.length < 3) return null;
-  const W = 600, H = 150, PAD = 22, lo = 5, hi = 10;
+  if (points.length < 5) return null;
+  const W = 480, H = 124, PAD = 20, lo = 5, hi = 10;
   const x = (i: number) => PAD + (i * (W - PAD * 2)) / Math.max(1, points.length - 1);
   const y = (v: number) => H - PAD - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (H - PAD * 2);
   const avg = points.reduce((n, p) => n + p.value, 0) / points.length;

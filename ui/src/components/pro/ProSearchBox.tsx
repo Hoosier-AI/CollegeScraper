@@ -11,7 +11,8 @@ interface HitRow { id: number; name: string; slug: string; sub: string | null; l
 export type Hit = { key: string; kind: 'league' | 'team' | 'player'; label: string; sub: string; href: string; logo: string | null; slug: string };
 
 /** `onPick`: choose instead of navigating (the compare page picks players with it). */
-export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club or player', examples, onNavigate, onPick }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void }) {
+/** wideMenu: results open wider than the box, anchored right (the narrow phone header box). */
+export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club or player', examples, onNavigate, onPick, wideMenu }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void; wideMenu?: boolean }) {
   const nav = useNavigate();
   const listId = useId();
   const [q, setQ] = useState('');
@@ -59,7 +60,7 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
         </div>
       )}
       {listOpen && (
-        <ul id={listId} role="listbox" aria-label="Search results" className="absolute inset-x-0 top-full z-40 mt-1 max-h-96 overflow-auto rounded-lg border border-field-700 bg-field-900 p-1 shadow-xl shadow-black/50">
+        <ul id={listId} role="listbox" aria-label="Search results" className={`absolute ${wideMenu ? 'right-0 w-[calc(100vw-2rem)] max-w-sm' : 'inset-x-0'} top-full z-40 mt-1 max-h-96 overflow-auto rounded-lg border border-field-700 bg-field-900 p-1 shadow-xl shadow-black/50`}>
           {hits.isPending && <li className="px-3 py-2"><Spinner label="Searching…" /></li>}
           {hits.error && <li className="px-3 py-2 text-sm text-loss">Search failed. Try again in a moment.</li>}
           {hits.data && !items.length && <li className="px-3 py-2 text-sm text-chalk-400">Nothing matched “{debounced}”.</li>}

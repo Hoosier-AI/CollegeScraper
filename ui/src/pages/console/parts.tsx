@@ -92,7 +92,7 @@ export function ParamForm({ specs, value, onChange }: { specs: ParamSpec[]; valu
   const set = (k: string, v: unknown) => { const next = { ...value }; if (v === '' || v === undefined || v === null || (Array.isArray(v) && !v.length)) delete next[k]; else next[k] = v; onChange(next); };
   if (!specs.length) return <p className="text-xs text-chalk-500">This job takes no parameters.</p>;
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {specs.map((p) => (
         <Field key={p.name} label={p.label} hint={p.help}>{(id) => {
           const v = value[p.name];

@@ -16,13 +16,13 @@ function Scoreline({ m }: { m: MatchData['match'] }) {
   const played = m.status === 'live' || m.status === 'final';
   const side = (s: Match['home'], align: 'left' | 'right') => (
     <Link to={proPath.team(s.slug)} className={`flex min-w-0 flex-1 flex-col items-center gap-2 text-center hover:text-pitch-300 sm:flex-row ${align === 'right' ? 'sm:flex-row-reverse sm:text-right' : 'sm:text-left'}`}>
-      <TeamLogo src={s.logo} name={s.name} size={56} />
+      <TeamLogo src={s.logo} name={s.name} size={48} />
       <span className="display text-lg leading-tight text-chalk-100 sm:text-2xl">{s.name}</span>
     </Link>
   );
   const status = m.status === 'live' ? proMinute(m) : m.status === 'final' ? (m.status_short === 'AET' ? 'After extra time' : m.status_short === 'PEN' ? 'After penalties' : 'Full time') : m.status === 'scheduled' ? new Date(m.kickoff).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : m.status;
   return (
-    <div className="card px-4 py-5">
+    <div className="card px-3 py-4 sm:px-5">
       <div className="flex items-center gap-3">
         {side(m.home, 'left')}
         <div className="shrink-0 text-center">
@@ -51,36 +51,38 @@ export default function ProMatch() {
   const m = d.match;
   const facts = [m.round, m.venue, m.referee ? `Referee ${m.referee}` : null].filter(Boolean).join(' · ');
   const hasLineups = d.home.starters.length > 0 || d.away.starters.length > 0;
+  const hasStats = !!(d.home.stats || d.away.stats);
+  const hasShots = !!d.advanced && d.advanced.shots.length > 0;
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-chalk-400">
         <Link to={proPath.home} className="hover:text-chalk-100">Pro</Link><span aria-hidden>/</span>
         <Link to={proPath.league(m.league.slug)} className="flex items-center gap-1 hover:text-chalk-100"><TeamLogo src={m.league.logo} name={m.league.name} size={14} chip={false} fallback="blank" />{m.league.name}</Link>
       </nav>
       <h1 className="sr-only">{m.home.name} vs {m.away.name}, {m.league.name}</h1>
       <Scoreline m={m} />
-      <p className="text-center text-xs text-chalk-400">{kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}</p>
-      {d.advanced && d.advanced.xg[0] != null && <p className="text-center text-sm tnum text-chalk-300" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}</p>}
+      <p className="text-center text-xs text-chalk-400">
+        {d.advanced && d.advanced.xg[0] != null && <span className="mr-2 font-medium text-chalk-200 tnum" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}.</span>}
+        {kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}
+      </p>
       {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
       {m.status === 'final' && !m.detail && !d.events.length && <p className="text-center text-sm text-chalk-400">Lineups and match stats arrive shortly after full time.</p>}
-      <div className="grid gap-5 lg:grid-cols-12">
-        <div className="space-y-5 lg:col-span-7">
-          {d.events.length > 0 && <Section title="Match events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>}
-          {d.advanced && d.advanced.shots.length > 0 && <Section title="Shot map"><ShotMap shots={d.advanced.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced.credit} /></Section>}
-          {(d.home.stats || d.away.stats) && <Section title="Team stats"><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
-          {hasLineups && (
-            <Section title="Lineups">
-              <div className="grid gap-3 md:grid-cols-2">
-                <LineupList side={d.home} title={m.home.name} />
-                <LineupList side={d.away} title={m.away.name} />
-              </div>
-            </Section>
-          )}
-        </div>
-        <div className="space-y-5 lg:col-span-5">
-          {hasLineups && <Section title="Formations"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}
-          {d.h2h.length > 0 && <Section title="Earlier meetings"><div className="frame divide-y divide-field-700">{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague />)}</div></Section>}
-        </div>
+      {/* Two columns on desktop, read in pairs: what happened beside the numbers, who played where beside the lineups,
+          where the shots came from beside earlier meetings. A pair missing one half gives the other the full width. */}
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+        {d.events.length > 0 && <Section title="Match events" className={hasStats ? '' : 'lg:col-span-2'}><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>}
+        {hasStats && <Section title="Team stats" className={d.events.length ? '' : 'lg:col-span-2'}><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
+        {hasLineups && <Section title="Formations"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}
+        {hasLineups && (
+          <Section title="Lineups">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <LineupList side={d.home} title={m.home.name} />
+              <LineupList side={d.away} title={m.away.name} />
+            </div>
+          </Section>
+        )}
+        {hasShots && <Section title="Shot map" className={d.h2h.length ? '' : 'lg:col-span-2'}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
+        {d.h2h.length > 0 && <Section title="Earlier meetings" className={hasShots ? '' : 'lg:col-span-2'}><div className={`frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 ${hasShots ? '' : 'xl:grid-cols-2'}`}>{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague={!hasShots} compact={hasShots} />)}</div></Section>}
       </div>
     </div>
   );

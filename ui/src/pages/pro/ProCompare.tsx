@@ -67,7 +67,7 @@ export default function ProCompare() {
           );
         })}
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {sides.map((p) => p.percentiles && p.percentiles.rows.length > 0 ? <PercentileBars key={p.player.id} rows={p.percentiles.rows} caption={`${p.player.name}: ${p.percentiles.league?.name ?? ''} ${p.percentiles.season}`} /> : <p key={p.player.id} className="text-sm text-chalk-400">No percentiles for {p.player.name} yet (450+ minutes needed).</p>)}
       </div>
     </div>

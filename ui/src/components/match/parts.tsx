@@ -1,4 +1,5 @@
 // Pieces of the match page: masthead, timeline, lineups, stat bars, head-to-head and the pre-match preview.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDownCircle, ArrowUpCircle, CalendarClock, ExternalLink, Hand, MapPin, Square } from 'lucide-react';
 import { fmt } from '../../lib/api';
@@ -45,7 +46,7 @@ export function MatchMasthead({ g, sides, scorers }: { g: any; sides?: any; scor
   };
   return (
     <header className="card p-4 sm:p-6">
-      <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
+      <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
         {team('home')}
         <div className="text-center">
           {live || final ? <div className="display text-4xl tnum sm:text-5xl">{g.home.score ?? '–'}<span className="mx-2 text-chalk-500">–</span>{g.away.score ?? '–'}</div> : <div className="display text-3xl text-chalk-300 sm:text-4xl">{fmt.kickoff(g.start_epoch) ?? 'TBD'}</div>}
@@ -87,24 +88,54 @@ const EV: Record<string, { icon: JSX.Element; label: string; cls?: string }> = {
 const KEY_EVENTS = new Set(Object.keys(EV));
 
 export function Timeline({ events, homeId, homeName, awayName, source }: { events: any[]; homeId: string | null; homeName: string | null; awayName: string | null; source: string | null }) {
-  const rows = events.filter((e) => e.source === source && KEY_EVENTS.has(e.event_type)).sort((a, b) => a.period - b.period || a.seq - b.seq);
-  if (!rows.length) return <EmptyState title="No goals, cards or substitutions recorded" body="The play-by-play arrives with the box score." />;
+  const all = events.filter((e) => e.source === source && KEY_EVENTS.has(e.event_type)).sort((a, b) => a.period - b.period || a.seq - b.seq);
+  const isSub = (e: any) => e.event_type === 'sub_in' || e.event_type === 'sub_out';
+  const subCount = all.filter((e) => e.event_type === 'sub_in').length;
+  // College re-entry rules log a hundred substitutions a match: they wait behind a switch unless there are only a few.
+  const [subsOn, setSubsOn] = useState(subCount <= 8);
+  if (!all.length) return <EmptyState title="No goals, cards or substitutions recorded" body="The play-by-play arrives with the box score." />;
   const minute = (e: any) => { const m = String(e.clock ?? '').match(/^(\d+):(\d\d)/); const base = m ? Number(m[1]) + (Number(m[2]) > 0 ? 1 : 0) : null; return base != null ? `${base}′` : e.period > 2 ? 'OT' : ''; };
+  // Substitutions at one minute for one side become one row: who came on, who went off.
+  type Row = { key: string; home: boolean; minute: string; sub?: { on: string[]; off: string[] }; e?: any };
+  const rows: Row[] = [];
+  for (const e of all) {
+    const home = e.program_id === homeId;
+    // A nameless goal beside a named one for the same side in the same minute is the feed logging it twice.
+    if ((e.event_type === 'goal' || e.event_type === 'pk') && !personName(e.player_name_raw)
+      && all.some((o) => o !== e && (o.event_type === 'goal' || o.event_type === 'pk') && o.program_id === e.program_id && minute(o) === minute(e) && personName(o.player_name_raw))) continue;
+    if (!isSub(e)) { rows.push({ key: e.id, home, minute: minute(e), e }); continue; }
+    if (!subsOn) continue;
+    const m = minute(e), last = rows[rows.length - 1];
+    const group = last?.sub && last.home === home && last.minute === m ? last : (rows.push({ key: e.id, home, minute: m, sub: { on: [], off: [] } }), rows[rows.length - 1]!);
+    group.sub![e.event_type === 'sub_in' ? 'on' : 'off'].push(personName(e.player_name_raw) ?? 'Team (bench)');
+  }
+  const side = (r: Row, content: React.ReactNode, icon: React.ReactNode, label: string, cls?: string) => {
+    const mark = <span className={cls} title={label}>{icon}<span className="sr-only">{label}</span></span>;
+    return (
+      <li key={r.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-1.5">
+        <div className={`flex items-center justify-end gap-2 text-right ${r.home ? '' : 'invisible'}`}>{content}{mark}</div>
+        <div className="w-12 text-center text-xs text-chalk-500 tnum">{r.minute}</div>
+        <div className={`flex items-center gap-2 ${r.home ? 'invisible' : ''}`}>{mark}{content}</div>
+      </li>
+    );
+  };
   return (
-    <ol className="frame divide-y divide-field-700" aria-label="Key events">
-      {rows.map((e) => {
-        const home = e.program_id === homeId; const ev = EV[e.event_type]!;
-        const who = <span className="text-sm"><span className="font-medium text-chalk-100">{personName(e.player_name_raw) ?? (e.event_type === 'goal' ? 'Unknown scorer' : 'Team (bench)')}</span>{e.assist_name_raw && <span className="text-chalk-400"> (assist {e.assist_name_raw})</span>}{e.event_type === 'goal' && e.home_score != null && <span className="ml-2 text-chalk-500 tnum">{e.home_score}–{e.away_score}</span>}</span>;
-        return (
-          <li key={e.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-2">
-            <div className={`flex items-center justify-end gap-2 ${home ? '' : 'invisible'}`}>{who}<span className={ev.cls} title={ev.label}>{ev.icon}<span className="sr-only">{ev.label}</span></span></div>
-            <div className="w-12 text-center text-xs text-chalk-500 tnum">{minute(e)}</div>
-            <div className={`flex items-center gap-2 ${home ? 'invisible' : ''}`}><span className={ev.cls} title={ev.label}>{ev.icon}<span className="sr-only">{ev.label}</span></span>{who}</div>
-          </li>
-        );
-      })}
-      <li className="grid grid-cols-[1fr_auto_1fr] px-3 py-1.5 text-2xs text-chalk-500"><span className="text-right">{homeName}</span><span className="w-12" /><span>{awayName}</span></li>
-    </ol>
+    <div className="space-y-2">
+      <ol className="frame divide-y divide-field-700" aria-label="Key events">
+        {rows.map((r) => {
+          if (r.sub) {
+            const text = <span className="text-sm text-chalk-300">{r.sub.on.length > 0 && <span>On: <span className="text-chalk-100">{r.sub.on.join(', ')}</span></span>}{r.sub.on.length > 0 && r.sub.off.length > 0 && '. '}{r.sub.off.length > 0 && <span>Off: {r.sub.off.join(', ')}</span>}</span>;
+            return side(r, text, <ArrowUpCircle size={14} />, 'Substitution', 'text-chalk-400');
+          }
+          const e = r.e; const ev = EV[e.event_type]!;
+          const who = <span className="text-sm"><span className="font-medium text-chalk-100">{personName(e.player_name_raw) ?? (e.event_type === 'goal' ? 'Unknown scorer' : 'Team (bench)')}</span>{e.assist_name_raw && <span className="text-chalk-400"> (assist {e.assist_name_raw})</span>}{e.event_type === 'goal' && e.home_score != null && <span className="ml-2 text-chalk-500 tnum">{e.home_score}–{e.away_score}</span>}</span>;
+          return side(r, who, ev.icon, ev.label, ev.cls);
+        })}
+        {!rows.length && <li className="px-3 py-3 text-center text-sm text-chalk-400">No goals or cards recorded.</li>}
+        <li className="grid grid-cols-[1fr_auto_1fr] px-3 py-1.5 text-2xs text-chalk-500"><span className="text-right">{homeName}</span><span className="w-12" /><span>{awayName}</span></li>
+      </ol>
+      {subCount > 8 && <button type="button" className="btn-ghost btn-sm" aria-pressed={subsOn} onClick={() => setSubsOn((v) => !v)}>{subsOn ? 'Hide substitutions' : `Show substitutions (${subCount})`}</button>}
+    </div>
   );
 }
 
@@ -263,7 +294,7 @@ export function HeadToHead({ g, h2h, sides }: { g: any; h2h: any; sides: any }) 
                 const sc = (m.scorers ?? []) as { program_id: string | null; name: string | null; minute: string | null }[];
                 return (
                   <li key={m.id}>
-                    <Link to={href(`/matches/${m.id}`)} className="grid gap-x-4 gap-y-1 px-3 py-2.5 hover:bg-field-800 sm:grid-cols-[8.5rem_minmax(0,1fr)_auto]">
+                    <Link to={href(`/matches/${m.id}`)} className="grid grid-cols-1 gap-x-4 gap-y-1 px-3 py-2.5 hover:bg-field-800 sm:grid-cols-[8.5rem_minmax(0,1fr)_auto]">
                       <span className="text-sm text-chalk-300"><span className="font-medium text-chalk-100">{fmt.date(m.game_date)}</span><span className="block text-2xs text-chalk-500">{comp}{m.neutral_site ? ', neutral site' : ''}{m.venue?.city ? `, ${m.venue.city}` : ''}</span></span>
                       <span className="min-w-0 text-sm">
                         <span className="flex items-center gap-2"><TeamLogo src={m.home.logo} seo={m.home.seo} name={m.home.name} size={18} /><span className={`truncate ${hw ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{m.home.name}</span><span className="text-2xs text-chalk-500">home</span><span className={`ml-auto tnum ${hw ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{m.home.score ?? '–'}</span></span>
@@ -344,7 +375,7 @@ export function KeyPlayers({ g, sides }: { g: any; sides: any }) {
       </div>
     );
   };
-  return <div className="grid gap-6 lg:grid-cols-2">{col('home')}{col('away')}</div>;
+  return <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">{col('home')}{col('away')}</div>;
 }
 
 export function ResultLine({ g }: { g: any }) {

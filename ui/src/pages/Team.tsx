@@ -36,7 +36,7 @@ export default function Team() {
   const refreshAll = () => { qc.invalidateQueries({ queryKey: ['program', id] }); qc.invalidateQueries({ queryKey: ['roster', id] }); qc.invalidateQueries({ queryKey: ['pgames', id] }); };
   if (entity.missing) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
-  if (team.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-10 w-96" /><Skeleton className="h-64" /></div>;
+  if (team.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-64" /></div>;
   if (team.error) return <ErrorBox error={team.error} retry={() => team.refetch()} />;
   if (!team.data?.program) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
   const t = team.data; const p = t.program; const s = t.teamStats;
@@ -94,7 +94,7 @@ function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: s
   const s = t.teamStats;
   const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td !whitespace-normal text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td !whitespace-normal text-xs text-chalk-500">{note ?? ''}</td></tr>;
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_1fr_1fr]">
       <Section title="Season in numbers">
         {s ? (
           <table className="frame w-full table-fixed border-separate border-spacing-0 text-sm"><caption className="sr-only">Season totals</caption><colgroup><col className="w-[38%]" /><col className="w-[22%]" /><col /></colgroup><tbody>

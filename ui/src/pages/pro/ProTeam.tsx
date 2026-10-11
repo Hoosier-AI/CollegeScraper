@@ -99,7 +99,7 @@ export default function ProTeam() {
   const splitRow = (label: string, s: Split) => <tr className="border-t border-field-700"><th scope="row" className="td text-left font-normal text-chalk-300">{label}</th><td className="td text-right tnum">{s.played}</td><td className="td text-right tnum">{s.w}-{s.d}-{s.l}</td><td className="td text-right tnum">{s.gf}:{s.ga}</td><td className="td text-right tnum">{s.played ? ((s.w * 3 + s.d) / s.played).toFixed(2) : '–'}</td></tr>;
   return (
     <div className="space-y-5">
-      <ProHero image={<span className="grid h-24 w-24 place-items-center rounded-xl bg-white/95 p-2 shadow-lg"><TeamLogo src={t.logo} name={t.name} size={76} chip={false} /></span>} title={t.name}
+      <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-[4.5rem] sm:w-[4.5rem]"><TeamLogo src={t.logo} name={t.name} size={60} chip={false} /></span>} title={t.name}
         line={<>{t.country && <span className="inline-flex items-center gap-1.5"><Flag country={t.country} />{t.country}</span>}{coach && <span>Coach {coach.name}</span>}</>}
         chips={[t.founded ? `Founded ${t.founded}` : null, t.venue ? `${t.venue.name}${t.venue.capacity ? ` · ${fmt.num(t.venue.capacity)}` : ''}` : null, t.venue?.surface ? cap(t.venue.surface) : null]}
         actions={d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: v === String(d.seasons[0]) ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}>
@@ -119,15 +119,16 @@ export default function ProTeam() {
       )}
       <TabsNav label="Club sections" tabs={tabs} value={tab as Tab} hrefFor={hrefFor} />
       {tab === 'squad' && (
-        <div className="grid gap-5 lg:grid-cols-12">
-          <div className="space-y-4 lg:col-span-8">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          {/* Positions two by two on wide screens: the whole squad in about one screen. */}
+          <div className="grid grid-cols-1 content-start gap-4 xl:grid-cols-2">
             {GROUPS.map(([pos, label]) => {
               const rows = d.squad.filter((r) => (pos ? r.player.position === pos : !GROUPS.slice(0, 4).some(([p]) => p === r.player.position)));
               return rows.length ? <Section key={label} title={label}><DataTable rows={rows} columns={cols} rowKey={(r) => String(r.player.id)} caption={`${t.name} ${label.toLowerCase()}`} rowHref={(r) => proPath.player(r.player.slug)} dense /></Section> : null;
             })}
             {!d.squad.length && <EmptyState title="No squad yet" body="The squad arrives as the crawl reaches this club." />}
           </div>
-          <div className="space-y-5 lg:col-span-4">
+          <aside className="space-y-4">
             {t.venue && <Section title="Ground"><GroundCard ground={t.venue} /></Section>}
             {d.coaches.length > 0 && (
               <Section title="Coaches">
@@ -138,12 +139,12 @@ export default function ProTeam() {
                 </ul>
               </Section>
             )}
-            {d.fixtures.length > 0 && <Section title="Next matches"><div className="frame divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div></Section>}
-          </div>
+            {d.fixtures.length > 0 && <Section title="Next matches"><div className="frame divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></Section>}
+          </aside>
         </div>
       )}
       {tab === 'matches' && (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Section title="Results">{d.results.length ? <div className="frame divide-y divide-field-700">{d.results.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div> : <p className="text-sm text-chalk-400">No results this season yet.</p>}</Section>
           <Section title="Fixtures">{d.fixtures.length ? <div className="frame divide-y divide-field-700">{d.fixtures.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div> : <p className="text-sm text-chalk-400">No upcoming fixtures.</p>}</Section>
         </div>
@@ -163,7 +164,7 @@ export default function ProTeam() {
             </div>
           )}
           {formItems.length > 0 && (
-            <div className="grid items-start gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
               <ResultStrip items={formItems.slice(-15)} caption={`Last ${Math.min(15, formItems.length)} results`} />
               <PointsLine results={formItems.map((f) => f.result)} caption={`Points over the ${d.season} season, every competition`} />
             </div>
@@ -186,7 +187,7 @@ export default function ProTeam() {
           )}
           {d.advanced && d.advanced.competitions.length > 0 && <Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /><Credit credit={d.advanced.credit} /></Section>}
           {(d.season_detail?.length ?? 0) > 0 && <Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section>}
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {periodShown ? <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
               : <Section title="Goals by period"><p className="text-sm text-chalk-400">Shows once goal times are in for most of the season's matches.</p></Section>}
             <Section title="Home and away">
@@ -207,7 +208,7 @@ export default function ProTeam() {
         </div>
       )}
       {tab === 'transfers' && (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Section title={`In (${ins.length})`}><TransfersList rows={ins} showPlayer empty="No arrivals recorded yet." /></Section>
           <Section title={`Out (${outs.length})`}><TransfersList rows={outs} showPlayer empty="No departures recorded yet." /></Section>
         </div>

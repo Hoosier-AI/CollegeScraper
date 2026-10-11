@@ -57,7 +57,7 @@ export function ConferenceDetail({ id }: { id: string }) {
       )) : <EmptyState title="No matches this week" body="Conference members have nothing scheduled Monday to Sunday." action={<Chip to={href('/matches', { conference: id })}>Browse matches</Chip>} />)}
       {tab === 'teams' && <DataTable rows={d.members} columns={memberCols} rowKey={(m) => m.id} caption={`${c.name} members`} rowHref={(m) => href(`/teams/${m.id}`)} defaultSort={{ key: 'conf', dir: 'desc' }} dense />}
       {tab === 'leaders' && (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {leaderList('Points', d.leaders.points, (r) => `${r.points} pts`)}
           {leaderList('Goals', d.leaders.goals, (r) => `${r.goals} G`)}
           {leaderList('Assists', d.leaders.assists, (r) => `${r.assists} A`)}

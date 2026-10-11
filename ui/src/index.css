@@ -9,6 +9,9 @@
   /* Every interactive element shows the same ring when reached from the keyboard. */
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid theme('colors.pitch.400'); outline-offset: 2px; border-radius: 4px; }
   button, a, select, summary, [role='button'] { touch-action: manipulation; }
+  /* A grid item may shrink below its content's width: a wide table then scrolls inside its own box instead of pushing
+     the whole page sideways on a phone (the club page rendered 446px wide on a 390px screen). */
+  .grid > * { min-width: 0; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   }
@@ -26,19 +29,23 @@
   .btn-primary { @apply btn bg-pitch-400 text-field-950 hover:bg-pitch-300; }
   .btn-ghost { @apply btn border border-field-700 bg-transparent text-chalk-200 hover:bg-field-800 hover:text-chalk-100; }
   .btn-quiet { @apply btn text-chalk-300 hover:bg-field-800 hover:text-chalk-100; }
-  .btn-sm { @apply px-2 py-1 text-xs coarse:min-h-9; }
+  .btn-sm { @apply px-2 py-1 text-xs coarse:min-h-11; }
   .btn-icon { @apply btn h-9 w-9 px-0; }
 
   .input { @apply h-9 rounded-md border border-field-700 bg-field-950 px-3 text-sm text-chalk-100 placeholder:text-chalk-500 focus:border-pitch-400 coarse:h-11; }
   .select { @apply input cursor-pointer appearance-none bg-no-repeat pr-8; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237F91AA' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.5rem center; }
 
-  .chip { @apply inline-flex items-center gap-1 rounded-full border border-field-700 px-2.5 py-1 text-xs font-medium text-chalk-300 transition-colors duration-150 hover:bg-field-800 hover:text-chalk-100 coarse:min-h-9; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-field-700 px-2.5 py-1 text-xs font-medium text-chalk-300 transition-colors duration-150 hover:bg-field-800 hover:text-chalk-100 coarse:min-h-11; }
   .chip-on { @apply border-pitch-400/60 bg-pitch-400/15 text-pitch-300; }
   .badge { @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium; }
 
   /* Tables: sentence-case headers, tabular numbers, hairline rows. */
-  .th { @apply bg-field-900 px-2 py-2 text-left text-2xs font-medium text-chalk-500 whitespace-nowrap; }
-  .td { @apply px-2 py-1.5 text-sm whitespace-nowrap border-t border-field-700/70 tnum; }
+  .th { @apply bg-field-900 px-2 py-1.5 text-left text-2xs font-medium text-chalk-500 whitespace-nowrap; }
+  .td { @apply px-2 py-1.5 text-sm whitespace-nowrap border-t border-field-700/70 tnum coarse:py-2.5; }
+
+  /* Edge fades on a table that scrolls sideways: more to see on that side. */
+  .shadow-start { box-shadow: inset 12px 0 10px -10px rgb(0 0 0 / 0.55); }
+  .shadow-end { box-shadow: inset -12px 0 10px -10px rgb(0 0 0 / 0.55); }
 
   .skeleton { @apply animate-shimmer rounded bg-field-800 motion-reduce:animate-none; }
   .sr-only-focusable { @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-pitch-400 focus:px-3 focus:py-2 focus:text-field-950; }

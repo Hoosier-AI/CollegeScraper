@@ -77,7 +77,7 @@ function StatsTab({ league, season, current, teams, scorers = [], assists = [], 
   return (
     <div className="space-y-5">
       {(scorers.length > 0 || assists.length > 0) && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <LeaderCards title="Top scorers" rows={scorers} value={(r) => String(r.goals)} />
           <LeaderCards title="Most assists" rows={assists} value={(r) => String(r.assists)} />
         </div>
@@ -148,10 +148,11 @@ export default function ProLeague() {
   // The season at a glance: matches, goals a match, who leads the table and the scoring.
   const played = d.team_table.reduce((n, t) => n + t.played, 0), goals = d.team_table.reduce((n, t) => n + t.gf, 0);
   const top = d.standings[0]?.rows[0];
+  const tabHref = (t: string) => proPath.league(slug, d.season, l.current_season) + (t === 'table' ? '' : `${d.season && d.season !== l.current_season ? '&' : '?'}tab=${t}`);
   const glance = played ? { matches: Math.round(played / 2), goals, gpm: (goals / Math.max(1, played / 2)).toFixed(2), leader: top?.team.name ?? null, leaderPts: top?.points ?? null, scorer: d.scorers[0]?.player.name ?? null, scorerGoals: d.scorers[0]?.goals ?? null } : null;
   return (
     <div className="space-y-5">
-      <ProHero image={<span className="grid h-20 w-20 place-items-center rounded-xl bg-white/95 p-2 shadow-lg"><TeamLogo src={l.logo} name={l.name} size={60} chip={false} /></span>} title={l.name}
+      <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-16 sm:w-16"><TeamLogo src={l.logo} name={l.name} size={52} chip={false} /></span>} title={l.name}
         chips={[where, `${genderWord(l.gender)} ${l.type === 'cup' ? 'cup' : 'league'}`, d.teams ? `${d.teams} clubs` : null, d.season ? `Season ${d.season}` : null]}
         actions={d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: Number(v) === l.current_season ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}>
         {glance && (
@@ -163,16 +164,27 @@ export default function ProLeague() {
           </div>
         )}
       </ProHero>
-      <TabsNav label="League sections" tabs={tabs} value={tab as Tab} hrefFor={(t) => proPath.league(slug, d.season, l.current_season) + (t === 'table' ? '' : `${d.season && d.season !== l.current_season ? '&' : '?'}tab=${t}`)} />
-      {tab === 'table' && (d.standings.length
-        ? <div className="space-y-4">{d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
-            {(d.advanced_leaders?.table?.length ?? 0) > 0 && <Section title="Expected table"><ExpectedTable rows={d.advanced_leaders!.table!} season={d.season} /><Credit credit={d.advanced_leaders!.credit} /></Section>}
-            {d.history_sources && <p className="text-2xs text-chalk-500">{d.history_sources.map((h, i) => <span key={i}>{i ? ' · ' : ''}{h.what}: {h.url ? <a href={h.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{h.name}</a> : h.name}{h.license ? ` (${h.license})` : ''}</span>)}.</p>}</div>
-        : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Results and Fixtures.' : 'The table appears once the first matches have been played.'} />)}
+      <TabsNav label="League sections" tabs={tabs} value={tab as Tab} hrefFor={tabHref} />
+      {tab === 'table' && (
+        // The table, and beside it on wide screens what a reader looks for next: who scores, who just played, who is next.
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          {d.standings.length
+            ? <div className="space-y-4">{d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
+                {(d.advanced_leaders?.table?.length ?? 0) > 0 && <Section title="Expected table"><ExpectedTable rows={d.advanced_leaders!.table!} season={d.season} /><Credit credit={d.advanced_leaders!.credit} /></Section>}
+                {d.history_sources && <p className="text-2xs text-chalk-500">{d.history_sources.map((h, i) => <span key={i}>{i ? '; ' : ''}{h.what}: {h.url ? <a href={h.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{h.name}</a> : h.name}{h.license ? ` (${h.license})` : ''}</span>)}.</p>}</div>
+            : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Results and Fixtures.' : 'The table appears once the first matches have been played.'} />}
+          <aside className="space-y-4">
+            {d.scorers.length > 0 && <Section title="Top scorers" right={<Link to={tabHref('players')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>}><Leaders rows={d.scorers.slice(0, 5)} stat="goals" label="Goals" /></Section>}
+            {d.assists.length > 0 && <Section title="Most assists"><Leaders rows={d.assists.slice(0, 5)} stat="assists" label="Assists" /></Section>}
+            {d.results.length > 0 && <Section title="Latest results" right={<Link to={tabHref('results')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>}><div className="frame divide-y divide-field-700">{d.results.slice(0, 6).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></Section>}
+            {d.fixtures.length > 0 && <Section title="Next up" right={<Link to={tabHref('fixtures')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>}><div className="frame divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></Section>}
+          </aside>
+        </div>
+      )}
       {tab === 'results' && (d.results.length ? <div className="frame divide-y divide-field-700">{d.results.map((m) => <ProMatchRow key={m.id} m={m} showDate />)}</div> : <EmptyState title="No results yet" />)}
       {tab === 'fixtures' && (d.fixtures.length ? <div className="frame divide-y divide-field-700">{d.fixtures.map((m) => <ProMatchRow key={m.id} m={m} showDate />)}</div> : <EmptyState title="No upcoming fixtures" body="The season may be over, or the next round is not scheduled yet." />)}
       {tab === 'players' && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Section title="Top scorers"><Leaders rows={d.scorers} stat="goals" label="Goals" /></Section>
           <Section title="Most assists"><Leaders rows={d.assists} stat="assists" label="Assists" /></Section>
           {d.advanced_leaders && <div className="md:col-span-2"><Section title="Advanced leaders"><AdvancedLeaders data={d.advanced_leaders} season={d.season} /><Credit credit={d.advanced_leaders.credit} /></Section></div>}

@@ -52,7 +52,7 @@ export function ClubSeasonDetail({ rows }: { rows: ClubSeasonRow[] }) {
         <Figure label="Longest runs" value={`${n(streak.wins)}W · ${n(streak.draws)}D · ${n(streak.loses)}L`} sub="in a row" />
         <Figure label="Matches" value={n(played)} sub={r.fixtures ? `${n(r.fixtures.wins?.total)}-${n(r.fixtures.draws?.total)}-${n(r.fixtures.loses?.total)}` : undefined} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {formations.length > 0 && (
           <figure className="frame p-3">
             <figcaption className="mb-2 text-xs text-chalk-400">Formations used (starts)</figcaption>

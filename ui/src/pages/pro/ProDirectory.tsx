@@ -1,7 +1,8 @@
 // The player directory (/pro/players) and the leaders (/pro/leaders): the same filters over every competition's
 // current season (nationality, position, age, competition, men's/women's, minimum minutes); the directory lists by
 // minutes played, the leaders page by any stat, totals or per 90.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
 import { useUrlNumber, useUrlState } from '../../lib/urlState';
@@ -33,6 +34,8 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
   });
   const leagueOptions = useMemo(() => [{ value: '', label: 'Every competition' }, ...(leagues.data ?? []).slice(0, 400).map((l) => ({ value: String(l.id), label: `${l.name}${l.country && l.country !== 'World' ? ` (${l.country})` : ''}` }))], [leagues.data]);
   const natOptions = useMemo(() => [{ value: '', label: 'Any nationality' }, ...countries.list.map((c) => ({ value: c.name, label: c.name }))], [countries.list]);
+  const [showFilters, setShowFilters] = useState(false);
+  const active = [league, nationality, position, age, gender].filter(Boolean).length;
   const title = leaders ? `${statLabel(stat)} leaders` : 'Players';
   return (
     <div className="space-y-4">
@@ -40,7 +43,11 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
         {leaders && <Field label="Stat">{(id) => <Select id={id} value={stat} onChange={(v) => { setStat(v); setPage(1); }} options={PRO_STATS.map((s) => ({ value: s.key, label: s.label }))} />}</Field>}
         {leaders && <Field label="Numbers">{() => <SegmentedControl label="Numbers" size="sm" value={rate} onChange={(v) => { setRate(v); setPage(1); }} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>}
       </PageHeader>
-      <div className="flex flex-wrap items-end gap-2">
+      {/* Phones: the filters behind one button, so the table starts on the first screen. */}
+      <button type="button" className="btn-ghost btn-sm sm:hidden" aria-expanded={showFilters} aria-controls="pro-filters" onClick={() => setShowFilters((v) => !v)}>
+        <SlidersHorizontal size={14} aria-hidden />{showFilters ? 'Hide filters' : `Filters${active ? ` (${active} on)` : ''}`}
+      </button>
+      <div id="pro-filters" className={`${showFilters ? 'flex' : 'hidden'} flex-wrap items-end gap-2 sm:flex`}>
         <Field label="Competition">{(id) => <Select id={id} value={league} onChange={(v) => { setLeague(v); setPage(1); }} options={leagueOptions} className="max-w-[260px]" />}</Field>
         <Field label="Nationality">{(id) => <Select id={id} value={nationality} onChange={(v) => { setNationality(v); setPage(1); }} options={natOptions} className="max-w-[200px]" />}</Field>
         <Field label="Position">{() => <SegmentedControl label="Position" size="sm" value={position} onChange={(v) => { setPosition(v); setPage(1); }} options={[{ value: '', label: 'All' }, { value: 'Goalkeeper', label: 'GK' }, { value: 'Defender', label: 'DF' }, { value: 'Midfielder', label: 'MF' }, { value: 'Attacker', label: 'FW' }]} />}</Field>
@@ -51,7 +58,7 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
       <div className={q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}>
         <LeadersTable rows={q.data?.rows ?? []} stat={stat} per90={!!(leaders && rate)} caption={title} loading={q.isPending} />
       </div>
-      {q.data && q.data.total > PAGE && <Pager page={page} pageSize={PAGE} total={q.data.total} onPage={setPage} busy={q.isFetching} noun="players" />}
+      {q.data && q.data.total > PAGE && <Pager page={page - 1} pageSize={PAGE} total={q.data.total} onPage={(p) => setPage(p + 1)} busy={q.isFetching} noun="players" />}
     </div>
   );
 }
