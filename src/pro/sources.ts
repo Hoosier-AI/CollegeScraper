@@ -106,6 +106,7 @@ export async function teamAdvanced(db: Db, teamId: number, season: number | null
       league: leagues.get(r.league_id) ?? null, games: r.games, points: r.points, xpoints: n(r.xpoints),
       shots_for: r.shots_for, shots_against: r.shots_against, xg_for: n(r.xg_for), xg_against: n(r.xg_against),
       pass_pct_for: n(r.pass_pct_for), xpass_pct_for: n(r.xpass_pct_for), pass_pct_against: n(r.pass_pct_against), xpass_pct_against: n(r.xpass_pct_against),
+      passes_over_expected_for: n(r.passes_over_expected_for), passes_over_expected_against: n(r.passes_over_expected_against),
       g_plus_for: n(r.g_plus_for), g_plus_against: n(r.g_plus_against), g_plus_by_action: r.g_plus ?? null,
     })).sort((a, b) => (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
   };

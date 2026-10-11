@@ -19,6 +19,7 @@ export interface AdvTeamSeason {
   league: (ProLeagueRef & { priority?: number }) | null; games: number | null; points: number | null; xpoints: number | null; shots_for: number | null; shots_against: number | null;
   xg_for: number | null; xg_against: number | null; pass_pct_for: number | null; xpass_pct_for: number | null; pass_pct_against: number | null; xpass_pct_against: number | null;
   g_plus_for: number | null; g_plus_against: number | null; g_plus_by_action: Record<string, { for: number | null; against: number | null }> | null;
+  passes_over_expected_for?: number | null; passes_over_expected_against?: number | null;
 }
 /** period: 1 and 2 the halves, 3 and 4 extra time. */
 export interface AdvShot { side: 'home' | 'away'; period?: number | null; minute: number | null; player: string | null; slug: string | null; x: number | null; y: number | null; xg: number | null; goal: boolean; own_goal: boolean; blocked: boolean; head: boolean; pattern: string | null }
@@ -70,7 +71,12 @@ export function PlayerAdvancedTable({ seasons }: { seasons: AdvPlayerSeason[] })
     { key: 'key_passes', label: 'KP', title: 'Key passes', num: true, priority: 3, value: (r) => r.key_passes },
     { key: 'pass', label: 'Pass %', title: 'Pass completion (expected)', num: true, priority: 3, value: (r) => r.pass_pct, render: (r) => r.pass_pct == null ? '–' : `${pct(r.pass_pct)} (${pct(r.xpass_pct)})` },
     { key: 'g_plus', label: 'g+', title: 'Goals added above average', num: true, decimals: 2, value: (r) => dec(r.g_plus) },
-    ...(keeper ? [{ key: 'gk', label: 'GA − xGA', title: 'Goals conceded minus expected (keepers; lower is better)', num: true as const, decimals: 2, value: (r: AdvPlayerSeason) => dec(r.keeper?.goals_minus_xg) }] : []),
+    ...(keeper ? [
+      { key: 'gk_faced', label: 'SF', title: 'Shots faced (keepers)', num: true as const, priority: 2 as const, value: (r: AdvPlayerSeason) => r.keeper?.shots_faced ?? null },
+      { key: 'gk_saves', label: 'Sv', title: 'Saves (keepers)', num: true as const, value: (r: AdvPlayerSeason) => r.keeper?.saves ?? null },
+      { key: 'gk_xga', label: 'xGA', title: 'Expected goals faced (keepers)', num: true as const, decimals: 2, priority: 2 as const, value: (r: AdvPlayerSeason) => dec(r.keeper?.xg_faced) },
+      { key: 'gk', label: 'GA − xGA', title: 'Goals conceded minus expected (keepers; lower is better)', num: true as const, decimals: 2, value: (r: AdvPlayerSeason) => dec(r.keeper?.goals_minus_xg) },
+    ] : []),
   ];
   return <DataTable rows={seasons} columns={cols} rowKey={(r) => `${r.season}-${r.league?.id}-${r.team?.id}`} caption="Advanced stats by season" dense />;
 }
@@ -90,6 +96,7 @@ export function TeamAdvancedCards({ competitions }: { competitions: AdvTeamSeaso
               ['Shots', c.shots_for != null ? `${c.shots_for} : ${c.shots_against ?? '–'}` : '–', 'for, against'],
               ['Passing', pct(c.pass_pct_for), c.xpass_pct_for != null ? `expected ${pct(c.xpass_pct_for)}` : null],
               ['Opponents passing', pct(c.pass_pct_against), c.xpass_pct_against != null ? `expected ${pct(c.xpass_pct_against)}` : null],
+              ['Passes over expected', signed(c.passes_over_expected_for ?? null, 0), c.passes_over_expected_against != null ? `against ${signed(c.passes_over_expected_against, 0)}` : null],
               ['Matches', c.games ?? '–', null],
             ].map(([label, value, sub]) => (
               <div key={String(label)} className="min-w-0"><div className="display text-xl tnum text-chalk-100">{value}</div><div className="text-xs text-chalk-500">{label}{sub ? <span className="text-chalk-400">, {sub}</span> : null}</div></div>

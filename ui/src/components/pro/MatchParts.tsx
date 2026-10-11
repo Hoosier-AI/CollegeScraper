@@ -117,11 +117,16 @@ const STAT_ROWS: [string, string, (v: number | null) => string][] = [
   ['xg', 'Expected goals (xG)', (v) => (v == null ? '–' : v.toFixed(2))],
   ['shots', 'Shots', (v) => (v == null ? '–' : String(v))],
   ['shots_on', 'Shots on target', (v) => (v == null ? '–' : String(v))],
+  ['shots_off', 'Shots off target', (v) => (v == null ? '–' : String(v))],
+  ['shots_blocked', 'Blocked shots', (v) => (v == null ? '–' : String(v))],
+  ['shots_inside', 'Shots inside the box', (v) => (v == null ? '–' : String(v))],
+  ['shots_outside', 'Shots outside the box', (v) => (v == null ? '–' : String(v))],
   ['corners', 'Corners', (v) => (v == null ? '–' : String(v))],
   ['fouls', 'Fouls', (v) => (v == null ? '–' : String(v))],
   ['offsides', 'Offsides', (v) => (v == null ? '–' : String(v))],
   ['saves', 'Saves', (v) => (v == null ? '–' : String(v))],
   ['passes', 'Passes', (v) => (v == null ? '–' : String(v))],
+  ['passes_accurate', 'Accurate passes', (v) => (v == null ? '–' : String(v))],
   ['pass_pct', 'Pass accuracy', (v) => (v == null ? '–' : `${Math.round(v)}%`)],
   ['yellow', 'Yellow cards', (v) => (v == null ? '–' : String(v))],
   ['red', 'Red cards', (v) => (v == null ? '–' : String(v))],
@@ -143,6 +148,9 @@ export function TeamStatsCompare({ home, away, homeName, awayName }: { home: Pro
           </div>
         );
       })}
+      {[home, away].some((s) => (s as { extra?: { source?: string } } | null)?.extra?.source === 'football-data') && (
+        <p className="px-3 py-1.5 text-2xs text-chalk-500">Match stats: <a href="https://www.football-data.co.uk" target="_blank" rel="noopener" className="underline hover:text-pitch-300">football-data.co.uk</a>.</p>
+      )}
     </div>
   );
 }

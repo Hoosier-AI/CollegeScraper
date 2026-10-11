@@ -129,6 +129,7 @@ const HISTORY_CREDIT: Record<string, { name: string; url: string | null; license
   openfootball: { name: 'openfootball', url: 'https://github.com/openfootball/world', license: 'public domain (CC0)' },
   wikipedia: { name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0' },
   asa: { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', license: 'credited' },
+  'football-data': { name: 'football-data.co.uk', url: 'https://www.football-data.co.uk', license: 'free data, credited' },
 };
 /**
  * Credits for a season's results and table when they are not API-Football's: the results' source for a history
