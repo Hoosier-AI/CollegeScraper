@@ -99,3 +99,8 @@ export function useCountries() {
 
 /** A per-90 number from a season total, or null under 90 minutes. */
 export const per90 = (v: number | null | undefined, minutes: number | null | undefined) => (v == null || !minutes || minutes < 90 ? null : Math.round((v * 9000) / minutes) / 100);
+
+// A cup or one-off tournament: the provider's type, or a name that says so (it files "USL League One Cup", "Copa de la
+// Liga Profesional" and a few super cups as leagues).
+const CUP_NAME = /\b(cup|copa|coupe|coppa|pokal|ta[cç]a|trophy|shield|beker|kupa|puchar|supercopa|supercoppa|supercup)\b/i;
+export const isCup = (l: { type?: string | null; name: string }) => l.type === 'cup' || CUP_NAME.test(l.name);
