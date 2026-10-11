@@ -1,7 +1,7 @@
 // The `crawl` block of /api/console/pro, for the hub's Crawling page: every site the pro crawl reads (requests,
 // seasons done of the seasons it should have, rows, agreement with API-Football, what is running), every league
 // season with the source that supplies each kind of data, and what is running right now.
-import { selectAll, type Db } from '../db/client.js';
+import { kvGet, kvSet, selectAll, type Db } from '../db/client.js';
 import { cachedKv, KV } from './settings.js';
 import { CRAWL_SITES, CHECK_JOBS, expectedSeasons, siteOfJob } from '../pro/crawlSites.js';
 import { tierOf } from '../jobs/pro/plan.js';
@@ -15,14 +15,19 @@ const day = (offset = 0) => new Date(Date.now() - offset * 86400_000).toISOStrin
 const sum = (rows: Record<string, number>, keep: (k: string) => boolean) => Object.entries(rows).reduce((n, [k, v]) => n + (keep(k) ? Number(v) : 0), 0);
 const isApi = (k: string) => k === 'api-football' || k === 'provider';
 
-/** Every row of pro_crawl_matrix(): PostgREST caps an answer at 1,000 rows, so it is read a page at a time. */
+/** Every row of pro_crawl_matrix(): PostgREST caps an answer at 1,000 rows, so it is read a page at a time, three pages
+ *  at once (each page runs the whole function, ~1.7 s; one after another they took the hub past its 8 s limit). */
 async function matrixRows(db: Db): Promise<MatrixRow[]> {
   const out: MatrixRow[] = [];
-  for (let from = 0; ; from += 1000) {
+  const page = async (from: number) => {
     const { data, error } = await db.rpc('pro_crawl_matrix').range(from, from + 999);
     if (error) throw new Error(`crawl matrix: ${error.message}`);
-    out.push(...((data ?? []) as MatrixRow[]));
-    if (!data || data.length < 1000) return out;
+    return (data ?? []) as MatrixRow[];
+  };
+  for (let from = 0; ; from += 3000) {
+    const pages = await Promise.all([page(from), page(from + 1000), page(from + 2000)]);
+    for (const p of pages) out.push(...p);
+    if (pages.some((p) => p.length < 1000)) return out;
   }
 }
 
@@ -33,13 +38,25 @@ export interface WorldCoverage {
   players_total: number; players_in_squads: number; players_with_season_stats: number; finals: number; finals_detailed: number; transfers: number; db_bytes: number; at: string;
 }
 let world: { at: number; data: WorldCoverage } | null = null;
-/** How much of the pro football world the crawl has (pro_world_coverage, migration 149), cached 5 minutes. */
+let worldRefresh: Promise<void> | null = null;
+const WORLD_KEY = 'pro:world_coverage';
+/** How much of the pro football world the crawl has (pro_world_coverage, migration 149). The count takes ~9 s on the
+ *  full tables, so the page never waits for it: the last result answers at once (kept in college_kv, so a restart
+ *  still has one) and a refresh runs in the background when it is over 5 minutes old. */
 async function worldCoverage(db: Db): Promise<WorldCoverage | null> {
-  if (world && Date.now() - world.at < 300_000) return world.data;
-  const { data, error } = await db.rpc('pro_world_coverage');
-  if (error) return world?.data ?? null;
-  world = { at: Date.now(), data: data as WorldCoverage };
-  return world.data;
+  if (!world) {
+    const saved = await kvGet<WorldCoverage>(db, WORLD_KEY).catch(() => null);
+    if (saved) world = { at: Date.parse(saved.at) || 0, data: saved };
+  }
+  if ((!world || Date.now() - world.at > 300_000) && !worldRefresh) {
+    worldRefresh = (async () => {
+      const { data, error } = await db.rpc('pro_world_coverage');
+      if (error || !data) return;
+      world = { at: Date.now(), data: data as WorldCoverage };
+      await kvSet(db, WORLD_KEY, data).catch(() => {});
+    })().catch(() => {}).finally(() => { worldRefresh = null; });
+  }
+  return world?.data ?? null;
 }
 
 /** The leagues list for the Crawling page, filtered (US scene, top competitions, or everything) and to current seasons unless asked. */
