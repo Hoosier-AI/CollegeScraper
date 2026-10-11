@@ -517,7 +517,53 @@ export async function match(db: Db, slug: string) {
     home: side(fx.home_team_id), away: side(fx.away_team_id),
     h2h: ((h2h.data ?? []) as any[]).map(toMatchRow),
     advanced: await matchAdvanced(db, fx.id, fx.home_team_id),
+    // Before kickoff: form, the table, each side's last starting XI, top scorers and who is out.
+    preview: m.status === 'live' || m.status === 'final' ? null : await matchPreview(db, fx).catch(() => null),
   };
+}
+
+/** What a match page shows before kickoff, for each side: the last five results (any competition), the latest
+ *  starting XI we hold (formation and coach), the leading scorers in this competition's season, the players the
+ *  provider lists as out or doubtful for this fixture, and both clubs' rows of the table. */
+async function matchPreview(db: Db, fx: { id: number; league_id: number; season: number; home_team_id: number; away_team_id: number; kickoff?: string }) {
+  const before = (fx as any).kickoff ?? new Date().toISOString();
+  const side = async (teamId: number) => {
+    const [recentRes, scorers, out] = await Promise.all([
+      db.from('pro_fixtures').select(FIXTURE_SELECT).eq('status', 'final').lt('kickoff', before)
+        .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`).order('kickoff', { ascending: false }).limit(8),
+      db.from('pro_player_season_stats').select('player_id,apps,minutes,goals,assists,position').eq('team_id', teamId).eq('league_id', fx.league_id).eq('season', fx.season)
+        .order('goals', { ascending: false }).order('assists', { ascending: false }).limit(4),
+      db.from('pro_injuries').select('player_id,type,reason').eq('fixture_id', fx.id).eq('team_id', teamId),
+    ]);
+    const recent = ((recentRes.data ?? []) as any[]).map(toMatchRow);
+    // The latest of those matches with a starting XI stored for this club.
+    const ids = recent.map((r) => r.id);
+    const lines = ids.length ? await selectAll<any>(db, 'pro_fixture_players', 'fixture_id,slot,player_id,name,number,pos,grid,starter,captain', (q) => q.in('fixture_id', ids).eq('team_id', teamId).eq('starter', true)) : [];
+    const lastId = ids.find((id) => lines.filter((l) => l.fixture_id === id).length >= 11) ?? null;
+    const xi = lastId ? lines.filter((l) => l.fixture_id === lastId).sort((a, b) => a.slot - b.slot) : [];
+    const lineupRow = lastId ? (await db.from('pro_fixture_lineups').select('formation,coach_name').eq('fixture_id', lastId).eq('team_id', teamId).maybeSingle()).data as any : null;
+    const playerIds = [...new Set([...xi.map((l) => l.player_id), ...((scorers.data ?? []) as any[]).map((s) => s.player_id), ...((out.data ?? []) as any[]).map((o) => o.player_id)].filter((x) => x != null))];
+    const people = new Map((playerIds.length ? await selectAll<any>(db, 'pro_players', 'id,slug,display_name,photo,position', (q) => q.in('id', playerIds)) : []).map((p) => [p.id, p]));
+    const who = (id: number | null, fallback: string | null) => { const p = id != null ? people.get(id) : null; return { id, name: p?.display_name ?? fallback ?? 'Unknown', slug: p?.slug ?? null, photo: p?.photo ?? null, position: p?.position ?? null }; };
+    return {
+      form: recent.slice(0, 5),
+      last_xi: lastId ? {
+        match: recent.find((r) => r.id === lastId)!, formation: lineupRow?.formation ?? null, coach: lineupRow?.coach_name ?? null,
+        starters: xi.map((l) => { const p = who(l.player_id, l.name); return { slot: l.slot, player_id: l.player_id, name: l.name, display: p.name, slug: p.slug, photo: p.photo, number: l.number, pos: l.pos, grid: l.grid, starter: true, captain: !!l.captain, minutes: null, rating: null, goals: null, assists: null, yellow: null, red: null, saves: null, conceded: null, shots: null, shots_on: null, passes: null, key_passes: null, tackles: null }; }),
+      } : null,
+      scorers: ((scorers.data ?? []) as any[]).filter((s) => s.goals > 0 || s.assists > 0).slice(0, 3).map((s) => ({ ...who(s.player_id, null), apps: s.apps, minutes: s.minutes, goals: s.goals, assists: s.assists })),
+      out: ((out.data ?? []) as any[]).map((o) => ({ ...who(o.player_id, null), type: o.type ?? null, reason: o.reason ?? null })),
+    };
+  };
+  const [home, away, table] = await Promise.all([
+    side(fx.home_team_id), side(fx.away_team_id),
+    db.from('pro_standings').select('group_name,team_id,rank,points,played,win,draw,lose,gf,ga,gd,form').eq('league_id', fx.league_id).eq('season', fx.season),
+  ]);
+  const rows = (table.data ?? []) as any[];
+  const groupOf = rows.find((r) => r.team_id === fx.home_team_id)?.group_name ?? rows.find((r) => r.team_id === fx.away_team_id)?.group_name ?? null;
+  const group = rows.filter((r) => r.group_name === groupOf);
+  const standing = (teamId: number) => { const r = group.find((x) => x.team_id === teamId); return r ? { rank: r.rank, points: r.points, played: r.played, win: r.win, draw: r.draw, lose: r.lose, gf: r.gf, ga: r.ga, gd: r.gd, form: r.form ?? null } : null; };
+  return { home, away, table: group.length ? { group: groupOf, teams: group.length, home: standing(fx.home_team_id), away: standing(fx.away_team_id) } : null };
 }
 
 // ---------- search and slugs ----------

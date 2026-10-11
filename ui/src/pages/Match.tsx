@@ -1,7 +1,7 @@
 // One match: the scoreline masthead, then Summary / Lineups / Stats / Head-to-head / Preview.
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { liveClock } from '../lib/liveClock';
-import { useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { api, fmt, useAdmin } from '../lib/api';
 import { useHref } from '../lib/filters';
@@ -69,8 +69,8 @@ export default function Match() {
   const pastNote = (lu: SideLineup, name: string | null) => (lu.status === 'past' && lu.past ? `${name}'s lineup from their last match (vs ${lu.past.opponent ?? '?'}, ${fmt.day(lu.past.game_date)})` : null);
   const tabs = [
     ...(played ? [{ id: 'summary' as Tab, label: 'Summary' }, { id: 'lineups' as Tab, label: bothPast ? 'Past lineups' : 'Lineups' }, { id: 'stats' as Tab, label: 'Stats' }] : []),
-    { id: 'h2h' as Tab, label: 'Head-to-head' },
-    { id: 'preview' as Tab, label: played ? 'Key players' : 'Preview' },
+    // Before kickoff the preview leads; after it, head-to-head comes before key players.
+    ...(played ? [{ id: 'h2h' as Tab, label: 'Head-to-head' }, { id: 'preview' as Tab, label: 'Key players' }] : [{ id: 'preview' as Tab, label: 'Preview' }, { id: 'h2h' as Tab, label: 'Head-to-head' }]),
     ...(played ? [] : [{ id: 'lineups' as Tab, label: 'Past lineups' }]),
     ...(admin ? [{ id: 'raw' as Tab, label: 'Raw' }] : []),
   ];
@@ -178,7 +178,25 @@ export default function Match() {
       )}
 
       {tab === 'h2h' && <HeadToHead g={g} h2h={p.head_to_head} sides={sides} />}
-      {tab === 'preview' && <KeyPlayers g={g} sides={sides} />}
+      {tab === 'preview' && (played ? <KeyPlayers g={g} sides={sides} /> : (
+        // Before kickoff, one page: the season side by side, head to head, each side's last lineup and key players.
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          <HeadToHead g={g} h2h={p.head_to_head} sides={sides} compact allHref={href(pathname, { tab: 'h2h' })} />
+          <div className="space-y-6">
+            {(homeLu.status !== 'none' || awayLu.status !== 'none') && (
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-chalk-100">Last lineups</h3>
+                <div className="mx-auto max-w-md"><Pitch home={homeLu} away={awayLu} homeName={g.home.name} awayName={g.away.name} /></div>
+                <ul className="space-y-0.5 text-xs text-chalk-400">
+                  {[pastNote(homeLu, g.home.name), pastNote(awayLu, g.away.name)].filter(Boolean).map((t) => <li key={t}>{t}</li>)}
+                </ul>
+                <Link to={href(pathname, { tab: 'lineups' })} className="text-sm text-pitch-300 hover:text-pitch-200">Full lineups and benches</Link>
+              </section>
+            )}
+            <section className="space-y-2"><h3 className="text-sm font-semibold text-chalk-100">Key players</h3><KeyPlayers g={g} sides={sides} narrow /></section>
+          </div>
+        </div>
+      ))}
       {tab === 'raw' && admin && <div className="space-y-2">{raw.map((r) => <JsonViewer key={r.source} title={`${r.source} payload (fetched ${fmt.dt(r.fetched_at)})`} value={r.payload} />)}<JsonViewer title="Game header row" value={box.data?.game} /><Badge>{players.length} player lines</Badge></div>}
     </div>
   );

@@ -252,7 +252,8 @@ export function StatBars({ home, away, homeName, awayName }: { home: any | null;
 
 /* ---------- head to head ---------- */
 
-export function HeadToHead({ g, h2h, sides }: { g: any; h2h: any; sides: any }) {
+/** compact: for the preview: the season table first, the record card, the last three meetings and a link to the rest. */
+export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: any; sides: any; compact?: boolean; allHref?: string }) {
   const href = useHref();
   const h = sides.home, a = sides.away;
   const hn = g.home.short_name ?? g.home.name ?? 'Home', an = g.away.short_name ?? g.away.name ?? 'Away';
@@ -263,6 +264,27 @@ export function HeadToHead({ g, h2h, sides }: { g: any; h2h: any; sides: any }) 
   const pct = (n: number) => (total ? `${(n / total) * 100}%` : '0%');
   return (
     <div className="space-y-6">
+      {compact ? <>
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-chalk-100">This season, side by side</h3>
+        <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Season comparison</caption>
+          <thead><tr><th scope="col" className="th text-right">{g.home.name}</th><th scope="col" className="th text-center"></th><th scope="col" className="th">{g.away.name}</th></tr></thead>
+          <tbody>
+            {row('Record', h?.stats ? fmt.rec(h.stats.w, h.stats.l, h.stats.t) : null, a?.stats ? fmt.rec(a.stats.w, a.stats.l, a.stats.t) : null)}
+            {row('Form', h?.stats ? <FormPips form={h.stats.form.last5} size="sm" /> : null, a?.stats ? <FormPips form={a.stats.form.last5} size="sm" /> : null)}
+            {row('Conference', h?.standing ? `${fmt.ordinal(h.standing.rank)}${h.standing.of ? ` of ${h.standing.of}` : ''}, ${fmt.rec(h.standing.conf_w, h.standing.conf_l, h.standing.conf_t)}` : null, a?.standing ? `${fmt.ordinal(a.standing.rank)}${a.standing.of ? ` of ${a.standing.of}` : ''}, ${fmt.rec(a.standing.conf_w, a.standing.conf_l, a.standing.conf_t)}` : null)}
+            {row('Coaches poll', h?.poll ? `No. ${h.poll.rank}` : 'unranked', a?.poll ? `No. ${a.poll.rank}` : 'unranked')}
+            {row('Points a game', h?.stats ? fmt.num(h.stats.ppg, 2) : null, a?.stats ? fmt.num(a.stats.ppg, 2) : null)}
+            {row('Goals for a game', h?.stats ? fmt.num(h.stats.gf_pg, 2) : null, a?.stats ? fmt.num(a.stats.gf_pg, 2) : null)}
+            {row('Goals against a game', h?.stats ? fmt.num(h.stats.ga_pg, 2) : null, a?.stats ? fmt.num(a.stats.ga_pg, 2) : null)}
+            {row('Home record', h?.stats ? fmt.rec(h.stats.home_w, h.stats.home_l, h.stats.home_t) : null, a?.stats ? fmt.rec(a.stats.home_w, a.stats.home_l, a.stats.home_t) : null)}
+            {row('Away record', h?.stats ? fmt.rec(h.stats.away_w, h.stats.away_l, h.stats.away_t) : null, a?.stats ? fmt.rec(a.stats.away_w, a.stats.away_l, a.stats.away_t) : null)}
+            {row('Shots a game', h?.stats ? fmt.num(h.stats.shots_pg, 1) : null, a?.stats ? fmt.num(a.stats.shots_pg, 1) : null)}
+            {row('Clean sheets', h?.stats?.clean_sheets, a?.stats?.clean_sheets)}
+          </tbody>
+        </table></div>
+        <p className="text-xs text-chalk-500"><Link className="text-pitch-400 hover:text-pitch-300" to={href(`/teams/${g.home.program_id}`)}>{g.home.name}</Link> and <Link className="text-pitch-400 hover:text-pitch-300" to={href(`/teams/${g.away.program_id}`)}>{g.away.name}</Link> team pages have the full season.</p>
+      </section>
       <section className="space-y-3" aria-labelledby="h2h-title">
         <h3 id="h2h-title" className="text-sm font-semibold text-chalk-100">Head-to-head{h2h.first_season ? <span className="font-normal text-chalk-500">, meetings since {h2h.first_season}</span> : null}</h3>
         {h2h.played ? (
@@ -288,9 +310,9 @@ export function HeadToHead({ g, h2h, sides }: { g: any; h2h: any; sides: any }) 
               </dl>
               {streakText(h2h.streak) && <p className="border-t border-field-700 pt-3 text-sm text-chalk-300">{streakText(h2h.streak)}.</p>}
             </div>
-            <h4 className="text-sm font-semibold text-chalk-100">Every meeting</h4>
+            <h4 className="text-sm font-semibold text-chalk-100">{compact ? 'Last meetings' : 'Every meeting'}</h4>
             <ol className="frame divide-y divide-field-700">
-              {h2h.games.map((m: any) => {
+              {(compact ? h2h.games.slice(0, 3) : h2h.games).map((m: any) => {
                 const hw = m.home.score != null && m.away.score != null && m.home.score > m.away.score, aw = m.home.score != null && m.away.score != null && m.away.score > m.home.score;
                 // Older seasons were stored from the scoreboard alone, without a conference flag: only say what is known.
                 const comp = m.postseason ? 'Postseason' : m.tournament ?? (m.conference_game ? 'Conference' : m.season === g.season ? 'Non-conference' : `${m.season} season`);
@@ -314,6 +336,65 @@ export function HeadToHead({ g, h2h, sides }: { g: any; h2h: any; sides: any }) 
                 );
               })}
             </ol>
+            {compact && allHref && h2h.games.length > 3 && <Link to={allHref} className="text-sm text-pitch-300 hover:text-pitch-200">All {h2h.games.length} meetings</Link>}
+            {h2h.scorers_pending && <Note>Scorers for older meetings are being fetched from NCAA.com; they appear here within a few minutes.</Note>}
+            <p className="text-xs text-chalk-500">Results shown for {hn}. Our records start in {h2h.first_season}; earlier meetings are not counted.</p>
+          </>
+        ) : <EmptyState title="First meeting in our records" body="Results go back to the 2024 season." />}
+      </section>
+      </> : <>
+      <section className="space-y-3" aria-labelledby="h2h-title">
+        <h3 id="h2h-title" className="text-sm font-semibold text-chalk-100">Head-to-head{h2h.first_season ? <span className="font-normal text-chalk-500">, meetings since {h2h.first_season}</span> : null}</h3>
+        {h2h.played ? (
+          <>
+            <div className="card space-y-4 p-4">
+              <div className="grid grid-cols-3 items-end text-center">
+                <div><div className="display text-3xl tnum text-chalk-100">{h2h.home_wins}</div><div className="text-xs text-chalk-400">{hn} wins</div></div>
+                <div><div className="display text-3xl tnum text-chalk-300">{h2h.ties}</div><div className="text-xs text-chalk-400">ties</div></div>
+                <div><div className="display text-3xl tnum text-chalk-100">{h2h.away_wins}</div><div className="text-xs text-chalk-400">{an} wins</div></div>
+              </div>
+              <div className="flex h-2 overflow-hidden rounded-full bg-field-800" role="img" aria-label={`${hn} ${h2h.home_wins} wins, ${h2h.ties} ties, ${an} ${h2h.away_wins} wins`}>
+                <span className="bg-pitch-400" style={{ width: pct(h2h.home_wins) }} /><span className="bg-chalk-500" style={{ width: pct(h2h.ties) }} /><span className="bg-note" style={{ width: pct(h2h.away_wins) }} />
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+                <Stat label="Meetings" value={h2h.played} />
+                <Stat label="Goals" value={`${h2h.home_goals}–${h2h.away_goals}`} sub={h2h.avg_goals != null ? `${h2h.avg_goals} a game` : undefined} />
+                <Stat label="Clean sheets" value={`${h2h.home_clean_sheets}–${h2h.away_clean_sheets}`} sub={`${hn}–${an}`} />
+                <Stat label="Last meeting" value={h2h.last_meeting ? fmt.date(h2h.last_meeting.game_date) : '–'} />
+                <Stat label={`${hn} at home`} value={rec(h2h.at_home)} />
+                <Stat label={`${hn} away`} value={rec(h2h.at_away)} sub={h2h.at_neutral && (h2h.at_neutral.w + h2h.at_neutral.l + h2h.at_neutral.t) ? `${rec(h2h.at_neutral)} neutral` : undefined} />
+                <Stat label={`${hn}'s biggest win`} value={h2h.biggest_home_win ? h2h.biggest_home_win.score : '–'} sub={h2h.biggest_home_win ? fmt.date(h2h.biggest_home_win.game_date) : undefined} />
+                <Stat label={`${an}'s biggest win`} value={h2h.biggest_away_win ? h2h.biggest_away_win.score : '–'} sub={h2h.biggest_away_win ? fmt.date(h2h.biggest_away_win.game_date) : undefined} />
+              </dl>
+              {streakText(h2h.streak) && <p className="border-t border-field-700 pt-3 text-sm text-chalk-300">{streakText(h2h.streak)}.</p>}
+            </div>
+            <h4 className="text-sm font-semibold text-chalk-100">{compact ? 'Last meetings' : 'Every meeting'}</h4>
+            <ol className="frame divide-y divide-field-700">
+              {(compact ? h2h.games.slice(0, 3) : h2h.games).map((m: any) => {
+                const hw = m.home.score != null && m.away.score != null && m.home.score > m.away.score, aw = m.home.score != null && m.away.score != null && m.away.score > m.home.score;
+                // Older seasons were stored from the scoreboard alone, without a conference flag: only say what is known.
+                const comp = m.postseason ? 'Postseason' : m.tournament ?? (m.conference_game ? 'Conference' : m.season === g.season ? 'Non-conference' : `${m.season} season`);
+                const sc = (m.scorers ?? []) as { program_id: string | null; name: string | null; minute: string | null }[];
+                return (
+                  <li key={m.id}>
+                    <Link to={href(`/matches/${m.id}`)} className="grid grid-cols-1 gap-x-4 gap-y-1 px-3 py-2.5 hover:bg-field-800 sm:grid-cols-[8.5rem_minmax(0,1fr)_auto]">
+                      <span className="text-sm text-chalk-300"><span className="font-medium text-chalk-100">{fmt.date(m.game_date)}</span><span className="block text-2xs text-chalk-500">{comp}{m.neutral_site ? ', neutral site' : ''}{m.venue?.city ? `, ${m.venue.city}` : ''}</span></span>
+                      <span className="min-w-0 text-sm">
+                        <span className="flex items-center gap-2"><TeamLogo src={m.home.logo} seo={m.home.seo} name={m.home.name} size={18} /><span className={`truncate ${hw ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{m.home.name}</span><span className="text-2xs text-chalk-500">home</span><span className={`ml-auto tnum ${hw ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{m.home.score ?? '–'}</span></span>
+                        <span className="mt-0.5 flex items-center gap-2"><TeamLogo src={m.away.logo} seo={m.away.seo} name={m.away.name} size={18} /><span className={`truncate ${aw ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{m.away.name}</span><span className={`ml-auto tnum ${aw ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{m.away.score ?? '–'}</span></span>
+                        {sc.length > 0 && (
+                          <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-chalk-400">
+                            {sc.map((x, i) => <span key={i} className="inline-flex items-center gap-1"><SoccerBall size={11} />{x.name ?? 'Unknown'}{x.minute ? ` ${x.minute}` : ''}<span className="text-chalk-500">({x.program_id === m.home.program_id ? (m.home.short_name ?? m.home.name) : (m.away.short_name ?? m.away.name)})</span></span>)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="self-center justify-self-start sm:justify-self-end">{m.result && <ResultBadge result={m.result} us={m.home.program_id === g.home.program_id ? m.home.score : m.away.score} them={m.home.program_id === g.home.program_id ? m.away.score : m.home.score} />}<span className="sr-only"> for {hn}</span></span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
+            {compact && allHref && h2h.games.length > 3 && <Link to={allHref} className="text-sm text-pitch-300 hover:text-pitch-200">All {h2h.games.length} meetings</Link>}
             {h2h.scorers_pending && <Note>Scorers for older meetings are being fetched from NCAA.com; they appear here within a few minutes.</Note>}
             <p className="text-xs text-chalk-500">Results shown for {hn}. Our records start in {h2h.first_season}; earlier meetings are not counted.</p>
           </>
@@ -339,6 +420,7 @@ export function HeadToHead({ g, h2h, sides }: { g: any; h2h: any; sides: any }) 
         </table></div>
         <p className="text-xs text-chalk-500"><Link className="text-pitch-400 hover:text-pitch-300" to={href(`/teams/${g.home.program_id}`)}>{g.home.name}</Link> and <Link className="text-pitch-400 hover:text-pitch-300" to={href(`/teams/${g.away.program_id}`)}>{g.away.name}</Link> team pages have the full season.</p>
       </section>
+      </>}
     </div>
   );
 }
@@ -361,7 +443,7 @@ function PlayerCard({ p, line }: { p: any; line: string }) {
   );
 }
 
-export function KeyPlayers({ g, sides }: { g: any; sides: any }) {
+export function KeyPlayers({ g, sides, narrow }: { g: any; sides: any; narrow?: boolean }) {
   const col = (side: 'home' | 'away') => {
     const s = sides[side]; const name = g[side].name;
     if (!s) return null;
@@ -378,7 +460,7 @@ export function KeyPlayers({ g, sides }: { g: any; sides: any }) {
       </div>
     );
   };
-  return <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">{col('home')}{col('away')}</div>;
+  return <div className={`grid grid-cols-1 gap-6 ${narrow ? 'sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2' : 'lg:grid-cols-2'}`}>{col('home')}{col('away')}</div>;
 }
 
 export function ResultLine({ g }: { g: any }) {

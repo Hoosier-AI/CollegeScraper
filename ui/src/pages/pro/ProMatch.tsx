@@ -9,8 +9,9 @@ import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ErrorBox, Section, Skeleton, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
+import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
 
-interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null }
+interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null }
 
 function Scoreline({ m }: { m: MatchData['match'] }) {
   const played = m.status === 'live' || m.status === 'final';
@@ -67,6 +68,8 @@ export default function ProMatch() {
       </p>
       {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
       {m.status === 'final' && !m.detail && !d.events.length && <p className="text-center text-sm text-chalk-400">Lineups and match stats arrive shortly after full time.</p>}
+      {/* Before kickoff (and until announced lineups arrive): the preview in place of events and stats. */}
+      {d.preview && !hasLineups && <MatchPreview m={m} p={d.preview} h2h={d.h2h} />}
       {/* Two columns on desktop, read in pairs: what happened beside the numbers, who played where beside the lineups,
           where the shots came from beside earlier meetings. A pair missing one half gives the other the full width. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
@@ -82,7 +85,7 @@ export default function ProMatch() {
           </Section>
         )}
         {hasShots && <Section title="Shot map" className={d.h2h.length ? '' : 'lg:col-span-2'}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
-        {d.h2h.length > 0 && <Section title="Earlier meetings" className={hasShots ? '' : 'lg:col-span-2'}><div className={`frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 ${hasShots ? '' : 'xl:grid-cols-2'}`}>{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague={!hasShots} compact={hasShots} />)}</div></Section>}
+        {d.h2h.length > 0 && !(d.preview && !hasLineups) && <Section title="Earlier meetings" className={hasShots ? '' : 'lg:col-span-2'}><div className={`frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 ${hasShots ? '' : 'xl:grid-cols-2'}`}>{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague={!hasShots} compact={hasShots} />)}</div></Section>}
       </div>
     </div>
   );
