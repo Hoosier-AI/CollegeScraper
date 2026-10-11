@@ -1,5 +1,6 @@
 // One match: the scoreline masthead, then Summary / Lineups / Stats / Head-to-head / Preview.
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { liveClock } from '../lib/liveClock';
 import { useLocation, useParams } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { api, fmt, useAdmin } from '../lib/api';
@@ -91,7 +92,7 @@ export default function Match() {
         {g.ncaa_contest_id && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={`https://www.ncaa.com/game/${g.ncaa_contest_id}`} target="_blank" rel="noreferrer">NCAA.com <ExternalLink size={12} aria-hidden /></a>}
         {Object.entries(box.data?.game?.site_game_refs ?? {}).map(([host, url]) => (url ? <a key={host} className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={String(url)} target="_blank" rel="noreferrer">{host} <ExternalLink size={12} aria-hidden /></a> : null))}
         {g.status === 'live' && (
-          <span className="inline-flex items-center gap-1.5 font-medium text-win"><span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />Live{(g.live?.period ?? g.live_period) ? ` · ${g.live?.period ?? g.live_period}${(g.live?.clock ?? g.live_clock) ? ` ${g.live?.clock ?? g.live_clock}` : ''}` : ''}{(g.live?.updated_at ?? g.live_updated_at) ? ` · score updated ${agoShort(g.live?.updated_at ?? g.live_updated_at, now)}` : ''}{provisional && box.data?.stats?.live_stats_at ? ` · stats ${agoShort(box.data.stats.live_stats_at, now)}` : ''}</span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-win"><span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />Live, {liveClock(g.live ?? { period: g.live_period, clock: g.live_clock }).long.replace(/^./, (c) => c.toLowerCase())}{(g.live?.updated_at ?? g.live_updated_at) ? ` · score updated ${agoShort(g.live?.updated_at ?? g.live_updated_at, now)}` : ''}{provisional && box.data?.stats?.live_stats_at ? ` · stats ${agoShort(box.data.stats.live_stats_at, now)}` : ''}</span>
         )}
         {admin && <button className="btn-ghost btn-sm" onClick={() => refetch.mutate()} disabled={refetch.isPending || refetch.isSuccess}>{refetch.isSuccess ? 'Re-fetch queued' : 'Re-fetch'}</button>}
       </div>

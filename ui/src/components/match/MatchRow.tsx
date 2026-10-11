@@ -4,6 +4,7 @@ import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
 import { Badge, TeamLogo } from '../primitives';
 import { WeatherMini, type MatchWeather } from './Weather';
+import { liveClock } from '../../lib/liveClock';
 
 export interface MatchLike {
   id: string; status: string; start_epoch: number | null; game_date: string; conference_game: boolean; tournament: string | null; neutral_site: boolean; forfeit: boolean; overtime: boolean; shootout: boolean; division: string | null;
@@ -16,15 +17,9 @@ export interface MatchLike {
   weather?: MatchWeather | null;
 }
 
-/** "63′ 2H", "HT", "OT 4′" from NCAA's period + clock strings. */
+/** The minute being played ("86′", "Half time"), for places with room for one word. */
 export function liveMinute(live: { period: string | null; clock: string | null } | null): string {
-  if (!live) return 'Live';
-  const p = (live.period ?? '').toUpperCase();
-  if (/HALF ?TIME|^HALF$/.test(p)) return 'HT';
-  const m = live.clock?.match(/^(\d+):(\d\d)$/);
-  const minute = m ? `${Number(m[1]) + (Number(m[2]) > 0 ? 1 : 0)}′` : '';
-  const half = /1ST/.test(p) ? '1H' : /2ND/.test(p) ? '2H' : /OT/.test(p) ? p.replace(/\s+/g, '') : p ? p.slice(0, 3) : '';
-  return [minute, half].filter(Boolean).join(' ') || 'Live';
+  return liveClock(live).minute;
 }
 
 function Side({ s, winner, loser, home }: { s: MatchLike['home']; winner: boolean; loser: boolean; home?: boolean }) {
@@ -45,16 +40,19 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
   const hs = g.home.score, as = g.away.score;
   const homeWin = final && hs != null && as != null && hs > as, awayWin = final && hs != null && as != null && as > hs;
   const pending = !!g.result_pending;
-  const when = live ? liveMinute(g.live) : final ? 'FT' : pending ? 'No result' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ?? 'TBD') : g.status === 'postponed' ? 'PPD' : g.status === 'cancelled' ? 'CANC' : g.status;
+  const clock = liveClock(g.live);
+  const when = live ? clock.minute : final ? 'FT' : pending ? 'No result' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ?? 'TBD') : g.status === 'postponed' ? 'PPD' : g.status === 'cancelled' ? 'CANC' : g.status;
   const tag = g.tournament ?? (g.conference_game ? (g.home.conference?.short ?? g.home.conference?.name ?? 'Conference') : null);
   return (
-    <Link to={href(`/matches/${g.id}`)} className={`flex items-center gap-3 px-3 transition-colors duration-150 hover:bg-field-800 coarse:min-h-[60px] ${dense ? 'py-1.5' : 'py-2'}`} aria-label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${when}`}>
-      <span className={`w-14 shrink-0 text-center text-xs tnum ${live ? 'font-semibold text-win' : pending ? 'text-note' : 'text-chalk-500'}`} title={pending ? 'The result has not been reported yet' : g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined}>
+    <Link to={href(`/matches/${g.id}`)} className={`flex items-center gap-3 px-3 transition-colors duration-150 hover:bg-field-800 coarse:min-h-[60px] ${dense ? 'py-1.5' : 'py-2'}`} aria-label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${live ? clock.long : when}`}>
+      <span className={`w-[4.5rem] shrink-0 text-center text-xs tnum ${live ? 'font-semibold text-win' : pending ? 'text-note' : 'text-chalk-500'}`} title={live ? clock.long : pending ? 'The result has not been reported yet' : g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined}>
         {showDate && !live ? <span className="block text-2xs">{fmt.day(g.game_date)}</span> : null}
         <span className="flex items-center justify-center gap-1 whitespace-nowrap">
           {live && <span aria-hidden className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-win motion-reduce:animate-none" />}
           {when}
         </span>
+        {/* Live: how much of the match is left, in words ("5 min left", "Added time"). */}
+        {live && clock.detail && <span className="block whitespace-nowrap text-2xs font-normal text-win/80">{clock.detail}</span>}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
         <Side s={g.home} winner={homeWin} loser={awayWin} home={!g.neutral_site} />

@@ -5,7 +5,8 @@ import { ArrowDownCircle, ArrowUpCircle, CalendarClock, ExternalLink, Hand, MapP
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
 import { PlayerAvatar, Badge, EmptyState, FormPips, Note, ResultBadge, TeamLogo } from '../primitives';
-import { liveMinute, MatchRow, type MatchLike } from './MatchRow';
+import { MatchRow, type MatchLike } from './MatchRow';
+import { liveClock } from '../../lib/liveClock';
 import { WeatherLine } from './Weather';
 import { Goals, SoccerBall } from '../icons';
 import type { Scorer } from '../../lib/match';
@@ -15,7 +16,9 @@ import type { Scorer } from '../../lib/match';
 export function MatchMasthead({ g, sides, scorers }: { g: any; sides?: any; scorers?: { home: Scorer[]; away: Scorer[] } }) {
   const href = useHref();
   const live = g.status === 'live', final = g.status === 'final';
-  const statusLine = live ? liveMinute(g.live ?? { period: g.live_period, clock: g.live_clock }) : final ? (g.forfeit ? 'Final, forfeit' : g.shootout ? 'Final, penalties' : g.overtime ? 'Final, overtime' : 'Final') : g.result_pending ? 'Result not in yet' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ? `${fmt.weekday(g.game_date)}, ${fmt.kickoff(g.start_epoch)}` : `${fmt.weekday(g.game_date)}, time TBD`) : g.status;
+  const lc = liveClock(g.live ?? { period: g.live_period, clock: g.live_clock });
+  // Live: "86′, 2nd half · 5 min left".
+  const statusLine = live ? [lc.minute === lc.period ? lc.minute : [lc.minute, lc.period].filter(Boolean).join(', '), lc.detail].filter(Boolean).join(' · ') : final ? (g.forfeit ? 'Final, forfeit' : g.shootout ? 'Final, penalties' : g.overtime ? 'Final, overtime' : 'Final') : g.result_pending ? 'Result not in yet' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ? `${fmt.weekday(g.game_date)}, ${fmt.kickoff(g.start_epoch)}` : `${fmt.weekday(g.game_date)}, time TBD`) : g.status;
   const team = (side: 'home' | 'away') => {
     const s = g[side]; const info = sides?.[side];
     return (
