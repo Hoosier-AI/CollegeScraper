@@ -28,6 +28,7 @@ import { log } from './log.js';
 import { registerSeo } from './seo/routes.js';
 import { DbSeoData } from './seo/data.js';
 import { DbProSeoData } from './seo/pro/data.js';
+import { DbIntlSeoData } from './seo/intl/data.js';
 import { fileTemplate } from './seo/template.js';
 import { BotVerifier } from './seo/bots.js';
 import { DEFAULT_PUBLIC_URL } from './seo/util.js';
@@ -130,6 +131,7 @@ const seo = cfg.SUPABASE_URL ? registerSeo(app, {
   gscVerificationFile: cfg.GSC_VERIFICATION_FILE ?? null,
   indexNowKey: cfg.INDEXNOW_KEY ?? null,
   pro: new DbProSeoData(getDb()),
+  intl: new DbIntlSeoData(getDb()),
   log,
 }) : null;
 

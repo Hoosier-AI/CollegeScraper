@@ -7,9 +7,11 @@
 //   /sitemaps/pro-teams-<n>.xml          clubs with a profile
 //   /sitemaps/pro-matches-<year>-<n>.xml finals with detail (score-only finals and unplayed matches are noindex)
 //   /sitemaps/pro-players-<n>.xml        players who have played
+//   /sitemaps/intl-core.xml             International: its pages, every tournament, every senior national team
 // Every document is built on demand and kept in memory for an hour.
 import type { SeoData, SitemapEntry } from './types.js';
 import type { ProSeoData } from './pro/data.js';
+import type { IntlSeoData } from './intl/data.js';
 import { LruCache } from './cache.js';
 import { esc, trimBase } from './util.js';
 
@@ -37,7 +39,7 @@ export function sitemapIndexXml(base: string, files: { path: string; lastmod?: s
 
 export class Sitemaps {
   private cache: LruCache<string>;
-  constructor(private data: SeoData, private baseUrl: string, private opts: { perFile?: number; ttlMs?: number } = {}, private pro: ProSeoData | null = null) {
+  constructor(private data: SeoData, private baseUrl: string, private opts: { perFile?: number; ttlMs?: number } = {}, private pro: ProSeoData | null = null, private intl: IntlSeoData | null = null) {
     this.cache = new LruCache<string>(200, opts.ttlMs ?? 3600_000);
   }
   private get perFile() { return this.opts.perFile ?? PER_FILE; }
@@ -61,6 +63,7 @@ export class Sitemaps {
       return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, ...confs]);
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
+    if (this.intl && file === 'intl-core.xml') return urlsetXml(this.baseUrl, await this.intl.sitemap());
     if (this.pro) {
       if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/sources' }, ...(await this.pro.sitemapLeagues())]);
       if (file === 'pro-countries.xml') return urlsetXml(this.baseUrl, await this.pro.sitemapCountries());
@@ -98,6 +101,7 @@ export class Sitemaps {
     }
     if (this.pro) {
       out.push({ path: '/sitemaps/pro-core.xml' }, { path: '/sitemaps/pro-countries.xml' });
+      if (this.intl) out.push({ path: '/sitemaps/intl-core.xml' });
       const [teams, players, years] = await Promise.all([this.pro.countTeams(), this.pro.countPlayers(), this.pro.matchYears()]);
       for (let i = 0; i < Math.ceil(teams / this.perFile); i += 1) out.push({ path: `/sitemaps/pro-teams-${i + 1}.xml` });
       for (const y of years) {

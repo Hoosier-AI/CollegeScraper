@@ -4,7 +4,9 @@
 import type { Db } from '../db/client.js';
 import { log } from '../log.js';
 
-export type SourceId = 'api-football' | 'asa' | 'wikipedia' | 'wikidata' | 'openfootball' | 'football-data';
+export type SourceId = 'api-football' | 'asa' | 'wikipedia' | 'wikidata' | 'openfootball' | 'football-data'
+  // International (national teams): martj42's results, openfootball's World Cups, Fjelstul's World Cup database, RSSSF.
+  | 'intl-results' | 'openfootball-wc' | 'worldcup-db' | 'rsssf';
 
 /** Which pro source a URL belongs to; null for everything else (college sites, NCAA). */
 export function sourceOfUrl(url: string): { source: SourceId; host: string } | null {
@@ -15,7 +17,11 @@ export function sourceOfUrl(url: string): { source: SourceId; host: string } | n
   if (host.endsWith('americansocceranalysis.com')) return { source: 'asa', host };
   if (host === 'en.wikipedia.org') return { source: 'wikipedia', host };
   if (host === 'www.wikidata.org') return { source: 'wikidata', host };
+  if (host === 'raw.githubusercontent.com' && u.pathname.startsWith('/openfootball/worldcup')) return { source: 'openfootball-wc', host };
   if (host === 'raw.githubusercontent.com' && u.pathname.startsWith('/openfootball/')) return { source: 'openfootball', host };
+  if (host === 'raw.githubusercontent.com' && u.pathname.startsWith('/martj42/')) return { source: 'intl-results', host };
+  if (host === 'raw.githubusercontent.com' && u.pathname.startsWith('/jfjelstul/')) return { source: 'worldcup-db', host };
+  if (host === 'www.rsssf.org' || host === 'rsssf.org') return { source: 'rsssf', host };
   if (host.endsWith('football-data.co.uk')) return { source: 'football-data', host };
   return null;
 }

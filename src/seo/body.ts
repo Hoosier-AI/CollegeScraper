@@ -5,7 +5,7 @@ import type { HeadContext } from './head.js';
 import { extraTime, isFinal, matchName, teamTitle } from './head.js';
 import { conferencePath, divisionLabel, esc, genderWord, longDate, matchPath, playerPath, rec, SITE_NAME, teamPath } from './util.js';
 
-export type PageType = 'home' | 'team' | 'player' | 'match' | 'conference' | 'rankings' | 'teams' | 'not-found' | 'pro';
+export type PageType = 'home' | 'team' | 'player' | 'match' | 'conference' | 'rankings' | 'teams' | 'not-found' | 'pro' | 'intl';
 
 export const TEKKI_URL = 'https://www.plaibook.soccer/';
 export const ctaHref = (page: PageType) => `${TEKKI_URL}?utm_source=stats&utm_medium=referral&utm_campaign=${encodeURIComponent(page)}`;
@@ -20,8 +20,10 @@ export const tr = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).
 /** Site navigation, breadcrumbs, the page content and the Tekki footer link. */
 export function wrapBody(page: PageType, crumbs: { name: string; path: string }[], inner: string): string {
   const nav = page === 'pro'
-    ? `<nav aria-label="Site">${a('/pro', `${SITE_NAME} Pro`)} · ${a('/pro/matches', 'Matches')} · ${a('/pro/leagues', 'Leagues')} · ${a('/', 'College soccer')}</nav>`
-    : `<nav aria-label="Site">${a('/', SITE_NAME)} · ${a('/teams', 'Teams')} · ${a('/rankings', 'Rankings')} · ${a('/matches', 'Matches')} · ${a('/pro', 'Pro soccer')}</nav>`;
+    ? `<nav aria-label="Site">${a('/pro', `${SITE_NAME} Pro`)} · ${a('/pro/matches', 'Matches')} · ${a('/pro/leagues', 'Leagues')} · ${a('/intl', 'International')} · ${a('/', 'College soccer')}</nav>`
+    : page === 'intl'
+      ? `<nav aria-label="Site">${a('/intl', `${SITE_NAME} International`)} · ${a('/intl/matches', 'Matches')} · ${a('/intl/tournaments', 'Tournaments')} · ${a('/intl/teams', 'Teams')} · ${a('/intl/rankings', 'Rankings')} · ${a('/pro', 'Pro soccer')} · ${a('/', 'College soccer')}</nav>`
+      : `<nav aria-label="Site">${a('/', SITE_NAME)} · ${a('/teams', 'Teams')} · ${a('/rankings', 'Rankings')} · ${a('/matches', 'Matches')} · ${a('/pro', 'Pro soccer')} · ${a('/intl', 'International')}</nav>`;
   const bc = crumbs.length > 1
     ? `<nav aria-label="Breadcrumb"><ol>${crumbs.map((c, i) => `<li>${i === crumbs.length - 1 ? esc(c.name) : a(c.path, c.name)}</li>`).join('')}</ol></nav>`
     : '';

@@ -39,7 +39,9 @@ export const CRAWL_SITES: CrawlSite[] = [
 ];
 
 /** Jobs that work across sources (matching, checks, history, worked-out tables). */
-export const CHECK_JOBS = ['source-map', 'source-check', 'history-fill', 'results-tables', 'football-data-fill', 'wikidata-fill'];
+export const CHECK_JOBS = ['source-map', 'source-check', 'history-fill', 'results-tables', 'football-data-fill', 'wikidata-fill',
+  // International: no downloads, so they wait on the checking worker rather than hold a download one.
+  'intl-refresh', 'intl-caps-sync', 'intl-match', 'intl-elo'];
 
 /** The site a job belongs to (null for the cross-source jobs). */
 export function siteOfJob(job: string): SourceId | null {

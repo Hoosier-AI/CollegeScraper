@@ -33,5 +33,7 @@ import './sources/wikipedia.js';
 import './sources/asaFill.js';
 import './sources/footballData.js';
 import './sources/wikidata.js';
+// International (national teams).
+import './sources/intl.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

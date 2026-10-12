@@ -5,6 +5,7 @@ import type * as Q from '../../pro/queries.js';
 import { abs, breadcrumbs, ld, NOINDEX, ogImage, SUFFIX, type HeadContext, type HeadMeta } from '../head.js';
 import { a, n, table, tr, wrapBody } from '../body.js';
 import { clip, esc, longDate, SITE_NAME } from '../util.js';
+import { isIntlLeague, isIntlMatchSlug, isIntlTeam } from '../../pro/intlRegistry.js';
 
 export type ProHomePage = Awaited<ReturnType<typeof Q.home>>;
 export type ProLeaguesPage = Awaited<ReturnType<typeof Q.leagues>>;
@@ -14,14 +15,22 @@ export type ProPlayerPage = NonNullable<Awaited<ReturnType<typeof Q.player>>>;
 export type ProMatchPage = NonNullable<Awaited<ReturnType<typeof Q.match>>>;
 
 const PRO = `${SITE_NAME} Pro`;
+// National-team competitions, national teams and their matches live under /intl (the International section); the
+// registry knows which (src/pro/intlRegistry.ts). A player has one address under /pro (his International page is a
+// separate view of him).
 export const proPaths = {
   home: '/pro', leagues: '/pro/leagues', matches: '/pro/matches',
-  league: (slug: string, season?: number | null, current?: number | null) => `/pro/leagues/${encodeURIComponent(slug)}${season && current && season !== current ? `?season=${season}` : ''}`,
-  team: (slug: string, season?: number | null, latest?: number | null) => `/pro/teams/${encodeURIComponent(slug)}${season && latest && season !== latest ? `?season=${season}` : ''}`,
+  league: (slug: string, season?: number | null, current?: number | null) => `${isIntlLeague(slug) ? '/intl/tournaments' : '/pro/leagues'}/${encodeURIComponent(slug)}${season && current && season !== current ? `?season=${season}` : ''}`,
+  team: (slug: string, season?: number | null, latest?: number | null) => `${isIntlTeam(slug) ? '/intl/teams' : '/pro/teams'}/${encodeURIComponent(slug)}${season && latest && season !== latest ? `?season=${season}` : ''}`,
   player: (slug: string) => `/pro/players/${encodeURIComponent(slug)}`,
-  match: (slug: string) => `/pro/matches/${encodeURIComponent(slug)}`,
+  /** scope: the match's competition's (from its row); otherwise read from the address's home side. */
+  match: (slug: string, scope?: 'club' | 'intl') => `${(scope ?? (isIntlMatchSlug(slug) ? 'intl' : 'club')) === 'intl' ? '/intl/matches' : '/pro/matches'}/${encodeURIComponent(slug)}`,
 };
 const crumbsHome = [{ name: PRO, path: proPaths.home }];
+const INTL = `${SITE_NAME} International`;
+/** The first breadcrumbs of a competition, team or match page: its section, then the section's list. */
+const sectionCrumbs = (intl: boolean) => (intl ? [{ name: INTL, path: '/intl' }] : crumbsHome);
+const listCrumb = (intl: boolean) => (intl ? { name: 'Tournaments', path: '/intl/tournaments' } : { name: 'Leagues', path: proPaths.leagues });
 const genderWord = (g: string | null | undefined) => (g === 'w' ? "women's" : "men's");
 const where = (l: { country: string | null }) => (l.country && l.country !== 'World' ? l.country : 'International');
 const day = (iso: string) => longDate(iso.slice(0, 10));
@@ -47,7 +56,7 @@ export function proHomeHead(h: ProHomePage, ctx: HeadContext): HeadMeta {
 
 export function proHomeBody(h: ProHomePage): string {
   const groups = h.matches.groups.filter((g) => g.priority < 100).slice(0, 12).map((g) =>
-    `<h3>${a(proPaths.league(g.league.slug), g.league.name)}</h3><ul>${g.matches.map((m) => `<li>${a(proPaths.match(m.slug), proIsFinal(m) || m.status === 'live' ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>`).join('');
+    `<h3>${a(proPaths.league(g.league.slug), g.league.name)}</h3><ul>${g.matches.map((m) => `<li>${a(proPaths.match(m.slug, m.league.scope), proIsFinal(m) || m.status === 'live' ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>`).join('');
   const featured = h.featured.length ? `<h2>Competitions</h2><ul>${h.featured.map((l) => `<li>${a(proPaths.league(l.slug), l.name)} (${esc(where(l))}, ${esc(genderWord(l.gender))})</li>`).join('')}</ul>` : '';
   const inner = `<h1>Professional Soccer Stats</h1>
 <p>Scores, lineups, league tables and player stats from ${esc(h.counts.leagues)} professional competitions: ${esc(h.counts.teams)} clubs, ${esc(h.counts.players)} players and ${esc(h.counts.matches)} matches. Browse ${a(proPaths.leagues, 'every competition')} or ${a(proPaths.matches, "today's matches")}.</p>
@@ -66,7 +75,7 @@ export function proMatchesHead(h: ProHomePage, ctx: HeadContext): HeadMeta {
 }
 
 export function proMatchesBody(h: ProHomePage): string {
-  const groups = h.matches.groups.map((g) => `<h2>${a(proPaths.league(g.league.slug), g.league.name)}</h2><ul>${g.matches.map((m) => `<li>${a(proPaths.match(m.slug), proIsFinal(m) || m.status === 'live' ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>`).join('');
+  const groups = h.matches.groups.map((g) => `<h2>${a(proPaths.league(g.league.slug), g.league.name)}</h2><ul>${g.matches.map((m) => `<li>${a(proPaths.match(m.slug, m.league.scope), proIsFinal(m) || m.status === 'live' ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>`).join('');
   return wrapBody('pro', [...crumbsHome, { name: 'Matches', path: proPaths.matches }], `<h1>Pro Soccer Matches, ${esc(longDate(h.date))}</h1><p>${esc(h.matches.total)} matches in ${esc(h.matches.groups.length)} competitions.</p>${groups}`);
 }
 
@@ -102,7 +111,7 @@ export function proLeagueHead(p: ProLeaguePage, ctx: HeadContext): HeadMeta {
     ogType: 'website', image: ogImage(ctx),
     jsonLd: [
       ld('SportsOrganization', { '@id': `${abs(ctx, proPaths.league(l.slug))}#league`, name: l.name, sport: 'Soccer', url: abs(ctx, path), logo: l.logo ?? undefined, member: (p.standings[0]?.rows ?? []).slice(0, 40).map((r) => teamLd(ctx, r.team)) }),
-      breadcrumbs(ctx, [...crumbsHome, { name: 'Leagues', path: proPaths.leagues }, { name: l.name, path }]),
+      breadcrumbs(ctx, [...sectionCrumbs(l.scope === 'intl'), listCrumb(l.scope === 'intl'), { name: l.name, path }]),
     ],
   };
 }
@@ -111,11 +120,11 @@ export function proLeagueBody(p: ProLeaguePage): string {
   const l = p.league;
   const tables = p.standings.map((g) => `<h2>${esc(g.name || `${l.name} table`)}</h2>${table(`${l.name} ${g.name} ${p.season ?? ''}`, ['#', 'Club', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'],
     g.rows.map((r) => tr([esc(r.rank ?? ''), a(proPaths.team(r.team.slug), r.team.name), n(r.played), n(r.win), n(r.draw), n(r.lose), n(r.gf), n(r.ga), n(r.gd), n(r.points)])))}`).join('');
-  const list = (title: string, ms: Q.ProMatchRow[]) => (ms.length ? `<h2>${esc(title)}</h2><ul>${ms.map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug), proIsFinal(m) ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>` : '');
+  const list = (title: string, ms: Q.ProMatchRow[]) => (ms.length ? `<h2>${esc(title)}</h2><ul>${ms.map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug, m.league.scope), proIsFinal(m) ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>` : '');
   const leaders = p.scorers.length ? `<h2>Top scorers</h2>${table(`${l.name} top scorers`, ['Player', 'Club', 'Goals', 'Apps'], p.scorers.map((s) => tr([a(proPaths.player(s.player.slug), s.player.name), s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', n(s.goals), n(s.apps)])))}` : '';
   const inner = `<h1>${esc(l.name)}${p.season ? ` ${esc(p.season)}` : ''}</h1>
 <p>${esc(where(l))}, ${esc(genderWord(l.gender))} ${l.type === 'cup' ? 'cup competition' : 'league'}${p.teams ? `, ${esc(p.teams)} clubs` : ''}.${p.seasons.length > 1 ? ` Seasons: ${p.seasons.slice(0, 8).map((s) => a(proPaths.league(l.slug, s, l.current_season), String(s))).join(', ')}.` : ''}</p>${tables}${p.history_sources?.length ? `<p>${p.history_sources.map((h) => `${esc(h.what)}: ${h.url ? `<a href="${esc(h.url)}" rel="noopener">${esc(h.name)}</a>` : esc(h.name)}${h.license ? ` (${esc(h.license)})` : ''}`).join('; ')}.</p>` : ''}${leaders}${list('Latest results', p.results.slice(0, 20))}${list('Upcoming fixtures', p.fixtures.slice(0, 20))}`;
-  return wrapBody('pro', [...crumbsHome, { name: 'Leagues', path: proPaths.leagues }, { name: l.name, path: proPaths.league(l.slug) }], inner);
+  return wrapBody(l.scope === 'intl' ? 'intl' : 'pro', [...sectionCrumbs(l.scope === 'intl'), listCrumb(l.scope === 'intl'), { name: l.name, path: proPaths.league(l.slug) }], inner);
 }
 
 // ---------- clubs ----------
@@ -134,7 +143,7 @@ export function proTeamHead(p: ProTeamPage, ctx: HeadContext): HeadMeta {
         location: t.venue ? { '@type': 'Place', name: t.venue.name, address: t.venue.city ?? undefined } : undefined,
         memberOf: p.competitions.filter((c) => c.league).map((c) => ({ '@type': 'SportsOrganization', name: c.league!.name, url: abs(ctx, proPaths.league(c.league!.slug)) })),
         athlete: p.squad.slice(0, 40).map((s) => ({ '@type': 'Person', name: s.player.name, url: abs(ctx, proPaths.player(s.player.slug)) })) }),
-      breadcrumbs(ctx, [...crumbsHome, ...(comp?.league ? [{ name: comp.league.name, path: proPaths.league(comp.league.slug) }] : []), { name: t.name, path: proPaths.team(t.slug) }]),
+      breadcrumbs(ctx, [...sectionCrumbs(!!t.national), ...(comp?.league ? [{ name: comp.league.name, path: proPaths.league(comp.league.slug) }] : []), { name: t.name, path: proPaths.team(t.slug) }]),
     ],
   };
 }
@@ -157,10 +166,10 @@ export function proTeamBody(p: ProTeamPage): string {
   }).join('');
   const comps = p.competitions.filter((c) => c.league).map((c) => `<li>${a(proPaths.league(c.league!.slug), c.league!.name)}: ${esc(`${c.w} won, ${c.d} drawn, ${c.l} lost, goals ${c.gf}-${c.ga}`)}</li>`).join('');
   const squad = p.squad.length ? `<h2>Squad${p.season ? ` ${esc(p.season)}` : ''}</h2>${table(`${t.name} squad`, ['Player', 'Pos', 'Apps', 'Min', 'G', 'A'], p.squad.map((s) => tr([a(proPaths.player(s.player.slug), s.player.name), esc(s.player.position ?? ''), n(s.apps), n(s.minutes), n(s.goals), n(s.assists)])))}` : '';
-  const results = p.results.length ? `<h2>Results</h2><ul>${p.results.slice(0, 25).map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug), proScoreLine(m))} (${esc(m.league.name)})</li>`).join('')}</ul>` : '';
-  const fixtures = p.fixtures.length ? `<h2>Fixtures</h2><ul>${p.fixtures.slice(0, 12).map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug), proMatchName(m))} (${esc(m.league.name)})</li>`).join('')}</ul>` : '';
+  const results = p.results.length ? `<h2>Results</h2><ul>${p.results.slice(0, 25).map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug, m.league.scope), proScoreLine(m))} (${esc(m.league.name)})</li>`).join('')}</ul>` : '';
+  const fixtures = p.fixtures.length ? `<h2>Fixtures</h2><ul>${p.fixtures.slice(0, 12).map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug, m.league.scope), proMatchName(m))} (${esc(m.league.name)})</li>`).join('')}</ul>` : '';
   const inner = `<h1>${esc(t.name)}${p.season ? ` ${esc(p.season)}` : ''}</h1>${facts ? `<p>${facts}.</p>` : ''}${comps ? `<h2>Competitions</h2><ul>${comps}</ul>` : ''}${detail ? `<h2>Season in detail</h2><ul>${detail}</ul>` : ''}${squad}${results}${fixtures}`;
-  return wrapBody('pro', [...crumbsHome, { name: t.name, path: proPaths.team(t.slug) }], inner);
+  return wrapBody(t.national ? 'intl' : 'pro', [...sectionCrumbs(!!t.national), { name: t.name, path: proPaths.team(t.slug) }], inner);
 }
 
 // ---------- players ----------
@@ -190,7 +199,7 @@ export function proPlayerBody(p: ProPlayerPage): string {
   const bio = [pl.position, pl.nationality, pl.birth_date ? `born ${longDate(pl.birth_date)}${pl.birth_place ? ` in ${pl.birth_place}` : ''}` : null, pl.height_cm ? `${pl.height_cm} cm` : null].filter(Boolean).map((x) => esc(x)).join(', ');
   const college = p.college.map((c) => `<p>Played college soccer at ${c.school_seo ? a(`/teams/${c.school_seo}/${pl.gender === 'w' ? 'women' : 'men'}`, c.college_name) : esc(c.college_name)}${c.first_season || c.last_season ? ` (${esc([c.first_season, c.last_season].filter(Boolean).join('-'))})` : ''}${c.college_player_slug ? `; ${a(`/players/${c.college_player_slug}`, 'college stats')}` : ''}.</p>`).join('');
   const seasons = p.seasons.length ? table(`${pl.name} season by season`, ['Season', 'Club', 'Competition', 'Apps', 'Min', 'G', 'A'], p.seasons.map((s) => tr([esc(s.season), s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', s.league ? a(proPaths.league(s.league.slug), s.league.name) : '', n(s.apps), n(s.minutes), n(s.goals), n(s.assists)]))) : '<p>No season stats yet.</p>';
-  const recent = p.matches.length ? `<h2>Recent matches</h2><ul>${p.matches.slice(0, 15).map((r) => `<li>${esc(day(r.match.kickoff))}: ${a(proPaths.match(r.match.slug), proIsFinal(r.match) ? proScoreLine(r.match) : proMatchName(r.match))}${r.minutes != null ? `, ${esc(r.minutes)} minutes` : ''}${r.goals ? `, ${esc(r.goals)} goal${r.goals > 1 ? 's' : ''}` : ''}</li>`).join('')}</ul>` : '';
+  const recent = p.matches.length ? `<h2>Recent matches</h2><ul>${p.matches.slice(0, 15).map((r) => `<li>${esc(day(r.match.kickoff))}: ${a(proPaths.match(r.match.slug, r.match.league.scope), proIsFinal(r.match) ? proScoreLine(r.match) : proMatchName(r.match))}${r.minutes != null ? `, ${esc(r.minutes)} minutes` : ''}${r.goals ? `, ${esc(r.goals)} goal${r.goals > 1 ? 's' : ''}` : ''}</li>`).join('')}</ul>` : '';
   const advRows = p.advanced?.seasons ?? [];
   const adv = advRows.length ? `<h2>Advanced stats</h2>${table(`${pl.name} advanced stats`, ['Season', 'Club', 'Min', 'xG', 'xA', 'Goals added'], advRows.map((s) => tr([esc(s.season), esc(s.team?.name ?? ''), n(s.minutes), esc(s.xg?.toFixed(2) ?? '–'), esc(s.xa?.toFixed(2) ?? '–'), esc(s.g_plus?.toFixed(2) ?? '–')])))}<p>Advanced stats: <a href="${esc(p.advanced!.credit.url)}" rel="noopener">${esc(p.advanced!.credit.name)}</a>.</p>` : '';
   const hurt = p.injury_history?.length ? `<h2>Injury history</h2><ul>${p.injury_history.slice(0, 15).map((h) => `<li>${esc(h.type)}: ${esc(day(h.start))} to ${h.end ? esc(day(h.end)) : 'now'}${h.matches_missed ? `, ${esc(h.matches_missed)} matches missed` : ''}</li>`).join('')}</ul>` : '';
@@ -205,7 +214,7 @@ export const proIsThin = (p: ProMatchPage) => proIsFinal(p.match) && !p.events.l
 
 export function proMatchHead(p: ProMatchPage, ctx: HeadContext): HeadMeta {
   const m = p.match;
-  const canonical = abs(ctx, proPaths.match(m.slug));
+  const canonical = abs(ctx, proPaths.match(m.slug, m.league.scope));
   const final = proIsFinal(m);
   const when = day(m.kickoff);
   const scorers = p.events.filter((e) => e.type === 'goal' && e.detail !== 'Missed Penalty' && e.player_name).map((e) => `${e.player_name} ${e.minute ?? ''}'`.trim()).slice(0, 6);
@@ -222,7 +231,7 @@ export function proMatchHead(p: ProMatchPage, ctx: HeadContext): HeadMeta {
         eventStatus: EVENT_STATUS[m.status] ?? 'https://schema.org/EventScheduled', eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
         location: m.venue ? { '@type': 'Place', name: m.venue } : undefined, homeTeam: side(m.home), awayTeam: side(m.away), competitor: [side(m.home), side(m.away)],
         superEvent: { '@type': 'SportsEvent', name: m.league.name, url: abs(ctx, proPaths.league(m.league.slug)) }, description: final ? `Final: ${proScoreLine(m)}` : undefined }),
-      breadcrumbs(ctx, [...crumbsHome, { name: m.league.name, path: proPaths.league(m.league.slug) }, { name: proMatchName(m), path: proPaths.match(m.slug) }]),
+      breadcrumbs(ctx, [...sectionCrumbs(m.league.scope === 'intl'), { name: m.league.name, path: proPaths.league(m.league.slug) }, { name: proMatchName(m), path: proPaths.match(m.slug, m.league.scope) }]),
     ],
   };
 }
@@ -236,11 +245,11 @@ export function proMatchBody(p: ProMatchPage): string {
   const lineup = (name: string, s: ProMatchPage['home']) => (s.starters.length ? `<h3>${esc(name)}${s.formation ? ` (${esc(s.formation)})` : ''}</h3>${table(`${name} lineup`, ['#', 'Player', 'Pos', 'Min', 'G', 'A', 'Rating'], [...s.starters, ...s.bench.filter((b) => (b.minutes ?? 0) > 0)].map((l) => tr([esc(l.number ?? ''), l.slug ? a(proPaths.player(l.slug), l.display) : esc(l.display), esc(l.pos ?? ''), n(l.minutes), n(l.goals), n(l.assists), l.rating != null ? esc(Number(l.rating).toFixed(1)) : '–'])))}` : '');
   const stat = (k: string, label: string) => (p.home.stats?.[k] != null || p.away.stats?.[k] != null ? tr([esc(label), n(p.home.stats?.[k] as number | null), n(p.away.stats?.[k] as number | null)]) : '');
   const stats = p.home.stats || p.away.stats ? `<h2>Team stats</h2>${table('Team stats', ['', m.home.name, m.away.name], [stat('possession', 'Possession %'), stat('shots', 'Shots'), stat('shots_on', 'Shots on target'), stat('corners', 'Corners'), stat('fouls', 'Fouls'), stat('yellow', 'Yellow cards'), stat('red', 'Red cards')].filter(Boolean))}` : '';
-  const h2h = p.h2h.length ? `<h2>Earlier meetings</h2><ul>${p.h2h.map((x) => `<li>${esc(day(x.kickoff))}: ${a(proPaths.match(x.slug), proScoreLine(x))} (${esc(x.league.name)})</li>`).join('')}</ul>` : '';
+  const h2h = p.h2h.length ? `<h2>Earlier meetings</h2><ul>${p.h2h.map((x) => `<li>${esc(day(x.kickoff))}: ${a(proPaths.match(x.slug, x.league.scope), proScoreLine(x))} (${esc(x.league.name)})</li>`).join('')}</ul>` : '';
   const adv = p.advanced && p.advanced.xg[0] != null
     ? `<p>${esc(`Expected goals ${p.advanced.xg[0].toFixed(2)} to ${(p.advanced.xg[1] ?? 0).toFixed(2)}${p.advanced.attendance ? `; attendance ${p.advanced.attendance.toLocaleString('en-US')}` : ''}.`)} Advanced stats: <a href="${esc(p.advanced.credit.url)}" rel="noopener">${esc(p.advanced.credit.name)}</a>.</p>` : '';
   const inner = `<h1>${esc(h1)}</h1><p>${a(proPaths.team(m.home.slug), m.home.name)} vs ${a(proPaths.team(m.away.slug), m.away.name)}. ${facts}.</p>${adv}${events ? `<h2>Goals and cards</h2><ol>${events}</ol>` : ''}${stats}${p.home.starters.length || p.away.starters.length ? `<h2>Lineups</h2>${lineup(m.home.name, p.home)}${lineup(m.away.name, p.away)}` : ''}${h2h}`;
-  return wrapBody('pro', [...crumbsHome, { name: m.league.name, path: proPaths.league(m.league.slug) }, { name: proMatchName(m), path: proPaths.match(m.slug) }], inner);
+  return wrapBody(m.league.scope === 'intl' ? 'intl' : 'pro', [...sectionCrumbs(m.league.scope === 'intl'), { name: m.league.name, path: proPaths.league(m.league.slug) }, { name: proMatchName(m), path: proPaths.match(m.slug, m.league.scope) }], inner);
 }
 
 // ---------- v2: directory, leaders, countries, College to Pro, transfers ----------
@@ -333,9 +342,9 @@ export function proAbroadBody(p: ProAbroadPage): string {
   const line = (l: ProAbroadPage['lines'][number]) => {
     const opp = l.match.home.id === l.team_id ? l.match.away : l.match.home;
     const parts = [`${l.minutes} minutes`, l.goals ? `${l.goals} ${l.goals === 1 ? 'goal' : 'goals'}` : '', l.assists ? `${l.assists} ${l.assists === 1 ? 'assist' : 'assists'}` : ''].filter(Boolean).join(', ');
-    return `<li>${a(proPaths.player(l.player.slug), l.player.name)} against ${esc(opp.name)} (${a(proPaths.match(l.match.slug), `${l.match.home.score ?? ''}-${l.match.away.score ?? ''}`)}, ${esc(l.match.league.name)}): ${esc(parts)}</li>`;
+    return `<li>${a(proPaths.player(l.player.slug), l.player.name)} against ${esc(opp.name)} (${a(proPaths.match(l.match.slug, l.match.league.scope), `${l.match.home.score ?? ''}-${l.match.away.score ?? ''}`)}, ${esc(l.match.league.name)}): ${esc(parts)}</li>`;
   };
-  const next = p.upcoming.slice(0, 30).map((u) => `<li>${esc(longDate(u.match.kickoff))}: ${a(proPaths.match(u.match.slug), `${u.match.home.name} v ${u.match.away.name}`)}, ${u.players.map((x) => esc(x!.name)).join(', ')}</li>`).join('');
+  const next = p.upcoming.slice(0, 30).map((u) => `<li>${esc(longDate(u.match.kickoff))}: ${a(proPaths.match(u.match.slug, u.match.league.scope), `${u.match.home.name} v ${u.match.away.name}`)}, ${u.players.map((x) => esc(x!.name)).join(', ')}</li>`).join('');
   return wrapBody('pro', [...crumbsHome, { name: 'Americans abroad', path: '/pro/abroad' }], `<h1>Americans abroad</h1><h2>This week</h2><ul>${p.lines.slice(0, 40).map(line).join('')}</ul><h2>Coming up</h2><ul>${next}</ul>`);
 }
 

@@ -15,6 +15,8 @@ import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
 import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
+import type { IntlSeoData } from './intl/data.js';
+import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlHomeBody, intlHomeHead, intlLeadersBody, intlLeadersHead, intlMatchesBody, intlMatchesHead, intlPlayerBody, intlPlayerHead, intlRankingsBody, intlRankingsHead, intlTeamsBody, intlTeamsHead, intlTournamentsBody, intlTournamentsHead } from './intl/pages.js';
 import { eastern } from '../jobs/seasons.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
@@ -41,6 +43,8 @@ export interface SeoOptions {
   log?: SeoLogger;
   /** Plaibook Stats Pro pages (/pro/...) and their sitemaps. */
   pro?: ProSeoData | null;
+  /** International pages (/intl/...): national teams. Needs pro (a tournament, team or match page is Pro's model). */
+  intl?: IntlSeoData | null;
 }
 
 export type CachedPage = { status: 200; html: string } | { status: 301; path: string };
@@ -59,7 +63,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   const { data, template } = opts;
   const baseUrl = trimBase(opts.baseUrl);
   const cache = opts.cache ?? new LruCache<CachedPage>(500, 5 * 60_000);
-  const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null);
+  const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null, opts.intl ?? null);
   const warn = (obj: unknown, msg: string) => opts.log?.warn(obj, msg);
   const ctx = (): HeadContext => ({ baseUrl, currentSeason: data.currentSeason() });
 
@@ -193,21 +197,73 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     app.get('/pro/sources', (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: proSourcesHead(ctx()), body: proSourcesBody() })));
     app.get('/pro/transfers', (req, reply) => serve(req, reply, keyOf(req), async () => { const t = await pro.transfers(); return { head: proTransfersHead(t, ctx()), body: proTransfersBody(t) }; }));
     app.get('/pro/abroad', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.abroad(); return { head: proAbroadHead(p, ctx()), body: proAbroadBody(p) }; }));
-    // A slug page, or a 301 when the slug was renamed, or a real 404.
-    const proPage = <T>(kind: 'league' | 'team' | 'player' | 'match', load: (slug: string, req: FastifyRequest) => Promise<T | null>, render: (page: T) => { head: HeadMeta; body: string }, path: (slug: string) => string) =>
+    // A slug page, or a 301 when the slug was renamed or lives in the other section (a national team asked for under
+    // /pro, a club under /intl), or a real 404. section: where the page belongs, from its own model.
+    const proPage = <T>(kind: 'league' | 'team' | 'player' | 'match', load: (slug: string, req: FastifyRequest) => Promise<T | null>, render: (page: T) => { head: HeadMeta; body: string }, path: (slug: string) => string, home?: (page: T, slug: string) => string) =>
       (req: P<{ slug: string }>, reply: FastifyReply) => serve(req, reply, keyOf(req), async () => {
         const s = req.params.slug;
         if (!s) return { shell: true };
         if (!SLUG.test(s)) return null;
         const page = await load(s, req);
-        if (page) return render(page);
+        if (page) {
+          const want = home?.(page, s);
+          return want && want !== pathOf(req.url) ? { redirect: want } : render(page);
+        }
         const moved = await pro.renamedSlug(kind, s);
         return moved ? { redirect: path(moved) } : null;
       });
-    app.get('/pro/leagues/:slug', proPage('league', (s, req) => pro.league(s, seasonParam(req)), (p) => ({ head: proLeagueHead(p, ctx()), body: proLeagueBody(p) }), (s) => proPaths.league(s)));
-    app.get('/pro/teams/:slug', proPage('team', (s, req) => pro.team(s, seasonParam(req)), (p) => ({ head: proTeamHead(p, ctx()), body: proTeamBody(p) }), (s) => proPaths.team(s)));
+    const enc = encodeURIComponent;
+    const leagueHome = (p: { league: { scope: string } }, s: string) => `${p.league.scope === 'intl' ? '/intl/tournaments' : '/pro/leagues'}/${enc(s)}`;
+    const teamHome = (p: { team: { national?: boolean } }, s: string) => `${p.team.national ? '/intl/teams' : '/pro/teams'}/${enc(s)}`;
+    const matchHome = (p: { match: { league: { scope: string } } }, s: string) => `${p.match.league.scope === 'intl' ? '/intl/matches' : '/pro/matches'}/${enc(s)}`;
+    const leaguePage = proPage('league', (s, req) => pro.league(s, seasonParam(req)), (p) => ({ head: proLeagueHead(p, ctx()), body: proLeagueBody(p) }), (s) => proPaths.league(s), leagueHome);
+    const matchPage = proPage('match', (s) => pro.match(s), (p) => ({ head: proMatchHead(p, ctx()), body: proMatchBody(p) }), (s) => proPaths.match(s), matchHome);
+    app.get('/pro/leagues/:slug', leaguePage);
+    app.get('/pro/teams/:slug', proPage('team', (s, req) => pro.team(s, seasonParam(req)), (p) => ({ head: proTeamHead(p, ctx()), body: proTeamBody(p) }), (s) => proPaths.team(s), teamHome));
     app.get('/pro/players/:slug', proPage('player', (s) => pro.player(s), (p) => ({ head: proPlayerHead(p, ctx()), body: proPlayerBody(p) }), (s) => proPaths.player(s)));
-    app.get('/pro/matches/:slug', proPage('match', (s) => pro.match(s), (p) => ({ head: proMatchHead(p, ctx()), body: proMatchBody(p) }), (s) => proPaths.match(s)));
+    app.get('/pro/matches/:slug', matchPage);
+
+    // ---------- International (national teams) ----------
+    const intl = opts.intl;
+    if (intl) {
+      // Links on every /pro and /intl page go to the right section: the registry of national-team slugs first.
+      app.addHook('onRequest', async (req) => { if (/^\/(pro|intl|sitemap)/.test(pathOf(req.url))) await intl.ensureRegistry().catch(() => {}); });
+      app.get('/intl', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await intl.home(eastern().date); return { head: intlHomeHead(h, ctx()), body: intlHomeBody(h) }; }));
+      app.get('/intl/matches', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await intl.home(eastern().date); return { head: intlMatchesHead(h, ctx()), body: intlMatchesBody(h) }; }));
+      app.get('/intl/tournaments', (req, reply) => serve(req, reply, keyOf(req), async () => { const ts = await intl.tournaments(); return { head: intlTournamentsHead(ts, ctx()), body: intlTournamentsBody(ts) }; }));
+      app.get('/intl/teams', (req, reply) => serve(req, reply, keyOf(req), async () => { const ns = await intl.nations(); return { head: intlTeamsHead(ns, ctx()), body: intlTeamsBody(ns) }; }));
+      app.get('/intl/rankings', (req, reply) => serve(req, reply, keyOf(req), async () => { const r = await intl.rankings('m'); return { head: intlRankingsHead(r, ctx()), body: intlRankingsBody(r) }; }));
+      app.get('/intl/players', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await intl.leaders(); return { head: intlLeadersHead(p, ctx()), body: intlLeadersBody(p) }; }));
+      // Head-to-head is the app's own view (two teams picked on the page).
+      app.get('/intl/h2h', (_req, reply) => shell(reply));
+      app.get('/intl/tournaments/:slug', leaguePage);
+      app.get('/intl/matches/:slug', matchPage);
+      // A national team: the Pro team model with its history below; a nation the provider never had (Yugoslavia,
+      // Czechoslovakia) is its history alone; a club is sent to /pro.
+      app.get('/intl/teams/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+        const s = req.params.slug;
+        if (!s) return { shell: true };
+        if (!SLUG.test(s)) return null;
+        const [t, h] = await Promise.all([pro.team(s, seasonParam(req)), intl.history(s).catch(() => null)]);
+        if (t) {
+          if (!t.team.national) return { redirect: teamHome(t, s) };
+          const base = proTeamBody(t);
+          return { head: proTeamHead(t, ctx()), body: h ? base.replace('</article>', `${intlHistorySection(h)}</article>`) : base };
+        }
+        if (h) return { head: intlHistoryHead(h, ctx()), body: intlHistoryBody(h) };
+        const moved = await pro.renamedSlug('team', s);
+        return moved ? { redirect: `/intl/teams/${enc(moved)}` } : null;
+      }));
+      app.get('/intl/players/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+        const s = req.params.slug;
+        if (!s) return { shell: true };
+        if (!SLUG.test(s)) return null;
+        const p = await intl.player(s);
+        if (p) return { head: intlPlayerHead(p, ctx()), body: intlPlayerBody(p) };
+        const moved = await pro.renamedSlug('player', s);
+        return moved ? { redirect: `/intl/players/${enc(moved)}` } : null;
+      }));
+    }
   }
 
   // ---------- old addresses (were client-side redirects only) ----------

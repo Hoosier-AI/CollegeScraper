@@ -54,7 +54,8 @@ export class DbProSeoData implements ProSeoData {
   }
 
   async sitemapLeagues(): Promise<SitemapEntry[]> {
-    const rows = await selectAll<{ slug: string }>(this.db, 'pro_leagues', 'slug', (q) => q.eq('enabled', true).not('slug', 'is', null).order('priority'));
+    // Club competitions; the international ones are in the International sitemap.
+    const rows = await selectAll<{ slug: string }>(this.db, 'pro_leagues', 'slug', (q) => q.eq('enabled', true).eq('scope', 'club').not('slug', 'is', null).order('priority'));
     return rows.map((r) => ({ path: proPaths.league(r.slug) }));
   }
   /** Clubs with a season record (they have played): the rest are noindex. */

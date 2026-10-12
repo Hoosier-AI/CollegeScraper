@@ -2,6 +2,7 @@
 // the prefix). Reads come from src/ops/consoleQueries.ts; writes are kv settings, job enqueues, API keys and the
 // Render service.
 import { CRAWL_SITES } from '../pro/crawlSites.js';
+import { INTL_SCRAPED } from '../ops/intlSources.js';
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
@@ -29,7 +30,8 @@ export interface ConsoleOptions {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const SCRAPED_SOURCES = CRAWL_SITES.filter((s) => s.scraped).map((s) => s.id as string);
+// The International section's sources share the same off switch (settings:pro_sources_off).
+const SCRAPED_SOURCES = [...new Set([...CRAWL_SITES.filter((s) => s.scraped).map((s) => s.id as string), ...INTL_SCRAPED])];
 
 export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): void {
   const cfg = loadConfig();

@@ -3,12 +3,14 @@
 import { sourcesOff } from './sources.js';
 import type { Db } from '../db/client.js';
 import { kvGet, kvSet, selectAll } from '../db/client.js';
-import { isUsScene } from '../sources/apiFootball/leagues.js';
+import { isUsScene, type LeagueLevel, type LeagueScope } from '../sources/apiFootball/leagues.js';
 import { SHOW_AT } from '../jobs/pro/collegeMatch.js';
 import { leagueAdvancedLeaders, matchAdvanced, playerAdvanced, teamAdvanced } from './sources.js';
 
 // ---------- shapes ----------
-export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; /** The US scene: a competition in the USA or one US clubs play in. */ us?: boolean }
+export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; /** The US scene: a competition in the USA or one US clubs play in. */ us?: boolean;
+  /** Club football (Pro) or national teams (International); senior or youth; an international one's confederation. */
+  scope: LeagueScope; level: LeagueLevel; confederation: string | null }
 export interface ProTeamRef { id: number; name: string; slug: string; logo: string | null; country?: string | null; gender?: 'm' | 'w' | null; national?: boolean }
 export interface ProMatchSide extends ProTeamRef { score: number | null }
 export interface ProMatchRow {
@@ -21,15 +23,18 @@ export interface ProLeaderRow { player: { id: number; name: string; slug: string
 export interface ProStandingRow { rank: number | null; team: ProTeamRef; played: number | null; win: number | null; draw: number | null; lose: number | null; gf: number | null; ga: number | null; gd: number | null; points: number | null; form: string | null; description: string | null }
 export interface ProStandingGroup { name: string; rows: ProStandingRow[] }
 
-const TEAM_COLS = 'id,display_name,slug,logo,country,gender,national';
-const LEAGUE_COLS = 'id,name,slug,logo,country,country_flag,gender,type';
+const TEAM_COLS = 'id,display_name,slug,logo,country,gender,national,intl';
+const LEAGUE_COLS = 'id,name,slug,logo,country,country_flag,gender,type,scope,level,confederation';
 export const FIXTURE_SELECT = `id,slug,kickoff,status,status_short,elapsed,elapsed_extra,round,season,home_goals,away_goals,ht_home,ht_away,et_home,et_away,pen_home,pen_away,winner,venue_name,venue_city,detail_fetched_at,
 league:pro_leagues!pro_fixtures_league_id_fkey(${LEAGUE_COLS}),
 home:pro_teams!pro_fixtures_home_team_id_fkey(${TEAM_COLS}),
 away:pro_teams!pro_fixtures_away_team_id_fkey(${TEAM_COLS})`;
 
-const teamRef = (t: any): ProTeamRef => ({ id: t?.id, name: t?.display_name ?? 'TBD', slug: t?.slug ?? '', logo: t?.logo ?? null, country: t?.country ?? null, gender: t?.gender ?? null, national: !!t?.national });
-const leagueRef = (l: any): ProLeagueRef => ({ id: l?.id, name: l?.name ?? '', slug: l?.slug ?? '', logo: l?.logo ?? null, country: l?.country ?? null, country_flag: l?.country_flag ?? null, gender: l?.gender ?? 'm', type: l?.type, us: l?.id != null && isUsScene(Number(l.id), l?.country) });
+// National: pro_teams.intl (migration 163), a side that plays international football and never club football; the
+// provider's own flag is wrong both ways.
+const teamRef = (t: any): ProTeamRef => ({ id: t?.id, name: t?.display_name ?? 'TBD', slug: t?.slug ?? '', logo: t?.logo ?? null, country: t?.country ?? null, gender: t?.gender ?? null, national: !!(t?.intl ?? t?.national) });
+const leagueRef = (l: any): ProLeagueRef => ({ id: l?.id, name: l?.name ?? '', slug: l?.slug ?? '', logo: l?.logo ?? null, country: l?.country ?? null, country_flag: l?.country_flag ?? null, gender: l?.gender ?? 'm', type: l?.type, us: l?.id != null && isUsScene(Number(l.id), l?.country),
+  scope: l?.scope === 'intl' ? 'intl' : 'club', level: l?.level === 'youth' ? 'youth' : 'senior', confederation: l?.confederation ?? null });
 
 export function toMatchRow(r: any): ProMatchRow {
   return {
@@ -61,15 +66,18 @@ export function easternDayRange(date: string): { from: string; to: string } {
   return { from: new Date(start).toISOString(), to: new Date(end).toISOString() };
 }
 
-async function priorities(db: Db): Promise<Map<number, number>> {
-  const rows = await selectAll<{ id: number; priority: number }>(db, 'pro_leagues', 'id,priority', (q) => q.eq('enabled', true));
+/** The competitions a section shows: Pro's club football or International's national teams. */
+export type Scope = LeagueScope;
+
+async function priorities(db: Db, scope: Scope = 'club'): Promise<Map<number, number>> {
+  const rows = await selectAll<{ id: number; priority: number }>(db, 'pro_leagues', 'id,priority', (q) => q.eq('enabled', true).eq('scope', scope));
   return new Map(rows.map((r) => [r.id, r.priority]));
 }
 
 // ---------- matches ----------
-export async function matchesByDate(db: Db, o: { date: string; league?: number | null; status?: string | null; featured?: boolean }) {
+export async function matchesByDate(db: Db, o: { date: string; league?: number | null; status?: string | null; featured?: boolean; scope?: Scope }) {
   const { from, to } = easternDayRange(o.date);
-  const prio = await priorities(db);
+  const prio = await priorities(db, o.scope ?? 'club');
   let rows = (await selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => {
     q = q.gte('kickoff', from).lt('kickoff', to).order('kickoff');
     if (o.league) q = q.eq('league_id', o.league);
@@ -92,10 +100,10 @@ export async function matchesByDate(db: Db, o: { date: string; league?: number |
 export async function home(db: Db, date: string) {
   const [day, featured, counts, abroad] = await Promise.all([
     matchesByDate(db, { date }),
-    db.from('pro_leagues').select(LEAGUE_COLS + ',priority,current_season').eq('enabled', true).lt('priority', 100).order('priority').limit(40),
+    db.from('pro_leagues').select(LEAGUE_COLS + ',priority,current_season').eq('enabled', true).eq('scope', 'club').lt('priority', 100).order('priority').limit(40),
     Promise.all(['pro_leagues', 'pro_teams', 'pro_players', 'pro_fixtures'].map((t) => {
       const q = db.from(t).select('id', { count: 'estimated', head: true });
-      return (t === 'pro_leagues' ? q.eq('enabled', true) : q).then((r) => r.count ?? 0);
+      return (t === 'pro_leagues' ? q.eq('enabled', true).eq('scope', 'club') : t === 'pro_teams' ? q.eq('intl', false) : q).then((r) => r.count ?? 0);
     })),
     americansAbroad(db, {}).catch(() => null),
   ]);
@@ -103,7 +111,7 @@ export async function home(db: Db, date: string) {
   let nextUs: Awaited<ReturnType<typeof matchesByDate>> | null = null;
   if (!day.groups.some((g) => g.league.us)) {
     const { from } = easternDayRange(date);
-    const ids = (await selectAll<any>(db, 'pro_leagues', 'id,country', (q) => q.eq('enabled', true))).filter((l) => isUsScene(l.id, l.country)).map((l) => l.id);
+    const ids = (await selectAll<any>(db, 'pro_leagues', 'id,country', (q) => q.eq('enabled', true).eq('scope', 'club'))).filter((l) => isUsScene(l.id, l.country)).map((l) => l.id);
     const { data: nx } = await db.from('pro_fixtures').select('kickoff').in('league_id', ids.concat([-1])).gte('kickoff', from).lte('kickoff', new Date(Date.parse(from) + 21 * 86400_000).toISOString()).order('kickoff').limit(1);
     const k = (nx?.[0] as any)?.kickoff as string | undefined;
     if (k) {
@@ -120,8 +128,8 @@ export async function home(db: Db, date: string) {
 }
 
 // ---------- leagues ----------
-export async function leagues(db: Db) {
-  const rows = await selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority,current_season', (q) => q.eq('enabled', true).order('priority').order('name'));
+export async function leagues(db: Db, scope: Scope = 'club') {
+  const rows = await selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority,current_season', (q) => q.eq('enabled', true).eq('scope', scope).order('priority').order('name'));
   return rows.map((l) => ({ ...leagueRef(l), priority: l.priority, current_season: l.current_season }));
 }
 
@@ -375,7 +383,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const clubSlugs = await teamsById(db, ((moves.data ?? []) as any[]).flatMap((m) => [m.from_team_id, m.to_team_id]).filter((x) => x > 0));
   const coachSeen = new Set<number>();
   return {
-    team: { ...teamRef(tm), founded: tm.founded, national: tm.national,
+    team: { ...teamRef(tm), founded: tm.founded, national: !!(tm.intl ?? tm.national),
       venue: ground.data ? { name: (ground.data as any).name, city: (ground.data as any).city, capacity: (ground.data as any).capacity, address: (ground.data as any).address ?? null, surface: (ground.data as any).surface ?? null, image: (ground.data as any).image ?? null }
         : tm.venue_name ? { name: tm.venue_name, city: tm.venue_city, capacity: tm.venue_capacity, address: null, surface: null, image: null } : null },
     season: s, seasons,
@@ -601,10 +609,10 @@ async function matchPreview(db: Db, fx: { id: number; league_id: number; season:
 }
 
 // ---------- search and slugs ----------
-export async function search(db: Db, q: string, limit = 8) {
+export async function search(db: Db, q: string, limit = 8, scope: Scope = 'club') {
   const term = q.trim().slice(0, 80);
   if (term.length < 2) return { leagues: [], teams: [], players: [] };
-  const { data, error } = await db.rpc('pro_search', { p_q: term, p_limit: limit });
+  const { data, error } = await db.rpc('pro_search', { p_q: term, p_limit: limit, p_scope: scope });
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as { kind: string; id: number; name: string; slug: string; sub: string | null; logo: string | null }[];
   const pick = (k: string) => rows.filter((r) => r.kind === k).map(({ kind: _k, ...r }) => r);
@@ -626,7 +634,8 @@ export async function renamedSlug(db: Db, kind: ProKind, slug: string): Promise<
 export const LEADER_STATS = ['goals', 'assists', 'apps', 'minutes', 'starts', 'shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'blocks', 'fouls_drawn', 'saves', 'clean_sheets', 'yellow', 'red', 'rating', 'pen_scored'] as const;
 export const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'] as const;
 
-export interface LeadersFilter { stat?: string; league?: number | null; season?: number | null; position?: string | null; nationality?: string | null; min_age?: number | null; max_age?: number | null; min_minutes?: number | null; per90?: boolean; gender?: 'm' | 'w' | null; abroad?: string | null; /** Only competitions in this country (the US scope: 'USA'). */ country?: string | null; limit?: number; offset?: number }
+export interface LeadersFilter { stat?: string; league?: number | null; season?: number | null; position?: string | null; nationality?: string | null; min_age?: number | null; max_age?: number | null; min_minutes?: number | null; per90?: boolean; gender?: 'm' | 'w' | null; abroad?: string | null; /** Only competitions in this country (the US scope: 'USA'). */ country?: string | null; limit?: number; offset?: number;
+  /** Club competitions (Pro, the default) or national-team ones (International); senior or youth. */ scope?: Scope; level?: LeagueLevel | null }
 
 /** Leaders and the player directory (pro_leaders): one row per player, competition season and club. */
 export async function leaders(db: Db, f: LeadersFilter) {
@@ -637,7 +646,7 @@ export async function leaders(db: Db, f: LeadersFilter) {
   const { data, error } = await db.rpc('pro_leaders', {
     p_stat: stat, p_league: f.league ?? null, p_season: f.season ?? null, p_position: f.position ?? null, p_nationality: f.nationality ?? null,
     p_min_age: f.min_age ?? null, p_max_age: f.max_age ?? null, p_min_minutes: minMinutes, p_per90: !!f.per90, p_gender: f.gender ?? null, p_abroad: f.abroad ?? null,
-    p_limit: limit, p_offset: offset, p_country: f.country ?? null,
+    p_limit: limit, p_offset: offset, p_country: f.country ?? null, p_scope: f.scope ?? 'club', p_level: f.level ?? null,
   });
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as any[];
@@ -652,7 +661,7 @@ export async function leaders(db: Db, f: LeadersFilter) {
 export async function countries(db: Db) {
   const [list, ls] = await Promise.all([
     selectAll<{ name: string; code: string | null; flag: string | null; slug: string }>(db, 'pro_countries', 'name,code,flag,slug', (q) => q.order('name')),
-    selectAll<{ country: string | null }>(db, 'pro_leagues', 'country', (q) => q.eq('enabled', true)),
+    selectAll<{ country: string | null }>(db, 'pro_leagues', 'country', (q) => q.eq('enabled', true).eq('scope', 'club')),
   ]);
   const counts = new Map<string, number>();
   for (const l of ls) if (l.country) counts.set(l.country, (counts.get(l.country) ?? 0) + 1);
@@ -665,9 +674,9 @@ export async function country(db: Db, slug: string, gender?: 'm' | 'w') {
   if (!c) return null;
   const name = (c as any).name as string;
   const [leagueRows, clubs, home, abroad] = await Promise.all([
-    selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority,current_season', (q) => { const b = q.eq('enabled', true).eq('country', name); return (gender ? b.eq('gender', gender) : b).order('priority').order('name'); }),
+    selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority,current_season', (q) => { const b = q.eq('enabled', true).eq('scope', 'club').eq('country', name); return (gender ? b.eq('gender', gender) : b).order('priority').order('name'); }),
     // Clubs that play in a competition we follow; a country's full club list (967 in the USA) is mostly amateur sides.
-    selectAll<any>(db, 'pro_teams', TEAM_COLS + ',founded,venue_name,venue_city', (q) => q.eq('country', name).eq('national', false).not('profile_synced_at', 'is', null).order('display_name')),
+    selectAll<any>(db, 'pro_teams', TEAM_COLS + ',founded,venue_name,venue_city', (q) => q.eq('country', name).eq('national', false).eq('intl', false).not('profile_synced_at', 'is', null).order('display_name')),
     leaders(db, { stat: 'minutes', nationality: name, gender, limit: 30 }),
     leaders(db, { stat: 'minutes', nationality: name, abroad: name, gender, limit: 30 }),
   ]);

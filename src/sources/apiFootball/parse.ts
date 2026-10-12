@@ -1,7 +1,7 @@
 // Pure: API-Football JSON -> rows for the pro_* tables (column names match migration 134). No I/O, so each shape is
 // tested against recorded answers in fixtures/apiFootball/.
 import { nameKey, stripDiacritics } from '../../normalize/names.js';
-import { isUsScene, leagueGender, leagueKind, leaguePriority, teamDisplayName, type Gender } from './leagues.js';
+import { isUsScene, leagueConfederation, leagueGender, leagueKind, leagueLevel, leaguePriority, leagueScope, teamDisplayName, type Confederation, type Gender, type LeagueLevel, type LeagueScope } from './leagues.js';
 
 // ---------- provider shapes (only the fields we read) ----------
 export interface AfCoverage { fixtures?: { events?: boolean; lineups?: boolean; statistics_fixtures?: boolean; statistics_players?: boolean }; standings?: boolean; players?: boolean; [k: string]: unknown }
@@ -47,7 +47,9 @@ export interface AfTeamItem { team: { id: number; name: string; code?: string | 
 
 // ---------- rows ----------
 export type FixtureStatus = 'scheduled' | 'live' | 'final' | 'postponed' | 'cancelled' | 'abandoned';
-export interface LeagueRow { id: number; name: string; type: 'league' | 'cup'; country: string | null; country_code: string | null; country_flag: string | null; logo: string | null; gender: Gender; kind: ReturnType<typeof leagueKind>; priority: number; current_season: number | null; enabled: boolean }
+export interface LeagueRow { id: number; name: string; type: 'league' | 'cup'; country: string | null; country_code: string | null; country_flag: string | null; logo: string | null; gender: Gender; kind: ReturnType<typeof leagueKind>; priority: number; current_season: number | null; enabled: boolean;
+  /** Club football (Pro) or national teams (International), senior or youth, and the confederation of an international one. */
+  scope: LeagueScope; level: LeagueLevel; confederation: Confederation | null }
 export interface SeasonRow { league_id: number; season: number; starts_on: string | null; ends_on: string | null; is_current: boolean; coverage: AfCoverage }
 export interface TeamRow { id: number; name: string; display_name: string; logo: string | null; gender: Gender | null }
 export interface TeamProfileRow extends TeamRow { code: string | null; country: string | null; founded: number | null; national: boolean; venue_id: number | null; venue_name: string | null; venue_city: string | null; venue_capacity: number | null; profile_synced_at: string }
@@ -108,12 +110,14 @@ export function parseLeagues(items: AfLeagueItem[]): { leagues: LeagueRow[]; sea
     const type = String(it.league.type).toLowerCase() === 'cup' ? 'cup' : 'league';
     const kind = leagueKind(id, name);
     const current = (it.seasons ?? []).find((s) => s.current) ?? null;
+    const scope = leagueScope(id, name, str(it.country?.name));
     leagues.push({
       id, name, type, country: str(it.country?.name), country_code: str(it.country?.code), country_flag: str(it.country?.flag), logo: str(it.league.logo),
       gender: leagueGender(id, name), kind, priority: leaguePriority(id, type, kind), current_season: current?.year ?? null,
       // Crawled when professional and still running (a current season the provider covers with fixtures); the whole US
       // scene is crawled whatever its level.
       enabled: (kind === 'pro' || isUsScene(id, str(it.country?.name))) && !!current,
+      scope, level: leagueLevel(id, name), confederation: leagueConfederation(id, name, scope),
     });
     // The provider sometimes lists a season year twice for one league; keep one row (the current one if either is).
     const byYear = new Map<number, SeasonRow>();
