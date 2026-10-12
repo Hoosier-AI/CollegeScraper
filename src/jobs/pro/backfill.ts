@@ -94,7 +94,7 @@ export async function proBackfill(ctx: JobContext): Promise<void> {
 export async function proPlayers(ctx: JobContext): Promise<void> {
   const limit = Math.min(1000, Number(ctx.params.limit) || 60);
   await withApi(ctx, async (api) => {
-    const { data, error } = await ctx.db.from('pro_players').select('id').is('profile_synced_at', null).order('created_at', { ascending: false }).limit(limit);
+    const { data, error } = await ctx.db.from('pro_players').select('id').is('profile_synced_at', null).gt('id', 0).order('created_at', { ascending: false }).limit(limit);
     if (error) throw new Error(error.message);
     for (const r of (data ?? []) as { id: number }[]) {
       if (await ctx.cancelled()) return;

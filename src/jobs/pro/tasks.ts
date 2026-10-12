@@ -180,6 +180,9 @@ const handlers: Record<string, Handler> = {
 
   async profile(t) {
     const id = Number(t.task.key);
+    // Players our other sources created (ASA, Wikidata) have negative ids API-Football does not know; asking for
+    // one is rejected ("The Player field cannot exceed 10 characters") and spends a call.
+    if (!(id > 0)) { await t.ctx.db.from('pro_players').update({ profile_synced_at: now() }).eq('id', id); return { done: true }; }
     const res = await t.api.get<AfProfile>('players/profiles', { player: id }, 'backfill');
     const p = res.response[0];
     if (p?.player?.id === id) await upsertProfiles(t.ctx.db, [parseProfile(p, now())]);

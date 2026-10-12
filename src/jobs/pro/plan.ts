@@ -121,7 +121,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
   for (const p of input.usPlayers ?? []) { add('sidelined', p, 18, 60); add('trophies', p, 18, 90); }
   for (const c of input.usCoaches ?? []) add('coach_trophies', c, 19, 180);
   tierNow = 0;
-  for (const id of input.newPlayers) add('profile', id, 19, null);
+  for (const id of input.newPlayers) if (id > 0) add('profile', id, 19, null);
 
   // ---------- everyone else: every league's season in play, then last season, then history ----------
   // Breadth first (the Mega plan, 2026-10-10): every enabled league's current season gets the top competitions'
