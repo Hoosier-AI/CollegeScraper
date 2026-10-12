@@ -51,5 +51,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 155_pro_us_first.sql | US-first Pro: `pro_leaders` p_country (Leaders/Players open on US competitions), `pro_search` US first after an exact name, `pro_us_league()`, and trigram indexes on lowered names (search 6.8 s to 0.16 s) | yes (2026-10-12) |
 | 156_pro_americans_abroad.sql | `pro_americans_abroad`, `pro_americans_upcoming`, `pro_us_transfers` for the Americans abroad page and US transfers | yes (2026-10-12) |
 | 157_pro_search_contains.sql | `pro_search`: names containing the search text before fuzzy matches ("morris": the Morrises before "M. Parris") | yes (2026-10-12) |
+| 158_pro_search_unaccent.sql | Accent-free search: `unaccent`, `pro_fold()` and trigram indexes on folded names ("pulisic" finds Christian Pulišić); drops 155's lowered-name indexes. The indexes run outside a transaction | yes (2026-10-12) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
