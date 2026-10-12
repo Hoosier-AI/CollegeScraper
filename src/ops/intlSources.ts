@@ -54,10 +54,12 @@ export async function intlSourcesBlock(db: Db) {
     (q) => q.gte('day', since).in('source', INTL_SITES.map((s) => s.id))).catch(() => []);
   const per = await Promise.all(INTL_SITES.map(async (s) => {
     const rq = requests.filter((r) => r.source === s.id);
-    const [matches, goals, extra] = s.id === 'api-football' ? [null, null, null] : await Promise.all([
+    // What each source has given: results and scorers; caps (Wikipedia careers), squads (the World Cup database); for
+    // API-Football, the results only it has (most women's internationals).
+    const [matches, goals, extra] = s.planned || s.id === 'wikidata' ? [null, null, null] : await Promise.all([
       count(db, 'intl_src_matches', (q) => q.eq('source', s.id)),
-      count(db, 'intl_src_goals', (q) => q.eq('source', s.id)),
-      s.id === 'wikidata' ? count(db, 'intl_caps', (q) => q.eq('source', 'wikidata')) : s.id === 'rsssf' ? count(db, 'intl_caps', (q) => q.eq('source', 'rsssf')) : s.id === 'worldcup-db' ? count(db, 'intl_squads', (q) => q.eq('source', 'worldcup-db')) : Promise.resolve(null),
+      s.id === 'api-football' ? Promise.resolve(null) : count(db, 'intl_src_goals', (q) => q.eq('source', s.id)),
+      s.id === 'wikipedia' ? count(db, 'intl_caps', (q) => q.eq('source', 'wikipedia')) : s.id === 'worldcup-db' ? count(db, 'intl_squads', (q) => q.eq('source', 'worldcup-db')) : Promise.resolve(null),
     ]);
     const last = rq.map((r) => r.last_at).filter(Boolean).sort().pop() ?? null;
     return { ...s, requests_7d: rq.reduce((n, r) => n + r.requests, 0), errors_7d: rq.reduce((n, r) => n + r.errors, 0), bytes_7d: rq.reduce((n, r) => n + Number(r.bytes), 0), last_at: last,

@@ -57,8 +57,9 @@ export async function schedule(db: Db) {
   };
 }
 
-/** group: 'pro' = Plaibook Stats Pro jobs (pro-* and the sources lane), 'college' = everything else. */
-export interface RunFilter { job?: string; status?: string; since?: string; hide_live?: boolean; limit?: number; offset?: number; group?: 'pro' | 'college' }
+/** group: 'pro' = Plaibook Stats Pro jobs (pro-* and the sources lane), 'intl' = International's (intl-*), 'college' =
+ *  everything else. */
+export interface RunFilter { job?: string; status?: string; since?: string; hide_live?: boolean; limit?: number; offset?: number; group?: 'pro' | 'college' | 'intl' }
 
 export async function runsPage(db: Db, f: RunFilter) {
   const limit = Math.min(200, Math.max(1, f.limit ?? 50)), offset = Math.max(0, f.offset ?? 0);
@@ -69,7 +70,9 @@ export async function runsPage(db: Db, f: RunFilter) {
   if (f.hide_live && f.job !== 'live') q = q.neq('job', 'live');
   // Pro includes the source jobs (ASA, Wikipedia, openfootball, matching and checks): they feed the pro pages.
   const sourceList = `(${SOURCE_JOBS.map((j) => `"${j}"`).join(',')})`;
-  if (f.group === 'pro') q = q.or(`job.like.pro-%,job.in.${sourceList}`);
+  const proSources = `(${SOURCE_JOBS.filter((j) => !j.startsWith('intl-')).map((j) => `"${j}"`).join(',')})`;
+  if (f.group === 'pro') q = q.or(`job.like.pro-%,job.in.${proSources}`);
+  if (f.group === 'intl') q = q.like('job', 'intl-%');
   if (f.group === 'college') q = q.not('job', 'like', 'pro-%').not('job', 'in', sourceList);
   const { data, error, count: total } = await q;
   if (error) { if (/416|range/i.test(error.message)) return { rows: [], total: 0, limit, offset }; throw new Error(error.message); }
