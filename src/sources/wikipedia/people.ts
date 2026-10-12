@@ -19,7 +19,9 @@ export function parseClubPage(html: string): { qid: string | null; players: Squa
   const $ = cheerio.load(html);
   const seen = new Set<string>();
   const players: SquadPlayer[] = [];
-  $('table.football-squad tr').each((_, tr) => {
+  // Men's club articles use the football-squad table; many others (NWSL clubs) build rows from the "Football squad
+  // player sort" template inside a plain table, marked vcard agent: both, once.
+  $('table.football-squad tr, tr.vcard.agent, tr[data-mw*="Football squad player"]').each((_, tr) => {
     const cells = $(tr).children('td').toArray();
     if (cells.length < 3) return;
     let pick: { title: string; name: string } | null = null;

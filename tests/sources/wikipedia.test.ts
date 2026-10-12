@@ -74,3 +74,14 @@ describe('Wikipedia club and player articles', () => {
     expect(p.careers.filter((c) => c.kind === 'international').length).toBe(2);
   });
 });
+
+describe('club squads in the NWSL layout (Football squad player sort rows)', () => {
+  it('reads every player of a women\'s club article, not the nationality links', () => {
+    const c = parseClubPage(fixture('wikipedia/club-thorns-squad.html'));
+    expect(c.players.length).toBeGreaterThan(15);
+    const names = c.players.map((p) => p.name);
+    expect(names).toContain('Olivia Moultrie');
+    expect(names).not.toContain('USA');
+    expect(c.players.find((p) => p.name === 'Olivia Moultrie')).toMatchObject({ number: 13, position: 'MF' });
+  });
+});

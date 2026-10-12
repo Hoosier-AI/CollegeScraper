@@ -81,3 +81,16 @@ describe('one row per person in a squad', () => {
     expect(pk.number).toBe(45);
   });
 });
+
+import { mapPlayer } from '../../src/jobs/sources/mapping.js';
+describe('a married name on one side', () => {
+  const smith = { id: 1, display_name: 'Sophia Smith', first_name: 'Sophia', last_name: 'Smith', birth_date: '2000-08-10' } as any;
+  const other = { id: 2, display_name: 'Sophia Jones', first_name: 'Sophia', last_name: 'Jones', birth_date: '2000-08-10' } as any;
+  it('same birth date, first name and club: matched', () => {
+    expect(mapPlayer({ name: 'Sophia Wilson', birth_date: '2000-08-10' } as any, [smith, other], [smith])).toMatchObject({ pro_id: 1 });
+  });
+  it('not at the club, or two such players there: no match', () => {
+    expect(mapPlayer({ name: 'Sophia Wilson', birth_date: '2000-08-10' } as any, [smith], []).pro_id).toBeNull();
+    expect(mapPlayer({ name: 'Sophia Wilson', birth_date: '2000-08-10' } as any, [smith, other], [smith, other]).pro_id).toBeNull();
+  });
+});

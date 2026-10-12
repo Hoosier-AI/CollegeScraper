@@ -100,6 +100,14 @@ export function mapPlayer(p: SrcPerson, byBirthAll: ApiPerson[], atClubAll: ApiP
       const hits = sameDay.filter((c) => [c.display_name, c.first_name, c.last_name].some((n) => normName(n).includes(one[0]!)));
       if (hits.length === 1) return { pro_id: hits[0]!.id, method: 'name+birth', confidence: 0.9 };
     }
+    // A married name on one side ("Sophia Wilson" on Wikipedia, "Sophia Smith" at API-Football; Mallory Pugh and
+    // Swanson): the same birth date, first name and club, and only one such player.
+    const first = normName(p.name)[0];
+    const clubIds = new Set(atClub.map((c) => c.id));
+    if (first) {
+      const hits = sameDay.filter((c) => clubIds.has(c.id) && [c.first_name, c.display_name].some((n) => normName(n)[0] === first));
+      if (hits.length === 1) return { pro_id: hits[0]!.id, method: 'name+birth', confidence: 0.9 };
+    }
   }
   const club = atClub.filter((c) => !p.birth_date || !c.birth_date || c.birth_date === p.birth_date);
   const best = bestOf(club, (c) => personScore(p.name, c), 0.9);
