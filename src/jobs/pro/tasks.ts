@@ -240,6 +240,11 @@ const handlers: Record<string, Handler> = {
     const f = (data as { coverage?: { fixtures?: { events?: boolean; lineups?: boolean; statistics_players?: boolean } } } | null)?.coverage?.fixtures;
     if (f && !(f.events || f.lineups || f.statistics_players)) { t.ctx.inc('finals_without_detail', await markNoDetail(t.ctx.db, league, season)); return { done: true }; }
     const pending = await pendingDetail(t.ctx, t.leagues, { limit: 5000, league, season });
+    // Nothing to fetch because the season's matches are not stored yet: not done, so it comes back after them.
+    if (!pending.length) {
+      const { count } = await t.ctx.db.from('pro_fixtures').select('id', { count: 'exact', head: true }).eq('league_id', league).eq('season', season).eq('status', 'final');
+      if (!count) return { done: false };
+    }
     const affordable = Math.max(0, Math.min(t.api.headroom('backfill'), t.callsLeft(), 1e6)) * 20;
     // Detail writes are the heaviest: at most 400 matches (20 requests) per turn keeps a run inside its slot.
     const slice = pending.slice(0, Math.min(affordable, 400));

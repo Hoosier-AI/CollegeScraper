@@ -109,7 +109,8 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     for (const t of teamsOf.get(k(c)) ?? []) { if (!usClubs.has(t)) continue; active.add(t); if (pro) activePro.add(t); }
     for (const s of input.seasons.get(l.id) ?? []) {
       if (s.season >= c) continue;
-      add('detail', k(s.season), 12, null);
+      // After the season's matches (13): run first, it found nothing to fetch and closed for good (NWSL 2019-2025).
+      add('detail', k(s.season), 14, null);
       add('season_fixtures', k(s.season), 13, null);
       if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), 13, null);
       if (s.players && needTotals(s.season)) add('league_players', k(s.season), 15, null);
@@ -147,6 +148,9 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     // Five seasons everywhere (Evan, 2026-10-12): the season in play and four before it, for every competition, with
     // matches, detail, tables and player totals. Two and more back wait behind every league's last season, and three
     // and four back behind every league's two back; top competitions first within each.
+    // Women's competitions: every season the provider has (Evan, 2026-10-13: "all the stats we can get"); a few
+    // dozen leagues of 7-14 seasons each, small next to the men's game.
+    const depth = l.gender === 'w' ? 99 : HISTORY_SEASONS;
     for (const s of input.seasons.get(l.id) ?? []) {
       const back = c - s.season;
       if (back <= 0) continue;
@@ -156,14 +160,14 @@ export function planTasks(input: PlanInput): TaskSeed[] {
         if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), 46, null);
         add('detail', k(s.season), 50, null);
         add('league_players', k(s.season), 60, null);
-      } else if (back <= HISTORY_SEASONS) {
+      } else if (back <= depth) {
         const later = back > 2 ? 20 : 0;
         add('season_fixtures', k(s.season), by(tier, 120, 130, 150) + later, null);
         if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), by(tier, 121, 131, 151) + later, null);
         add('detail', k(s.season), (tier === 2 ? 170 : 180) + later, null);
         add('league_players', k(s.season), (tier === 2 ? 200 : 220) + later, null);
       }
-      if (back > HISTORY_SEASONS && tier === 2 && s.season >= 2015) add('league_players', k(s.season), 300, null);
+      if (back > depth && tier === 2 && s.season >= 2015) add('league_players', k(s.season), 300, null);
     }
   }
 

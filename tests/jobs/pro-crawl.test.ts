@@ -53,7 +53,7 @@ describe('crawl plan', () => {
       expect(get('season_fixtures', `253|${s}`)).toMatchObject({ priority: 13, every_days: null });
       expect(get('standings', `253|${s}`)!.priority).toBe(13);
       expect(get('league_players', `253|${s}`)!.priority).toBe(15);
-      expect(get('detail', `253|${s}`)!.priority).toBe(12);
+      expect(get('detail', `253|${s}`)!.priority).toBeGreaterThan(get('season_fixtures', `253|${s}`)!.priority); // after the matches it fetches
     }
     expect(get('team_stats', '253|2012|11')).toMatchObject({ priority: 15, every_days: null });
   });
@@ -184,5 +184,16 @@ describe('everyone\'s injury history and honours', () => {
     expect(tasks.find((t) => t.kind === 'trophies' && t.key === '77')).toMatchObject({ priority: 420, tier: 3 });
     expect(tasks.find((t) => t.kind === 'sidelined' && t.key === '77')).toMatchObject({ priority: 430 });
     expect(tasks.find((t) => t.kind === 'trophies' && t.key === '7')!.priority).toBeLessThan(420);
+  });
+});
+
+describe('women\'s competitions: every season the provider has', () => {
+  const W = (id: number): [number, LeagueInfo] => [id, { id, gender: 'w', enabled: true, priority: 500, type: 'league', current_season: 2026, country: 'England', kind: 'pro' }];
+  const tasks = planTasks({ leagues: new Map([W(44), L(183, 500)]), seasons: new Map([[44, cov(2026, 2025, 2020, 2015, 2011)], [183, cov(2026, 2025, 2020, 2015)]]), leagueTeams: [], topPlayers: [], newPlayers: [] });
+  const get = (kind: string, key: string) => tasks.find((t) => t.kind === kind && t.key === key);
+  it('goes back to the first season for women, five seasons for men', () => {
+    expect(get('detail', '44|2011')).toBeDefined();
+    expect(get('league_players', '44|2015')).toBeDefined();
+    expect(get('detail', '183|2015')).toBeUndefined();
   });
 });

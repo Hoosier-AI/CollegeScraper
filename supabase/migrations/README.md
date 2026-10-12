@@ -55,5 +55,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 159_pro_american_flag.sql | `pro_players.american` (nationality USA, or capped by a US national team: two matches or a squad listing when another nationality is on file), `pro_refresh_americans()` (daily in pro-rank); `pro_leaders` nationality USA, Americans abroad and search use it; Americans-abroad lines from the week's finals, every American, ordered by goals + assists, competition, minutes | yes (2026-10-12) |
 | 160_pro_player_gender.sql | `pro_refresh_player_gender()`: men's or women's for every pro player from their competitions and squads (662k had none; the college-to-pro matcher skipped them); daily in pro-rank | yes (2026-10-12) |
 | 161_pro_college_links_wikipedia.sql | `pro_college_links.method` allows 'wikipedia' | yes (2026-10-12) |
+| 162_pro_lines_from_events.sql | `pro_fill_lines_from_events()`: minutes, goals, assists and cards from lineups and events where the provider gives no player stats (most women's leagues, lower men's); `pro_refresh_season_aggregates` runs it first. 2,047 competition seasons had match detail but no player totals | yes (2026-10-13) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
