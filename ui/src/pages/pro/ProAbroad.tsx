@@ -1,5 +1,6 @@
 // Americans abroad (/pro/abroad): US players at clubs outside the US. Last week's match lines, who plays in the coming
 // week, and the season's leaders among them. Men's or women's from the header toggle.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, qs } from '../../lib/api';
@@ -17,6 +18,9 @@ export default function ProAbroad() {
   const [stat, setStat] = useUrlState('stat', 'goals', { allow: PRO_STATS.map((s) => s.key) });
   const q = useQuery({ queryKey: ['pro-abroad', gender, stat], queryFn: () => api<Data>(`/api/pro/americans-abroad${qs({ gender, stat })}`), placeholderData: keepPreviousData });
   const d = q.data;
+  const [allUpcoming, setAllUpcoming] = useState(false);
+  const starred = (d?.lines ?? []).filter((l) => l.goals || l.assists);
+  const rest = (d?.lines ?? []).filter((l) => !l.goals && !l.assists);
   const updated = d?.at ? new Date(d.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   return (
     <div className="space-y-6">
@@ -26,10 +30,34 @@ export default function ProAbroad() {
       {d && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="space-y-6">
-            <Section title="This week">
-              {d.lines.length
-                ? <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{d.lines.slice(0, 24).map((l) => <AbroadCard key={`${l.player.id}-${l.match.id}`} l={l} />)}</ul>
-                : <EmptyState title="No games in the last seven days" body="Lines appear after each club match, as soon as its player stats are in." />}
+            {/* Everyone who played: goal and assist makers as cards, every other appearance in a compact list. */}
+            <Section title={`This week: ${d.lines.length} ${d.lines.length === 1 ? 'appearance' : 'appearances'}`}>
+              {d.lines.length ? (
+                <>
+                  {starred.length > 0 && <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{starred.map((l) => <AbroadCard key={`${l.player.id}-${l.match.id}`} l={l} />)}</ul>}
+                  {rest.length > 0 && (
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-medium text-chalk-400">Also played</h3>
+                      <ul className="frame divide-y divide-field-700">
+                        {rest.map((l) => {
+                          const home = l.match.home.id === l.team_id; const club = home ? l.match.home : l.match.away, opp = home ? l.match.away : l.match.home;
+                          const us = club.score ?? 0, them = opp.score ?? 0; const r = us > them ? 'W' : us < them ? 'L' : 'D';
+                          return (
+                            <li key={`${l.player.id}-${l.match.id}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-1.5 text-sm sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]">
+                              <span className="flex min-w-0 items-center gap-2"><PlayerAvatar src={l.player.photo} name={l.player.name} size={22} /><Link to={proPath.player(l.player.slug)} className="truncate text-chalk-100 hover:text-pitch-300">{l.player.name}</Link></span>
+                              <Link to={proPath.match(l.match.slug)} className="order-last col-span-2 flex min-w-0 items-center gap-1.5 text-xs text-chalk-400 hover:text-chalk-200 sm:order-none sm:col-span-1">
+                                <TeamLogo src={club.logo} name={club.name} size={14} /><span className="truncate">{club.name}</span>
+                                <span className={`shrink-0 ${r === 'W' ? 'text-win' : r === 'L' ? 'text-loss' : 'text-draw'}`}>{r} {us}–{them}</span><span className="truncate">{home ? 'v' : 'at'} {opp.name}</span>
+                              </Link>
+                              <span className="shrink-0 text-right text-xs text-chalk-400 tnum">{l.minutes}′{l.rating != null ? `, ${l.rating.toFixed(1)}` : ''}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : <EmptyState title="No games in the last seven days" body="Lines appear after each club match, as soon as its player stats are in." />}
             </Section>
             <Section title={`Season leaders: ${statLabel(stat).toLowerCase()}`} right={<Field label="Stat">{(id) => <Select id={id} value={stat} onChange={setStat} options={PRO_STATS.map((s) => ({ value: s.key, label: s.label }))} />}</Field>}>
               <LeadersTable rows={d.leaderboard?.rows ?? []} stat={stat} caption={`Americans abroad, ${statLabel(stat)}`} loading={q.isPlaceholderData} />
@@ -37,10 +65,10 @@ export default function ProAbroad() {
             </Section>
           </div>
           <aside className="space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Coming up</h2>
+            <h2 className="text-base font-semibold text-chalk-100">Coming up<span className="ml-2 text-sm font-normal text-chalk-500">biggest competitions first</span></h2>
             {d.upcoming.length ? (
               <ul className="frame divide-y divide-field-700">
-                {d.upcoming.slice(0, 30).map((u) => {
+                {(allUpcoming ? d.upcoming : d.upcoming.slice(0, 25)).map((u) => {
                   const club = u.match.home.id === u.team_id ? u.match.home : u.match.away;
                   const opp = u.match.home.id === u.team_id ? u.match.away : u.match.home;
                   return (
@@ -58,6 +86,7 @@ export default function ProAbroad() {
                 })}
               </ul>
             ) : <p className="text-sm text-chalk-400">No matches for clubs with Americans in the next seven days.</p>}
+            {d.upcoming.length > 25 && <button type="button" className="btn-ghost btn-sm w-full" aria-expanded={allUpcoming} onClick={() => setAllUpcoming((v) => !v)}>{allUpcoming ? 'Show fewer' : `Show all ${d.upcoming.length} matches`}</button>}
           </aside>
         </div>
       )}

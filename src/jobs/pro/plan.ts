@@ -346,6 +346,11 @@ export async function proRank(ctx: JobContext): Promise<void> {
   const { data, error } = await ctx.db.rpc('pro_refresh_player_rank');
   if (error) throw new Error(error.message);
   ctx.inc('players_updated', Number(data) || 0);
+  // Who counts as American (migration 159): nationality USA or capped by a US national team; read by Americans
+  // abroad, the USA country page, the nationality filter and search.
+  const am = await ctx.db.rpc('pro_refresh_americans');
+  if (am.error) throw new Error(`americans: ${am.error.message}`);
+  ctx.inc('american_flags_changed', Number(am.data) || 0);
 }
 
 registerJob('pro-plan', proPlan);

@@ -758,7 +758,7 @@ async function abroadRows(db: Db): Promise<AbroadData | null> {
   }
   if ((!abroadCache || Date.now() - abroadCache.at > 30 * 60_000) && !abroadRefresh) {
     abroadRefresh = (async () => {
-      const [lines, upcoming] = await Promise.all([db.rpc('pro_americans_abroad', { p_days: 7, p_limit: 300 }), db.rpc('pro_americans_upcoming', { p_days: 7 })]);
+      const [lines, upcoming] = await Promise.all([db.rpc('pro_americans_abroad', { p_days: 7, p_limit: 400 }), db.rpc('pro_americans_upcoming', { p_days: 7 })]);
       if (lines.error || upcoming.error) return;
       const data: AbroadData = { at: new Date().toISOString(), lines: (lines.data ?? []) as AbroadLine[], upcoming: (upcoming.data ?? []) as AbroadUpcoming[] };
       abroadCache = { at: Date.now(), data };
@@ -773,14 +773,16 @@ async function abroadRows(db: Db): Promise<AbroadData | null> {
 export async function americansAbroad(db: Db, o: { gender?: 'm' | 'w' | null; stat?: string | null; leaderboard?: boolean }) {
   const raw = await abroadRows(db);
   const g = o.gender ?? null;
-  const lines = (raw?.lines ?? []).filter((l) => !g || l.gender === g).slice(0, 60);
-  const upcoming = (raw?.upcoming ?? []).filter((u) => !g || u.gender === g).slice(0, 60);
+  // Every American who played this week (sorted in the database: goals + assists, then the competition, then minutes).
+  const lines = (raw?.lines ?? []).filter((l) => !g || l.gender === g);
+  const upcoming = (raw?.upcoming ?? []).filter((u) => !g || u.gender === g);
   const playerIds = [...new Set([...lines.map((l) => l.player_id), ...upcoming.flatMap((u) => u.player_ids.slice(0, 4))])];
   const fixtureIds = [...new Set([...lines.map((l) => l.fixture_id), ...upcoming.map((u) => u.fixture_id)])];
-  const [people, fixtures, board] = await Promise.all([
+  const [people, fixtures, board, prio] = await Promise.all([
     playerIds.length ? selectAll<any>(db, 'pro_players', 'id,display_name,slug,photo,position', (q) => q.in('id', playerIds)) : Promise.resolve([] as any[]),
     fixtureIds.length ? selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => q.in('id', fixtureIds)) : Promise.resolve([] as any[]),
     o.leaderboard ? leaders(db, { stat: o.stat ?? 'goals', nationality: 'USA', abroad: 'USA', gender: g, limit: 25 }) : Promise.resolve(null),
+    priorities(db),
   ]);
   const pp = new Map(people.map((p) => [p.id, { id: p.id, name: p.display_name, slug: p.slug, photo: p.photo ?? null, position: p.position ?? null }]));
   const fx = new Map(fixtures.map((f) => [Number(f.id), toMatchRow(f)]));
@@ -788,7 +790,8 @@ export async function americansAbroad(db: Db, o: { gender?: 'm' | 'w' | null; st
     at: raw?.at ?? null,
     lines: lines.filter((l) => pp.has(l.player_id) && fx.has(Number(l.fixture_id))).map((l) => ({ player: pp.get(l.player_id)!, match: fx.get(Number(l.fixture_id))!, team_id: l.team_id, minutes: l.minutes, goals: l.goals, assists: l.assists, rating: l.rating == null ? null : Number(l.rating), starter: l.starter })),
     upcoming: upcoming.filter((u) => fx.has(Number(u.fixture_id))).map((u) => ({ match: fx.get(Number(u.fixture_id))!, team_id: u.team_id, players: u.player_ids.slice(0, 4).map((id) => pp.get(id)).filter(Boolean) }))
-      .sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff)),
+      // The biggest competitions first (Milan before a fourth division), then by kickoff.
+      .sort((a, b) => (prio.get(a.match.league.id) ?? 999) - (prio.get(b.match.league.id) ?? 999) || a.match.kickoff.localeCompare(b.match.kickoff)),
     leaderboard: board,
   };
 }
