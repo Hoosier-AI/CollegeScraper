@@ -43,7 +43,7 @@ const WORLD_KEY = 'pro:world_coverage';
 /** How much of the pro football world the crawl has (pro_world_coverage, migration 149). The count takes ~9 s on the
  *  full tables, so the page never waits for it: the last result answers at once (kept in college_kv, so a restart
  *  still has one) and a refresh runs in the background when it is over 5 minutes old. */
-async function worldCoverage(db: Db): Promise<WorldCoverage | null> {
+export async function worldCoverage(db: Db): Promise<WorldCoverage | null> {
   if (!world) {
     const saved = await kvGet<WorldCoverage>(db, WORLD_KEY).catch(() => null);
     if (saved) world = { at: Date.parse(saved.at) || 0, data: saved };

@@ -56,5 +56,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 160_pro_player_gender.sql | `pro_refresh_player_gender()`: men's or women's for every pro player from their competitions and squads (662k had none; the college-to-pro matcher skipped them); daily in pro-rank | yes (2026-10-12) |
 | 161_pro_college_links_wikipedia.sql | `pro_college_links.method` allows 'wikipedia' | yes (2026-10-12) |
 | 162_pro_lines_from_events.sql | `pro_fill_lines_from_events()`: minutes, goals, assists and cards from lineups and events where the provider gives no player stats (most women's leagues, lower men's); `pro_refresh_season_aggregates` runs it first. 2,047 competition seasons had match detail but no player totals | yes (2026-10-13) |
+| 163_stats_analytics.sql | Cookie-free site analytics per day (`stats_views_daily`, `stats_referrers_daily`, `stats_devices_daily`, `stats_visitors_daily`, `stats_searches_daily`; written by `stats_analytics_add`, read by `stats_traffic(days)`) and `stats_daily_counts` (content counts per day, written by pro-rank and the insights read) for the hub's Stats Overview and Traffic tabs | yes (2026-10-13) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

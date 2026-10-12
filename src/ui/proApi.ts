@@ -141,7 +141,9 @@ export function registerProApi(app: FastifyInstance): void {
     return crawlLeagues(getDb(), { scope, seasons: req.query.seasons === 'all' ? 'all' : 'current' });
   });
 
-  app.get('/api/console/pro', async () => {
+  // ?parts=summary leaves out the sources and crawl blocks (the heavy part) for callers that only show the numbers.
+  app.get<{ Querystring: Record<string, string> }>('/api/console/pro', async (req) => {
+    const summary = req.query.parts === 'summary';
     const db = getDb();
     const cfg = loadConfig();
     const count = (t: string, f?: (q: any) => any, mode: 'exact' | 'estimated' = 'exact') => { let q = db.from(t).select('*', { count: mode, head: true }); if (f) q = f(q); return q.then((r: { count: number | null }) => r.count ?? 0); };
@@ -182,9 +184,9 @@ export function registerProApi(app: FastifyInstance): void {
         crawl_enabled: entry('pro-crawl')?.enabled ?? false, plan_enabled: entry('pro-plan')?.enabled ?? false,
         next_crawl: entry('pro-crawl')?.next ?? null, next_plan: entry('pro-plan')?.next ?? null,
       },
-      sources: await sourcesBlock(db),
+      sources: summary ? null : await sourcesBlock(db),
       // Every site the crawl reads, every league season's sources, and what is running (the hub's Crawling page).
-      crawl: await crawlBlock(db, { quota, overall, perDay }),
+      crawl: summary ? null : await crawlBlock(db, { quota, overall, perDay }),
       // Kept for the Stats console's own Pro card (older shape).
       leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links,
     };

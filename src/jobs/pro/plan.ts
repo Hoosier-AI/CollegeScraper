@@ -11,6 +11,7 @@
 //   and trophies; coach trophies and new players' profiles
 // pro-crawl: drains the queue on the pro-bulk lane, within the backfill quota floor and a time budget.
 // pro-rank: nightly recent minutes, indexable, current club and number (pro_refresh_player_rank).
+import { saveDailyCounts } from '../../ops/insights.js';
 import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, type Db } from '../../db/client.js';
 import { insertTasks, leagueIndex, rescheduleTasks, type LeagueInfo, type TaskSeed } from '../../db/proRepo.js';
@@ -359,6 +360,8 @@ export async function proRank(ctx: JobContext): Promise<void> {
   const gd = await ctx.db.rpc('pro_refresh_player_gender');
   if (gd.error) throw new Error(`gender: ${gd.error.message}`);
   ctx.inc('genders_changed', Number(gd.data) || 0);
+  // The day's content counts for the hub's growth charts (stats_daily_counts, migration 163).
+  await saveDailyCounts(ctx.db).then(() => ctx.inc('daily_counts_saved'), (err) => ctx.note('daily_counts', String(err)));
 }
 
 registerJob('pro-plan', proPlan);

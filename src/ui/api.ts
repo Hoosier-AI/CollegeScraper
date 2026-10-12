@@ -27,6 +27,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     req.method !== 'GET' || req.url.startsWith('/api/quality') || req.url.startsWith('/api/console') || /^\/api\/runs(\/|\?|$)/.test(req.url);
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
+    // The analytics beacon (src/server.ts) keeps its own limit and is not an API read.
+    if (req.url === '/api/t') return;
     if (adminOnly(req)) {
       if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
       return;

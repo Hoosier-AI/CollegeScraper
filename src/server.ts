@@ -13,6 +13,8 @@ import { registerPublicApi } from './api/v1.js';
 import { anonPrincipal, makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
 import { KeyStore } from './api/keys.js';
 import { UsageMeter } from './api/usage.js';
+import { AnalyticsMeter } from './api/analytics.js';
+import { isBot } from './pro/onView.js';
 import { registerConsoleApi } from './ui/consoleApi.js';
 import { evaluateHealth } from './ops/health.js';
 import { heartbeats, LANES } from './ops/consoleQueries.js';
@@ -81,6 +83,22 @@ const usage = new UsageMeter(cfg.SUPABASE_URL ? getDb() : null);
 usage.start();
 registerUiApi(app, { authorized, limitAnonymous: limitSite });
 
+// Cookie-free site analytics (src/api/analytics.ts): the viewer's beacon on every page change and settled search.
+// Bots are not counted; the viewer itself skips the owner (an admin token in the browser).
+const ownHosts = ['plaibook.live', 'onrender.com', 'localhost', ...(cfg.PUBLIC_URL ? [new URL(cfg.PUBLIC_URL).hostname.replace(/^www\./, '')] : [])];
+const analytics = new AnalyticsMeter(cfg.SUPABASE_URL ? getDb() : null, ownHosts);
+analytics.start();
+const beaconLimiter = new RateLimiter(120);
+app.post('/api/t', async (req, reply) => {
+  const ua = req.headers['user-agent'];
+  if (isBot(ua) || !beaconLimiter.take(anonPrincipal(req.ip).name).ok) return reply.code(204).send();
+  let b: any = req.body;
+  if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = null; } }
+  if (b && b.t === 'view') analytics.view({ path: String(b.path ?? ''), ref: typeof b.ref === 'string' ? b.ref : null, ua, ip: req.ip });
+  else if (b && b.t === 'search' && (b.scope === 'pro' || b.scope === 'college')) analytics.search(b.scope, String(b.q ?? ''), Number(b.n) || 0);
+  return reply.code(204).send();
+});
+
 // Public read API: open to anyone at the free-tier limit, higher for named keys (env list + keys made in the console).
 const apiKeys = parseApiKeys(cfg.COLLEGE_API_KEYS);
 const keyStore = cfg.SUPABASE_URL ? new KeyStore(getDb()) : null;
@@ -99,7 +117,7 @@ log.info({ keys: apiKeys.map((k) => k.name), anonPerMin: cfg.API_ANON_RATE_LIMIT
 
 // The owner's console: everything behind the trigger secret.
 const startedAt = Date.now();
-registerConsoleApi(app, { keyStore, usage, envKeys: apiKeys.map((k) => k.name), corsOrigins, limits: { key: cfg.API_RATE_LIMIT_PER_MIN, anon: cfg.API_ANON_RATE_LIMIT_PER_MIN, site: cfg.API_ANON_RATE_LIMIT_PER_MIN * 5 }, startedAt });
+registerConsoleApi(app, { keyStore, usage, analytics, envKeys: apiKeys.map((k) => k.name), corsOrigins, limits: { key: cfg.API_RATE_LIMIT_PER_MIN, anon: cfg.API_ANON_RATE_LIMIT_PER_MIN, site: cfg.API_ANON_RATE_LIMIT_PER_MIN * 5 }, startedAt });
 
 // Server-rendered public pages (titles, canonicals, JSON-LD, a text summary), slug redirects, sitemaps, robots.txt
 // and real 404s. Registered before the static files so its specific routes win over the static wildcard.
@@ -171,5 +189,5 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
   // Requests per site for the hub's Crawling page (pro_source_requests).
   startRequestFlush(getDb());
-  controller.signal.addEventListener('abort', () => { void flushRequests(getDb()); });
+  controller.signal.addEventListener('abort', () => { void flushRequests(getDb()); void analytics.flush(); void usage.flush(); });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });

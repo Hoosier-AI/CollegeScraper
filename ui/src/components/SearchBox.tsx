@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
 import { api, qs } from '../lib/api';
+import { flushSearch, trackSearch } from '../lib/track';
 import { useFilters, genderLabel } from '../lib/filters';
 import { Spinner, TeamLogo } from './primitives';
 
@@ -33,6 +34,8 @@ export function SearchBox({ size = 'md', autoFocus, placeholder = 'Find a team o
     ...(hits.data?.players ?? []).map((p) => ({ id: `p-${p.player_id}`, kind: 'player' as const, label: p.display_name, sub: [p.program_name, p.pos, p.season].filter(Boolean).join(', '), href: `/players/${p.player_id}` })),
   ], [hits.data, season]);
   useEffect(() => { setCursor(0); }, [items]);
+  // Site analytics: what was searched and whether anything matched (sent once typing stops).
+  useEffect(() => { if (hits.data && debounced.length >= 2) trackSearch('college', debounced, (hits.data.programs?.length ?? 0) + (hits.data.players?.length ?? 0)); }, [hits.data, debounced]);
   // Close on outside click.
   useEffect(() => {
     if (!open) return;
@@ -51,7 +54,7 @@ export function SearchBox({ size = 'md', autoFocus, placeholder = 'Find a team o
     return () => document.removeEventListener('keydown', onKey);
   }, [size]);
 
-  const go = (h: Hit) => { setOpen(false); setQ(''); onNavigate?.(); nav(h.href); };
+  const go = (h: Hit) => { flushSearch(); setOpen(false); setQ(''); onNavigate?.(); nav(h.href); };
   const listOpen = open && debounced.length >= 2;
   const big = size === 'lg';
   return (

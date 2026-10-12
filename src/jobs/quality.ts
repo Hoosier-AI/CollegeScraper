@@ -16,7 +16,7 @@ registerJob('quality', async (ctx: JobContext) => {
   for (const c of q.checks) ctx.inc(`check.${c.id}`, c.count);
 });
 
-export const RETENTION = { runs_days: 30, live_runs_days: 1, usage_days: 90, snapshots_days: 180 };
+export const RETENTION = { runs_days: 30, live_runs_days: 1, usage_days: 90, snapshots_days: 180, analytics_days: 400 };
 
 registerJob('ops-retention', async (ctx: JobContext) => {
   const ago = (days: number) => new Date(Date.now() - days * 86400_000).toISOString();
@@ -29,6 +29,8 @@ registerJob('ops-retention', async (ctx: JobContext) => {
   await del('college_crawl_runs', (q) => q.in('status', ['done', 'failed', 'cancelled']).neq('job', 'live').lt('created_at', ago(RETENTION.runs_days)), 'runs_deleted');
   await del('college_api_usage', (q) => q.lt('day', ago(RETENTION.usage_days).slice(0, 10)), 'usage_deleted');
   await del('college_quality_snapshots', (q) => q.lt('taken_at', ago(RETENTION.snapshots_days)), 'snapshots_deleted');
+  // Site analytics (migration 163): a little over a year, so the hub can compare with the same week last year.
+  for (const t of ['stats_views_daily', 'stats_referrers_daily', 'stats_devices_daily', 'stats_visitors_daily', 'stats_searches_daily']) await del(t, (q) => q.lt('day', ago(RETENTION.analytics_days).slice(0, 10)), 'analytics_deleted');
   // Render gives every deploy a new host name, so old pods leave heartbeat rows behind.
   await del('college_kv', (q) => q.like('key', `${KV.heartbeatPrefix}%`).lt('updated_at', ago(1)), 'stale_heartbeats_deleted');
 });

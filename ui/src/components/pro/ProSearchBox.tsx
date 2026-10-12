@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
 import { api, qs } from '../../lib/api';
+import { flushSearch, trackSearch } from '../../lib/track';
 import { proPath } from '../../lib/pro';
 import { PlayerAvatar, Spinner, TeamLogo } from '../primitives';
 
@@ -29,13 +30,15 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
     ...(hits.data?.players ?? []).map((h) => ({ key: `p${h.id}`, kind: 'player' as const, label: h.name, sub: h.sub ?? 'Player', href: proPath.player(h.slug), logo: h.logo, slug: h.slug })),
   ], [hits.data, onPick]);
   useEffect(() => { setCursor(0); }, [items]);
+  // Site analytics: what was searched and whether anything matched (sent once typing stops).
+  useEffect(() => { if (hits.data && debounced.length >= 2) trackSearch('pro', debounced, (hits.data.leagues?.length ?? 0) + (hits.data.teams?.length ?? 0) + (hits.data.players?.length ?? 0)); }, [hits.data, debounced]);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
-  const go = (h: Hit) => { setOpen(false); setQ(''); if (onPick) { onPick(h); return; } onNavigate?.(); nav(h.href); };
+  const go = (h: Hit) => { flushSearch(); setOpen(false); setQ(''); if (onPick) { onPick(h); return; } onNavigate?.(); nav(h.href); };
   const listOpen = open && debounced.length >= 2;
   const big = size === 'lg';
   return (

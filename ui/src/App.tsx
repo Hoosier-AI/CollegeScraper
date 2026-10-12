@@ -1,11 +1,12 @@
 import { Suspense, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError, clearToken, useAdmin } from './lib/api';
 import { FiltersProvider } from './lib/filters';
 import { BottomBar, Footer, TopBar, useFocusMain } from './components/shell';
 import { Skeleton } from './components/primitives';
 import { removeServerSummary } from './lib/entity';
+import { trackView } from './lib/track';
 
 export default function App() {
   const admin = useAdmin();
@@ -16,6 +17,9 @@ export default function App() {
   useFocusMain();
   // The server-rendered summary is for crawlers and the first paint; the app replaces it as soon as it mounts.
   useEffect(() => { removeServerSummary(); }, []);
+  // Site analytics: a page view on every page change (query strings are not sent).
+  const { pathname } = useLocation();
+  useEffect(() => { trackView(pathname); }, [pathname]);
   return (
     <FiltersProvider>
       <a href="#main" className="sr-only-focusable">Skip to content</a>
