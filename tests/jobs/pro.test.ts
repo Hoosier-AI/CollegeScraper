@@ -119,3 +119,15 @@ describe('college to pro: the rules that kept players out', () => {
     expect(links[0]).toMatchObject({ school_seo: 'smu', first_season: 2017, last_season: 2019, method: 'wikipedia', confidence: 0.9 });
   });
 });
+
+describe('college to pro: a campus is its own school', () => {
+  const idx = schoolIndex([{ seo: 'california', name: 'California', long_name: 'University of California' }, { seo: 'ucla', name: 'UCLA', long_name: 'UCLA' }, { seo: 'uc-irvine', name: 'UC Irvine', long_name: 'UC Irvine' }, { seo: 'cal-st-fullerton', name: 'Cal St. Fullerton', long_name: 'Cal State-Fullerton' }, { seo: 'long-beach-st', name: 'Long Beach St.', long_name: 'Long Beach State University' }, { seo: 'indiana', name: 'Indiana', long_name: 'Indiana University' }]);
+  it('University of California and Cal State campuses', () => {
+    expect(resolveSchool(idx, 'University of California, Los Angeles')).toBe('ucla');
+    expect(resolveSchool(idx, 'University of California, Berkeley')).toBe('california');
+    expect(resolveSchool(idx, 'University of California, Irvine')).toBe('uc-irvine');
+    expect(resolveSchool(idx, 'California State University, Fullerton')).toBe('cal-st-fullerton');
+    expect(resolveSchool(idx, 'California State University, Long Beach')).toBe('long-beach-st');
+    expect(resolveSchool(idx, 'Indiana University, Bloomington')).toBe('indiana');
+  });
+});

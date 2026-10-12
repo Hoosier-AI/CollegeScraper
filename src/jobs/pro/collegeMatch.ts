@@ -36,7 +36,29 @@ export function schoolIndex(schools: SchoolLite[]): SchoolIndex {
  * "University of North Carolina at Chapel Hill" -> "north-carolina". The whole name first, then shorter leading
  * parts ("north carolina chapel hill" -> "north carolina"), never shorter than two words unless the name is one word.
  */
+/** The names a "System, Campus" school goes by in our list. */
+export function campusNames(label: string): string[] {
+  const m = /^(.+?),\s*(.+)$/.exec(label.trim());
+  if (!m) return [];
+  const [, system, campus] = m as unknown as [string, string, string];
+  if (/^university of california$/i.test(system)) {
+    if (/^los angeles$/i.test(campus)) return ['UCLA'];
+    if (/^berkeley$/i.test(campus)) return ['California'];
+    return [`UC ${campus}`];
+  }
+  if (/^california state (polytechnic )?university$/i.test(system)) return [`Cal State-${campus}`, `Cal St. ${campus}`, `${campus} State`, `${campus} St.`, `Cal Poly ${campus}`, `CSU ${campus}`];
+  if (/^(the )?university of (texas|north carolina|wisconsin|tennessee|alabama|arkansas|missouri|nebraska|maryland|massachusetts|illinois|minnesota|michigan|colorado|louisiana)/i.test(system)) return [`${system.replace(/^the /i, '')} ${campus}`, `${system.replace(/^(the )?university of /i, '')} ${campus}`];
+  return [];
+}
+
 export function resolveSchool(index: SchoolIndex, label: string): string | null {
+  // Systems named "University, Campus": the campus is the school ("University of California, Los Angeles" is UCLA, not
+  // Berkeley, which cutting at the comma gave for 132 links).
+  for (const c of campusNames(label)) {
+    const k = teamKey(c);
+    const hit = index.long.get(k) ?? index.short.get(k);
+    if (hit) return hit;
+  }
   const words = teamKey(label.replace(/,.*$/, '')).split(' ').filter(Boolean);
   if (!words.length) return null;
   for (const m of [index.long, index.short]) {
