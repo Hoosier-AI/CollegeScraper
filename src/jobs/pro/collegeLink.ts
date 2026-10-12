@@ -99,7 +99,14 @@ export async function proCollegeLink(ctx: JobContext): Promise<void> {
       return s && prog ? [{ player_id: c.id, name_key: c.name_key, gender: prog.gender, seasons: s.seasons, school_seo: prog.school_seo, school_name: schoolName.get(prog.school_seo) ?? prog.school_seo }] : [];
     });
     const lite: ProNameLite[] = pros.map((p) => ({ ...p, first_season: firstSeason.get(p.id) ?? null, us: inUs.has(p.id) }));
-    const found = matchNameAge(lite, college);
+    // Two pro players with the same name and gender (two Ahmed Ibrahims): which one went to college is a guess, so
+    // the link waits for review instead of showing.
+    const sameName = new Map<string, number>();
+    for (const p of pros) if (p.gender) { const k = `${p.name_key}|${p.gender}`; sameName.set(k, (sameName.get(k) ?? 0) + 1); }
+    const found = matchNameAge(lite, college).map((f) => {
+      const p = pros.find((x) => x.id === f.pro_player_id);
+      return p && (sameName.get(`${p.name_key}|${p.gender}`) ?? 0) > 1 ? { ...f, confidence: Math.min(f.confidence, 0.5), evidence: { ...f.evidence, pro_namesakes: sameName.get(`${p.name_key}|${p.gender}`) } } : f;
+    });
     ctx.inc('name_age_matches', found.length);
     proposals.push(...found);
   }
