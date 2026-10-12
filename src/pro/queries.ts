@@ -2,12 +2,13 @@
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
 import { sourcesOff } from './sources.js';
 import type { Db } from '../db/client.js';
-import { selectAll } from '../db/client.js';
+import { kvGet, kvSet, selectAll } from '../db/client.js';
+import { isUsScene } from '../sources/apiFootball/leagues.js';
 import { SHOW_AT } from '../jobs/pro/collegeMatch.js';
 import { leagueAdvancedLeaders, matchAdvanced, playerAdvanced, teamAdvanced } from './sources.js';
 
 // ---------- shapes ----------
-export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup' }
+export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; /** The US scene: a competition in the USA or one US clubs play in. */ us?: boolean }
 export interface ProTeamRef { id: number; name: string; slug: string; logo: string | null; country?: string | null; gender?: 'm' | 'w' | null; national?: boolean }
 export interface ProMatchSide extends ProTeamRef { score: number | null }
 export interface ProMatchRow {
@@ -28,7 +29,7 @@ home:pro_teams!pro_fixtures_home_team_id_fkey(${TEAM_COLS}),
 away:pro_teams!pro_fixtures_away_team_id_fkey(${TEAM_COLS})`;
 
 const teamRef = (t: any): ProTeamRef => ({ id: t?.id, name: t?.display_name ?? 'TBD', slug: t?.slug ?? '', logo: t?.logo ?? null, country: t?.country ?? null, gender: t?.gender ?? null, national: !!t?.national });
-const leagueRef = (l: any): ProLeagueRef => ({ id: l?.id, name: l?.name ?? '', slug: l?.slug ?? '', logo: l?.logo ?? null, country: l?.country ?? null, country_flag: l?.country_flag ?? null, gender: l?.gender ?? 'm', type: l?.type });
+const leagueRef = (l: any): ProLeagueRef => ({ id: l?.id, name: l?.name ?? '', slug: l?.slug ?? '', logo: l?.logo ?? null, country: l?.country ?? null, country_flag: l?.country_flag ?? null, gender: l?.gender ?? 'm', type: l?.type, us: l?.id != null && isUsScene(Number(l.id), l?.country) });
 
 export function toMatchRow(r: any): ProMatchRow {
   return {
@@ -89,16 +90,31 @@ export async function matchesByDate(db: Db, o: { date: string; league?: number |
 }
 
 export async function home(db: Db, date: string) {
-  const [day, featured, counts] = await Promise.all([
+  const [day, featured, counts, abroad] = await Promise.all([
     matchesByDate(db, { date }),
     db.from('pro_leagues').select(LEAGUE_COLS + ',priority,current_season').eq('enabled', true).lt('priority', 100).order('priority').limit(40),
     Promise.all(['pro_leagues', 'pro_teams', 'pro_players', 'pro_fixtures'].map((t) => {
       const q = db.from(t).select('id', { count: 'estimated', head: true });
       return (t === 'pro_leagues' ? q.eq('enabled', true) : q).then((r) => r.count ?? 0);
     })),
+    americansAbroad(db, {}).catch(() => null),
   ]);
+  // US first: when no US competition plays today, the next day one does (within three weeks), for the top section.
+  let nextUs: Awaited<ReturnType<typeof matchesByDate>> | null = null;
+  if (!day.groups.some((g) => g.league.us)) {
+    const { from } = easternDayRange(date);
+    const ids = (await selectAll<any>(db, 'pro_leagues', 'id,country', (q) => q.eq('enabled', true))).filter((l) => isUsScene(l.id, l.country)).map((l) => l.id);
+    const { data: nx } = await db.from('pro_fixtures').select('kickoff').in('league_id', ids.concat([-1])).gte('kickoff', from).lte('kickoff', new Date(Date.parse(from) + 21 * 86400_000).toISOString()).order('kickoff').limit(1);
+    const k = (nx?.[0] as any)?.kickoff as string | undefined;
+    if (k) {
+      const nd = new Date(k).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const m = await matchesByDate(db, { date: nd });
+      nextUs = { ...m, groups: m.groups.filter((g) => g.league.us) };
+    }
+  }
   return {
-    date, matches: day, featured: ((featured.data ?? []) as any[]).map((l) => ({ ...leagueRef(l), current_season: l.current_season })),
+    date, matches: day, next_us: nextUs, abroad: abroad ? { lines: abroad.lines.slice(0, 8), at: abroad.at } : null,
+    featured: ((featured.data ?? []) as any[]).map((l) => ({ ...leagueRef(l), current_season: l.current_season })),
     counts: { leagues: counts[0], teams: counts[1], players: counts[2], matches: counts[3] },
   };
 }
@@ -610,7 +626,7 @@ export async function renamedSlug(db: Db, kind: ProKind, slug: string): Promise<
 export const LEADER_STATS = ['goals', 'assists', 'apps', 'minutes', 'starts', 'shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'blocks', 'fouls_drawn', 'saves', 'clean_sheets', 'yellow', 'red', 'rating', 'pen_scored'] as const;
 export const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'] as const;
 
-export interface LeadersFilter { stat?: string; league?: number | null; season?: number | null; position?: string | null; nationality?: string | null; min_age?: number | null; max_age?: number | null; min_minutes?: number | null; per90?: boolean; gender?: 'm' | 'w' | null; abroad?: string | null; limit?: number; offset?: number }
+export interface LeadersFilter { stat?: string; league?: number | null; season?: number | null; position?: string | null; nationality?: string | null; min_age?: number | null; max_age?: number | null; min_minutes?: number | null; per90?: boolean; gender?: 'm' | 'w' | null; abroad?: string | null; /** Only competitions in this country (the US scope: 'USA'). */ country?: string | null; limit?: number; offset?: number }
 
 /** Leaders and the player directory (pro_leaders): one row per player, competition season and club. */
 export async function leaders(db: Db, f: LeadersFilter) {
@@ -621,7 +637,7 @@ export async function leaders(db: Db, f: LeadersFilter) {
   const { data, error } = await db.rpc('pro_leaders', {
     p_stat: stat, p_league: f.league ?? null, p_season: f.season ?? null, p_position: f.position ?? null, p_nationality: f.nationality ?? null,
     p_min_age: f.min_age ?? null, p_max_age: f.max_age ?? null, p_min_minutes: minMinutes, p_per90: !!f.per90, p_gender: f.gender ?? null, p_abroad: f.abroad ?? null,
-    p_limit: limit, p_offset: offset,
+    p_limit: limit, p_offset: offset, p_country: f.country ?? null,
   });
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as any[];
@@ -669,14 +685,22 @@ export async function compare(db: Db, a: string, b: string) {
   return pa && pb ? { a: pa, b: pb } : null;
 }
 
-export async function transfersFeed(db: Db, o: { limit?: number; offset?: number; team?: number | null } = {}) {
+/** us: only moves to or from a club in a current US competition (pro_us_transfers, migration 156). */
+export async function transfersFeed(db: Db, o: { limit?: number; offset?: number; team?: number | null; us?: boolean } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const limit = Math.min(100, o.limit ?? 50), offset = o.offset ?? 0;
-  let q = db.from('pro_transfers').select('player_id,player_name,date,type,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').lte('date', today);
-  if (o.team) q = q.or(`to_team_id.eq.${o.team},from_team_id.eq.${o.team}`);
-  const { data, error } = await q.order('date', { ascending: false }).range(offset, offset + limit - 1);
-  if (error) throw new Error(error.message);
-  let rows = (data ?? []) as any[];
+  let rows: any[];
+  if (o.us && !o.team) {
+    const { data, error } = await db.rpc('pro_us_transfers', { p_limit: limit, p_offset: offset });
+    if (error) throw new Error(error.message);
+    rows = (data ?? []) as any[];
+  } else {
+    let q = db.from('pro_transfers').select('player_id,player_name,date,type,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').lte('date', today);
+    if (o.team) q = q.or(`to_team_id.eq.${o.team},from_team_id.eq.${o.team}`);
+    const { data, error } = await q.order('date', { ascending: false }).range(offset, offset + limit - 1);
+    if (error) throw new Error(error.message);
+    rows = (data ?? []) as any[];
+  }
   const ids = [...new Set(rows.map((r) => r.player_id))];
   const ppl = new Map((ids.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,first_name,last_name,slug,photo,nationality,position', (q2) => q2.in('id', ids)) : []).map((p) => [p.id, p]));
   rows = cleanMoves(rows, ppl);
@@ -715,4 +739,56 @@ export async function collegeHub(db: Db, o: { gender?: 'm' | 'w' | null } = {}) 
 export async function collegeAlumni(db: Db, schoolSeo: string, gender: 'm' | 'w') {
   const hub = await collegeHub(db, { gender });
   return hub.groups.find((g) => g.school.seo === schoolSeo)?.players ?? [];
+}
+
+// ---------- Americans abroad ----------
+type AbroadLine = { fixture_id: number; player_id: number; team_id: number; league_id: number; gender: 'm' | 'w'; minutes: number; goals: number; assists: number; rating: number | null; starter: boolean };
+type AbroadUpcoming = { fixture_id: number; team_id: number; gender: 'm' | 'w'; player_ids: number[] };
+type AbroadData = { at: string; lines: AbroadLine[]; upcoming: AbroadUpcoming[] };
+const ABROAD_KEY = 'pro:americans_abroad';
+let abroadCache: { at: number; data: AbroadData } | null = null;
+let abroadRefresh: Promise<void> | null = null;
+
+/** The raw Americans-abroad rows (migration 156). The lines take ~20 s to read, so the last answer is served at once
+ *  (kept in college_kv across restarts) and refreshed in the background when over 30 minutes old. */
+async function abroadRows(db: Db): Promise<AbroadData | null> {
+  if (!abroadCache) {
+    const saved = await kvGet<AbroadData>(db, ABROAD_KEY).catch(() => null);
+    if (saved) abroadCache = { at: Date.parse(saved.at) || 0, data: saved };
+  }
+  if ((!abroadCache || Date.now() - abroadCache.at > 30 * 60_000) && !abroadRefresh) {
+    abroadRefresh = (async () => {
+      const [lines, upcoming] = await Promise.all([db.rpc('pro_americans_abroad', { p_days: 7, p_limit: 300 }), db.rpc('pro_americans_upcoming', { p_days: 7 })]);
+      if (lines.error || upcoming.error) return;
+      const data: AbroadData = { at: new Date().toISOString(), lines: (lines.data ?? []) as AbroadLine[], upcoming: (upcoming.data ?? []) as AbroadUpcoming[] };
+      abroadCache = { at: Date.now(), data };
+      await kvSet(db, ABROAD_KEY, data).catch(() => {});
+    })().catch(() => {}).finally(() => { abroadRefresh = null; });
+  }
+  return abroadCache?.data ?? null;
+}
+
+/** Americans at clubs outside the US scene: last week's match lines, the coming week's matches, and (when a stat is
+ *  asked for) the season leaderboard. gender: the Pro toggle. */
+export async function americansAbroad(db: Db, o: { gender?: 'm' | 'w' | null; stat?: string | null; leaderboard?: boolean }) {
+  const raw = await abroadRows(db);
+  const g = o.gender ?? null;
+  const lines = (raw?.lines ?? []).filter((l) => !g || l.gender === g).slice(0, 60);
+  const upcoming = (raw?.upcoming ?? []).filter((u) => !g || u.gender === g).slice(0, 60);
+  const playerIds = [...new Set([...lines.map((l) => l.player_id), ...upcoming.flatMap((u) => u.player_ids.slice(0, 4))])];
+  const fixtureIds = [...new Set([...lines.map((l) => l.fixture_id), ...upcoming.map((u) => u.fixture_id)])];
+  const [people, fixtures, board] = await Promise.all([
+    playerIds.length ? selectAll<any>(db, 'pro_players', 'id,display_name,slug,photo,position', (q) => q.in('id', playerIds)) : Promise.resolve([] as any[]),
+    fixtureIds.length ? selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => q.in('id', fixtureIds)) : Promise.resolve([] as any[]),
+    o.leaderboard ? leaders(db, { stat: o.stat ?? 'goals', nationality: 'USA', abroad: 'USA', gender: g, limit: 25 }) : Promise.resolve(null),
+  ]);
+  const pp = new Map(people.map((p) => [p.id, { id: p.id, name: p.display_name, slug: p.slug, photo: p.photo ?? null, position: p.position ?? null }]));
+  const fx = new Map(fixtures.map((f) => [Number(f.id), toMatchRow(f)]));
+  return {
+    at: raw?.at ?? null,
+    lines: lines.filter((l) => pp.has(l.player_id) && fx.has(Number(l.fixture_id))).map((l) => ({ player: pp.get(l.player_id)!, match: fx.get(Number(l.fixture_id))!, team_id: l.team_id, minutes: l.minutes, goals: l.goals, assists: l.assists, rating: l.rating == null ? null : Number(l.rating), starter: l.starter })),
+    upcoming: upcoming.filter((u) => fx.has(Number(u.fixture_id))).map((u) => ({ match: fx.get(Number(u.fixture_id))!, team_id: u.team_id, players: u.player_ids.slice(0, 4).map((id) => pp.get(id)).filter(Boolean) }))
+      .sort((a, b) => a.match.kickoff.localeCompare(b.match.kickoff)),
+    leaderboard: board,
+  };
 }

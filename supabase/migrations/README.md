@@ -48,5 +48,7 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 152_pro_implausible_seasons.sql | `pro_leaders` and player pages leave out provider season rows filed under the wrong competition (more appearances than the club's fixtures there, plus 2): Mitrovic's 28 "Club World Cup" games | yes (2026-10-11) |
 | 153_college_job_rollup.sql | `college_job_rollup()`: each job's last success, last failure and queue over 14 days in one query, for the console overview (was 35k rows read in the service; the hub timed out) | yes (2026-10-11) |
 | 154_pro_fixture_predictions.sql | `pro_fixture_predictions`: API-Football's win/draw/win chances and comparison for upcoming matches (the match preview) | yes (2026-10-12) |
+| 155_pro_us_first.sql | US-first Pro: `pro_leaders` p_country (Leaders/Players open on US competitions), `pro_search` US first after an exact name, `pro_us_league()`, and trigram indexes on lowered names (search 6.8 s to 0.16 s) | yes (2026-10-12) |
+| 156_pro_americans_abroad.sql | `pro_americans_abroad`, `pro_americans_upcoming`, `pro_us_transfers` for the Americans abroad page and US transfers | yes (2026-10-12) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

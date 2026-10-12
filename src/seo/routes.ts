@@ -14,7 +14,7 @@ import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
-import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
+import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
 import { eastern } from '../jobs/seasons.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
@@ -181,8 +181,8 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       const c = ctx(); const ls = await pro.leagues();
       return { head: proLeaguesHead(ls, c), body: proLeaguesBody(ls) };
     }));
-    app.get('/pro/players', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.leaders({ stat: 'minutes', limit: 50 }); return { head: proDirectoryHead('players', p, ctx()), body: proDirectoryBody('players', p) }; }));
-    app.get('/pro/leaders', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.leaders({ stat: 'goals', limit: 50 }); return { head: proDirectoryHead('leaders', p, ctx()), body: proDirectoryBody('leaders', p) }; }));
+    app.get('/pro/players', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.leaders({ stat: 'minutes', country: 'USA', limit: 50 }); return { head: proDirectoryHead('players', p, ctx()), body: proDirectoryBody('players', p) }; }));
+    app.get('/pro/leaders', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.leaders({ stat: 'goals', country: 'USA', limit: 50 }); return { head: proDirectoryHead('leaders', p, ctx()), body: proDirectoryBody('leaders', p) }; }));
     app.get('/pro/countries', (req, reply) => serve(req, reply, keyOf(req), async () => { const cs = await pro.countries(); return { head: proCountriesHead(cs, ctx()), body: proCountriesBody(cs) }; }));
     app.get('/pro/countries/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
       if (!SLUG.test(req.params.slug)) return null;
@@ -192,6 +192,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     app.get('/pro/college', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await pro.college(); return { head: proCollegeHead(h, ctx()), body: proCollegeBody(h) }; }));
     app.get('/pro/sources', (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: proSourcesHead(ctx()), body: proSourcesBody() })));
     app.get('/pro/transfers', (req, reply) => serve(req, reply, keyOf(req), async () => { const t = await pro.transfers(); return { head: proTransfersHead(t, ctx()), body: proTransfersBody(t) }; }));
+    app.get('/pro/abroad', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.abroad(); return { head: proAbroadHead(p, ctx()), body: proAbroadBody(p) }; }));
     // A slug page, or a 301 when the slug was renamed, or a real 404.
     const proPage = <T>(kind: 'league' | 'team' | 'player' | 'match', load: (slug: string, req: FastifyRequest) => Promise<T | null>, render: (page: T) => { head: HeadMeta; body: string }, path: (slug: string) => string) =>
       (req: P<{ slug: string }>, reply: FastifyReply) => serve(req, reply, keyOf(req), async () => {

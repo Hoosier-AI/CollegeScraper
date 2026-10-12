@@ -2,7 +2,7 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { BarChart3, CalendarDays, Gauge, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users, X } from 'lucide-react';
+import { BarChart3, CalendarDays, Gauge, Globe, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users, X } from 'lucide-react';
 import { PRO_GENDER_PAGES, useProGender } from '../lib/proGender';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
@@ -18,13 +18,15 @@ export const NAV = [
   { to: '/rankings', label: 'Rankings', icon: Trophy },
 ] as const;
 // Plaibook Stats Pro's own sections; the header switch moves between the college and pro halves of the site.
-export const PRO_NAV = [
+// wide: the label where the header has room (xl and up); the short one elsewhere.
+export const PRO_NAV: { to: string; label: string; wide?: string; icon: typeof CalendarDays }[] = [
   { to: '/pro/matches', label: 'Matches', icon: CalendarDays },
   { to: '/pro/leagues', label: 'Leagues', icon: Trophy },
   { to: '/pro/players', label: 'Players', icon: Users },
   { to: '/pro/leaders', label: 'Leaders', icon: BarChart3 },
+  { to: '/pro/abroad', label: 'Abroad', wide: 'Americans abroad', icon: Globe },
   { to: '/pro/college', label: 'College to Pro', icon: GraduationCap },
-] as const;
+];
 const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
 export const isProPath = (path: string) => path === '/pro' || path.startsWith('/pro/');
 
@@ -60,7 +62,7 @@ export function TopBar() {
         <Link to={pro ? '/pro' : '/'} className="shrink-0 rounded" aria-label={pro ? 'Plaibook Stats Pro home' : 'Plaibook Stats home'}><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
         <SectionSwitch pro={pro} />
         <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">
-          {nav.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{n.label}</NavLink>)}
+          {nav.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{'wide' in n && n.wide ? <><span className="xl:hidden">{n.label}</span><span className="hidden xl:inline">{n.wide}</span></> : n.label}</NavLink>)}
           {admin && ADMIN_NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-note/80 hover:text-note'}`}>{n.label}</NavLink>)}
         </nav>
         {pro ? <>
@@ -88,7 +90,7 @@ export function BottomBar() {
   const pro = isProPath(pathname);
   const items = pro
     // Phones: five slots; Leaders is a tab away on the players page, and the College/Pro switch stays in the top bar.
-    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => n.to !== '/pro/leaders')]
+    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => n.to !== '/pro/leaders' && n.to !== '/pro/college')]
     : [...NAV, { to: '/search', label: 'Search', icon: Search }, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

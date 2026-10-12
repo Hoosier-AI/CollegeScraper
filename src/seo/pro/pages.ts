@@ -249,6 +249,7 @@ export type ProCountriesPage = Awaited<ReturnType<typeof Q.countries>>;
 export type ProCountryPage = NonNullable<Awaited<ReturnType<typeof Q.country>>>;
 export type ProCollegePage = Awaited<ReturnType<typeof Q.collegeHub>>;
 export type ProTransfersPage = Awaited<ReturnType<typeof Q.transfersFeed>>;
+export type ProAbroadPage = Awaited<ReturnType<typeof Q.americansAbroad>>;
 
 const leaderRows = (rows: ProLeadersPage['rows'], valueLabel: string) => table(valueLabel, ['#', 'Player', 'Club', 'Competition', 'Apps', valueLabel],
   rows.map((r) => tr([esc(r.rank), a(proPaths.player(r.player.slug), r.player.name), r.team ? a(proPaths.team(r.team.slug), r.team.name) : '', r.league ? a(proPaths.league(r.league.slug), r.league.name) : '', n(r.apps), n(r.value, r.value != null && r.value % 1 ? 2 : 0)])));
@@ -319,6 +320,23 @@ export function proTransfersHead(rows: ProTransfersPage, ctx: HeadContext): Head
 }
 export function proTransfersBody(rows: ProTransfersPage): string {
   return wrapBody('pro', [...crumbsHome, { name: 'Transfers', path: '/pro/transfers' }], `<h1>Latest Transfers</h1><ul>${rows.map((r) => `<li>${esc(longDate(r.date))}: ${r.player.slug ? a(proPaths.player(r.player.slug), r.player.name) : esc(r.player.name)} from ${esc(r.from.name ?? 'unknown')} to ${esc(r.to.name ?? 'unknown')}${r.type ? ` (${esc(r.type)})` : ''}</li>`).join('')}</ul>`);
+}
+
+export function proAbroadHead(p: ProAbroadPage, ctx: HeadContext): HeadMeta {
+  const top = p.lines.slice(0, 3).map((l) => l.player.name).join(', ');
+  return { title: `Americans Abroad: US Soccer Players at Clubs Around the World${SUFFIX}`,
+    description: clip(`How American players at clubs outside the US did this week${top ? `, led by ${top}` : ''}, who plays next, and the season's leaders among Americans abroad.`),
+    canonical: abs(ctx, '/pro/abroad'), robots: p.lines.length || p.upcoming.length ? null : NOINDEX, ogType: 'website', image: ogImage(ctx),
+    jsonLd: [breadcrumbs(ctx, [...crumbsHome, { name: 'Americans abroad', path: '/pro/abroad' }])] };
+}
+export function proAbroadBody(p: ProAbroadPage): string {
+  const line = (l: ProAbroadPage['lines'][number]) => {
+    const opp = l.match.home.id === l.team_id ? l.match.away : l.match.home;
+    const parts = [`${l.minutes} minutes`, l.goals ? `${l.goals} ${l.goals === 1 ? 'goal' : 'goals'}` : '', l.assists ? `${l.assists} ${l.assists === 1 ? 'assist' : 'assists'}` : ''].filter(Boolean).join(', ');
+    return `<li>${a(proPaths.player(l.player.slug), l.player.name)} against ${esc(opp.name)} (${a(proPaths.match(l.match.slug), `${l.match.home.score ?? ''}-${l.match.away.score ?? ''}`)}, ${esc(l.match.league.name)}): ${esc(parts)}</li>`;
+  };
+  const next = p.upcoming.slice(0, 30).map((u) => `<li>${esc(longDate(u.match.kickoff))}: ${a(proPaths.match(u.match.slug), `${u.match.home.name} v ${u.match.away.name}`)}, ${u.players.map((x) => esc(x!.name)).join(', ')}</li>`).join('');
+  return wrapBody('pro', [...crumbsHome, { name: 'Americans abroad', path: '/pro/abroad' }], `<h1>Americans abroad</h1><h2>This week</h2><ul>${p.lines.slice(0, 40).map(line).join('')}</ul><h2>Coming up</h2><ul>${next}</ul>`);
 }
 
 // ---------- where the data comes from ----------

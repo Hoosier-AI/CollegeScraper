@@ -53,6 +53,7 @@ class FixtureProData implements ProSeoData {
   async country(slug: string) { return slug === 'usa' ? { country: { name: 'USA', code: 'US', flag: null, slug: 'usa' }, leagues: [{ ...league, priority: 2, current_season: 2026 }], clubs: [{ ...thorns, founded: 2012, venue: null }], players: (await this.leaders()).rows, abroad: [] } : null; }
   async college() { return { total: 1, schools: 1, groups: [{ school: { seo: 'stanford', name: 'Stanford', logo: null }, players: [{ id: 9, name: 'Sophia Smith', slug: 'sophia-smith-9', photo: null, nationality: 'USA', position: 'Attacker', gender: 'w', birth_date: '2000-08-10', minutes_recent: 1700, team: thorns, college_years: [2018, 2019] }] }] }; }
   async transfers() { return [{ date: '2026-07-01', type: 'Loan', player: { id: 9, name: 'Sophia Smith', slug: 'sophia-smith-9', photo: null, nationality: 'USA', position: 'Attacker' }, from: { id: 3001, name: 'Portland Thorns', logo: null, slug: 'portland-thorns-women' }, to: { id: 3002, name: 'Boston Legacy', logo: null, slug: null } }]; }
+  async abroad() { return { at: null, lines: [], upcoming: [], leaderboard: null } as any; }
   async sitemapCountries() { return [{ path: '/pro/countries/usa' }]; }
   async sitemapLeagues() { return [{ path: '/pro/leagues/usa-nwsl-women' }]; }
   async countTeams() { return 3; }

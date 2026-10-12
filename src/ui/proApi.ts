@@ -98,7 +98,7 @@ export function registerProApi(app: FastifyInstance): void {
     return reply.header('Cache-Control', 'public, max-age=300').send(await pro.leaders(getDb(), {
       stat: q.stat, league: int(q.league), season: season(q.season), position: q.position || null, nationality: q.nationality || null,
       min_age: int(q.min_age), max_age: int(q.max_age), min_minutes: int(q.min_minutes), per90: q.per90 === '1', gender: q.gender === 'w' || q.gender === 'm' ? q.gender : null,
-      abroad: q.abroad || null, limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0,
+      abroad: q.abroad || null, country: q.country && /^[A-Za-z-]{2,40}$/.test(q.country) ? q.country : null, limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0,
     }));
   });
   app.get('/api/pro/countries', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=3600').send(await pro.countries(getDb())));
@@ -115,7 +115,9 @@ export function registerProApi(app: FastifyInstance): void {
     return r ? reply.header('Cache-Control', CACHE).send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/transfers', async (req, reply) =>
-    reply.header('Cache-Control', 'public, max-age=600').send(await pro.transfersFeed(getDb(), { limit: int(req.query.limit) ?? 50, offset: int(req.query.offset) ?? 0, team: int(req.query.team) })));
+    reply.header('Cache-Control', 'public, max-age=600').send(await pro.transfersFeed(getDb(), { limit: int(req.query.limit) ?? 50, offset: int(req.query.offset) ?? 0, team: int(req.query.team), us: req.query.scope !== 'world' })));
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/americans-abroad', async (req, reply) =>
+    reply.header('Cache-Control', 'public, max-age=300').send(await pro.americansAbroad(getDb(), { gender: req.query.gender === 'w' || req.query.gender === 'm' ? req.query.gender : null, stat: (pro.LEADER_STATS as readonly string[]).includes(req.query.stat ?? '') ? req.query.stat : 'goals', leaderboard: true })));
   app.get<{ Querystring: Record<string, string> }>('/api/pro/college', async (req, reply) =>
     reply.header('Cache-Control', 'public, max-age=600').send(await pro.collegeHub(getDb(), { gender: req.query.gender === 'w' || req.query.gender === 'm' ? req.query.gender : null })));
   app.get<{ Params: { school: string; gender: string } }>('/api/pro/college/:school/:gender', async (req, reply) => {

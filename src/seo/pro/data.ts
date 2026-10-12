@@ -19,6 +19,7 @@ export interface ProSeoData {
   country(slug: string): ReturnType<typeof Q.country>;
   college(): ReturnType<typeof Q.collegeHub>;
   transfers(): ReturnType<typeof Q.transfersFeed>;
+  abroad(): ReturnType<typeof Q.americansAbroad>;
   sitemapCountries(): Promise<SitemapEntry[]>;
   // sitemaps
   sitemapLeagues(): Promise<SitemapEntry[]>;
@@ -46,7 +47,8 @@ export class DbProSeoData implements ProSeoData {
   countries() { return Q.countries(this.db); }
   country(slug: string) { return Q.country(this.db, slug); }
   college() { return Q.collegeHub(this.db); }
-  transfers() { return Q.transfersFeed(this.db, { limit: 100 }); }
+  transfers() { return Q.transfersFeed(this.db, { limit: 100, us: true }); }
+  abroad() { return Q.americansAbroad(this.db, { leaderboard: true }); }
   async sitemapCountries(): Promise<SitemapEntry[]> {
     return (await Q.countries(this.db)).filter((c) => c.leagues > 0).map((c) => ({ path: `/pro/countries/${c.slug}` }));
   }

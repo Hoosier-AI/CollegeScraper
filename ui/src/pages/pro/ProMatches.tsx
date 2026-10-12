@@ -46,14 +46,20 @@ export default function ProMatches() {
       {q.isPending && <div className="space-y-2" aria-busy="true">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>}
       {q.data && !groups.length && <EmptyState title={`No matches on ${longDay(date)}`} body={show ? 'Clear the filter to see every competition.' : 'Try another day.'} action={show ? <button className="btn-ghost btn-sm" onClick={() => setShow('')}>Show all</button> : undefined} />}
       <div className={`space-y-3 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
-        <div className={`gap-3 ${main.length > 2 ? 'xl:columns-2' : ''}`}>
-          {main.map((g) => (
-            <section key={g.league.id} className="frame mb-3 break-inside-avoid divide-y divide-field-700 overflow-hidden" aria-label={g.league.name}>
-              <LeagueHeading league={g.league} right={<GroupCount g={g} />} />
-              {g.matches.map((m) => <ProMatchRow key={m.id} m={m} />)}
-            </section>
-          ))}
-        </div>
+        {/* US first (most visitors are American): the US scene under its own heading, then the rest of the world. */}
+        {[{ title: 'United States', list: main.filter((g) => g.league.us) }, { title: 'Around the world', list: main.filter((g) => !g.league.us) }].map(({ title, list }) => list.length > 0 && (
+          <section key={title} className="space-y-2" aria-label={title}>
+            <h2 className="text-sm font-semibold text-chalk-100">{title}</h2>
+            <div className={`gap-3 ${list.length > 2 ? 'xl:columns-2' : ''}`}>
+              {list.map((g) => (
+                <section key={g.league.id} className="frame mb-3 break-inside-avoid divide-y divide-field-700 overflow-hidden" aria-label={g.league.name}>
+                  <LeagueHeading league={g.league} right={<GroupCount g={g} />} />
+                  {g.matches.map((m) => <ProMatchRow key={m.id} m={m} />)}
+                </section>
+              ))}
+            </div>
+          </section>
+        ))}
         {rest.length > 0 && (
           <details className="group/more">
             <summary className="btn-ghost btn-sm w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">

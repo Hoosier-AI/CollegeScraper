@@ -6,7 +6,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
 import { useUrlNumber, useUrlState } from '../../lib/urlState';
-import { PRO_STATS, statLabel, useCountries, type ProLeagueRef } from '../../lib/pro';
+import { PRO_STATS, SCOPE_OPTIONS, statLabel, useCountries, type ProLeagueRef, type ProScope } from '../../lib/pro';
 import { LeadersTable, type LeaderRow } from '../../components/pro/People';
 import { ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select } from '../../components/primitives';
 import { useProGender } from '../../lib/proGender';
@@ -20,6 +20,8 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
   const [position, setPosition] = useUrlState('position', '', { allow: ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'] });
   const [nationality, setNationality] = useUrlState('nationality');
   const [league, setLeague] = useUrlState('league');
+  // US first: US competitions unless Worldwide is chosen (a competition picked from the list wins over either).
+  const [scope, setScope] = useUrlState('scope', 'us', { allow: ['us', 'world'] }) as [ProScope, (v: string) => void];
   const [gender] = useProGender();
   const [age, setAge] = useUrlState('age', '', { allow: ['u21', 'u23', '23-29', '30+'] });
   const [rate, setRate] = useUrlState('per90', '', { allow: ['1'] });
@@ -32,18 +34,19 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
   const leagueGender = leagues.data?.find((l) => String(l.id) === league)?.gender;
   const leagueOn = league && (!leagueGender || leagueGender === gender) ? league : '';
   const q = useQuery({
-    queryKey: ['pro-directory', stat, position, nationality, leagueOn, gender, age, rate, page],
-    queryFn: () => api<Page>(`/api/pro/leaders${qs({ stat, position, nationality, league: leagueOn, gender, min_age: minAge, max_age: maxAge, per90: leaders ? rate : '', limit: PAGE, offset: (page - 1) * PAGE })}`),
+    queryKey: ['pro-directory', stat, position, nationality, leagueOn, gender, age, rate, page, scope],
+    queryFn: () => api<Page>(`/api/pro/leaders${qs({ stat, position, nationality, league: leagueOn, gender, country: !leagueOn && scope === 'us' ? 'USA' : '', min_age: minAge, max_age: maxAge, per90: leaders ? rate : '', limit: PAGE, offset: (page - 1) * PAGE })}`),
     placeholderData: keepPreviousData,
   });
-  const leagueOptions = useMemo(() => [{ value: '', label: 'Every competition' }, ...(leagues.data ?? []).filter((l) => l.gender === gender).slice(0, 400).map((l) => ({ value: String(l.id), label: `${l.name}${l.country && l.country !== 'World' ? ` (${l.country})` : ''}` }))], [leagues.data, gender]);
+  const leagueOptions = useMemo(() => [{ value: '', label: scope === 'us' ? 'Every US competition' : 'Every competition' }, ...(leagues.data ?? []).filter((l) => l.gender === gender && (scope === 'world' || l.country === 'USA')).slice(0, 400).map((l) => ({ value: String(l.id), label: `${l.name}${l.country && l.country !== 'World' ? ` (${l.country})` : ''}` }))], [leagues.data, gender, scope]);
   const natOptions = useMemo(() => [{ value: '', label: 'Any nationality' }, ...countries.list.map((c) => ({ value: c.name, label: c.name }))], [countries.list]);
   const [showFilters, setShowFilters] = useState(false);
   const active = [leagueOn, nationality, position, age].filter(Boolean).length;
   const title = leaders ? `${statLabel(stat)} leaders` : 'Players';
   return (
     <div className="space-y-4">
-      <PageHeader title={title} meta={q.data ? `${fmt.num(q.data.total)} player seasons, current season of each competition${q.data.min_minutes ? `, ${q.data.min_minutes}+ minutes` : ''}` : 'Every competition we follow'}>
+      <PageHeader title={title} meta={q.data ? `${fmt.num(q.data.total)} player seasons, ${!leagueOn && scope === 'us' ? (gender === 'w' ? 'NWSL, USL Super League and other US competitions' : 'MLS, USL, MLS NEXT Pro and other US competitions') : 'current season of each competition'}${q.data.min_minutes ? `, ${q.data.min_minutes}+ minutes` : ''}` : 'US competitions first'}>
+        <Field label="Where">{() => <SegmentedControl label="US or worldwide" size="sm" value={scope} onChange={(v) => { setScope(v); setLeague(''); setPage(1); }} options={[...SCOPE_OPTIONS]} />}</Field>
         {leaders && <Field label="Stat">{(id) => <Select id={id} value={stat} onChange={(v) => { setStat(v); setPage(1); }} options={PRO_STATS.map((s) => ({ value: s.key, label: s.label }))} />}</Field>}
         {leaders && <Field label="Numbers">{() => <SegmentedControl label="Numbers" size="sm" value={rate} onChange={(v) => { setRate(v); setPage(1); }} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>}
       </PageHeader>

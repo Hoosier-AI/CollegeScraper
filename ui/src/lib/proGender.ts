@@ -33,4 +33,4 @@ export function useProGender(): [ProGender, (g: ProGender) => void] {
 }
 
 /** The Pro pages the toggle applies to: lists across competitions. A league, club, player or match is one game already. */
-export const PRO_GENDER_PAGES = /^\/pro(\/(matches|leagues|players|leaders|countries(\/[^/]+)?|college))?\/?$/;
+export const PRO_GENDER_PAGES = /^\/pro(\/(matches|leagues|players|leaders|countries(\/[^/]+)?|college|abroad))?\/?$/;

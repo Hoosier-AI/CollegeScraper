@@ -33,6 +33,7 @@ const ProCountry = lazy(() => import('./pages/pro/ProCountries').then((m) => ({ 
 const ProCompare = lazy(() => import('./pages/pro/ProCompare'));
 const ProTransfers = lazy(() => import('./pages/pro/ProTransfers'));
 const ProCollege = lazy(() => import('./pages/pro/ProCollege'));
+const ProAbroad = lazy(() => import('./pages/pro/ProAbroad'));
 const ProSources = lazy(() => import('./pages/pro/ProSources'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
@@ -95,6 +96,7 @@ const router = createBrowserRouter([
           { path: 'pro/compare', element: <ProCompare /> },
           { path: 'pro/transfers', element: <ProTransfers /> },
           { path: 'pro/college', element: <ProCollege /> },
+          { path: 'pro/abroad', element: <ProAbroad /> },
           { path: '*', element: <NotFound /> },
         ],
       },

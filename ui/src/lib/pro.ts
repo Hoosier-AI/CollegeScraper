@@ -1,7 +1,7 @@
 // Plaibook Stats Pro: the shapes /api/pro/* returns (src/pro/queries.ts) and small display helpers.
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
-export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; priority?: number; current_season?: number | null }
+export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; priority?: number; current_season?: number | null; /** The US scene: a competition in the USA or one US clubs play in. */ us?: boolean }
 export interface ProTeamRef { id: number; name: string; slug: string; logo: string | null; country?: string | null; gender?: 'm' | 'w' | null }
 export interface ProSide extends ProTeamRef { score: number | null }
 export interface ProMatch {
@@ -67,7 +67,7 @@ export function seasonLabel(season: number, startsOn?: string | null, endsOn?: s
 // ---------- v2 ----------
 
 export const proPaths2 = {
-  players: '/pro/players', leaders: '/pro/leaders', countries: '/pro/countries', transfers: '/pro/transfers', college: '/pro/college',
+  players: '/pro/players', leaders: '/pro/leaders', countries: '/pro/countries', transfers: '/pro/transfers', college: '/pro/college', abroad: '/pro/abroad',
   country: (slug: string) => `/pro/countries/${slug}`,
   compare: (a: string, b?: string) => `/pro/compare?a=${encodeURIComponent(a)}${b ? `&b=${encodeURIComponent(b)}` : ''}`,
 };
@@ -104,3 +104,7 @@ export const per90 = (v: number | null | undefined, minutes: number | null | und
 // Liga Profesional" and a few super cups as leagues).
 const CUP_NAME = /\b(cup|copa|coupe|coppa|pokal|ta[cç]a|trophy|shield|beker|kupa|puchar|supercopa|supercoppa|supercup)\b/i;
 export const isCup = (l: { type?: string | null; name: string }) => l.type === 'cup' || CUP_NAME.test(l.name);
+
+/** US first (most visitors are American): the scope switch on Leaders, Players and Transfers. */
+export const SCOPE_OPTIONS = [{ value: 'us', label: 'US' }, { value: 'world', label: 'Worldwide' }] as const;
+export type ProScope = 'us' | 'world';
