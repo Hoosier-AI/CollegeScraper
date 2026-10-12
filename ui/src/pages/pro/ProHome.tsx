@@ -37,7 +37,7 @@ function CompetitionList({ title, leagues }: { title: string; leagues: ProLeague
       <ul className="frame divide-y divide-field-700/70">
         {leagues.map((l) => (
           <li key={l.id}>
-            <Link to={proPath.league(l.slug)} className="flex items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-field-800 coarse:py-2.5" title={l.country && l.country !== 'World' ? l.country : 'International'}>
+            <Link to={proPath.league(l.slug)} className="flex items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-field-800 coarse:py-2.5" title={l.country && l.country !== 'World' ? l.country : 'Continental club cup'}>
               <TeamLogo src={l.logo} name={l.name} size={18} />
               <span className="min-w-0 truncate text-chalk-100">{l.name}</span>
             </Link>

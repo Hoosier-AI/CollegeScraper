@@ -2,8 +2,9 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { BarChart3, CalendarDays, Gauge, Globe, GraduationCap, Home as HomeIcon, Search, Shield, Trophy, Users, X } from 'lucide-react';
+import { BarChart3, CalendarDays, Flag, Gauge, Globe, GraduationCap, Home as HomeIcon, Medal, Search, Shield, Trophy, Users, X } from 'lucide-react';
 import { PRO_GENDER_PAGES, useProGender } from '../lib/proGender';
+import { isIntlPath, isProPath as isProSection, sectionOf, type Section } from '../lib/section';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
@@ -27,15 +28,25 @@ export const PRO_NAV: { to: string; label: string; wide?: string; icon: typeof C
   { to: '/pro/abroad', label: 'Abroad', wide: 'Americans abroad', icon: Globe },
   { to: '/pro/college', label: 'College to Pro', icon: GraduationCap },
 ];
+// International: national teams (Pro is club football only).
+export const INTL_NAV: { to: string; label: string; wide?: string; icon: typeof CalendarDays }[] = [
+  { to: '/intl/matches', label: 'Matches', icon: CalendarDays },
+  { to: '/intl/tournaments', label: 'Tournaments', icon: Trophy },
+  { to: '/intl/teams', label: 'Teams', wide: 'National teams', icon: Flag },
+  { to: '/intl/players', label: 'Players', icon: Users },
+  { to: '/intl/rankings', label: 'Rankings', icon: Medal },
+];
 const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
-export const isProPath = (path: string) => path === '/pro' || path.startsWith('/pro/');
+/** Pro or International: the halves that share pages, search and the men's/women's toggle. */
+export const isProPath = (path: string) => isProSection(path) || isIntlPath(path);
 
-function SectionSwitch({ pro }: { pro: boolean }) {
+function SectionSwitch({ section }: { section: Section }) {
   const cls = (on: boolean) => `rounded px-2 py-1 text-xs font-semibold transition-colors duration-150 ${on ? 'bg-pitch-400/20 text-pitch-300' : 'text-chalk-400 hover:text-chalk-100'}`;
   return (
     <nav aria-label="Section" className="flex shrink-0 items-center gap-0.5 rounded-md border border-field-700 p-0.5">
-      <Link to="/" className={cls(!pro)} aria-current={!pro ? 'page' : undefined}>College</Link>
-      <Link to="/pro" className={cls(pro)} aria-current={pro ? 'page' : undefined}>Pro</Link>
+      <Link to="/" className={cls(section === 'college')} aria-current={section === 'college' ? 'page' : undefined}>College</Link>
+      <Link to="/pro" className={cls(section === 'pro')} aria-current={section === 'pro' ? 'page' : undefined}>Pro</Link>
+      <Link to="/intl" className={cls(section === 'intl')} aria-current={section === 'intl' ? 'page' : undefined}><span className="sm:hidden">Intl</span><span className="hidden sm:inline">International</span></Link>
     </nav>
   );
 }
@@ -46,9 +57,10 @@ export function TopBar() {
   const admin = useAdmin();
   const { pathname } = useLocation();
   const pro = isProPath(pathname);
+  const section = sectionOf(pathname);
   // Season and gender are college filters; pro pages carry their own season pickers.
   const showFilters = !pro && !FILTERLESS.includes(pathname);
-  const nav = pro ? PRO_NAV : NAV;
+  const nav = section === 'intl' ? INTL_NAV : pro ? PRO_NAV : NAV;
   // Pro: men's or women's across the list pages, like the college toggle; a league, club, player or match is one already.
   const proGender = pro && PRO_GENDER_PAGES.test(pathname);
   // Pro search: a box on wide screens; below that an icon opening a full-width row, so the toggle fits.
@@ -59,8 +71,8 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950">
       <div className="mx-auto flex h-14 max-w-page items-center gap-3 px-4 sm:gap-4 sm:px-6">
-        <Link to={pro ? '/pro' : '/'} className="shrink-0 rounded" aria-label={pro ? 'Plaibook Stats Pro home' : 'Plaibook Stats home'}><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
-        <SectionSwitch pro={pro} />
+        <Link to={section === 'intl' ? '/intl' : pro ? '/pro' : '/'} className="shrink-0 rounded" aria-label={section === 'intl' ? 'Plaibook Stats International home' : pro ? 'Plaibook Stats Pro home' : 'Plaibook Stats home'}><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
+        <SectionSwitch section={section} />
         <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">
           {nav.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{'wide' in n && n.wide ? <><span className="xl:hidden">{n.label}</span><span className="hidden xl:inline">{n.wide}</span></> : n.label}</NavLink>)}
           {admin && ADMIN_NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-note/80 hover:text-note'}`}>{n.label}</NavLink>)}
@@ -88,7 +100,10 @@ export function BottomBar() {
   const admin = useAdmin();
   const { pathname } = useLocation();
   const pro = isProPath(pathname);
-  const items = pro
+  const items = isIntlPath(pathname)
+    // Phones: five slots; Players is a link away on the tournament and team pages.
+    ? [{ to: '/intl', label: 'Intl', icon: HomeIcon }, ...INTL_NAV.filter((n) => n.to !== '/intl/players')]
+    : pro
     // Phones: five slots; Leaders is a tab away on the players page, and the College/Pro switch stays in the top bar.
     ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => n.to !== '/pro/leaders' && n.to !== '/pro/college')]
     : [...NAV, { to: '/search', label: 'Search', icon: Search }, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
@@ -96,7 +111,7 @@ export function BottomBar() {
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/pro' || n.to === '/'} className={({ isActive }) => `flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-2xs font-medium ${isActive ? 'text-pitch-300' : 'text-chalk-400'}`}>
+          <NavLink key={n.to} to={n.to} end={n.to === '/pro' || n.to === '/intl' || n.to === '/'} className={({ isActive }) => `flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-2xs font-medium ${isActive ? 'text-pitch-300' : 'text-chalk-400'}`}>
             {({ isActive }) => <><n.icon size={20} aria-hidden strokeWidth={isActive ? 2.25 : 1.75} /><span>{n.label}</span></>}
           </NavLink>
         ))}
@@ -131,7 +146,9 @@ export function Footer() {
   return (
     <footer className="mx-auto mt-12 max-w-page border-t border-field-700 px-4 py-6 text-xs text-chalk-500 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {pro
+        {isIntlPath(pathname)
+          ? <span>Plaibook Stats International: results since 1872 from international_results (Mart Jürisoo, CC0), World Cups from the Fjelstul World Cup Database (CC BY-SA 4.0) and openfootball (CC0), caps from Wikipedia (CC BY-SA 4.0); live scores, lineups and player stats from API-Football (api-sports.io). Rankings are Plaibook Elo, our own.</span>
+          : pro
           ? <span>Plaibook Stats Pro: professional match data from API-Football (api-sports.io); college links from Wikidata and Plaibook Stats.</span>
           : <span>Plaibook Stats collects NCAA soccer data from each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, and shows where they agree.</span>}
         <Link to="/admin" className="ml-auto hover:text-chalk-300">Admin</Link>

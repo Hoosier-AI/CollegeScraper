@@ -99,11 +99,12 @@ const HISTORY_CREDIT: Record<string, { name: string; url: string; license: strin
   'intl-results': { name: 'international_results (Mart Jürisoo)', url: 'https://github.com/martj42/international_results', license: 'public domain (CC0)' },
   'worldcup-db': { name: 'The Fjelstul World Cup Database (Joshua C. Fjelstul, Ph.D.)', url: 'https://github.com/jfjelstul/worldcup', license: 'CC BY-SA 4.0' },
   'openfootball-wc': { name: 'openfootball', url: 'https://github.com/openfootball/worldcup', license: 'public domain (CC0)' },
+  'api-football': { name: 'API-Football', url: 'https://www.api-football.com', license: 'shown on our pages only' },
   wikipedia: { name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0' },
   elo: { name: 'Plaibook Elo, worked out from every result (World Football Elo method)', url: 'https://www.plaibook.live/intl/rankings', license: 'ours' },
 };
 /** Which source's copy of a match counts when several have it: the World Cup database, then martj42, then the rest. */
-export const SOURCE_RANK: Record<string, number> = { 'worldcup-db': 0, 'intl-results': 1, 'openfootball-wc': 2, wikipedia: 3 };
+export const SOURCE_RANK: Record<string, number> = { 'worldcup-db': 0, 'intl-results': 1, 'openfootball-wc': 2, wikipedia: 3, 'api-football': 4 };
 
 export interface NationRef { key: string; name: string; slug: string | null; logo: string | null; fifa_code: string | null; confederation: string | null }
 export interface IntlResult {
@@ -214,7 +215,7 @@ export async function nationHistory(db: Db, key: string, gender: 'm' | 'w') {
   // Elo through time, thinned to one point a month (a rating line, not every match).
   const series: { date: string; rating: number }[] = [];
   for (const e of eloRows) { const last = series[series.length - 1]; if (last && last.date.slice(0, 7) === e.date.slice(0, 7)) last.rating = Number(e.rating); else series.push({ date: e.date, rating: Number(e.rating) }); }
-  const usedSources = [...new Set(rows.map((r) => r.source)), ...(squads.length ? ['worldcup-db'] : [])];
+  const usedSources = [...new Set([...rows.map((r) => r.source), ...(squads.length ? ['worldcup-db'] : [])])];
   return {
     nation: { ...refs.get(key)!, first_match: nationRow.first_match, fifa: nationRow.fifa }, gender,
     record, first_match: rows[0]?.date ?? null,

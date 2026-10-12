@@ -35,7 +35,7 @@ export function ProMatchRow({ m, showDate, showLeague, compact }: { m: ProMatch;
     return <span className={won ? 'text-chalk-100' : lost ? 'text-chalk-500' : live ? 'text-win' : 'text-chalk-100'}>{m[side].score ?? '–'}</span>;
   };
   return (
-    <Link to={proPath.match(m.slug)} className="block transition-colors duration-150 hover:bg-field-800"
+    <Link to={proPath.match(m.slug, m.league.scope)} className="block transition-colors duration-150 hover:bg-field-800"
       aria-label={`${m.home.name} ${m.home.score ?? ''} ${m.away.name} ${m.away.score ?? ''}, ${when}`}>
       {/* Phones: both clubs stacked, the score on the right. */}
       <span className={`flex items-center gap-3 px-3 py-2 coarse:min-h-[56px] ${compact ? '' : 'sm:hidden'}`}>
@@ -74,7 +74,7 @@ export function LeagueHeading({ league, right }: { league: ProMatch['league']; r
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 text-2xs font-medium text-chalk-400">
       <TeamLogo src={league.logo} name={league.name} size={16} chip={false} />
-      <Link to={proPath.league(league.slug)} title={`${league.country && league.country !== 'World' ? `${league.country}: ` : ''}${league.name}`} className="min-w-0 flex-1 truncate hover:text-chalk-100 coarse:py-2">{league.country && league.country !== 'World' ? `${league.country}: ` : ''}{league.name}</Link>
+      <Link to={proPath.league(league.slug, null, null, league.scope)} title={`${league.country && league.country !== 'World' ? `${league.country}: ` : ''}${league.name}`} className="min-w-0 flex-1 truncate hover:text-chalk-100 coarse:py-2">{league.country && league.country !== 'World' ? `${league.country}: ` : ''}{league.name}</Link>
       {right && <span className="shrink-0">{right}</span>}
     </div>
   );

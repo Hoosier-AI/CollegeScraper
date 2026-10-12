@@ -15,7 +15,7 @@ import { kvGet, kvSet, selectAll, upsertChunked, type Db } from '../../db/client
 import { sourcesOff } from '../../pro/sources.js';
 import { samePerson } from '../../pro/queries.js';
 import * as intl from '../../pro/intl.js';
-import { applyShootouts, NON_FIFA_TOURNAMENT, parseGoals, parseResults, parseShootouts, RESULTS_BASE, RESULTS_SOURCE, type IntlGoalRow, type IntlMatchRow } from '../../sources/intl/results.js';
+import { applyShootouts, NON_FIFA_TOURNAMENT, parseGoals, parseResults, parseShootouts, RESULTS_BASE, RESULTS_SOURCE, TOURNAMENT_LEAGUE, type IntlGoalRow, type IntlMatchRow } from '../../sources/intl/results.js';
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, WCDB_BASE, WCDB_SOURCE, wcdbCodes } from '../../sources/intl/worldcupDb.js';
 import { parseWorldCupTxt, WC_FOLDERS, WC_TXT_BASE, WC_TXT_SOURCE } from '../../sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../sources/intl/nations.js';
@@ -223,9 +223,10 @@ async function intlMatch(ctx: JobContext): Promise<void> {
   //    sources' dates are local).
   const sideOf = new Map<number, { key: string; gender: 'm' | 'w' }>();
   for (const [k, v] of pick) { const [key, g] = k.split('|'); sideOf.set(v.id, { key: key!, gender: g as 'm' | 'w' }); }
-  const leagueIds = (await selectAll<{ id: number }>(db, 'pro_leagues', 'id', (q) => q.eq('scope', 'intl'))).map((l) => l.id);
-  const fixtures: { id: number; kickoff: string; home_team_id: number; away_team_id: number }[] = [];
-  for (let i = 0; i < leagueIds.length; i += 40) fixtures.push(...await selectAll<any>(db, 'pro_fixtures', 'id,kickoff,home_team_id,away_team_id', (q) => q.in('league_id', leagueIds.slice(i, i + 40)).eq('status', 'final')));
+  const intlLeagues = await selectAll<{ id: number; name: string; level: string }>(db, 'pro_leagues', 'id,name,level', (q) => q.eq('scope', 'intl'));
+  const leagueIds = intlLeagues.map((l) => l.id);
+  const fixtures: { id: number; league_id: number; kickoff: string; home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; pen_home: number | null; pen_away: number | null; status_short: string | null; round: string | null; venue_city: string | null }[] = [];
+  for (let i = 0; i < leagueIds.length; i += 40) fixtures.push(...await selectAll<any>(db, 'pro_fixtures', 'id,league_id,kickoff,home_team_id,away_team_id,home_goals,away_goals,pen_home,pen_away,status_short,round,venue_city', (q) => q.in('league_id', leagueIds.slice(i, i + 40)).eq('status', 'final')));
   const fx = new Map<string, number>();
   let earliest = '9999';
   for (const f of fixtures) {
@@ -244,6 +245,31 @@ async function intlMatch(ctx: JobContext): Promise<void> {
     const id = fx.get(`${m.gender}|${m.date}|${x}|${y}`) ?? fx.get(`${m.gender}|${shift(m.date, 1)}|${x}|${y}`) ?? fx.get(`${m.gender}|${shift(m.date, -1)}|${x}|${y}`) ?? null;
     if (id !== (m.pro_fixture_id == null ? null : Number(m.pro_fixture_id))) links.push({ source: m.source, gender: m.gender, date: m.date, home: m.home, away: m.away, fixture: id });
   }
+  // 3. API-Football's own finals as the last source: the matches no open source has (most women's internationals,
+  //    the latest window before martj42 catches up). Senior sides only; never a match another source already has.
+  const covered = new Set(src.map((m) => {
+    const [x, y] = [m.home, m.away].sort();
+    return fx.get(`${m.gender}|${m.date}|${x}|${y}`) ?? fx.get(`${m.gender}|${shift(m.date, 1)}|${x}|${y}`) ?? fx.get(`${m.gender}|${shift(m.date, -1)}|${x}|${y}`) ?? null;
+  }).filter((id): id is number => id != null));
+  const nameOf = new Map(intlLeagues.map((l) => [l.id, l]));
+  const reverse = new Map(Object.entries(TOURNAMENT_LEAGUE).map(([name, id]) => [id, name]));
+  const apiRows: IntlMatchRow[] = [];
+  for (const f of fixtures) {
+    const h = sideOf.get(f.home_team_id), a = sideOf.get(f.away_team_id), l = nameOf.get(f.league_id);
+    if (!h || !a || h.gender !== a.gender || !l || l.level !== 'senior' || covered.has(Number(f.id)) || f.home_goals == null || f.away_goals == null) continue;
+    const pens = f.pen_home != null && f.pen_away != null;
+    apiRows.push({ source: 'api-football', gender: h.gender, level: 'senior', date: f.kickoff.slice(0, 10), home: h.key, away: a.key, home_name: h.key, away_name: a.key,
+      home_score: f.home_goals, away_score: f.away_goals, pen_home: f.pen_home, pen_away: f.pen_away, aet: f.status_short === 'AET' || f.status_short === 'PEN',
+      shootout_winner: pens ? (f.pen_home! > f.pen_away! ? h.key : a.key) : null,
+      // martj42's name where the competition is one of its (the Elo weights read it), else the provider's.
+      tournament: (h.gender === 'm' ? reverse.get(f.league_id) : null) ?? l.name, league_id: f.league_id, stage: f.round, city: f.venue_city, country: null, neutral: null, ext_id: String(f.id) });
+  }
+  const seenApi = new Set<string>();
+  const apiUniq = apiRows.filter((r) => { const k = `${r.gender}|${r.date}|${r.home}|${r.away}`; return !seenApi.has(k) && !!seenApi.add(k); });
+  if (apiUniq.length) ctx.inc('api_results', await replaceMatches(db, 'api-football', apiUniq));
+  // Its own rows are the fixtures themselves: linked so the pages open the match.
+  for (const r of apiUniq) links.push({ source: 'api-football', gender: r.gender, date: r.date, home: r.home, away: r.away, fixture: Number(r.ext_id) });
+
   let linked = 0;
   for (let i = 0; i < links.length; i += 1000) {
     const { data, error } = await db.rpc('intl_set_fixture_links', { p_rows: links.slice(i, i + 1000) });
@@ -312,8 +338,13 @@ async function intlElo(ctx: JobContext): Promise<void> {
     ctx.inc(`${gender}_steps`, await upsertChunked(ctx.db, 'intl_elo', steps.map((s) => ({ gender, nation: s.nation, date: s.date, opponent: s.opponent, rating: Math.round(s.rating * 10) / 10, delta: Math.round(s.delta * 10) / 10, tournament: s.tournament, updated_at: at })),
       { onConflict: 'gender,nation,date,opponent', chunk: 1000 }));
     await ctx.db.from('intl_elo').delete().eq('gender', gender).lt('updated_at', at);
-    // Current rating, rank among FIFA sides that played in the last four years, a year's change, the best ever.
-    const fifa = new Set((await selectAll<{ key: string }>(ctx.db, 'intl_nations', 'key', (q) => q.eq('fifa', true))).map((n) => n.key));
+    // Current rating, rank among FIFA members that played in the last four years, a year's change, the best ever. A
+    // FIFA member: men, a World Cup qualifier in the last eight years (every member enters); women, a national side in
+    // the provider's data (Basque Country and Zanzibar play friendlies too, and are not ranked).
+    const eightYears = new Date(Date.now() - 8 * 365 * 86400_000).toISOString().slice(0, 10);
+    const fifa = gender === 'm'
+      ? new Set(results.filter((r) => r.date >= eightYears && /^(FIFA )?World Cup.*qualif/i.test(r.tournament)).flatMap((r) => [r.home, r.away]))
+      : new Set((await selectAll<{ key: string }>(ctx.db, 'intl_nations', 'key', (q) => q.not('team_w', 'is', null))).map((n) => n.key));
     const today = at.slice(0, 10), yearAgo = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10), fourYears = new Date(Date.now() - 4 * 365 * 86400_000).toISOString().slice(0, 10);
     const then = new Map<string, number>(), best = new Map<string, { r: number; d: string }>();
     for (const s of steps) {

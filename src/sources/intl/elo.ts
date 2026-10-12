@@ -11,13 +11,15 @@
 export const START = 1500;
 export const HOME_EDGE = 100;
 
-const CONTINENTAL = /^(UEFA Euro|Copa América|African Cup of Nations|AFC Asian Cup|Gold Cup|CONCACAF Championship|Oceania Nations Cup|Confederations Cup)$/;
+// Tournament names as martj42 and API-Football write them ("UEFA Euro" / "Euro Championship", "World Cup - Women").
+const WORLD_CUP = /^(FIFA )?(Women's )?World Cup( - Women)?$/i;
+const CONTINENTAL = /^(UEFA Euro|Euro Championship|UEFA Championship - Women|Copa Am[eé]rica( Femenina)?|African Cup of Nations|Africa Cup of Nations( - Women)?|(AFC )?Asian Cup( Women)?|(CONCACAF )?Gold Cup( - Women)?|CONCACAF Championship|Oceania Nations Cup|OFC Nations Cup|Confederations Cup)$/i;
 
 export function kFactor(tournament: string): number {
-  if (tournament === 'FIFA World Cup' || tournament === "FIFA Women's World Cup") return 60;
+  if (WORLD_CUP.test(tournament)) return 60;
   if (CONTINENTAL.test(tournament)) return 50;
   if (/qualification|nations league/i.test(tournament)) return 40;
-  if (/^friendly$/i.test(tournament)) return 20;
+  if (/^friendl(y|ies)( women)?$/i.test(tournament)) return 20;
   return 30;
 }
 

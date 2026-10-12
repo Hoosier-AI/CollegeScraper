@@ -11,6 +11,8 @@ import { LeagueTable, ProForm } from '../../components/pro/LeagueTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { EmptyState, ErrorBox, Field, PlayerAvatar, Section, SegmentedControl, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
+import { MoveSection } from '../../components/pro/MoveSection';
+import { useSection } from '../../lib/section';
 import { ProHero, StatTile } from '../../components/pro/Hero';
 import { AdvancedLeaders, Credit, ExpectedTable, type AdvLeaderLine, type ExpectedLine, type SourceCredit } from '../../components/pro/Advanced';
 
@@ -131,6 +133,7 @@ function Leaders({ rows, stat, label }: { rows: ProLeader[]; stat: 'goals' | 'as
 
 export default function ProLeague() {
   const { slug = '' } = useParams();
+  const intl = useSection() === 'intl';
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
   const [tab] = useUrlState('tab', 'table', { allow: ['table', 'results', 'fixtures', 'players', 'stats', 'history'] });
@@ -140,11 +143,13 @@ export default function ProLeague() {
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
   const l = d.league;
+  // A national-team competition is International's page, a club one Pro's.
+  if ((l.scope === 'intl') !== intl) return <MoveSection to={proPath.league(slug, null, null, l.scope ?? 'club')} />;
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'table', label: 'Table' }, { id: 'results', label: 'Results', count: d.results.length }, { id: 'fixtures', label: 'Fixtures', count: d.fixtures.length }, { id: 'players', label: 'Top players' }, { id: 'stats', label: 'Stats' },
     ...(d.champions.length ? [{ id: 'history' as Tab, label: 'Past winners', count: d.champions.length }] : []),
   ];
-  const where = l.country && l.country !== 'World' ? l.country : 'International';
+  const where = intl ? (l.confederation && l.confederation !== 'FIFA' && l.confederation !== 'Other' ? l.confederation : 'Worldwide') : l.country && l.country !== 'World' ? l.country : 'Continental';
   // The season at a glance: matches, goals a match, who leads the table and the scoring.
   const played = d.team_table.reduce((n, t) => n + t.played, 0), goals = d.team_table.reduce((n, t) => n + t.gf, 0);
   const top = d.standings[0]?.rows[0];
@@ -153,7 +158,7 @@ export default function ProLeague() {
   return (
     <div className="space-y-5">
       <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-16 sm:w-16"><TeamLogo src={l.logo} name={l.name} size={52} chip={false} /></span>} title={l.name}
-        chips={[where, `${genderWord(l.gender)} ${l.type === 'cup' ? 'cup' : 'league'}`, d.teams ? `${d.teams} clubs` : null, d.season ? `Season ${d.season}` : null]}
+        chips={[where, intl ? `${genderWord(l.gender)} ${l.level === 'youth' ? 'youth national teams' : 'national teams'}` : `${genderWord(l.gender)} ${l.type === 'cup' ? 'cup' : 'league'}`, d.teams ? `${d.teams} ${intl ? 'teams' : 'clubs'}` : null, d.season ? `${intl ? 'Edition' : 'Season'} ${d.season}` : null]}
         actions={d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: Number(v) === l.current_season ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}>
         {glance && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

@@ -116,6 +116,8 @@ describe('Plaibook Elo', () => {
     expect(kFactor('UEFA Euro qualification')).toBe(40);
     expect(kFactor('Friendly')).toBe(20);
     expect(kFactor('Gulf Cup')).toBe(30);
+    // API-Football's names for the same competitions.
+    expect([kFactor('World Cup - Women'), kFactor('Euro Championship'), kFactor('CONCACAF Gold Cup'), kFactor('Friendlies Women'), kFactor('World Cup - Qualification Europe')]).toEqual([60, 50, 50, 20, 40]);
     expect([goalFactor(1), goalFactor(2), goalFactor(3), goalFactor(5)]).toEqual([1, 1.5, 14 / 8, 16 / 8]);
     expect(expected(0)).toBe(0.5);
   });

@@ -1,6 +1,7 @@
 // One club: record and table places, the current squad by position (number, age, nationality, season numbers), coach,
 // injuries, ground, goals by 15-minute period, home/away splits, the provider's season stats (formations, biggest
-// results, streaks, clean sheets, penalties, cards by minute), transfers in and out, results and fixtures.
+// results, streaks, clean sheets, penalties, cards by minute), transfers in and out, results and fixtures. A national team (its page is International's) has its history instead of
+// transfers.
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Ambulance } from 'lucide-react';
@@ -17,6 +18,10 @@ import { PointsLine, ResultStrip } from '../../components/pro/Charts';
 import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { ProHero, StatTile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
+import { MoveSection } from '../../components/pro/MoveSection';
+import { NationHistoryTab } from '../../components/intl/NationHistory';
+import { IntlNation } from '../intl/IntlNation';
+import { useSection } from '../../lib/section';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -38,20 +43,23 @@ interface TeamData {
   splits: { home: Split; away: Split };
   results: ProMatch[]; fixtures: ProMatch[];
 }
-type Tab = 'squad' | 'matches' | 'stats' | 'transfers';
+type Tab = 'squad' | 'history' | 'matches' | 'stats' | 'transfers';
 const GROUPS = [['Goalkeeper', 'Goalkeepers'], ['Defender', 'Defenders'], ['Midfielder', 'Midfielders'], ['Attacker', 'Forwards'], ['', 'Other players']] as const;
 
 export default function ProTeam() {
   const { slug = '' } = useParams();
+  const intl = useSection() === 'intl';
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
-  const [tab] = useUrlState('tab', 'squad', { allow: ['squad', 'matches', 'stats', 'transfers'] });
+  const [tab] = useUrlState('tab', 'squad', { allow: ['squad', 'history', 'matches', 'stats', 'transfers'] });
   const q = useQuery({ queryKey: ['pro-team', slug, seasonParam], queryFn: () => api<TeamData>(`/api/pro/teams/${slug}${qs({ season: seasonParam })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
-  if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="team" slug={slug} />;
+  // International: a nation the provider never had a side for is its history alone.
+  if (q.error instanceof ApiError && q.error.status === 404) return intl ? <IntlNation slug={slug} /> : <ProMoved kind="team" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
   const t = d.team;
+  if (!!t.national !== intl) return <MoveSection to={proPath.team(slug, null, !!t.national)} />;
   const total = d.competitions.reduce((a, c) => ({ p: a.p + c.played, w: a.w + c.w, d: a.d + c.d, l: a.l + c.l, gf: a.gf + c.gf, ga: a.ga + c.ga }), { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
   const coach = d.coaches.find((c) => c.current) ?? null;
   const hrefFor = (x: Tab) => `${proPath.team(slug)}${qs({ season: seasonParam || undefined, tab: x === 'squad' ? undefined : x })}`;
@@ -68,7 +76,9 @@ export default function ProTeam() {
     { key: 'clean_sheets', label: 'CS', title: 'Clean sheets (keepers)', num: true, priority: 3, value: (r) => r.clean_sheets },
     { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 3, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
   ];
-  const tabs: { id: Tab; label: string; count?: number }[] = [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'transfers', label: 'Transfers', count: d.transfers.length }];
+  const tabs: { id: Tab; label: string; count?: number }[] = t.national
+    ? [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'history', label: 'History' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }]
+    : [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'transfers', label: 'Transfers', count: d.transfers.length }];
   // The season across competitions: averages over the matches that have each number (shots and the rest need detail).
   const sum = total.p > 0 ? (() => {
     const withStats = d.competitions.filter((c) => c.shots != null);
@@ -207,6 +217,7 @@ export default function ProTeam() {
           {!sum && <EmptyState title="No season numbers yet" body="They arrive with this club's results; shots, possession and cards with match detail." />}
         </div>
       )}
+      {tab === 'history' && <NationHistoryTab slug={slug} />}
       {tab === 'transfers' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Section title={`In (${ins.length})`}><TransfersList rows={ins} showPlayer empty="No arrivals recorded yet." /></Section>

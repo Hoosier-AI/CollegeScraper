@@ -35,6 +35,12 @@ const ProTransfers = lazy(() => import('./pages/pro/ProTransfers'));
 const ProCollege = lazy(() => import('./pages/pro/ProCollege'));
 const ProAbroad = lazy(() => import('./pages/pro/ProAbroad'));
 const ProSources = lazy(() => import('./pages/pro/ProSources'));
+// International (national teams): its own lists; a tournament, team, player or match page is Pro's.
+const IntlHome = lazy(() => import('./pages/intl/IntlHome'));
+const IntlTournaments = lazy(() => import('./pages/intl/IntlTournaments'));
+const IntlTeams = lazy(() => import('./pages/intl/IntlTeams'));
+const IntlRankings = lazy(() => import('./pages/intl/IntlRankings'));
+const IntlH2H = lazy(() => import('./pages/intl/IntlH2H'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
 window.addEventListener('vite:preloadError', (e) => {
@@ -97,6 +103,17 @@ const router = createBrowserRouter([
           { path: 'pro/transfers', element: <ProTransfers /> },
           { path: 'pro/college', element: <ProCollege /> },
           { path: 'pro/abroad', element: <ProAbroad /> },
+          { path: 'intl', element: <IntlHome /> },
+          { path: 'intl/matches', element: <ProMatches key="intl" /> },
+          { path: 'intl/matches/:slug', element: <ProMatch /> },
+          { path: 'intl/tournaments', element: <IntlTournaments /> },
+          { path: 'intl/tournaments/:slug', element: <ProLeague /> },
+          { path: 'intl/teams', element: <IntlTeams /> },
+          { path: 'intl/teams/:slug', element: <ProTeam /> },
+          { path: 'intl/players', element: <ProDirectory key="intl-players" mode="players" /> },
+          { path: 'intl/players/:slug', element: <ProPlayer /> },
+          { path: 'intl/rankings', element: <IntlRankings /> },
+          { path: 'intl/h2h', element: <IntlH2H /> },
           { path: '*', element: <NotFound /> },
         ],
       },

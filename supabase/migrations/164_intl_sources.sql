@@ -3,7 +3,8 @@
 --   intl_nations      one row per nation (key = slug of martj42's name, "united-states"), its senior men's and women's
 --                     sides in pro_teams, FIFA code, confederation, first match.
 --   intl_src_matches  each source's results (martj42 'intl-results', Fjelstul 'worldcup-db', openfootball
---                     'openfootball-wc', 'wikipedia'), linked to the API-Football fixture when there is one.
+--                     'openfootball-wc', 'wikipedia'), linked to the API-Football fixture when there is one; then
+--                     'api-football' for the finals no open source has (most women's internationals).
 --   intl_src_goals    scorers (minute, penalty, own goal, assist where the source has it).
 --   intl_squads       tournament squads (Fjelstul: every World Cup squad, men's and women's).
 --   intl_caps         caps and international goals per player and nation (Wikipedia careers, Wikidata, RSSSF).
@@ -162,7 +163,8 @@ AS $function$
   FROM public.intl_src_matches m
   JOIN public.pro_fixtures f ON f.id = m.pro_fixture_id AND f.status = 'final'
   LEFT JOIN public.intl_nations nh ON nh.team_m = f.home_team_id OR nh.team_w = f.home_team_id
-  WHERE m.home_score IS NOT NULL
+  -- API-Football's own rows (the matches only it has) are the fixtures themselves: nothing to compare.
+  WHERE m.home_score IS NOT NULL AND m.source <> 'api-football'
   GROUP BY m.source
 $function$;
 REVOKE ALL ON FUNCTION public.intl_source_agreement() FROM PUBLIC, anon, authenticated;

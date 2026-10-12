@@ -18,6 +18,8 @@ export interface IntlSite {
   cadence: string;
   /** Read by Pro's jobs too (its requests are counted together). */
   shared?: boolean;
+  /** Approved, not crawled yet. */
+  planned?: boolean;
 }
 
 export const INTL_SITES: IntlSite[] = [
@@ -28,11 +30,11 @@ export const INTL_SITES: IntlSite[] = [
   { id: 'worldcup-db', name: 'The Fjelstul World Cup Database', url: 'https://github.com/jfjelstul/worldcup', license: 'CC BY-SA 4.0', credit: 'Joshua C. Fjelstul, Ph.D., The Fjelstul World Cup Database (CC BY-SA 4.0)',
     scraped: true, feeds: ["men's and women's World Cups", 'squads', 'goals', 'bookings', 'awards'], jobs: ['intl-wcdb-sync'], cadence: 'Mondays 10:50 UTC (a new release is read once)' },
   { id: 'wikipedia', name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0', credit: 'Wikipedia (CC BY-SA 4.0)',
-    scraped: true, feeds: ["women's and youth results", 'national team records'], jobs: ['intl-wiki-sync'], cadence: 'Mondays 11:00 UTC', shared: true },
+    scraped: true, feeds: ['caps and international goals (player careers)'], jobs: ['intl-caps-sync'], cadence: 'daily 11:20 UTC, from the careers the Pro people crawl reads (no new requests)', shared: true },
   { id: 'wikidata', name: 'Wikidata', url: 'https://www.wikidata.org', license: 'CC0', credit: 'Wikidata (CC0)',
-    scraped: true, feeds: ['caps and international goals'], jobs: ['intl-caps-sync'], cadence: 'daily 11:20 UTC', shared: true },
+    scraped: true, feeds: ['which player a career belongs to'], jobs: ['wikidata-sync'], cadence: 'with Pro (hourly at :20)', shared: true },
   { id: 'rsssf', name: 'RSSSF', url: 'https://www.rsssf.org', license: 'free to copy with credit to the RSSSF', credit: 'RSSSF (the Rec.Sport.Soccer Statistics Foundation)',
-    scraped: true, feeds: ['most caps and goals per nation'], jobs: ['intl-rsssf-sync'], cadence: 'Mondays 11:30 UTC' },
+    scraped: true, feeds: ['most caps and goals per nation', 'older tournaments'], jobs: [], cadence: 'planned (phase 3)', planned: true },
   { id: 'api-football', name: 'API-Football', url: 'https://www.api-football.com', license: 'paid plan, shown on our pages only', credit: 'API-Football',
     scraped: false, feeds: ['live scores', 'lineups', 'events', 'player match stats', 'squads'], jobs: ['pro-crawl', 'pro-live', 'pro-scoreboard'], cadence: 'with Pro (one crawl)', shared: true },
 ];

@@ -646,7 +646,9 @@ export async function leaders(db: Db, f: LeadersFilter) {
   const { data, error } = await db.rpc('pro_leaders', {
     p_stat: stat, p_league: f.league ?? null, p_season: f.season ?? null, p_position: f.position ?? null, p_nationality: f.nationality ?? null,
     p_min_age: f.min_age ?? null, p_max_age: f.max_age ?? null, p_min_minutes: minMinutes, p_per90: !!f.per90, p_gender: f.gender ?? null, p_abroad: f.abroad ?? null,
-    p_limit: limit, p_offset: offset, p_country: f.country ?? null, p_scope: f.scope ?? 'club', p_level: f.level ?? null,
+    p_limit: limit, p_offset: offset, p_country: f.country ?? null,
+    // A competition picked is its own scope (a tournament's leaders, asked from its page).
+    p_scope: f.league ? null : f.scope ?? 'club', p_level: f.level ?? null,
   });
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as any[];

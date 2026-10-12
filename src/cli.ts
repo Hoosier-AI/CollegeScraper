@@ -84,6 +84,12 @@ for (const job of ['pro-catalog', 'pro-scoreboard', 'pro-live', 'pro-final-detai
     });
 }
 
+// International (national teams): open sources, no API-Football requests.
+for (const job of ['intl-refresh', 'intl-results-sync', 'intl-wcdb-sync', 'intl-wc-sync', 'intl-caps-sync', 'intl-match', 'intl-elo']) {
+  program.command(job).description(`run the ${job} job inline`).option('--force', 'read the files even when they have not changed')
+    .action(async (opts) => console.log(JSON.stringify(await runInline(getDb(), job, opts.force ? { force: true } : {}), null, 2)));
+}
+
 program.command('enqueue <job>').description('queue a job for the worker').action(async (job: string) => {
   if (!jobNames().includes(job)) throw new Error(`unknown job ${job}; known: ${jobNames().join(', ')}`);
   console.log(JSON.stringify(await enqueue(getDb(), job, {})));

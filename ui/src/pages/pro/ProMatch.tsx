@@ -8,6 +8,8 @@ import { EventTimeline, LineupList, ProPitch, TeamStatsCompare, type ProEvent, t
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ErrorBox, Section, Skeleton, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
+import { MoveSection } from '../../components/pro/MoveSection';
+import { useSection } from '../../lib/section';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
 
@@ -40,6 +42,7 @@ function Scoreline({ m }: { m: MatchData['match'] }) {
 
 export default function ProMatch() {
   const { slug = '' } = useParams();
+  const intl = useSection() === 'intl';
   const q = useQuery({
     queryKey: ['pro-match', slug], queryFn: () => api<MatchData>(`/api/pro/matches/${slug}`),
     retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1,
@@ -49,6 +52,7 @@ export default function ProMatch() {
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
+  if ((d.match.league.scope === 'intl') !== intl) return <MoveSection to={proPath.match(slug, d.match.league.scope ?? 'club')} />;
   const m = d.match;
   const facts = [m.round, m.venue, m.referee ? `Referee ${m.referee}` : null].filter(Boolean).join(' · ');
   const hasLineups = d.home.starters.length > 0 || d.away.starters.length > 0;
@@ -57,7 +61,7 @@ export default function ProMatch() {
   return (
     <div className="space-y-4">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-chalk-400">
-        <Link to={proPath.home} className="hover:text-chalk-100">Pro</Link><span aria-hidden>/</span>
+        <Link to={proPath.home} className="hover:text-chalk-100">{intl ? 'International' : 'Pro'}</Link><span aria-hidden>/</span>
         <Link to={proPath.league(m.league.slug)} className="flex items-center gap-1 hover:text-chalk-100"><TeamLogo src={m.league.logo} name={m.league.name} size={14} chip={false} fallback="blank" />{m.league.name}</Link>
       </nav>
       <h1 className="sr-only">{m.home.name} vs {m.away.name}, {m.league.name}</h1>

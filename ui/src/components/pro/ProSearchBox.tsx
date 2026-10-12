@@ -1,4 +1,5 @@
-// Search across pro competitions, clubs and players (/api/pro/search). Same combobox behaviour as the college one.
+// Search across pro competitions, clubs and players (/api/pro/search), or on International pages its tournaments,
+// national teams and players (/api/intl/search). Same combobox behaviour as the college one.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -6,6 +7,7 @@ import { Search, X } from 'lucide-react';
 import { api, qs } from '../../lib/api';
 import { flushSearch, trackSearch } from '../../lib/track';
 import { proPath } from '../../lib/pro';
+import { listApi, useSection } from '../../lib/section';
 import { PlayerAvatar, Spinner, TeamLogo } from '../primitives';
 
 interface HitRow { id: number; name: string; slug: string; sub: string | null; logo: string | null }
@@ -13,8 +15,10 @@ export type Hit = { key: string; kind: 'league' | 'team' | 'player'; label: stri
 
 /** `onPick`: choose instead of navigating (the compare page picks players with it). */
 /** wideMenu: results open wider than the box, anchored right (the narrow phone header box). */
-export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club or player', examples, onNavigate, onPick, wideMenu }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void; wideMenu?: boolean }) {
+export function ProSearchBox({ size = 'md', placeholder, examples, onNavigate, onPick, wideMenu }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void; wideMenu?: boolean }) {
   const nav = useNavigate();
+  const section = useSection();
+  const intl = section === 'intl';
   const listId = useId();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -23,10 +27,10 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { const t = setTimeout(() => setDebounced(q.trim()), 250); return () => clearTimeout(t); }, [q]);
-  const hits = useQuery({ queryKey: ['pro-search', debounced], queryFn: () => api<{ leagues: HitRow[]; teams: HitRow[]; players: HitRow[] }>(`/api/pro/search${qs({ q: debounced, limit: 6 })}`), enabled: debounced.length >= 2 });
+  const hits = useQuery({ queryKey: ['pro-search', section, debounced], queryFn: () => api<{ leagues: HitRow[]; teams: HitRow[]; players: HitRow[] }>(`${listApi(section, 'search')}${qs({ q: debounced, limit: 6 })}`), enabled: debounced.length >= 2 });
   const items = useMemo<Hit[]>(() => [
-    ...(onPick ? [] : (hits.data?.leagues ?? []).map((h) => ({ key: `l${h.id}`, kind: 'league' as const, label: h.name, sub: h.sub ?? 'Competition', href: proPath.league(h.slug), logo: h.logo, slug: h.slug }))),
-    ...(onPick ? [] : (hits.data?.teams ?? []).map((h) => ({ key: `t${h.id}`, kind: 'team' as const, label: h.name, sub: h.sub ?? 'Club', href: proPath.team(h.slug), logo: h.logo, slug: h.slug }))),
+    ...(onPick ? [] : (hits.data?.leagues ?? []).map((h) => ({ key: `l${h.id}`, kind: 'league' as const, label: h.name, sub: h.sub && h.sub !== 'World' ? h.sub : intl ? 'Tournament' : 'Competition', href: proPath.league(h.slug), logo: h.logo, slug: h.slug }))),
+    ...(onPick ? [] : (hits.data?.teams ?? []).map((h) => ({ key: `t${h.id}`, kind: 'team' as const, label: h.name, sub: intl ? (/-women(-|$)/.test(h.slug) ? "Women's national team" : 'National team') : h.sub ?? 'Club', href: proPath.team(h.slug), logo: h.logo, slug: h.slug }))),
     ...(hits.data?.players ?? []).map((h) => ({ key: `p${h.id}`, kind: 'player' as const, label: h.name, sub: h.sub ?? 'Player', href: proPath.player(h.slug), logo: h.logo, slug: h.slug })),
   ], [hits.data, onPick]);
   useEffect(() => { setCursor(0); }, [items]);
@@ -54,7 +58,7 @@ export function ProSearchBox({ size = 'md', placeholder = 'Find a league, club o
             else if (e.key === 'Escape') setOpen(false);
           }}
           role="combobox" aria-expanded={listOpen} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={listOpen && items[cursor] ? `${listId}-${items[cursor]!.key}` : undefined}
-          aria-label="Search pro leagues, clubs and players" placeholder={placeholder} className={`input w-full [&::-webkit-search-cancel-button]:appearance-none ${big ? 'h-12 pl-11 pr-10 text-base' : 'pl-8 pr-8'}`} />
+          aria-label={intl ? 'Search tournaments, national teams and players' : 'Search pro leagues, clubs and players'} placeholder={placeholder ?? (intl ? 'Find a tournament, nation or player' : 'Find a league, club or player')} className={`input w-full [&::-webkit-search-cancel-button]:appearance-none ${big ? 'h-12 pl-11 pr-10 text-base' : 'pl-8 pr-8'}`} />
         {q && <button type="button" aria-label="Clear search" onClick={() => { setQ(''); input.current?.focus(); }} className={`absolute top-1/2 -translate-y-1/2 rounded p-1 text-chalk-500 hover:text-chalk-100 ${big ? 'right-3' : 'right-1.5'}`}><X size={16} /></button>}
       </div>
       {!q && examples && big && (

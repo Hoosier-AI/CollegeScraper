@@ -1,6 +1,7 @@
 // The player directory (/pro/players) and the leaders (/pro/leaders): the same filters over every competition's
 // current season (nationality, position, age, competition, men's/women's, minimum minutes); the directory lists by
-// minutes played, the leaders page by any stat, totals or per 90.
+// minutes played, the leaders page by any stat, totals or per 90. On International (/intl/players) the same over
+// national-team competitions, senior or youth.
 import { useMemo, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -10,12 +11,17 @@ import { PRO_STATS, SCOPE_OPTIONS, statLabel, useCountries, type ProLeagueRef, t
 import { LeadersTable, type LeaderRow } from '../../components/pro/People';
 import { ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select } from '../../components/primitives';
 import { useProGender } from '../../lib/proGender';
+import { listApi, useSection } from '../../lib/section';
 
 interface Page { stat: string; per90: boolean; min_minutes: number; total: number; limit: number; offset: number; rows: LeaderRow[] }
 const PAGE = 50;
 
 export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) {
-  const leaders = mode === 'leaders';
+  const section = useSection();
+  const intl = section === 'intl';
+  // International players lead with goals; their minutes say little across a handful of matches a year.
+  const leaders = mode === 'leaders' || intl;
+  const [level, setLevel] = useUrlState('level', 'senior', { allow: ['senior', 'youth'] });
   const [stat, setStat] = useUrlState('stat', leaders ? 'goals' : 'minutes', { allow: PRO_STATS.map((s) => s.key) });
   const [position, setPosition] = useUrlState('position', '', { allow: ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'] });
   const [nationality, setNationality] = useUrlState('nationality');
@@ -27,26 +33,30 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
   const [rate, setRate] = useUrlState('per90', '', { allow: ['1'] });
   const [page, setPage] = useUrlNumber('page', 1, { min: 1 });
   const countries = useCountries();
-  const leagues = useQuery({ queryKey: ['pro-leagues'], queryFn: () => api<(ProLeagueRef & { priority: number })[]>('/api/pro/leagues'), staleTime: 300_000 });
+  const leagues = useQuery({ queryKey: ['pro-leagues', section], queryFn: () => api<(ProLeagueRef & { priority: number })[]>(intl ? '/api/intl/tournaments' : '/api/pro/leagues'), staleTime: 300_000 });
   const ages: Record<string, [number | undefined, number | undefined]> = { u21: [undefined, 20], u23: [undefined, 22], '23-29': [23, 29], '30+': [30, undefined] };
   const [minAge, maxAge] = ages[age] ?? [undefined, undefined];
   // A competition picked under the other game is set aside (NWSL chosen, then Men): the toggle wins.
   const leagueGender = leagues.data?.find((l) => String(l.id) === league)?.gender;
   const leagueOn = league && (!leagueGender || leagueGender === gender) ? league : '';
   const q = useQuery({
-    queryKey: ['pro-directory', stat, position, nationality, leagueOn, gender, age, rate, page, scope],
-    queryFn: () => api<Page>(`/api/pro/leaders${qs({ stat, position, nationality, league: leagueOn, gender, country: !leagueOn && scope === 'us' ? 'USA' : '', min_age: minAge, max_age: maxAge, per90: leaders ? rate : '', limit: PAGE, offset: (page - 1) * PAGE })}`),
+    queryKey: ['pro-directory', section, stat, position, nationality, leagueOn, gender, age, rate, page, scope, level],
+    queryFn: () => api<Page>(`${listApi(section, 'leaders')}${qs({ stat, position, nationality, league: leagueOn, gender, country: !intl && !leagueOn && scope === 'us' ? 'USA' : '', level: intl ? level : '', min_age: minAge, max_age: maxAge, per90: leaders ? rate : '', limit: PAGE, offset: (page - 1) * PAGE })}`),
     placeholderData: keepPreviousData,
   });
-  const leagueOptions = useMemo(() => [{ value: '', label: scope === 'us' ? 'Every US competition' : 'Every competition' }, ...(leagues.data ?? []).filter((l) => l.gender === gender && (scope === 'world' || l.country === 'USA')).slice(0, 400).map((l) => ({ value: String(l.id), label: `${l.name}${l.country && l.country !== 'World' ? ` (${l.country})` : ''}` }))], [leagues.data, gender, scope]);
+  const leagueOptions = useMemo(() => intl
+    ? [{ value: '', label: 'Every tournament' }, ...(leagues.data ?? []).filter((l) => l.gender === gender && (l.level ?? 'senior') === level).map((l) => ({ value: String(l.id), label: l.name }))]
+    : [{ value: '', label: scope === 'us' ? 'Every US competition' : 'Every competition' }, ...(leagues.data ?? []).filter((l) => l.gender === gender && (scope === 'world' || l.country === 'USA')).slice(0, 400).map((l) => ({ value: String(l.id), label: `${l.name}${l.country && l.country !== 'World' ? ` (${l.country})` : ''}` }))], [leagues.data, gender, scope, intl, level]);
   const natOptions = useMemo(() => [{ value: '', label: 'Any nationality' }, ...countries.list.map((c) => ({ value: c.name, label: c.name }))], [countries.list]);
   const [showFilters, setShowFilters] = useState(false);
   const active = [leagueOn, nationality, position, age].filter(Boolean).length;
-  const title = leaders ? `${statLabel(stat)} leaders` : 'Players';
+  const title = intl ? `International ${statLabel(stat).toLowerCase()} leaders` : leaders ? `${statLabel(stat)} leaders` : 'Players';
   return (
     <div className="space-y-4">
-      <PageHeader title={title} meta={q.data ? `${fmt.num(q.data.total)} player seasons, ${!leagueOn && scope === 'us' ? (gender === 'w' ? 'NWSL, USL Super League and other US competitions' : 'MLS, USL, MLS NEXT Pro and other US competitions') : 'current season of each competition'}${q.data.min_minutes ? `, ${q.data.min_minutes}+ minutes` : ''}` : 'US competitions first'}>
-        <Field label="Where">{() => <SegmentedControl label="US or worldwide" size="sm" value={scope} onChange={(v) => { setScope(v); setLeague(''); setPage(1); }} options={[...SCOPE_OPTIONS]} />}</Field>
+      <PageHeader title={title} meta={q.data ? `${fmt.num(q.data.total)} player seasons, ${intl ? 'the current edition of each national-team competition' : !leagueOn && scope === 'us' ? (gender === 'w' ? 'NWSL, USL Super League and other US competitions' : 'MLS, USL, MLS NEXT Pro and other US competitions') : 'current season of each competition'}${q.data.min_minutes ? `, ${q.data.min_minutes}+ minutes` : ''}` : intl ? 'National teams' : 'US competitions first'}>
+        {intl
+          ? <Field label="Teams">{() => <SegmentedControl label="Senior or youth" size="sm" value={level} onChange={(v) => { setLevel(v === 'senior' ? '' : v); setLeague(''); setPage(1); }} options={[{ value: 'senior', label: 'Senior' }, { value: 'youth', label: 'Youth' }]} />}</Field>
+          : <Field label="Where">{() => <SegmentedControl label="US or worldwide" size="sm" value={scope} onChange={(v) => { setScope(v); setLeague(''); setPage(1); }} options={[...SCOPE_OPTIONS]} />}</Field>}
         {leaders && <Field label="Stat">{(id) => <Select id={id} value={stat} onChange={(v) => { setStat(v); setPage(1); }} options={PRO_STATS.map((s) => ({ value: s.key, label: s.label }))} />}</Field>}
         {leaders && <Field label="Numbers">{() => <SegmentedControl label="Numbers" size="sm" value={rate} onChange={(v) => { setRate(v); setPage(1); }} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>}
       </PageHeader>

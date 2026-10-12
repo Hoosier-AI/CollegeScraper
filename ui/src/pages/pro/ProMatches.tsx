@@ -1,4 +1,6 @@
 // The pro scoreboard: every match of a day across enabled competitions, grouped by competition in priority order.
+// On International (/intl/matches) the same for national teams, with the next international matches on a quiet day
+// (internationals come in windows a few days long).
 import { useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -8,10 +10,13 @@ import { isIso, longDay, todayEastern } from '../../lib/dates';
 import { DateStrip } from '../../components/match/DateStrip';
 import { LeagueHeading, ProMatchRow } from '../../components/pro/ProMatchRow';
 import { Chip, EmptyState, ErrorBox, PageHeader, Skeleton } from '../../components/primitives';
-import type { ProDay } from '../../lib/pro';
+import type { ProDay, ProMatch } from '../../lib/pro';
+import { listApi, useSection } from '../../lib/section';
 import { useProGender } from '../../lib/proGender';
 
 export default function ProMatches() {
+  const section = useSection();
+  const intl = section === 'intl';
   const patch = useUrlPatch();
   const today = todayEastern();
   const [dateParam] = useUrlState('date', '');
@@ -19,8 +24,8 @@ export default function ProMatches() {
   const [show, setShow] = useUrlState('show', '', { allow: ['live', 'featured'] });
   const [gender] = useProGender();
   const q = useQuery({
-    queryKey: ['pro-matches', date],
-    queryFn: () => api<ProDay>(`/api/pro/matches${qs({ date })}`),
+    queryKey: ['pro-matches', section, date],
+    queryFn: () => api<ProDay>(`${listApi(section, 'matches')}${qs({ date })}`),
     placeholderData: keepPreviousData,
     refetchInterval: (query) => ((query.state.data?.live ?? 0) > 0 ? 60_000 : false),
   });
@@ -31,12 +36,18 @@ export default function ProMatches() {
   const count = groups.reduce((n, g) => n + g.matches.length, 0);
   // Hundreds of competitions play on a weekend: the top ones and any with a match in play show; the rest wait in one
   // "More competitions" section, a line each. A filter shows everything it keeps.
-  const lead = (g: (typeof groups)[number]) => !!show || g.priority < 100 || g.matches.some((m) => m.status === 'live');
+  // International days are a few dozen qualifiers and friendlies: every one is shown.
+  const lead = (g: (typeof groups)[number]) => intl || !!show || g.priority < 100 || g.matches.some((m) => m.status === 'live');
   const main = groups.filter(lead), rest = groups.filter((g) => !lead(g));
   const restCount = rest.reduce((n, g) => n + g.matches.length, 0);
+  // International, a day without matches: the next ones (the next window).
+  const next = useQuery({ queryKey: ['intl-home', date], queryFn: () => api<{ upcoming: ProMatch[] }>(`/api/intl/home${qs({ date })}`), enabled: intl && !!q.data && !groups.length && !show });
+  const upcoming = (next.data?.upcoming ?? []).filter((m) => m.league.gender === gender).slice(0, 20);
+  // Pro: the US scene, then the world. International: one list.
+  const blocks = intl ? [{ title: '', list: main }] : [{ title: 'United States', list: main.filter((g) => g.league.us) }, { title: 'Around the world', list: main.filter((g) => !g.league.us) }];
   return (
     <div className="space-y-4">
-      <PageHeader title="Pro matches" meta={`${longDay(date)}, ${q.data ? `${count} ${gender === 'w' ? "women's" : "men's"} matches in ${groups.length} competitions` : 'loading'}`} />
+      <PageHeader title={intl ? 'International matches' : 'Pro matches'} meta={`${longDay(date)}, ${q.data ? `${count} ${gender === 'w' ? "women's" : "men's"} matches in ${groups.length} competitions` : 'loading'}`} />
       <DateStrip date={date} today={today} onChange={setDate} />
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Show only">
         <Chip on={show === 'live'} onClick={() => setShow(show === 'live' ? '' : 'live')}>Live{liveCount ? ` (${liveCount})` : ''}</Chip>
@@ -44,12 +55,18 @@ export default function ProMatches() {
       </div>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <div className="space-y-2" aria-busy="true">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>}
-      {q.data && !groups.length && <EmptyState title={`No matches on ${longDay(date)}`} body={show ? 'Clear the filter to see every competition.' : 'Try another day.'} action={show ? <button className="btn-ghost btn-sm" onClick={() => setShow('')}>Show all</button> : undefined} />}
+      {q.data && !groups.length && <EmptyState title={`No ${intl ? 'international ' : ''}matches on ${longDay(date)}`} body={show ? 'Clear the filter to see every competition.' : intl ? 'National teams play in windows a few days long. The next matches are below.' : 'Try another day.'} action={show ? <button className="btn-ghost btn-sm" onClick={() => setShow('')}>Show all</button> : undefined} />}
+      {upcoming.length > 0 && (
+        <section className="space-y-2" aria-label="Next international matches">
+          <h2 className="text-sm font-semibold text-chalk-100">Next international matches</h2>
+          <div className="frame divide-y divide-field-700 overflow-hidden">{upcoming.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div>
+        </section>
+      )}
       <div className={`space-y-3 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
         {/* US first (most visitors are American): the US scene under its own heading, then the rest of the world. */}
-        {[{ title: 'United States', list: main.filter((g) => g.league.us) }, { title: 'Around the world', list: main.filter((g) => !g.league.us) }].map(({ title, list }) => list.length > 0 && (
-          <section key={title} className="space-y-2" aria-label={title}>
-            <h2 className="text-sm font-semibold text-chalk-100">{title}</h2>
+        {blocks.map(({ title, list }) => list.length > 0 && (
+          <section key={title || 'all'} className="space-y-2" aria-label={title || 'Competitions'}>
+            {title && <h2 className="text-sm font-semibold text-chalk-100">{title}</h2>}
             <div className={`gap-3 ${list.length > 2 ? 'xl:columns-2' : ''}`}>
               {list.map((g) => (
                 <section key={g.league.id} className="frame mb-3 break-inside-avoid divide-y divide-field-700 overflow-hidden" aria-label={g.league.name}>

@@ -6,6 +6,8 @@
 //             per 90, plus the advanced stats (xG, xA, goals added) where American Soccer Analysis covers the season
 //   Matches   the match log: minutes, goals, assists, shots, passes, tackles, rating
 //   Career    college, transfers, honours, injury history
+// Pro (/pro/players) shows his club football; International (/intl/players) the same page over his national-team
+// matches, with caps by nation (Wikipedia careers) and World Cup squads.
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -21,6 +23,15 @@ import { Credit, GplusBars, PlayerAdvancedTable, type AdvPlayerSeason, type Sour
 import { EmptyState, ErrorBox, PlayerAvatar, Section, SegmentedControl, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ProHero, StatTile as Tile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
+import { useSection } from '../../lib/section';
+import { Credits, nationHref } from '../../components/intl/NationHistory';
+import type { Credit as IntlCredit, NationRef } from '../../lib/intl';
+
+interface IntlCareer {
+  caps: { nation: NationRef | null; gender: 'm' | 'w'; caps: number | null; goals: number | null; first_year: number | null; last_year: number | null; source: string }[];
+  world_cups: { nation: NationRef | null; year: number; shirt: number | null; position: string | null; tournament: string }[];
+  credits: IntlCredit[];
+}
 
 type N = number | null;
 interface SeasonRow {
@@ -114,7 +125,9 @@ export default function ProPlayer() {
   const [view, setView] = useState<'totals' | 'per90'>('totals');
   const [group, setGroup] = useState<Group>('overview');
   const [tab] = useUrlState('tab', 'overview', { allow: ['overview', 'stats', 'matches', 'career'] });
+  const onIntl = useSection() === 'intl';
   const q = useQuery({ queryKey: ['pro-player', slug], queryFn: () => api<PlayerData>(`/api/pro/players/${slug}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
+  const career = useQuery({ queryKey: ['intl-player', slug], queryFn: () => api<IntlCareer>(`/api/intl/players/${slug}`), enabled: onIntl, staleTime: 300_000 });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="player" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
@@ -124,8 +137,12 @@ export default function ProPlayer() {
   const club = d.seasons.filter((s) => !s.team?.national);
   const intl = d.seasons.filter((s) => s.team?.national);
   const caps = intl.reduce((n, s) => n + s.apps, 0), intlGoals = intl.reduce((n, s) => n + s.goals, 0);
-  const latest = club[0]?.season ?? null;
-  const now = sumRows(club.filter((s) => s.season === latest));
+  // The rows and matches this half shows: club football on Pro, national-team football on International.
+  const shown = onIntl ? intl : club;
+  const sideNational = (m: MatchLine) => !!(m.team_id === m.match.home.id ? m.match.home : m.match.away).national;
+  const lines = d.matches.filter((m) => sideNational(m) === onIntl);
+  const latest = shown[0]?.season ?? null;
+  const now = sumRows(shown.filter((s) => s.season === latest));
   const adv = d.advanced?.seasons.filter((s) => s.season === latest) ?? [];
   const xg = adv.reduce((n, s) => n + (s.xg ?? 0), 0), xa = adv.reduce((n, s) => n + (s.xa ?? 0), 0);
   const age = ageFrom(p.birth_date);
@@ -133,11 +150,11 @@ export default function ProPlayer() {
   const hrefFor = (x: Tab) => `${proPath.player(p.slug)}${qs({ tab: x === 'overview' ? undefined : x })}`;
 
   // Goals and assists by season, club competitions together (oldest first).
-  const bySeason = [...new Set(club.map((s) => s.season))].sort((a, b) => a - b).map((y) => {
-    const rows = club.filter((s) => s.season === y);
+  const bySeason = [...new Set(shown.map((s) => s.season))].sort((a, b) => a - b).map((y) => {
+    const rows = shown.filter((s) => s.season === y);
     return { label: String(y), a: rows.reduce((n, s) => n + s.goals, 0), b: rows.reduce((n, s) => n + s.assists, 0) };
   });
-  const form = d.matches.filter((m) => m.rating != null && (m.minutes ?? 0) > 0).slice(0, 15).reverse().map((m) => {
+  const form = lines.filter((m) => m.rating != null && (m.minutes ?? 0) > 0).slice(0, 15).reverse().map((m) => {
     const home = m.team_id === m.match.home.id;
     const opp = home ? m.match.away : m.match.home;
     return { label: `${home ? 'v' : '@'} ${opp.name}`, value: m.rating!, href: proPath.match(m.match.slug), title: `${fmt.date(m.match.kickoff)} ${home ? 'v' : '@'} ${opp.name}: ${m.rating!.toFixed(1)}${m.goals ? `, ${m.goals} G` : ''}${m.assists ? `, ${m.assists} A` : ''}` };
@@ -150,7 +167,7 @@ export default function ProPlayer() {
   const share = (a: N | undefined, b: N | undefined) => (a != null && b ? Math.round((a / b) * 100) : null);
   const base: Column<SeasonRow>[] = [
     { key: 'season', label: 'Season', primary: true, value: (s) => s.season, render: (s) => String(s.season) },
-    { key: 'team', label: 'Club', value: (s) => s.team?.name ?? '', render: (s) => s.team ? <Link to={proPath.team(s.team.slug, s.season)} className="flex items-center gap-2 hover:text-pitch-300"><TeamLogo src={s.team.logo} name={s.team.name} size={18} /><span className="truncate">{s.team.name}</span></Link> : '–' },
+    { key: 'team', label: onIntl ? 'Team' : 'Club', value: (s) => s.team?.name ?? '', render: (s) => s.team ? <Link to={proPath.team(s.team.slug, s.season)} className="flex items-center gap-2 hover:text-pitch-300"><TeamLogo src={s.team.logo} name={s.team.name} size={18} /><span className="truncate">{s.team.name}</span></Link> : '–' },
     { key: 'league', label: 'Competition', priority: 2, value: (s) => s.league?.name ?? '', render: (s) => s.league ? <Link to={proPath.league(s.league.slug, s.season)} className="hover:text-pitch-300">{s.league.name}</Link> : '–' },
   ];
   const GROUPS: Record<Group, Column<SeasonRow>[]> = {
@@ -192,7 +209,7 @@ export default function ProPlayer() {
   ];
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats' }, { id: 'matches', label: 'Matches', count: d.matches.length || undefined }, { id: 'career', label: 'Career' },
+    { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats' }, { id: 'matches', label: 'Matches', count: lines.length || undefined }, ...(onIntl ? [] : [{ id: 'career' as Tab, label: 'Career' }]),
   ];
   const chips = [p.position, p.number != null ? `No. ${p.number}` : null, age != null ? `${age} years old` : null, p.height_cm ? `${p.height_cm} cm` : null, p.weight_kg ? `${p.weight_kg} kg` : null].filter(Boolean) as string[];
 
@@ -215,7 +232,7 @@ export default function ProPlayer() {
       >
         {now && (
           <section aria-label={`${latest} at a glance`}>
-            <h2 className="mb-1.5 text-2xs text-chalk-400">{latest}, club competitions</h2>
+            <h2 className="mb-1.5 text-2xs text-chalk-400">{latest}, {onIntl ? 'international matches' : 'club competitions'}</h2>
             <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [mask-image:linear-gradient(to_right,black_82%,transparent)] sm:mx-0 sm:[mask-image:none] sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-8 [&>*]:w-[6.75rem] [&>*]:shrink-0 sm:[&>*]:w-auto">
               <Tile label="Appearances" value={now.apps} sub={`${now.starts} starts`} />
               <Tile label="Minutes" value={fmt.num(now.minutes)} sub={now.apps ? `${Math.round(now.minutes / now.apps)} a match` : undefined} />
@@ -245,22 +262,22 @@ export default function ProPlayer() {
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_23rem]">
           <div className="space-y-5">
-            {!d.seasons.length && <EmptyState title="No season stats yet" body="Season totals arrive as the crawl reaches this player's competitions." />}
+            {!shown.length && <EmptyState title={onIntl ? 'No international numbers here yet' : 'No season stats yet'} body={onIntl ? 'Caps from his career are beside this; match lines arrive with his national team\'s matches.' : "Season totals arrive as the crawl reaches this player's competitions."} />}
             {(bySeason.some((r) => r.a || r.b) || form.length >= 3) && (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <SeasonBars rows={bySeason} a="Goals" b="Assists" caption="Goals and assists by season (club)" />
+                <SeasonBars rows={bySeason} a="Goals" b="Assists" caption={`Goals and assists by season (${onIntl ? 'international' : 'club'})`} />
                 <FormLine points={form} caption={`Match ratings, last ${form.length} matches`} />
               </div>
             )}
-            {d.seasons.length > 0 && (
+            {shown.length > 0 && (
               <Section title="By season" right={<Link to={hrefFor('stats')} className="text-xs text-pitch-300 hover:text-pitch-200">Every stat</Link>}>
-                <DataTable rows={d.seasons.slice(0, 10)} columns={[...base, ...GROUPS.overview]} rowKey={(s) => `${s.season}-${s.league?.id}-${s.team?.id}`} caption={`${p.name} by season`} dense />
+                <DataTable rows={shown.slice(0, 10)} columns={[...base, ...GROUPS.overview]} rowKey={(s) => `${s.season}-${s.league?.id}-${s.team?.id}`} caption={`${p.name} by season`} dense />
               </Section>
             )}
-            {d.matches.length > 0 && (
+            {lines.length > 0 && (
               <Section title="Recent matches" right={<Link to={hrefFor('matches')} className="text-xs text-pitch-300 hover:text-pitch-200">All matches</Link>}>
                 <ul className="frame divide-y divide-field-700">
-                  {d.matches.slice(0, 6).map((m) => (
+                  {lines.slice(0, 6).map((m) => (
                     <li key={m.match.id} className="flex items-center">
                       <div className="min-w-0 flex-1"><ProMatchRow m={m.match} showDate showLeague /></div>
                       <span className="hidden w-32 shrink-0 px-3 text-right text-xs tnum text-chalk-400 sm:block">{(m.minutes ?? 0) > 0 ? `${m.minutes}′` : 'bench'}{m.goals ? `, ${m.goals} G` : ''}{m.assists ? `, ${m.assists} A` : ''}{m.rating != null ? <span className={`ml-1.5 rounded px-1 py-0.5 font-semibold ${ratingChip(m.rating)}`}>{m.rating.toFixed(1)}</span> : null}</span>
@@ -272,9 +289,30 @@ export default function ProPlayer() {
           </div>
           <aside className="space-y-5">
             <div className="grid grid-cols-2 gap-2">
-              <Tile label="Club appearances" value={fmt.num(club.reduce((n2, s) => n2 + s.apps, 0))} sub={`${fmt.num(club.reduce((n2, s) => n2 + s.goals, 0))} goals, ${fmt.num(club.reduce((n2, s) => n2 + s.assists, 0))} assists`} />
-              <Tile label="International" value={caps ? `${caps} caps` : '–'} sub={caps ? `${intlGoals} goals` : undefined} />
+              <Link to={`/pro/players/${p.slug}`} className="block rounded-lg hover:ring-1 hover:ring-pitch-400/50" aria-label="Club career"><Tile label="Club appearances" value={fmt.num(club.reduce((n2, s) => n2 + s.apps, 0))} sub={`${fmt.num(club.reduce((n2, s) => n2 + s.goals, 0))} goals, ${fmt.num(club.reduce((n2, s) => n2 + s.assists, 0))} assists`} /></Link>
+              <Link to={`/intl/players/${p.slug}`} className="block rounded-lg hover:ring-1 hover:ring-pitch-400/50" aria-label="International career"><Tile label="International" value={caps ? `${caps} matches` : '–'} sub={caps ? `${intlGoals} goals, in our match data` : 'his international page'} /></Link>
             </div>
+            {onIntl && career.data && career.data.caps.length > 0 && (
+              <Section title="Caps">
+                <ul className="frame divide-y divide-field-700 text-sm">
+                  {career.data.caps.map((c, i) => (
+                    <li key={i} className="flex items-center gap-2 px-3 py-1.5">
+                      {c.nation ? <Link to={nationHref(c.nation)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.nation.name}</Link> : <span className="min-w-0 flex-1">–</span>}
+                      <span className="text-2xs tnum text-chalk-500">{c.first_year ?? ''}–{c.last_year ?? ''}</span>
+                      <span className="tnum text-chalk-200">{c.caps ?? '–'} caps, {c.goals ?? 0} goals</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+            {onIntl && career.data && career.data.world_cups.length > 0 && (
+              <Section title="World Cups">
+                <ul className="frame divide-y divide-field-700 text-sm">
+                  {career.data.world_cups.map((w) => <li key={`${w.tournament}-${w.year}`} className="flex items-center gap-2 px-3 py-1.5"><span className="w-12 tnum text-chalk-400">{w.year}</span><span className="min-w-0 flex-1 truncate">{w.nation?.name ?? ''}</span><span className="text-2xs text-chalk-500">{w.shirt ? `No. ${w.shirt}` : ''}{w.position ? ` · ${w.position}` : ''}</span></li>)}
+                </ul>
+              </Section>
+            )}
+            {onIntl && career.data && <Credits credits={career.data.credits} />}
             {winners.length > 0 && <p className="flex items-center gap-2 text-sm text-chalk-300"><Trophy size={16} aria-hidden className="text-note" />{winners.length} {winners.length === 1 ? 'trophy' : 'trophies'} won, <Link to={hrefFor('career')} className="text-pitch-300 hover:text-pitch-200">see career</Link></p>}
             {d.percentiles && d.percentiles.rows.length > 0 && (
               <Section title="Compared with peers">
@@ -292,7 +330,7 @@ export default function ProPlayer() {
             <SegmentedControl label="Stat group" size="sm" value={group} onChange={setGroup} options={groupOptions} />
             <SegmentedControl label="Numbers" size="sm" value={view} onChange={setView} options={[{ value: 'totals', label: 'Totals' }, { value: 'per90', label: 'Per 90' }]} />
           </div>
-          <DataTable rows={d.seasons} columns={[...base, ...GROUPS[group]]} rowKey={(s) => `${s.season}-${s.league?.id}-${s.team?.id}`} caption={`${p.name} by season: ${group}`} dense
+          <DataTable rows={shown} columns={[...base, ...GROUPS[group]]} rowKey={(s) => `${s.season}-${s.league?.id}-${s.team?.id}`} caption={`${p.name} by season: ${group}`} dense
             empty={<EmptyState title="No season stats yet" body="Season totals arrive as the crawl reaches this player's competitions." />} />
           {d.advanced && d.advanced.seasons.length > 0 && (
             <Section title="Advanced">
@@ -305,8 +343,8 @@ export default function ProPlayer() {
       )}
 
       {tab === 'matches' && (
-        d.matches.length
-          ? <DataTable rows={d.matches} columns={matchCols} rowKey={(m) => String(m.match.id)} caption={`${p.name} match log`} dense rowHref={(m) => proPath.match(m.match.slug)} />
+        lines.length
+          ? <DataTable rows={lines} columns={matchCols} rowKey={(m) => String(m.match.id)} caption={`${p.name} match log`} dense rowHref={(m) => proPath.match(m.match.slug, m.match.league.scope)} />
           : <EmptyState title="No match lines yet" body="Opening this page fetches his club's latest matches: look again in a minute. Some lower leagues (USL League One, Super League, W League, League Two) have no player match lines from our data provider." />
       )}
 

@@ -7,7 +7,7 @@ import * as intl from '../pro/intl.js';
 import { intlSourcesBlock } from './intlSources.js';
 
 /** Jobs the International section runs (the hub's Runs and Schedule tabs filter on these names). */
-export const INTL_JOBS = ['intl-refresh', 'intl-results-sync', 'intl-wc-sync', 'intl-wcdb-sync', 'intl-wiki-sync', 'intl-caps-sync', 'intl-rsssf-sync', 'intl-match', 'intl-elo'] as const;
+export const INTL_JOBS = ['intl-refresh', 'intl-results-sync', 'intl-wc-sync', 'intl-wcdb-sync', 'intl-caps-sync', 'intl-match', 'intl-elo'] as const;
 
 export async function intlConsole(db: Db) {
   const [ts, ns, audit, runs] = await Promise.all([

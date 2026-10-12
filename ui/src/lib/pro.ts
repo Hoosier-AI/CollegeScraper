@@ -1,8 +1,11 @@
 // Plaibook Stats Pro: the shapes /api/pro/* returns (src/pro/queries.ts) and small display helpers.
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
-export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; priority?: number; current_season?: number | null; /** The US scene: a competition in the USA or one US clubs play in. */ us?: boolean }
-export interface ProTeamRef { id: number; name: string; slug: string; logo: string | null; country?: string | null; gender?: 'm' | 'w' | null }
+import { currentLinkSection } from './section';
+export interface ProLeagueRef { id: number; name: string; slug: string; logo: string | null; country: string | null; country_flag?: string | null; gender: 'm' | 'w'; type?: 'league' | 'cup'; priority?: number; current_season?: number | null; /** The US scene: a competition in the USA or one US clubs play in. */ us?: boolean;
+  /** Club football (Pro) or national teams (International); senior or youth; an international one's confederation. */
+  scope?: 'club' | 'intl'; level?: 'senior' | 'youth'; confederation?: string | null }
+export interface ProTeamRef { id: number; name: string; slug: string; logo: string | null; country?: string | null; gender?: 'm' | 'w' | null; /** A national team (its pages are International's). */ national?: boolean }
 export interface ProSide extends ProTeamRef { score: number | null }
 export interface ProMatch {
   id: number; slug: string; kickoff: string; status: string; status_short: string | null; elapsed: number | null; elapsed_extra: number | null; round: string | null; season: number;
@@ -13,14 +16,17 @@ export interface ProDay { date: string; total: number; live: number; groups: { l
 export interface ProStandingRow { rank: number | null; team: ProTeamRef; played: number | null; win: number | null; draw: number | null; lose: number | null; gf: number | null; ga: number | null; gd: number | null; points: number | null; form: string | null; description: string | null }
 export interface ProLeader { player: { id: number; name: string; slug: string; photo: string | null }; team: ProTeamRef | null; apps: number; minutes: number; goals: number; assists: number; rating: number | null }
 
+/** Pro or International: the half a link goes to. `scope` when the link knows (a match's competition); otherwise the
+ *  half the reader is in (see lib/section.ts). */
+const intl = (scope?: 'club' | 'intl' | null) => (scope ? scope === 'intl' : currentLinkSection() === 'intl');
 export const proPath = {
-  home: '/pro',
-  matches: '/pro/matches',
-  leagues: '/pro/leagues',
-  league: (slug: string, season?: number | null, current?: number | null) => `/pro/leagues/${slug}${season && season !== current ? `?season=${season}` : ''}`,
-  team: (slug: string, season?: number | null) => `/pro/teams/${slug}${season ? `?season=${season}` : ''}`,
-  player: (slug: string) => `/pro/players/${slug}`,
-  match: (slug: string) => `/pro/matches/${slug}`,
+  get home() { return intl() ? '/intl' : '/pro'; },
+  get matches() { return intl() ? '/intl/matches' : '/pro/matches'; },
+  get leagues() { return intl() ? '/intl/tournaments' : '/pro/leagues'; },
+  league: (slug: string, season?: number | null, current?: number | null, scope?: 'club' | 'intl' | null) => `${intl(scope) ? '/intl/tournaments' : '/pro/leagues'}/${slug}${season && season !== current ? `?season=${season}` : ''}`,
+  team: (slug: string, season?: number | null, national?: boolean | null) => `${intl(national == null ? null : national ? 'intl' : 'club') ? '/intl/teams' : '/pro/teams'}/${slug}${season ? `?season=${season}` : ''}`,
+  player: (slug: string) => `${intl() ? '/intl' : '/pro'}/players/${slug}`,
+  match: (slug: string, scope?: 'club' | 'intl' | null) => `${intl(scope) ? '/intl/matches' : '/pro/matches'}/${slug}`,
 };
 
 /** "67′", "HT", "90+3′", "ET 105′", "PENS". */

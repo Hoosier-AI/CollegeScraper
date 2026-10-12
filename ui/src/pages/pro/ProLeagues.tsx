@@ -1,4 +1,6 @@
-// Every competition Plaibook Stats Pro follows, grouped by country (international ones first), with a filter.
+// Every club competition Plaibook Stats Pro follows, grouped by country (the continental and world club cups first),
+// with a filter. National-team competitions are International's (/intl/tournaments).
+const CROSS = 'Continental club cups';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -23,9 +25,9 @@ export default function ProLeagues() {
   const byCountry = useMemo(() => {
     const rows = matching.filter((l) => cups || !isCup(l));
     const m = new Map<string, Row[]>();
-    for (const l of rows) { const k = !l.country || l.country === 'World' ? 'International' : l.country; m.set(k, [...(m.get(k) ?? []), l]); }
-    // International first, then the country of the highest-priority competition first (USA, England, ...), then A-Z.
-    return [...m.entries()].sort(([a, x], [b, y]) => (a === 'International' ? -1 : b === 'International' ? 1 : 0) || Math.min(...x.map((l) => l.priority)) - Math.min(...y.map((l) => l.priority)) || a.localeCompare(b));
+    for (const l of rows) { const k = !l.country || l.country === 'World' ? CROSS : l.country; m.set(k, [...(m.get(k) ?? []), l]); }
+    // The club cups across countries first, then the country of the highest-priority competition (USA, England, ...), then A-Z.
+    return [...m.entries()].sort(([a, x], [b, y]) => (a === CROSS ? -1 : b === CROSS ? 1 : 0) || Math.min(...x.map((l) => l.priority)) - Math.min(...y.map((l) => l.priority)) || a.localeCompare(b));
   }, [matching, cups]);
   const total = byCountry.reduce((n, [, l]) => n + l.length, 0);
   const n = useColumnCount();

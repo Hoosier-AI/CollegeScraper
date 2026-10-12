@@ -32,5 +32,6 @@ export function useProGender(): [ProGender, (g: ProGender) => void] {
   return [value, set];
 }
 
-/** The Pro pages the toggle applies to: lists across competitions. A league, club, player or match is one game already. */
-export const PRO_GENDER_PAGES = /^\/pro(\/(matches|leagues|players|leaders|countries(\/[^/]+)?|college|abroad))?\/?$/;
+/** The Pro and International pages the toggle applies to: lists across competitions. A league, club, player or match is
+ *  one game already. */
+export const PRO_GENDER_PAGES = /^\/pro(\/(matches|leagues|players|leaders|countries(\/[^/]+)?|college|abroad))?\/?$|^\/intl(\/(matches|tournaments|teams|players|rankings))?\/?$/;

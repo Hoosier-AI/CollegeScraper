@@ -7,9 +7,13 @@ import { BottomBar, Footer, TopBar, useFocusMain } from './components/shell';
 import { Skeleton } from './components/primitives';
 import { removeServerSummary } from './lib/entity';
 import { trackView } from './lib/track';
+import { setLinkSection } from './lib/section';
 
 export default function App() {
   const admin = useAdmin();
+  const { pathname } = useLocation();
+  // Before the page renders: Pro and International share their pages, and their links follow the half the reader is in.
+  setLinkSection(pathname);
   // /api/meta is public, so probe an admin-only route to notice a secret that has been rotated away.
   const check = useQuery({ queryKey: ['admin-check'], queryFn: () => api('/api/runs?limit=1'), enabled: admin, retry: false, staleTime: 5 * 60_000 });
   const rejected = check.error instanceof ApiError && check.error.status === 401;
@@ -18,7 +22,6 @@ export default function App() {
   // The server-rendered summary is for crawlers and the first paint; the app replaces it as soon as it mounts.
   useEffect(() => { removeServerSummary(); }, []);
   // Site analytics: a page view on every page change (query strings are not sent).
-  const { pathname } = useLocation();
   useEffect(() => { trackView(pathname); }, [pathname]);
   return (
     <FiltersProvider>
