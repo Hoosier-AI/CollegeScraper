@@ -300,6 +300,22 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const order = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'];
   const posRank = (pos: string | null) => { const i = order.indexOf(pos ?? ''); return i < 0 ? order.length : i; };
   const finals = games.filter((g) => g.status === 'final');
+  // No squad list and no season totals (lower divisions the provider lists no squad for): the players who appeared in
+  // this season's match lineups we hold, with their appearances, starts, minutes and goals from those lines.
+  if (!squad.size && finals.length) {
+    const lines = await selectAll<any>(db, 'pro_fixture_players', 'player_id,starter,minutes,goals,assists,yellow,red,pos,number', (q) => q.in('fixture_id', finals.map((f) => f.id)).eq('team_id', tm.id).not('player_id', 'is', null));
+    const ids = [...new Set(lines.map((l) => l.player_id))];
+    const people = new Map((ids.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,slug,photo,position,nationality,birth_date', (q) => q.in('id', ids)) : []).map((p) => [p.id, p]));
+    const posName: Record<string, string> = { G: 'Goalkeeper', D: 'Defender', M: 'Midfielder', F: 'Attacker' };
+    for (const l of lines) {
+      const pl = people.get(l.player_id); if (!pl) continue;
+      const row = squad.get(l.player_id) ?? blank(pl, l.number ?? null, posName[String(l.pos ?? '')] ?? null);
+      if ((l.minutes ?? 0) > 0 || l.starter) { row.apps += 1; if (l.starter) row.starts += 1; }
+      for (const k of ['minutes', 'goals', 'assists', 'yellow', 'red'] as const) row[k] += l[k] ?? 0;
+      squad.set(l.player_id, row);
+    }
+    for (const [id, row] of squad) if (!row.apps) squad.delete(id);
+  }
   // Goals for and against by 15-minute period, from the stored events of this season's finals.
   const periods = ['1-15', '16-30', '31-45', '46-60', '61-75', '76-90', 'ET'];
   const byPeriod = periods.map((p) => ({ period: p, for: 0, against: 0 }));
