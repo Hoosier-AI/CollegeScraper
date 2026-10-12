@@ -2,8 +2,10 @@
 //   Wikidata (CC0): a footballer whose "educated at" (P69) is a US school, matched to our pro player by birth date and
 //   family name. Strong evidence: 0.95.
 //   Name and age: our pro player's name key equals one NCAA player's, same gender, whose last college season came
-//   0-4 years before the first pro season, at a plausible age. 0.85 when there is exactly one such college player,
-//   0.5 when several share the name (kept for review, never shown).
+//   0-4 years before the first professional season (summer amateur leagues like USL League Two do not count), at a
+//   plausible age. 0.85 when there is exactly one such college player and the birth year fits or the player plays in
+//   a US competition, 0.75 otherwise, 0.5 when several share the name (kept for review, never shown).
+//   Wikipedia: the "College career" rows of a player's own article (matched to our player through Wikidata). 0.9.
 import { teamKey } from '../../normalize/teamIdentity.js';
 import { looseKey } from '../../sources/apiFootball/parse.js';
 
@@ -48,7 +50,7 @@ export function resolveSchool(index: SchoolIndex, label: string): string | null 
 
 export interface WikiRow { qid: string; label: string; dob: string | null; gender: 'm' | 'w' | null; college: string; start: number | null; end: number | null }
 export interface ProLite { id: number; last_name: string | null; birth_date: string | null; gender: 'm' | 'w' | null }
-export interface LinkProposal { pro_player_id: number; college_name: string; school_seo: string | null; college_player_id: string | null; first_season: number | null; last_season: number | null; method: 'wikidata' | 'name_age'; confidence: number; evidence: Record<string, unknown> }
+export interface LinkProposal { pro_player_id: number; college_name: string; school_seo: string | null; college_player_id: string | null; first_season: number | null; last_season: number | null; method: 'wikidata' | 'name_age' | 'wikipedia'; confidence: number; evidence: Record<string, unknown> }
 
 export function matchWikidata(rows: WikiRow[], pros: ProLite[], schools: SchoolIndex): LinkProposal[] {
   const byDob = new Map<string, ProLite[]>();
@@ -70,7 +72,8 @@ export function matchWikidata(rows: WikiRow[], pros: ProLite[], schools: SchoolI
   return out;
 }
 
-export interface ProNameLite { id: number; name_key: string | null; birth_date: string | null; gender: 'm' | 'w' | null; first_season: number | null }
+/** first_season: the first season in a professional competition; us: has played in a US competition. */
+export interface ProNameLite { id: number; name_key: string | null; birth_date: string | null; gender: 'm' | 'w' | null; first_season: number | null; us?: boolean }
 export interface CollegeLite { player_id: string; name_key: string; gender: 'm' | 'w'; seasons: number[]; school_seo: string; school_name: string }
 
 export function matchNameAge(pros: ProNameLite[], college: CollegeLite[]): LinkProposal[] {
@@ -87,7 +90,9 @@ export function matchNameAge(pros: ProNameLite[], college: CollegeLite[]): LinkP
       return born == null || (last - born >= 17 && last - born <= 25);
     });
     if (!fits.length) continue;
-    const confidence = fits.length === 1 ? (born != null ? 0.85 : 0.75) : 0.5;
+    // One college player of that name and gender whose career fits: shown when the age checks out or the pro plays in
+    // the US, where college players go (no birth date for many lower-league players: Sam Sarver, Indiana to FC Dallas).
+    const confidence = fits.length === 1 ? (born != null || p.us ? 0.85 : 0.75) : 0.5;
     for (const c of fits) {
       out.push({ pro_player_id: p.id, college_name: c.school_name, school_seo: c.school_seo, college_player_id: c.player_id, first_season: Math.min(...c.seasons), last_season: Math.max(...c.seasons), method: 'name_age', confidence, evidence: { name_key: p.name_key, candidates: fits.length } });
     }
@@ -131,4 +136,39 @@ export function withLabels(rows: WikiRaw[], labels: Map<string, string>): WikiRo
     const label = labels.get(r.qid); const college = labels.get(r.collegeQid);
     return label && college ? [{ qid: r.qid, label, dob: r.dob, gender: r.gender, college, start: r.start, end: r.end }] : [];
   });
+}
+
+/** A college team as Wikipedia names it ("SMU Mustangs", "Kent State Golden Flashes") to one of our schools: the whole
+ *  name, then without the nickname word by word ("smu mustangs" -> "smu"), down to one word. */
+export function resolveCollegeTeam(index: SchoolIndex, team: string): string | null {
+  const direct = resolveSchool(index, team);
+  if (direct) return direct;
+  const words = teamKey(team.replace(/\b(men'?s|women'?s)\b.*$/i, '')).split(' ').filter(Boolean);
+  for (let n = words.length - 1; n >= 1; n -= 1) {
+    const k = words.slice(0, n).join(' ');
+    const hit = index.short.get(k) ?? index.long.get(k);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+export interface WikiSpell { pro_player_id: number; team: string; start_year: number | null; end_year: number | null; qid: string }
+const years = (v: (number | null | undefined)[]) => v.filter((y): y is number => y != null);
+const lowest = (v: (number | null | undefined)[]) => (years(v).length ? Math.min(...years(v)) : null);
+const highest = (v: (number | null | undefined)[]) => (years(v).length ? Math.max(...years(v)) : null);
+
+/** Wikipedia "College career" rows of players we hold, one link per player and school. */
+export function matchWikipediaSpells(spells: WikiSpell[], schools: SchoolIndex): LinkProposal[] {
+  const out = new Map<string, LinkProposal>();
+  for (const s of spells) {
+    const school = resolveCollegeTeam(schools, s.team);
+    const k = `${s.pro_player_id}|${school ?? s.team}`;
+    const prev = out.get(k);
+    out.set(k, {
+      pro_player_id: s.pro_player_id, college_name: s.team, school_seo: school, college_player_id: null,
+      first_season: lowest([prev?.first_season, s.start_year]), last_season: highest([prev?.last_season, s.end_year]),
+      method: 'wikipedia', confidence: 0.9, evidence: { qid: s.qid, team: s.team },
+    });
+  }
+  return [...out.values()];
 }

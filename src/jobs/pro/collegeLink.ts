@@ -5,7 +5,9 @@ import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, upsertChunked } from '../../db/client.js';
 import { loadConfig } from '../../config.js';
 import { chunk } from './shared.js';
-import { matchNameAge, matchWikidata, parseWikidata, schoolIndex, withLabels, WIKIDATA_QUERY, type CollegeLite, type LinkProposal, type ProNameLite, type SchoolLite } from './collegeMatch.js';
+import { matchNameAge, matchWikidata, matchWikipediaSpells, parseWikidata, schoolIndex, withLabels, WIKIDATA_QUERY, type CollegeLite, type LinkProposal, type ProNameLite, type SchoolLite } from './collegeMatch.js';
+import { leagueIndex } from '../../db/proRepo.js';
+import { isUsScene } from '../../sources/apiFootball/leagues.js';
 import { log } from '../../log.js';
 
 const WDQS = 'https://query.wikidata.org/sparql';
@@ -67,10 +69,21 @@ export async function proCollegeLink(ctx: JobContext): Promise<void> {
     .filter((p) => p.name_key && collegeKeys.has(p.name_key));
   ctx.inc('name_candidates', pros.length);
   if (pros.length) {
+    // The first season in a professional competition: college players turn out for amateur summer sides (USL League
+    // Two, NPSL, WPSL, the W League) while still in college, which made their "first pro season" come before their
+    // last college one. And whether they have played in a US competition (where college players go).
+    const leagues = await leagueIndex(db);
     const firstSeason = new Map<number, number>();
+    const inUs = new Set<number>();
     for (const ids of chunk(pros.map((p) => p.id), 300)) {
-      const rows = await selectAll<{ player_id: number; season: number }>(db, 'pro_player_season_stats', 'player_id,season', (q) => q.in('player_id', ids));
-      for (const r of rows) firstSeason.set(r.player_id, Math.min(firstSeason.get(r.player_id) ?? 9999, r.season));
+      const rows = await selectAll<{ player_id: number; season: number; league_id: number }>(db, 'pro_player_season_stats', 'player_id,season,league_id', (q) => q.in('player_id', ids));
+      for (const r of rows) {
+        const l = leagues.get(r.league_id);
+        if (l && isUsScene(l.id, l.country)) inUs.add(r.player_id);
+        // Professional leagues only: cups take amateur clubs (the US Open Cup) and national teams (youth World Cups).
+        if (l && (l.kind !== 'pro' || l.type !== 'league')) continue;
+        firstSeason.set(r.player_id, Math.min(firstSeason.get(r.player_id) ?? 9999, r.season));
+      }
     }
     const keys = new Set(pros.map((p) => p.name_key!));
     const matching = collegePlayers.filter((c) => keys.has(c.name_key));
@@ -85,13 +98,23 @@ export async function proCollegeLink(ctx: JobContext): Promise<void> {
       const s = seasons.get(c.id); const prog = s ? programs.get(s.program) : null;
       return s && prog ? [{ player_id: c.id, name_key: c.name_key, gender: prog.gender, seasons: s.seasons, school_seo: prog.school_seo, school_name: schoolName.get(prog.school_seo) ?? prog.school_seo }] : [];
     });
-    const lite: ProNameLite[] = pros.map((p) => ({ ...p, first_season: firstSeason.get(p.id) ?? null }));
+    const lite: ProNameLite[] = pros.map((p) => ({ ...p, first_season: firstSeason.get(p.id) ?? null, us: inUs.has(p.id) }));
     const found = matchNameAge(lite, college);
     ctx.inc('name_age_matches', found.length);
     proposals.push(...found);
   }
 
-  // 3. Store, leaving reviewed links alone. The same college from both methods: Wikidata's dates, our player id.
+  // 3. Wikipedia: the "College career" rows of the articles of players we matched through Wikidata.
+  try {
+    const spells = await selectAll<{ qid: string; team: string; start_year: number | null; end_year: number | null }>(db, 'pro_src_spells', 'qid,team,start_year,end_year', (q) => q.eq('kind', 'college'));
+    const ids = await selectAll<{ ext_id: string; pro_id: number }>(db, 'pro_source_ids', 'ext_id,pro_id', (q) => q.eq('source', 'wikidata').eq('kind', 'player').not('pro_id', 'is', null).in('ext_id', [...new Set(spells.map((s) => s.qid))].concat(['-'])));
+    const proOf = new Map(ids.map((r) => [r.ext_id, Number(r.pro_id)]));
+    const found = matchWikipediaSpells(spells.flatMap((s) => (proOf.has(s.qid) ? [{ ...s, pro_player_id: proOf.get(s.qid)! }] : [])), index);
+    ctx.inc('wikipedia_matches', found.length);
+    proposals.push(...found);
+  } catch (err) { ctx.note('wikipedia_error', err instanceof Error ? err.message : String(err)); }
+
+  // 4. Store, leaving reviewed links alone. The same college from both methods: Wikidata's dates, our player id.
   const existing = await selectAll<{ pro_player_id: number; college_name: string; verified: boolean; rejected: boolean; method: string }>(db, 'pro_college_links', 'pro_player_id,college_name,verified,rejected,method');
   const frozen = new Set(existing.filter((e) => e.verified || e.rejected || e.method === 'manual').map((e) => `${e.pro_player_id}|${e.college_name}`));
   const merged = new Map<string, LinkProposal>();

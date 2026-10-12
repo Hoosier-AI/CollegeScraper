@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { backfillQueue } from '../../src/jobs/pro/backfill.js';
 import { scoreboardDays } from '../../src/jobs/pro/scoreboard.js';
-import { matchNameAge, matchWikidata, parseWikidata, resolveSchool, schoolIndex, withLabels } from '../../src/jobs/pro/collegeMatch.js';
+import { matchNameAge, matchWikidata, matchWikipediaSpells, parseWikidata, resolveCollegeTeam, resolveSchool, schoolIndex, withLabels } from '../../src/jobs/pro/collegeMatch.js';
 import type { LeagueInfo } from '../../src/db/proRepo.js';
 import { SCHEDULE, clockAt } from '../../src/jobs/scheduler.js';
 import { LIVE_DEFAULTS } from '../../src/ops/settings.js';
@@ -98,5 +98,24 @@ describe('college links', () => {
     // Two college players share the name: proposed for review only.
     const two = matchNameAge([{ id: 1, name_key: 'doe|jane', birth_date: null, gender: 'w', first_season: 2026 }], [...college, { ...college[0]!, player_id: 'c3', school_seo: 'north-carolina' }]);
     expect(two.every((l) => l.confidence < 0.85)).toBe(true);
+  });
+});
+
+describe('college to pro: the rules that kept players out', () => {
+  const college = [{ player_id: 'c9', name_key: 'sarver|samuel', gender: 'm' as const, seasons: [2024], school_seo: 'indiana', school_name: 'Indiana University' }];
+  it('no birth date: shown when the pro plays in a US competition, kept for review otherwise', () => {
+    const [us] = matchNameAge([{ id: 509720, name_key: 'sarver|samuel', birth_date: null, gender: 'm', first_season: 2025, us: true }], college);
+    expect(us).toMatchObject({ pro_player_id: 509720, school_seo: 'indiana', confidence: 0.85 });
+    const [abroad] = matchNameAge([{ id: 509720, name_key: 'sarver|samuel', birth_date: null, gender: 'm', first_season: 2025 }], college);
+    expect(abroad!.confidence).toBeLessThan(0.85);
+  });
+  it('Wikipedia college careers: nicknames dropped to find the school, one link per player and school', () => {
+    const idx = schoolIndex([{ seo: 'smu', name: 'SMU' }, { seo: 'kent-st', name: 'Kent St.', long_name: 'Kent State University' }, { seo: 'michigan', name: 'Michigan' }, { seo: 'michigan-st', name: 'Michigan St.' }]);
+    expect(resolveCollegeTeam(idx, 'SMU Mustangs')).toBe('smu');
+    expect(resolveCollegeTeam(idx, 'Michigan Wolverines')).toBe('michigan');
+    expect(resolveCollegeTeam(idx, 'Michigan State Spartans')).not.toBe('michigan');
+    const links = matchWikipediaSpells([{ pro_player_id: 5, team: 'SMU Mustangs', start_year: 2017, end_year: 2018, qid: 'Q1' }, { pro_player_id: 5, team: 'SMU Mustangs', start_year: 2018, end_year: 2019, qid: 'Q1' }], idx);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ school_seo: 'smu', first_season: 2017, last_season: 2019, method: 'wikipedia', confidence: 0.9 });
   });
 });

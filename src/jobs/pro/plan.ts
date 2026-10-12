@@ -351,6 +351,10 @@ export async function proRank(ctx: JobContext): Promise<void> {
   const am = await ctx.db.rpc('pro_refresh_americans');
   if (am.error) throw new Error(`americans: ${am.error.message}`);
   ctx.inc('american_flags_changed', Number(am.data) || 0);
+  // Men's or women's from the competitions and squads a player is in (migration 160): the college-to-pro matcher needs it.
+  const gd = await ctx.db.rpc('pro_refresh_player_gender');
+  if (gd.error) throw new Error(`gender: ${gd.error.message}`);
+  ctx.inc('genders_changed', Number(gd.data) || 0);
 }
 
 registerJob('pro-plan', proPlan);
