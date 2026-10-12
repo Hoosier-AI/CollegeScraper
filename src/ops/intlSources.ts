@@ -4,6 +4,7 @@
 import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import type { SourceId } from './sourceRequests.js';
+import { sourcesOff } from '../pro/sources.js';
 
 export interface IntlSite {
   id: SourceId;
@@ -56,15 +57,16 @@ export async function intlSourcesBlock(db: Db) {
     const rq = requests.filter((r) => r.source === s.id);
     // What each source has given: results and scorers; caps (Wikipedia careers), squads (the World Cup database); for
     // API-Football, the results only it has (most women's internationals).
-    const [matches, goals, extra] = s.planned || s.id === 'wikidata' ? [null, null, null] : await Promise.all([
+    const [matches, goals, extra] = s.planned || s.id === 'wikidata' ? [null, null, null] : s.id === 'wikipedia' ? [null, null, await count(db, 'intl_caps', (q) => q.eq('source', 'wikipedia'))] : await Promise.all([
       count(db, 'intl_src_matches', (q) => q.eq('source', s.id)),
       s.id === 'api-football' ? Promise.resolve(null) : count(db, 'intl_src_goals', (q) => q.eq('source', s.id)),
-      s.id === 'wikipedia' ? count(db, 'intl_caps', (q) => q.eq('source', 'wikipedia')) : s.id === 'worldcup-db' ? count(db, 'intl_squads', (q) => q.eq('source', 'worldcup-db')) : Promise.resolve(null),
+      s.id === 'worldcup-db' ? count(db, 'intl_squads', (q) => q.eq('source', 'worldcup-db')) : Promise.resolve(null),
     ]);
     const last = rq.map((r) => r.last_at).filter(Boolean).sort().pop() ?? null;
     return { ...s, requests_7d: rq.reduce((n, r) => n + r.requests, 0), errors_7d: rq.reduce((n, r) => n + r.errors, 0), bytes_7d: rq.reduce((n, r) => n + Number(r.bytes), 0), last_at: last,
       last_error: rq.find((r) => r.last_error)?.last_error ?? null, rows: { matches, goals, extra } };
   }));
+  const off = await sourcesOff(db);
   const agreement = await db.rpc('intl_source_agreement').then((r) => (r.error ? [] : (r.data ?? [])) as { source: string; compared: number; agree: number }[]);
-  return { sites: per.map((s) => { const a = agreement.find((x) => x.source === s.id); return { ...s, compared: a?.compared ?? 0, agree: a?.agree ?? 0, rate: a?.compared ? Math.round((a.agree / a.compared) * 1000) / 1000 : null }; }) };
+  return { off: [...off], sites: per.map((s) => { const a = agreement.find((x) => x.source === s.id); return { ...s, on: !off.has(s.id), compared: a?.compared ?? 0, agree: a?.agree ?? 0, rate: a?.compared ? Math.round((a.agree / a.compared) * 1000) / 1000 : null }; }) };
 }
