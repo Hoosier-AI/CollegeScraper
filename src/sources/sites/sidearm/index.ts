@@ -7,7 +7,7 @@
 //   box score GET {url}  (pretty /sports/{slug}/stats/{year}/{opp}/boxscore/{id}, or /boxscore.aspx?id={id})
 //   bio       GET {url}
 import type { BoxScore, Fetcher, Gender, PlayerBio, Roster, ScheduleEntry, SeasonStats, SiteAdapter, SiteContext } from '../../../model.js';
-import { isNotFound, isObj, obj, sidearmSportSlug, str } from './common.js';
+import { isNotFound, isObj, isPastSeason, obj, sidearmSportSlug, str } from './common.js';
 import { parseBoxScore } from './boxScore.js';
 import { parseLegacyBoxScore, looksLikeLegacyBoxScore } from './boxScoreHtml.js';
 import { parseCumulativeStats } from './cumulativeStats.js';
@@ -89,7 +89,8 @@ async function roster(fetcher: Fetcher, ctx: SiteContext): Promise<Roster> {
     const json = parseJson(text);
     if (isObj(json) && Array.isArray(json['players'])) return parseRosterJson(json, ctx, jsonUrl);
   }
-  for (const url of [`${base(ctx)}/sports/${slug}/roster/${ctx.season}`, `${base(ctx)}/sports/${slug}/roster`]) {
+  const rosterUrls = [`${base(ctx)}/sports/${slug}/roster/${ctx.season}`, ...(isPastSeason(ctx.season) ? [] : [`${base(ctx)}/sports/${slug}/roster`])];
+  for (const url of rosterUrls) {
     const html = await tryGet(fetcher, url);
     if (!html) continue;
     // Legacy template: the roster object is embedded in the page script.
@@ -103,7 +104,8 @@ async function roster(fetcher: Fetcher, ctx: SiteContext): Promise<Roster> {
 
 async function scheduleHtmlPage(fetcher: Fetcher, ctx: SiteContext): Promise<{ html: string; url: string } | null> {
   const slug = slugOf(ctx);
-  for (const url of [`${base(ctx)}/sports/${slug}/schedule/${ctx.season}`, `${base(ctx)}/sports/${slug}/schedule`]) {
+  const urls = [`${base(ctx)}/sports/${slug}/schedule/${ctx.season}`, ...(isPastSeason(ctx.season) ? [] : [`${base(ctx)}/sports/${slug}/schedule`])];
+  for (const url of urls) {
     const html = await tryGet(fetcher, url);
     if (html) return { html, url };
   }
@@ -112,7 +114,8 @@ async function scheduleHtmlPage(fetcher: Fetcher, ctx: SiteContext): Promise<{ h
 
 async function schedule(fetcher: Fetcher, ctx: SiteContext): Promise<ScheduleEntry[]> {
   const payloads: unknown[] = [];
-  if (ctx.sportId != null) {
+  // The results feed only carries the season in play: a past season reads its own schedule page.
+  if (ctx.sportId != null && !isPastSeason(ctx.season)) {
     for (const kind of ['results', 'upcoming'] as const) {
       const text = await tryGet(fetcher, resultsUrl(base(ctx), ctx.sportId, kind), 'application/json');
       if (!text) continue;

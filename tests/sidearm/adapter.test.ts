@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SiteContext } from '../../src/model.js';
 import { looksLikeSidearm, sidearmAdapter, sidearmSportSlug } from '../../src/sources/sites/sidearm/index.js';
 import { FakeFetcher, fixture, type Route } from '../helpers/fakeFetcher.js';
 
 const base: SiteContext = { host: 'goduke.com', baseUrl: 'https://goduke.com', gender: 'm', season: 2025, sportSlug: null, sportId: null, teamSlug: null };
 const ctx: SiteContext = { ...base, sportSlug: 'mens-soccer', sportId: 10 };
+
+// The fixtures were recorded during the 2025 season: these tests run with the clock in October 2025, so 2025 is the
+// season in play (its season-less pages and results feed are its own).
+beforeAll(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2025-10-15T12:00:00Z')); });
+afterAll(() => { vi.useRealTimers(); });
 
 const ROSTER_JSON: Route = { match: /\/api\/v2\/Rosters\/bySport\/mens-soccer/, file: 'sidearm/duke-roster-2025.json' };
 const RESULTS: Route = { match: /\/api\/v2\.1\/EventsResults\/results\?sportId=10/, file: 'sidearm/duke-results.json' };
@@ -109,5 +114,22 @@ describe('sidearmAdapter', () => {
     expect(bs.attendance).toBe(1344);
     const bio = await sidearmAdapter.playerBio(f, ctx, 'https://goduke.com/sports/mens-soccer/roster/colin-gallagher/8833');
     expect(bio.honors.length).toBeGreaterThan(0);
+  });
+});
+
+describe('a past season never reads the season in play', () => {
+  const past: SiteContext = { ...ctx, season: 2023 };
+  it('roster: only the season\'s own pages, never /roster', async () => {
+    const f = new FakeFetcher([{ match: /./, status: 404 }]);
+    await expect(sidearmAdapter.roster(f, past)).rejects.toThrow(/not found/);
+    expect(f.calls.some((u) => u.endsWith('/sports/mens-soccer/roster'))).toBe(false);
+    expect(f.calls).toContain('https://goduke.com/sports/mens-soccer/roster/2023');
+  });
+  it('schedule: no results feed and no season-less page', async () => {
+    const f = new FakeFetcher([{ match: /./, status: 404 }]);
+    await expect(sidearmAdapter.schedule(f, past)).rejects.toThrow(/not found/);
+    expect(f.calls.some((u) => u.includes('/EventsResults/'))).toBe(false);
+    expect(f.calls.some((u) => u.endsWith('/sports/mens-soccer/schedule'))).toBe(false);
+    expect(f.calls).toContain('https://goduke.com/sports/mens-soccer/schedule/2023');
   });
 });

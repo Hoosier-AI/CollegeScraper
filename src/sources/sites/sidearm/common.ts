@@ -139,3 +139,11 @@ export function nameJerseyKey(lastName: string, firstName: string, jersey: numbe
   const n = (x: string) => stripDiacritics(x).toLowerCase().replace(/[^a-z0-9' -]/g, '').trim();
   return `${n(lastName)}|${n(firstName)}|${jersey == null ? '' : String(jersey)}`;
 }
+
+/** A season before the one in play (the fall season turns over on July 1, as in jobs/seasons). Season-less pages
+ *  (/roster, /schedule) and the results feed show the season in play, so a past season must never fall back to them:
+ *  that would file this year's players and games under an old season. */
+export function isPastSeason(season: number, now: Date = new Date()): boolean {
+  const current = now.getUTCMonth() + 1 >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return season < current;
+}

@@ -12,7 +12,7 @@
 // sites, which already cover them.
 import type { BoxScore, Coach, Fetcher, Gender, PlayerBio, Roster, RosterPlayer, ScheduleEntry, SeasonStats, SiteAdapter, SiteContext } from '../../../model.js';
 import { decodeNuxtData } from '../sidearm/devalue.js';
-import { isNotFound } from '../sidearm/common.js';
+import { isNotFound, isPastSeason } from '../sidearm/common.js';
 import { cleanName } from '../../../normalize/names.js';
 import { int } from '../../../normalize/num.js';
 
@@ -128,6 +128,8 @@ export const wmtAdapter: SiteAdapter = {
 
   async roster(fetcher: Fetcher, ctx: SiteContext): Promise<Roster> {
     const slugs = ctx.sportSlug ? [ctx.sportSlug] : wmtSportSlugs(ctx.gender);
+    // WMT pages carry only the season in play: a past season has no roster here (never this year's, filed as old).
+    if (isPastSeason(ctx.season)) return { players: [], coaches: [], sourceUrl: rosterUrl(ctx, slugs[0]!) };
     for (const slug of slugs) {
       const url = rosterUrl(ctx, slug);
       try {

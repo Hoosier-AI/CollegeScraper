@@ -22,6 +22,9 @@ import { withApi } from './shared.js';
 import { log } from '../../log.js';
 
 export type Tier = 0 | 1 | 2 | 3 | 4;
+/** Seasons back from the one in play that every competition gets in full (five seasons in all). */
+export const HISTORY_SEASONS = 4;
+
 type LeagueTierInfo = Pick<LeagueInfo, 'id' | 'country' | 'priority' | 'type'>;
 export const tierOf = (l: LeagueTierInfo): Tier =>
   isUsScene(l.id, l.country) ? 1 : l.priority < 100 ? 2 : l.type === 'league' && l.priority < 600 ? 3 : 4;
@@ -141,7 +144,9 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     if (tier === 2) add('injuries', k(c), 25, 1);
     // A club's season stats in its league (formations, streaks, goals by minute): every club, current season.
     if (tier === 2 || l.type === 'league') for (const t of teamsOf.get(k(c)) ?? []) add('team_stats', `${k(c)}|${t}`, 90, tier === 2 ? 14 : 30);
-    const detailDepth = tier === 2 ? 4 : 2;
+    // Five seasons everywhere (Evan, 2026-10-12): the season in play and four before it, for every competition, with
+    // matches, detail, tables and player totals. Two and more back wait behind every league's last season, and three
+    // and four back behind every league's two back; top competitions first within each.
     for (const s of input.seasons.get(l.id) ?? []) {
       const back = c - s.season;
       if (back <= 0) continue;
@@ -151,13 +156,14 @@ export function planTasks(input: PlanInput): TaskSeed[] {
         if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), 46, null);
         add('detail', k(s.season), 50, null);
         add('league_players', k(s.season), 60, null);
-      } else if (back <= detailDepth) {
-        add('season_fixtures', k(s.season), by(tier, 120, 130, 150), null);
-        if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), by(tier, 121, 131, 151), null);
-        add('detail', k(s.season), tier === 2 ? 170 : 180, null);
-        if (back <= 2) add('league_players', k(s.season), tier === 2 ? 200 : 220, null);
+      } else if (back <= HISTORY_SEASONS) {
+        const later = back > 2 ? 20 : 0;
+        add('season_fixtures', k(s.season), by(tier, 120, 130, 150) + later, null);
+        if (s.standings && !input.sourceTables?.has(k(s.season))) add('standings', k(s.season), by(tier, 121, 131, 151) + later, null);
+        add('detail', k(s.season), (tier === 2 ? 170 : 180) + later, null);
+        add('league_players', k(s.season), (tier === 2 ? 200 : 220) + later, null);
       }
-      if (back > 2 && tier === 2 && s.season >= 2015) add('league_players', k(s.season), 300, null);
+      if (back > HISTORY_SEASONS && tier === 2 && s.season >= 2015) add('league_players', k(s.season), 300, null);
     }
   }
 

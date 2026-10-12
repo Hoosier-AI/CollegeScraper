@@ -555,15 +555,17 @@ async function matchPreview(db: Db, fx: { id: number; league_id: number; season:
       out: ((out.data ?? []) as any[]).map((o) => ({ ...who(o.player_id, null), type: o.type ?? null, reason: o.reason ?? null })),
     };
   };
-  const [home, away, table] = await Promise.all([
+  const [home, away, table, pred] = await Promise.all([
     side(fx.home_team_id), side(fx.away_team_id),
     db.from('pro_standings').select('group_name,team_id,rank,points,played,win,draw,lose,gf,ga,gd,form').eq('league_id', fx.league_id).eq('season', fx.season),
+    db.from('pro_fixture_predictions').select('home_pct,draw_pct,away_pct,comparison,fetched_at').eq('fixture_id', fx.id).maybeSingle(),
   ]);
   const rows = (table.data ?? []) as any[];
   const groupOf = rows.find((r) => r.team_id === fx.home_team_id)?.group_name ?? rows.find((r) => r.team_id === fx.away_team_id)?.group_name ?? null;
   const group = rows.filter((r) => r.group_name === groupOf);
   const standing = (teamId: number) => { const r = group.find((x) => x.team_id === teamId); return r ? { rank: r.rank, points: r.points, played: r.played, win: r.win, draw: r.draw, lose: r.lose, gf: r.gf, ga: r.ga, gd: r.gd, form: r.form ?? null } : null; };
-  return { home, away, table: group.length ? { group: groupOf, teams: group.length, home: standing(fx.home_team_id), away: standing(fx.away_team_id) } : null };
+  const p = pred.data as { home_pct: number | null; draw_pct: number | null; away_pct: number | null; comparison: Record<string, [number | null, number | null]>; fetched_at: string } | null;
+  return { home, away, table: group.length ? { group: groupOf, teams: group.length, home: standing(fx.home_team_id), away: standing(fx.away_team_id) } : null, prediction: p ?? null };
 }
 
 // ---------- search and slugs ----------

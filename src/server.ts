@@ -147,7 +147,7 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   process.on('SIGINT', () => controller.abort());
   // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
   if (cfg.WORKERS_ENABLED !== '0') {
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', 'backfill', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
@@ -155,6 +155,9 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
   // A fifth for the pro bulk crawl (minutes per run): never behind the college crawl, never in front of live pro scores.
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_BULK_JOBS, idleMs: 15_000, lane: 'pro-bulk' }).catch((err) => { log.error({ err: String(err) }, 'pro-bulk worker crashed'); process.exit(1); });
+  // A past season's full backfill (2024, 2025: days of school-site pages): its own lane, so hourly, nightly and the
+  // standings never wait behind it. School sites keep their per-host limits in the shared fetch client.
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['backfill'], idleMs: 30_000, lane: 'history' }).catch((err) => { log.error({ err: String(err) }, 'history worker crashed'); process.exit(1); });
   // Box scores for earlier meetings a match page asked for: their own lane, so a backlog never holds up final-detail.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['h2h-detail'], idleMs: 15_000, lane: 'h2h' }).catch((err) => { log.error({ err: String(err) }, 'h2h worker crashed'); process.exit(1); });
   // The scraped and open sources (ASA, Wikipedia, openfootball ...): two workers that download, side by side (each

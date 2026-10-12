@@ -14,7 +14,7 @@ describe('crawl plan', () => {
   ]);
   const seasons = new Map([
     [253, cov(2026, 2025, 2024, 2023, 2022, 2021, 2012)], [256, [...cov(2026), { season: 2025, standings: false, players: false, injuries: false }]],
-    [39, cov(2026, 2025, 2024, 2023, 2022, 2021, 2014)], [183, cov(2026, 2025, 2024, 2023)],
+    [39, cov(2026, 2025, 2024, 2023, 2022, 2021, 2014)], [183, cov(2026, 2025, 2024, 2023, 2022, 2021)],
   ]);
   const leagueTeams = [
     { league_id: 253, season: 2026, team_id: 1 }, { league_id: 253, season: 2012, team_id: 11 }, { league_id: 256, season: 2026, team_id: 12 },
@@ -99,11 +99,17 @@ describe('crawl plan', () => {
     expect(get('injuries', '183|2026')).toBeUndefined();
     expect(get('detail', '39|2022')).toBeDefined();
     expect(get('detail', '39|2021')).toBeUndefined();
+    // Five seasons everywhere: four back for every competition, the oldest two behind every league's two back.
     expect(get('detail', '183|2024')).toBeDefined();
-    expect(get('detail', '183|2023')).toBeUndefined();
+    expect(get('detail', '183|2022')).toBeDefined();
+    expect(get('detail', '183|2021')).toBeUndefined();
+    expect(get('detail', '183|2023')!.priority).toBeGreaterThan(get('detail', '183|2024')!.priority);
+    expect(get('season_fixtures', '183|2022')).toBeDefined();
+    expect(get('league_players', '183|2022')).toBeDefined();
+    expect(get('league_players', '183|2021')).toBeUndefined();
+    expect(get('league_players', '39|2022')).toMatchObject({ every_days: null });
     expect(get('league_players', '39|2021')).toMatchObject({ priority: 300, every_days: null });
     expect(get('league_players', '39|2014')).toBeUndefined();
-    expect(get('league_players', '183|2023')).toBeUndefined();
   });
   it('other clubs: the best tier of their current competitions; last season\'s clubs are not re-read', () => {
     expect(get('squad', '30')).toMatchObject({ priority: 35, every_days: 7, tier: 2 });

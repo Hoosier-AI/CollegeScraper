@@ -15,7 +15,8 @@ export interface PreviewSide {
   scorers: (Person & { apps: number; minutes: number; goals: number; assists: number })[];
   out: (Person & { type: string | null; reason: string | null })[];
 }
-export interface ProPreview { home: PreviewSide; away: PreviewSide; table: { group: string | null; teams: number; home: Standing | null; away: Standing | null } | null }
+export interface ProPrediction { home_pct: number | null; draw_pct: number | null; away_pct: number | null; comparison: Record<string, [number | null, number | null]>; fetched_at: string }
+export interface ProPreview { home: PreviewSide; away: PreviewSide; table: { group: string | null; teams: number; home: Standing | null; away: Standing | null } | null; prediction?: ProPrediction | null }
 
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const TONE = { W: 'bg-win/20 text-win', D: 'bg-draw/20 text-draw', L: 'bg-loss/20 text-loss' } as const;
@@ -109,6 +110,50 @@ function TableRows({ m, table }: { m: ProMatch; table: NonNullable<ProPreview['t
   );
 }
 
+const COMPARE: [string, string][] = [['form', 'Form'], ['att', 'Attack'], ['def', 'Defence'], ['h2h', 'Head to head'], ['goals', 'Goals'], ['poisson_distribution', 'Goal model'], ['total', 'Overall']];
+
+/** API-Football's chances of each result, and its comparison of the two sides (each row adds up to 100). */
+function Chances({ m, p }: { m: ProMatch; p: ProPrediction }) {
+  const parts: [string, number | null, string][] = [[m.home.name, p.home_pct, 'bg-pitch-400'], ['Draw', p.draw_pct, 'bg-chalk-500'], [m.away.name, p.away_pct, 'bg-sky-400']];
+  const sum = parts.reduce((n, [, v]) => n + (v ?? 0), 0) || 1;
+  const rows = COMPARE.filter(([k]) => p.comparison?.[k]);
+  return (
+    <div className="frame space-y-3 p-3">
+      {sum > 1 && (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-3 text-sm">
+            {parts.map(([label, v], i) => (
+              <span key={label} className={`min-w-0 ${i === 0 ? 'text-left' : i === 1 ? 'text-center' : 'text-right'}`}>
+                <b className="display text-xl tnum text-chalk-100">{v ?? '–'}%</b><span className="block truncate text-2xs text-chalk-400">{i === 1 ? 'Draw' : `${label} win`}</span>
+              </span>
+            ))}
+          </div>
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-field-800" role="img" aria-label={`Chances: ${m.home.name} win ${p.home_pct ?? '?'}%, draw ${p.draw_pct ?? '?'}%, ${m.away.name} win ${p.away_pct ?? '?'}%`}>
+            {parts.map(([label, v, cls]) => (v ? <span key={label} className={cls} style={{ width: `${(v / sum) * 100}%` }} /> : null))}
+          </div>
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div className="space-y-1 border-t border-field-700 pt-2">
+          {rows.map(([k, label]) => {
+            const [h, a] = p.comparison[k]!; const t = (h ?? 0) + (a ?? 0) || 1;
+            return (
+              <div key={k} className="grid grid-cols-[2.25rem_minmax(0,1fr)_6.5rem_minmax(0,1fr)_2.25rem] items-center gap-2 text-xs tnum">
+                <span className={(h ?? 0) > (a ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-400'}>{h ?? '–'}%</span>
+                <span className="flex h-1.5 justify-end overflow-hidden rounded-full bg-field-800" aria-hidden><span className="rounded-full bg-pitch-400" style={{ width: `${((h ?? 0) / t) * 100}%` }} /></span>
+                <span className="truncate text-center text-chalk-400">{label}</span>
+                <span className="flex h-1.5 overflow-hidden rounded-full bg-field-800" aria-hidden><span className="rounded-full bg-sky-400/80" style={{ width: `${((a ?? 0) / t) * 100}%` }} /></span>
+                <span className={`text-right ${(a ?? 0) > (h ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-400'}`}>{a ?? '–'}%</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-2xs text-chalk-500">API-Football's prediction, updated {new Date(p.fetched_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.</p>
+    </div>
+  );
+}
+
 const asSide = (x: PreviewSide['last_xi']): ProSideDetail => ({ formation: x?.formation ?? null, coach: x?.coach ?? null, starters: x?.starters ?? [], bench: [], stats: null });
 
 /** Each side's latest starting XI we hold, on one pitch (a list when the provider gave no positions). */
@@ -162,6 +207,7 @@ export function MatchPreview({ m, p, h2h }: { m: ProMatch; p: ProPreview; h2h: P
   return (
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
       <div className="space-y-5">
+        {p.prediction && (p.prediction.home_pct != null || Object.keys(p.prediction.comparison ?? {}).length > 0) && <Section title="Chances"><Chances m={m} p={p.prediction} /></Section>}
         <Section title="Form">
           <div className="frame space-y-2 p-3">
             <FormRow team={m.home} form={p.home.form} />

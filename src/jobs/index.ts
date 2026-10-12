@@ -24,6 +24,7 @@ import './pro/standings.js';
 import './pro/backfill.js';
 import './pro/collegeLink.js';
 import './pro/plan.js';
+import './pro/predictions.js';
 // Other sources (American Soccer Analysis), mapped onto API-Football and checked against it.
 import './sources/asaSync.js';
 import './sources/sourceMap.js';

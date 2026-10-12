@@ -578,3 +578,29 @@ export function parseSidelined(items: { type?: string | null; start?: string | n
   }
   return [...out.values()];
 }
+
+/** predictions?fixture=: the provider's chances for an upcoming match and its side-by-side comparison. */
+export interface AfPrediction {
+  predictions?: { percent?: { home?: string | null; draw?: string | null; away?: string | null } | null } | null;
+  comparison?: Record<string, { home?: string | null; away?: string | null } | null> | null;
+}
+export interface PredictionRow { fixture_id: number; home_pct: number | null; draw_pct: number | null; away_pct: number | null; comparison: Record<string, [number | null, number | null]>; fetched_at: string }
+
+const pct = (s: string | null | undefined): number | null => {
+  const n = s == null ? NaN : Number(String(s).replace('%', '').trim());
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
+};
+const COMPARISON_KEYS = ['form', 'att', 'def', 'poisson_distribution', 'h2h', 'goals', 'total'] as const;
+
+/** One prediction row, or null when the answer carries no chances at all. */
+export function parsePrediction(fixtureId: number, item: AfPrediction | undefined, at: string): PredictionRow | null {
+  const p = item?.predictions?.percent;
+  const home = pct(p?.home), draw = pct(p?.draw), away = pct(p?.away);
+  const comparison: Record<string, [number | null, number | null]> = {};
+  for (const k of COMPARISON_KEYS) {
+    const c = item?.comparison?.[k];
+    if (c && (c.home != null || c.away != null)) comparison[k] = [pct(c.home), pct(c.away)];
+  }
+  if (home == null && draw == null && away == null && !Object.keys(comparison).length) return null;
+  return { fixture_id: fixtureId, home_pct: home, draw_pct: draw, away_pct: away, comparison, fetched_at: at };
+}
