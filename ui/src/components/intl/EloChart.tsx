@@ -76,6 +76,8 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
   const nations = useQuery({ queryKey: ['intl-nations'], queryFn: () => api<IntlNation[]>('/api/intl/nations'), staleTime: 600_000, enabled: allowCompare && !compareProp });
   const [active, setActive] = useState<number | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  // A marked moment the pointer has snapped to: held until the pointer moves well clear of it (and for a beat).
+  const lock = useRef<{ idx: number; at: number } | null>(null);
 
   const d = main.data;
   const from = startOf(range);
@@ -83,7 +85,7 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
   const otherPts = useMemo(() => (other.data?.points ?? []).filter((p) => p.date >= from), [other.data, from]);
   const ranks = useMemo(() => (d?.ranks ?? []).filter((r) => `${r.m}-01` >= from.slice(0, 7)), [d, from]);
   const otherRanks = useMemo(() => (other.data?.ranks ?? []).filter((r) => `${r.m}-01` >= from.slice(0, 7)), [other.data, from]);
-  useEffect(() => { setActive(null); }, [range, metric, slug, compareSlug]);
+  useEffect(() => { setActive(null); lock.current = null; }, [range, metric, slug, compareSlug]);
 
   // Drawn at the container's own width so the labels stay readable on a phone instead of shrinking with the SVG.
   const [boxW, setBoxW] = useState(720);
@@ -126,15 +128,16 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
     return out;
   }, [geo]);
 
-  const nearest = (clientX: number) => {
+  const nearest = (clientX: number, clientY: number) => {
     const el = box.current?.querySelector('svg');
     if (!el || !geo || !pts.length) return null;
     const rect = el.getBoundingClientRect();
-    const vx = ((clientX - rect.left) / rect.width) * W;
+    const vx = ((clientX - rect.left) / rect.width) * W, vy = ((clientY - rect.top) / rect.height) * H;
     const target = geo.t0 + ((vx - L) / (W - L - R)) * (geo.t1 - geo.t0);
     let lo = 0, hi = pts.length - 1;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (ts(pts[mid]!.date) < target) lo = mid + 1; else hi = mid; }
-    return lo > 0 && Math.abs(ts(pts[lo - 1]!.date) - target) < Math.abs(ts(pts[lo]!.date) - target) ? lo - 1 : lo;
+    const idx = lo > 0 && Math.abs(ts(pts[lo - 1]!.date) - target) < Math.abs(ts(pts[lo]!.date) - target) ? lo - 1 : lo;
+    return { idx, vx, vy };
   };
   const onKey = (e: React.KeyboardEvent) => {
     if (!pts.length) return;
@@ -154,9 +157,35 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
   const titles = d.moments.titles.filter((t) => t.date >= from);
   const bestRank = d.moments.best_rank;
   const markDate = (date: string | null | undefined) => (date ? pts.find((q) => q.date >= date) ?? null : null);
-  const bestPt = bestRank ? pts.find((q) => q.date.slice(0, 7) >= bestRank.month) ?? null : null;
+  // The month-end table that gave the best rank came after the month's last match.
+  const bestPt = bestRank ? pts.filter((q) => q.date.slice(0, 7) <= bestRank.month).at(-1) ?? pts.find((q) => q.date.slice(0, 7) >= bestRank.month) ?? null : null;
   const gainPt = markDate(d.moments.biggest_gain), lossPt = markDate(d.moments.biggest_loss);
   const yOf = (q: EloPoint) => (metric === 'rating' ? geo.y(q.rating) : rankAt(d.ranks, q.date) != null ? geo.y(rankAt(d.ranks, q.date)!) : null);
+  // The marked moments, for snapping and for naming them in the card.
+  // `dy`: where the marker is drawn relative to the line (the gain triangle above it, the drop below).
+  const markers: { pt: EloPoint; label: string; dy: number }[] = [
+    ...(bestPt && bestRank ? [{ pt: bestPt, label: `Best world rank: #${bestRank.rank}, first reached in ${monthLabel(bestRank.month)}`, dy: 0 }] : []),
+    ...titles.flatMap((t) => { const q = markDate(t.date); return q ? [{ pt: q, label: `World Cup won, ${t.date.slice(0, 4)}`, dy: 0 }] : []; }),
+    ...(gainPt ? [{ pt: gainPt, label: 'Biggest one-match gain', dy: -6 }] : []),
+    ...(lossPt ? [{ pt: lossPt, label: 'Biggest one-match drop', dy: 6 }] : []),
+  ];
+  const SNAP = 16, RELEASE = 32, HOLD_MS = 350;
+  const onPointer = (e: React.PointerEvent) => {
+    const hit = nearest(e.clientX, e.clientY);
+    if (!hit) return;
+    const near = markers.map((mk) => { const yy = yOf(mk.pt); return { idx: pts.indexOf(mk.pt), dist: yy == null ? Infinity : Math.hypot(geo.x(mk.pt.date) - hit.vx, yy + mk.dy - hit.vy) }; })
+      .filter((c) => c.idx >= 0).sort((a, b) => a.dist - b.dist)[0];
+    const held = lock.current;
+    if (held) {
+      const q = pts[held.idx], yy = q ? yOf(q) : null;
+      const dist = q && yy != null ? Math.hypot(geo.x(q.date) - hit.vx, yy - hit.vy) : Infinity;
+      if (dist <= RELEASE || Date.now() - held.at < HOLD_MS) { setActive(held.idx); return; }
+      lock.current = null;
+    }
+    if (near && near.dist <= SNAP) { lock.current = { idx: near.idx, at: Date.now() }; setActive(near.idx); return; }
+    setActive(hit.idx);
+  };
+  const moment = p ? markers.filter((mk) => mk.pt === p).map((mk) => mk.label) : [];
   const years = (() => { const a = Number(new Date(geo.t0).getUTCFullYear()), b = Number(new Date(geo.t1).getUTCFullYear()); const span = (b - a) * (720 / W), step = span > 80 ? 20 : span > 30 ? 10 : span > 12 ? 4 : span > 5 ? 2 : 1; const out: number[] = []; for (let yr = Math.ceil(a / step) * step; yr <= b; yr += step) out.push(yr); return out; })();
   const ys = p ? yearSummary(d.points, p.date.slice(0, 4)) : null;
   const reason = p ? eloReason(p) : null;
@@ -168,7 +197,7 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
   return (
     <figure className="frame space-y-2 p-3" aria-label={`${d.nation.name}: Plaibook Elo`}>
       <figcaption className="flex flex-wrap items-center justify-between gap-2 text-xs text-chalk-400">
-        <span>{caption ?? `${d.nation.name}: Plaibook Elo`}{bestRank ? <span className="ml-2 text-note">best world rank #{bestRank.rank} ({monthLabel(bestRank.month)})</span> : null}</span>
+        <span>{caption ?? `${d.nation.name}: Plaibook Elo`}{bestRank ? <span className="ml-2 text-note">best world rank #{bestRank.rank} (first {monthLabel(bestRank.month)})</span> : null}</span>
         <span className="flex flex-wrap items-center gap-2">
           <SegmentedControl label="Rating or world rank" size="sm" value={metric} onChange={setMetric} options={[{ value: 'rating', label: 'Rating' }, { value: 'rank', label: 'World rank' }]} />
           <SegmentedControl label="Range" size="sm" value={range} onChange={setRange} options={RANGES} />
@@ -198,19 +227,20 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
           {titles.map((t) => { const q = markDate(t.date); const yy = q ? yOf(q) : null; return q && yy != null ? <g key={t.date}><circle cx={geo.x(q.date)} cy={yy} r={5} className="fill-note stroke-field-900" strokeWidth={1.5} /><text x={geo.x(q.date)} y={yy - 8} textAnchor="middle" className="fill-note text-[9px] font-semibold">{t.date.slice(0, 4)}</text></g> : null; })}
           {gainPt && yOf(gainPt) != null && <path d={`M${geo.x(gainPt.date)},${yOf(gainPt)! - 9} l-4,6 l8,0 z`} className="fill-win" />}
           {lossPt && yOf(lossPt) != null && <path d={`M${geo.x(lossPt.date)},${yOf(lossPt)! + 9} l-4,-6 l8,0 z`} className="fill-loss" />}
-          {bestPt && yOf(bestPt) != null && <circle cx={geo.x(bestPt.date)} cy={yOf(bestPt)!} r={4.5} className="fill-none stroke-note" strokeWidth={2} />}
+          {bestPt && yOf(bestPt) != null && <circle cx={geo.x(bestPt.date)} cy={yOf(bestPt)!} r={p === bestPt ? 8 : 4.5} className="fill-none stroke-note transition-[r] duration-150" strokeWidth={2} />}
           {p && <>
             <line x1={ax} x2={ax} y1={T} y2={H - B} className="stroke-chalk-500" strokeDasharray="3 3" strokeWidth={1} />
             {ay != null && <circle cx={ax} cy={ay} r={4.5} className="fill-pitch-300 stroke-field-900" strokeWidth={2} />}
           </>}
           <rect x={L} y={T} width={W - L - R} height={H - T - B} className="fill-transparent" style={{ cursor: 'crosshair' }}
-            onPointerMove={(e) => { const i = nearest(e.clientX); if (i != null) setActive(i); }} onPointerDown={(e) => { const i = nearest(e.clientX); if (i != null) setActive(i); }}
-            onPointerLeave={(e) => { if (e.pointerType === 'mouse') setActive(null); }} />
+            onPointerMove={onPointer} onPointerDown={onPointer}
+            onPointerLeave={(e) => { lock.current = null; if (e.pointerType === 'mouse') setActive(null); }} />
         </svg>
         {p && reason && (
           <div role="status" aria-live="polite"
             className="z-10 mt-2 w-full rounded-lg border border-field-600 bg-field-900/95 p-3 text-xs text-chalk-300 shadow-xl shadow-black/40 sm:pointer-events-none sm:absolute sm:top-2 sm:mt-0 sm:w-80"
             style={typeof window !== 'undefined' && window.innerWidth >= 640 ? (tipLeft > 55 ? { right: `${100 - tipLeft + 2}%` } : { left: `${tipLeft + 2}%` }) : undefined}>
+            {moment.map((label) => <p key={label} className="mb-1.5 rounded border border-note/40 bg-note/10 px-2 py-1 text-2xs font-semibold text-note">{label}</p>)}
             <p className="flex justify-between gap-2 text-2xs text-chalk-500"><span>{fmt.date(p.date)}</span><span className="truncate">{p.tournament}</span></p>
             <p className="mt-1 text-sm font-semibold text-chalk-100">
               {p.gf != null && p.ga != null ? `${resultWord(p)} ${p.gf}–${p.ga} ${p.venue === 'away' ? 'at' : 'vs'} ${p.opponent.name}` : `vs ${p.opponent.name}`}

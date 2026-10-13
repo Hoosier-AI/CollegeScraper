@@ -12,13 +12,23 @@
 // Spain stood 65 points above the published ratings, Hungary's 1954 side 250 below its peak, and every nation's
 // "best" fell in the 2020s (2026-10-13). With it, today's ratings are within about 25 points of the published ones.
 //
-// Ratings from different eras do not compare (the pool of sides changes), so a side's best is its best world rank:
-// see bestRanks.
+// Regions that seldom meet: a side's rating is its own Elo plus a level for its confederation. A result between two
+// confederations moves the winner's rating by the full K * G * (W - We) as above, a tenth of it through the level, so
+// its whole confederation shares a little of what that result says about the region. Without the level, sides in a
+// region that mostly played itself kept the 1500 they started from: Ghana stood first in the world in 1966, Mexico in
+// 1965 and 1990, and today Oceania sat ~190 points, CONCACAF ~70 and Asia ~55 points above the published ratings.
+// Measured against the published ratings (2026-10-13): each side's best world rank, log error 0.47 -> 0.25 over 92
+// sides; today's ratings, average gap +-47 -> +-26 points over 205 sides; the order of today's top 50 unchanged.
+//
+// Ratings from different eras do not compare (the pool of sides changes), so a side's best is its best world rank,
+// from month-end tables of the same ratings the charts show: see RankRules.
 
 export const START = 1500;
 export const HOME_EDGE = 100;
 /** Matches before a side's rating moves the sides it plays. */
 export const PROVISIONAL = 15;
+/** The share of a result between two confederations that moves the confederation's level. */
+export const CONFED_SHARE = 0.1;
 
 // Tournament names as martj42 and API-Football write them ("UEFA Euro" / "Euro Championship", "World Cup - Women").
 const WORLD_CUP = /^(FIFA )?(Women's )?World Cup( - Women)?$/i;
@@ -53,14 +63,45 @@ export interface EloStep {
 const scored = (matches: EloMatch[]) => [...matches].filter((m) => m.home_score != null && m.away_score != null).sort((a, b) => a.date.localeCompare(b.date));
 const resultOf = (m: EloMatch) => { const d = m.home_score! - m.away_score!; return { diff: d, w: d > 0 ? 1 : d < 0 ? 0 : 0.5 }; };
 
-/** Ratings after every match, in date order (the input order within a day). Matches without a score are skipped. */
-export function runElo(matches: EloMatch[], o: { provisional?: number } = {}): { steps: EloStep[]; ratings: Map<string, number>; played: Map<string, { n: number; last: string }> } {
-  const provisional = o.provisional ?? PROVISIONAL;
-  const ratings = new Map<string, number>();
+/** Which sides a month-end world ranking table holds: FIFA members (`members`) with `minMatches`+ matches (where Elo
+ *  ratings settle), a match in the last four years and `minInter`+ matches ever against other confederations, in a
+ *  table of `minPool`+ such sides (so no 19th-century "world" of four). The table for the last month (or `asOf`'s) is
+ *  today's world ranking. */
+export interface RankRules { members: Set<string>; minMatches?: number; minInter?: number; minPool?: number; asOf?: string }
+/** A side's best world rank and the first month it held it. */
+export interface BestRank { rank: number; month: string }
+
+/** Ratings after every match, in date order (the input order within a day). Matches without a score are skipped. With
+ *  `confederations`, each side's rating carries its confederation's level; with `ranks`, the month-end world rank
+ *  tables too: every side's rank history, its best rank, and today's rank (`current`). */
+export function runElo(matches: EloMatch[], o: { provisional?: number; confederations?: Map<string, string>; share?: number; ranks?: RankRules } = {}): {
+  steps: EloStep[]; ratings: Map<string, number>; played: Map<string, { n: number; last: string }>;
+  best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]>; current: Map<string, number>; levels: Map<string, number>;
+} {
+  const provisional = o.provisional ?? PROVISIONAL, share = o.share ?? CONFED_SHARE, confs = o.confederations ?? new Map<string, string>();
+  const team = new Map<string, number>(), levels = new Map<string, number>(), inter = new Map<string, number>();
+  const rating = (t: string) => (team.get(t) ?? START) + (levels.get(confs.get(t) ?? '') ?? 0);
   const played = new Map<string, { n: number; last: string }>();
   const steps: EloStep[] = [];
+  const best = new Map<string, BestRank>(), history = new Map<string, { m: string; r: number }[]>(), current = new Map<string, number>();
+  const rules = o.ranks;
+  const table = (month: string) => {
+    if (!rules) return;
+    const since4 = `${Number(month.slice(0, 4)) - 4}${month.slice(4)}`;
+    const pool = [...team.keys()].filter((t) => rules.members.has(t) && (played.get(t)?.n ?? 0) >= (rules.minMatches ?? 30) && (played.get(t)?.last ?? '') >= since4 && (inter.get(t) ?? 0) >= (rules.minInter ?? 3))
+      .map((t) => [t, rating(t)] as const).sort((a, b) => b[1] - a[1]);
+    if (pool.length < (rules.minPool ?? 20)) return;
+    pool.forEach(([t], i) => {
+      const b = best.get(t);
+      if (!b || i + 1 < b.rank) best.set(t, { rank: i + 1, month });
+      const h = history.get(t) ?? []; h.push({ m: month, r: i + 1 }); history.set(t, h);
+    });
+  };
+  let month = '';
   for (const m of scored(matches)) {
-    const rh = ratings.get(m.home) ?? START, ra = ratings.get(m.away) ?? START;
+    const mm = m.date.slice(0, 7);
+    if (mm !== month) { if (month) table(month); month = mm; }
+    const rh = rating(m.home), ra = rating(m.away);
     const dr = rh + (m.neutral ? 0 : HOME_EDGE) - ra;
     const { diff, w } = resultOf(m);
     const k = kFactor(m.tournament, m.date), g = goalFactor(diff), we = expected(dr);
@@ -68,23 +109,32 @@ export function runElo(matches: EloMatch[], o: { provisional?: number } = {}): {
     // A provisional side's results move only its own rating against an established side.
     const ph = (played.get(m.home)?.n ?? 0) < provisional, pa = (played.get(m.away)?.n ?? 0) < provisional;
     const dh = pa && !ph ? 0 : change, da = ph && !pa ? 0 : -change;
-    ratings.set(m.home, rh + dh); ratings.set(m.away, ra + da);
+    // Between two established sides of different confederations, a share of the move goes through the levels.
+    const ch = confs.get(m.home), ca = confs.get(m.away), across = !!ch && !!ca && ch !== ca;
+    const viaLevel = across && !ph && !pa ? share : 0;
+    team.set(m.home, (team.get(m.home) ?? START) + dh * (1 - viaLevel)); team.set(m.away, (team.get(m.away) ?? START) + da * (1 - viaLevel));
+    if (viaLevel) { levels.set(ch!, (levels.get(ch!) ?? 0) + viaLevel * dh); levels.set(ca!, (levels.get(ca!) ?? 0) + viaLevel * da); }
+    if (across) for (const side of [m.home, m.away]) inter.set(side, (inter.get(side) ?? 0) + 1);
     for (const side of [m.home, m.away]) { const p = played.get(side) ?? { n: 0, last: m.date }; p.n += 1; p.last = m.date; played.set(side, p); }
     const common = { date: m.date, tournament: m.tournament, k, goalFactor: g };
     steps.push({ ...common, nation: m.home, rating: rh + dh, delta: dh, opponent: m.away, gf: m.home_score!, ga: m.away_score!, oppRating: ra, expected: we, venue: m.neutral ? 'neutral' : 'home' });
     steps.push({ ...common, nation: m.away, rating: ra + da, delta: da, opponent: m.home, gf: m.away_score!, ga: m.home_score!, oppRating: rh, expected: 1 - we, venue: m.neutral ? 'neutral' : 'away' });
   }
-  return { steps, ratings, played };
+  if (month) table(month);
+  // Today's table: the month of `asOf` (when later than the last result), whose last row per side is its rank now.
+  const now = (o.ranks?.asOf ?? '').slice(0, 7);
+  if (rules && now > month) table(now);
+  const lastMonth = now > month ? now : month;
+  for (const [t, h] of history) { const l = h[h.length - 1]!; if (l.m === lastMonth) current.set(t, l.r); }
+  const ratings = new Map([...team.keys()].map((t) => [t, rating(t)]));
+  return { steps, ratings, played, best, history, current, levels };
 }
 
 /** FIFA members among the results: every side that has played the World Cup or its qualifiers. */
 export const worldCupSides = (matches: { home: string; away: string; tournament: string }[]) =>
   new Set(matches.filter((m) => /world cup/i.test(m.tournament)).flatMap((m) => [m.home, m.away]));
 
-// ---------- best world rank ----------
-/** A side's best world rank: the month, and its lead over the next side then (ties go to the most dominant spell). */
-export interface BestRank { rank: number; month: string; margin: number }
-
+// ---------- confederations ----------
 /** Each side's confederation, from the continental competitions it has played (the most often). */
 const CONTINENT: [RegExp, string][] = [
   [/UEFA|\bEuro\b|European/i, 'UEFA'], [/Copa Am|CONMEBOL|South American/i, 'CONMEBOL'],
@@ -99,54 +149,6 @@ export function confederationsFrom(matches: { home: string; away: string; tourna
     for (const t of [m.home, m.away]) { const v = votes.get(t) ?? new Map<string, number>(); v.set(c, (v.get(c) ?? 0) + 1); votes.set(t, v); }
   }
   return new Map([...votes].map(([t, v]) => [t, [...v].sort((a, b) => b[1] - a[1])[0]![0]]));
-}
-
-/**
- * Best world ranks from month-end tables. Before the 1970s the regions seldom met, and each started from the same 1500,
- * so a strong side in a weak region ranked among the world's best (Costa Rica first in 1965). The tables add a level
- * per confederation that only results between confederations move (a quarter of each such result), and rank only
- * sides whose place is earned against the world: 30+ matches (where Elo ratings settle), a match in the last four
- * years, 5+ matches against other confederations in the last eight, in a table of 20+ such sides. The ratings shown
- * stay the plain Elo above (the published method); this only decides the best rank (2026-10-13).
- */
-export function bestRanks(matches: EloMatch[], o: { members: Set<string>; confederations: Map<string, string>; lambda?: number; minMatches?: number; minInter?: number; minPool?: number }): { best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]> } {
-  const lambda = o.lambda ?? 0.25, minMatches = o.minMatches ?? 30, minInter = o.minInter ?? 5, minPool = o.minPool ?? 20;
-  const team = new Map<string, number>(), level = new Map<string, number>(), n = new Map<string, number>(), last = new Map<string, string>(), inter = new Map<string, string[]>();
-  const rating = (t: string) => (team.get(t) ?? START) + (level.get(o.confederations.get(t) ?? '') ?? 0);
-  const best = new Map<string, BestRank>();
-  // Every month-end rank of every ranked side (the chart's World rank view; its minimum is the best rank).
-  const history = new Map<string, { m: string; r: number }[]>();
-  const table = (month: string) => {
-    const y = Number(month.slice(0, 4));
-    const since4 = `${y - 4}${month.slice(4)}`, since8 = `${y - 8}${month.slice(4)}`;
-    const pool = [...team.keys()].filter((t) => o.members.has(t) && (n.get(t) ?? 0) >= minMatches && (last.get(t) ?? '') >= since4 && (inter.get(t) ?? []).filter((d) => d >= since8).length >= minInter)
-      .map((t) => [t, rating(t)] as const).sort((a, b) => b[1] - a[1]);
-    if (pool.length < minPool) return;
-    pool.forEach(([t, r], i) => {
-      const margin = r - (pool[i + 1]?.[1] ?? r);
-      const b = best.get(t);
-      if (!b || i + 1 < b.rank || (i + 1 === b.rank && margin > b.margin)) best.set(t, { rank: i + 1, month, margin });
-      const h = history.get(t) ?? []; h.push({ m: month, r: i + 1 }); history.set(t, h);
-    });
-  };
-  let month = '';
-  for (const m of scored(matches)) {
-    const mm = m.date.slice(0, 7);
-    if (mm !== month) { if (month) table(month); month = mm; }
-    const { diff, w } = resultOf(m);
-    const change = kFactor(m.tournament, m.date) * goalFactor(diff) * (w - expected(rating(m.home) + (m.neutral ? 0 : HOME_EDGE) - rating(m.away)));
-    const ph = (n.get(m.home) ?? 0) < PROVISIONAL, pa = (n.get(m.away) ?? 0) < PROVISIONAL;
-    team.set(m.home, (team.get(m.home) ?? START) + (pa && !ph ? 0 : change));
-    team.set(m.away, (team.get(m.away) ?? START) - (ph && !pa ? 0 : change));
-    const ch = o.confederations.get(m.home), ca = o.confederations.get(m.away);
-    if (ch && ca && ch !== ca) {
-      if (!ph && !pa) { level.set(ch, (level.get(ch) ?? 0) + lambda * change); level.set(ca, (level.get(ca) ?? 0) - lambda * change); }
-      for (const t of [m.home, m.away]) inter.set(t, [...(inter.get(t) ?? []), m.date]);
-    }
-    for (const t of [m.home, m.away]) { n.set(t, (n.get(t) ?? 0) + 1); last.set(t, m.date); }
-  }
-  if (month) table(month);
-  return { best, history };
 }
 
 // ---------- win, draw, win ----------

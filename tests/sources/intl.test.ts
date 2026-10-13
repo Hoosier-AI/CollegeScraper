@@ -5,7 +5,7 @@ import { applyShootouts, parseGoals, parseResults, parseShootouts, TOURNAMENT_LE
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, wcdbCodes } from '../../src/sources/intl/worldcupDb.js';
 import { parseWorldCupTxt } from '../../src/sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../src/sources/intl/nations.js';
-import { bestRanks, confederationsFrom, drawModel, expected, goalFactor, kFactor, predict, PROVISIONAL, runElo, worldCupSides } from '../../src/sources/intl/elo.js';
+import { CONFED_SHARE, confederationsFrom, drawModel, expected, goalFactor, kFactor, predict, PROVISIONAL, runElo, worldCupSides } from '../../src/sources/intl/elo.js';
 import { dedupeResults } from '../../src/jobs/sources/intl.js';
 
 const RESULTS = `date,home_team,away_team,home_score,away_score,tournament,city,country,neutral
@@ -142,18 +142,37 @@ describe('Plaibook Elo', () => {
     expect(after.get('a')).toBeCloseTo(before.get('a')!);
     expect(after.get('n')!).toBeLessThan(1500);
   });
-  it("a side's best is its best month-end world rank, ties to its most dominant spell", () => {
+  it("a side's best is its best month-end world rank, the first month it held it; today's rank is the last row", () => {
     const sides = Array.from({ length: 12 }, (_, i) => `s${i}`);
     const games: Parameters<typeof runElo>[0] = [];
     let day = 0;
     const date = () => new Date(Date.UTC(2000, 0, 1) + day++ * 86400_000).toISOString().slice(0, 10);
     // A round robin three times over (everyone established), s0 winning every game.
     for (let r = 0; r < 3; r++) for (let i = 0; i < sides.length; i++) for (let j = i + 1; j < sides.length; j++) games.push({ date: date(), home: sides[i]!, away: sides[j]!, home_score: i === 0 ? 3 : 1, away_score: i === 0 ? 0 : 1, tournament: 'FIFA World Cup qualification', neutral: true });
-    const { best, history } = bestRanks(games, { members: worldCupSides(games), confederations: new Map(), minInter: 0, minPool: 10 });
+    const { best, history, current, ratings } = runElo(games, { ranks: { members: worldCupSides(games), minInter: 0, minPool: 10, asOf: '2001-03-01' } });
     expect(best.get('s0')?.rank).toBe(1);
-    expect(best.get('s0')!.margin).toBeGreaterThan(0);
+    // s0 led from the first table on: its best is dated then, not later.
+    expect(best.get('s0')!.month).toBe(history.get('s0')![0]!.m);
     // The best rank is the minimum of the month-end history, for every side.
     for (const [t, b] of best) expect(Math.min(...history.get(t)!.map((h) => h.r))).toBe(b.rank);
+    // Today's table (asOf) is the last row of every history and orders the sides by the ratings shown.
+    for (const [t, r] of current) expect(history.get(t)!.at(-1)).toEqual({ m: '2001-03', r });
+    const order = [...current].sort((a, b) => a[1] - b[1]).map(([t]) => ratings.get(t)!);
+    expect(order).toEqual([...order].sort((a, b) => b - a));
+  });
+  it('a result between confederations moves the side by K x G x (W - We), a share of it through its confederation', () => {
+    const confederations = new Map([['a', 'UEFA'], ['a2', 'UEFA'], ['b', 'CAF']]);
+    // Everyone established (draws among themselves), then a beats b.
+    const settle = ['a', 'a2', 'b'].flatMap((t, i) => Array.from({ length: PROVISIONAL }, (_, j) => ({ date: `1999-0${i + 1}-${String(j + 1).padStart(2, '0')}`, home: t, away: `x${i}`, home_score: 0, away_score: 0, tournament: 'Friendly', neutral: true })));
+    const games = [...settle, { date: '2000-01-01', home: 'a', away: 'b', home_score: 1, away_score: 0, tournament: 'Friendly', neutral: true }];
+    const run = runElo(games, { confederations });
+    const step = run.steps.at(-2)!;
+    expect(step.delta).toBeCloseTo(20 * (1 - step.expected));
+    expect(step.rating - step.delta).toBeCloseTo(1500);
+    expect(run.ratings.get('a')).toBeCloseTo(1500 + step.delta);
+    // a2 never played b, and gains the confederation's share.
+    expect(run.ratings.get('a2')).toBeCloseTo(1500 + CONFED_SHARE * step.delta);
+    expect(run.levels.get('UEFA')).toBeCloseTo(-run.levels.get('CAF')!);
   });
   it('each move carries its reasons: score, expected result, weight, goal factor, venue', () => {
     const { steps } = runElo([{ date: '2021-06-06', home: 'united-states', away: 'mexico', home_score: 3, away_score: 2, tournament: 'CONCACAF Nations League', neutral: true }]);

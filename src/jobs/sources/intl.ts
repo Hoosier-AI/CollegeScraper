@@ -19,7 +19,7 @@ import { applyShootouts, NON_FIFA_TOURNAMENT, parseGoals, parseResults, parseSho
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, WCDB_BASE, WCDB_SOURCE, wcdbCodes } from '../../sources/intl/worldcupDb.js';
 import { parseWorldCupTxt, WC_FOLDERS, WC_TXT_BASE, WC_TXT_SOURCE } from '../../sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../sources/intl/nations.js';
-import { bestRanks, confederationsFrom, DRAW_MODEL_KEY, drawModel, runElo, worldCupSides } from '../../sources/intl/elo.js';
+import { confederationsFrom, DRAW_MODEL_KEY, drawModel, runElo, worldCupSides } from '../../sources/intl/elo.js';
 
 const hash = (s: string) => createHash('sha1').update(s).digest('hex');
 
@@ -306,8 +306,9 @@ async function intlMatch(ctx: JobContext): Promise<void> {
 
 // ---------- intl-elo ----------
 /** Bumped when the Elo method or what it stores changes (v2 2026-10-13: provisional sides, Olympic weight, best rank;
- *  v3: each move's reasons, rank history, draw model). */
-const ELO_METHOD = 'v3';
+ *  v3: each move's reasons, rank history, draw model; v4: confederation levels in the rating, one ranking for the
+ *  table, the chart and the best rank). */
+const ELO_METHOD = 'v4';
 /** Every senior result once (the best source of each match), without switched-off sources. */
 export async function intlResults(db: Db, gender: 'm' | 'w', o: { nation?: string } = {}) {
   const off = await sourcesOff(db);
@@ -332,15 +333,22 @@ export function dedupeResults<T extends { source: string; date: string; home: st
 }
 
 async function intlElo(ctx: JobContext): Promise<void> {
+  const at = new Date().toISOString(), today = at.slice(0, 10);
   for (const gender of ['m', 'w'] as const) {
-    const results = (await intlResults(ctx.db, gender)).filter((r) => !NON_FIFA_TOURNAMENT.test(r.tournament));
+    // A result dated after today is the provider's error (a 2027 fixture marked full time): never counted.
+    const results = (await intlResults(ctx.db, gender)).filter((r) => !NON_FIFA_TOURNAMENT.test(r.tournament) && r.date <= today);
     // The method's version is part of the key: a change to the method recomputes everything once.
-    const c = await changed(ctx, `elo-${gender}-${ELO_METHOD}`, [JSON.stringify(results.map((r) => [r.date, r.home, r.away, r.home_score, r.away_score, r.tournament, r.neutral]))]);
+    const c = await changed(ctx, `elo-${gender}-${ELO_METHOD}`, [JSON.stringify(results.map((r) => [r.date, r.home, r.away, r.home_score, r.away_score, r.tournament, r.neutral])), today.slice(0, 7)]);
     if (!c.changed) { ctx.note(`${gender}_unchanged`, 'no new results'); continue; }
-    const { steps, ratings, played } = runElo(results);
-    // Women's internationals are thinner on record (mostly since 2010): looser bars for a ranked month.
-    const { best: bestRank, history: rankHistory } = bestRanks(results, { members: worldCupSides(results), confederations: confederationsFrom(results), ...(gender === 'w' ? { minMatches: 15, minInter: 3, minPool: 10 } : {}) });
-    const at = new Date().toISOString();
+    // Ranked: FIFA members. Men, every side that has played the World Cup or its qualifiers; women, also every national
+    // side in the provider's data (Basque Country and Zanzibar play friendlies too, and are not ranked). Women's
+    // internationals are thinner on record (mostly since 2010): looser bars.
+    const members = worldCupSides(results);
+    if (gender === 'w') for (const n of await selectAll<{ key: string }>(ctx.db, 'intl_nations', 'key', (q) => q.not('team_w', 'is', null))) members.add(n.key);
+    const { steps, ratings, played, best: bestRank, history: rankHistory, current } = runElo(results, {
+      confederations: confederationsFrom(results),
+      ranks: { members, asOf: today, ...(gender === 'w' ? { minMatches: 10, minInter: 0, minPool: 10 } : {}) },
+    });
     const r1 = (v: number) => Math.round(v * 10) / 10;
     ctx.inc(`${gender}_steps`, await upsertChunked(ctx.db, 'intl_elo', steps.map((s) => ({ gender, nation: s.nation, date: s.date, opponent: s.opponent, rating: r1(s.rating), delta: r1(s.delta), tournament: s.tournament,
       gf: s.gf, ga: s.ga, opp_rating: r1(s.oppRating), expected: Math.round(s.expected * 1000) / 1000, k: s.k, goal_factor: Math.round(s.goalFactor * 1000) / 1000, venue: s.venue, updated_at: at })),
@@ -350,14 +358,9 @@ async function intlElo(ctx: JobContext): Promise<void> {
     ctx.inc(`${gender}_rank_series`, await upsertChunked(ctx.db, 'intl_elo_ranks', [...rankHistory].map(([nation, ranks]) => ({ gender, nation, ranks, updated_at: at })), { onConflict: 'gender,nation', chunk: 50 }));
     await ctx.db.from('intl_elo_ranks').delete().eq('gender', gender).lt('updated_at', at);
     await kvSet(ctx.db, DRAW_MODEL_KEY(gender), drawModel(steps));
-    // Current rating, rank among FIFA members that played in the last four years, a year's change, the best ever. A
-    // FIFA member: men, a World Cup qualifier in the last eight years (every member enters); women, a national side in
-    // the provider's data (Basque Country and Zanzibar play friendlies too, and are not ranked).
-    const eightYears = new Date(Date.now() - 8 * 365 * 86400_000).toISOString().slice(0, 10);
-    const fifa = gender === 'm'
-      ? new Set(results.filter((r) => r.date >= eightYears && /^(FIFA )?World Cup.*qualif/i.test(r.tournament)).flatMap((r) => [r.home, r.away]))
-      : new Set((await selectAll<{ key: string }>(ctx.db, 'intl_nations', 'key', (q) => q.not('team_w', 'is', null))).map((n) => n.key));
-    const today = at.slice(0, 10), yearAgo = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10), fourYears = new Date(Date.now() - 4 * 365 * 86400_000).toISOString().slice(0, 10);
+    // Current rating and rank (the last row of the same month-end tables as the chart, so the two always agree), a
+    // year's change, the highest rating and the best world rank (the first month it was held).
+    const yearAgo = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10);
     const then = new Map<string, number>(), best = new Map<string, { r: number; d: string }>();
     for (const s of steps) {
       if (s.date <= yearAgo) then.set(s.nation, s.rating);
@@ -365,11 +368,9 @@ async function intlElo(ctx: JobContext): Promise<void> {
       if (!b || s.rating > b.r) best.set(s.nation, { r: s.rating, d: s.date });
     }
     const rows = [...ratings].map(([nation, rating]) => ({ gender, nation, rating: Math.round(rating * 10) / 10, matches: played.get(nation)!.n, last_match: played.get(nation)!.last, change_1y: then.has(nation) ? Math.round((rating - then.get(nation)!) * 10) / 10 : null,
-      best: Math.round(best.get(nation)!.r * 10) / 10, best_date: best.get(nation)!.d, rank: null as number | null, updated_at: at,
+      best: Math.round(best.get(nation)!.r * 10) / 10, best_date: best.get(nation)!.d, rank: current.get(nation) ?? null, updated_at: at,
       best_rank: bestRank.get(nation)?.rank ?? null, best_rank_date: bestRank.has(nation) ? `${bestRank.get(nation)!.month}-01` : null }));
-    const ranked = rows.filter((r) => fifa.has(r.nation) && r.last_match >= fourYears && r.matches >= (gender === 'w' ? 10 : 20)).sort((a, b) => b.rating - a.rating);
-    ranked.forEach((r, i) => { r.rank = i + 1; });
-    ctx.inc(`${gender}_ranked`, ranked.length);
+    ctx.inc(`${gender}_ranked`, current.size);
     await upsertChunked(ctx.db, 'intl_elo_current', rows, { onConflict: 'gender,nation' });
     await ctx.db.from('intl_elo_current').delete().eq('gender', gender).lt('updated_at', at);
     ctx.note(`${gender}_as_of`, today);
