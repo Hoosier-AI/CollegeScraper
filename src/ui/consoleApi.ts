@@ -38,6 +38,33 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   const render = () => (cfg.RENDER_API_KEY && cfg.RENDER_SERVICE_ID ? new RenderClient(cfg.RENDER_API_KEY, cfg.RENDER_SERVICE_ID) : null);
   const todayUsage = () => { const today = new Date().toISOString().slice(0, 10); return o.usage.pending().filter((u) => u.day === today); };
 
+  // TEMP (2026-10-13, finding the job that stalls the site for ~13 s): a CPU profile of this process for N seconds,
+  // the functions with the most time of their own, and the stacks of the busiest ones.
+  app.get<{ Querystring: { seconds?: string } }>('/api/console/cpu-profile', async (req) => {
+    const { Session } = await import('node:inspector/promises');
+    const seconds = Math.min(180, Math.max(5, Number(req.query.seconds) || 60));
+    const session = new Session(); session.connect();
+    await session.post('Profiler.enable'); await session.post('Profiler.setSamplingInterval', { interval: 2000 });
+    await session.post('Profiler.start');
+    await new Promise((r) => setTimeout(r, seconds * 1000));
+    const { profile } = await session.post('Profiler.stop') as { profile: { nodes: { id: number; callFrame: { functionName: string; url: string; lineNumber: number }; children?: number[] }[]; samples: number[]; timeDeltas: number[] } };
+    session.disconnect();
+    const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+    const parent = new Map<number, number>();
+    for (const n of profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+    const self = new Map<number, number>();
+    profile.samples.forEach((id, i) => self.set(id, (self.get(id) ?? 0) + (profile.timeDeltas[i] ?? 0)));
+    const label = (id: number) => { const f = byId.get(id)!.callFrame; return `${f.functionName || '(anon)'} ${f.url.replace(/^.*\/(dist|node_modules)\//, '$1/')}:${f.lineNumber + 1}`; };
+    const fn = new Map<string, number>();
+    for (const [id, us] of self) fn.set(label(id), (fn.get(label(id)) ?? 0) + us);
+    const top = [...fn].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([f, us]) => ({ ms: Math.round(us / 1000), f }));
+    const stacks = [...self].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id, us]) => {
+      const st: string[] = []; for (let x: number | undefined = id; x != null && st.length < 25; x = parent.get(x)) st.push(label(x));
+      return { ms: Math.round(us / 1000), stack: st };
+    });
+    return { seconds, total_ms: Math.round(profile.timeDeltas.reduce((n, d) => n + d, 0) / 1000), top, stacks };
+  });
+
   app.get('/api/console/overview', async () => cq.overview(getDb(), o.startedAt, todayUsage()));
   // The hub's Stats Overview and Traffic: health, what needs attention, site traffic, API use, growth, coverage.
   app.get<{ Querystring: Record<string, string> }>('/api/console/insights', async (req) => insights(getDb(), Number(req.query.days) || 30, o.startedAt));
