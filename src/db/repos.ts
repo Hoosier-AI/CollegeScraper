@@ -222,7 +222,15 @@ export async function upsertGameByNcaa(db: Db, row: Record<string, unknown> & { 
 
 export async function insertGame(db: Db, row: Record<string, unknown>): Promise<GameRow> {
   const { data, error } = await db.from('college_games').insert(row).select('*').single();
-  if (error) throw new Error(`insert game: ${error.message}`);
+  if (error) {
+    // Two schools of the same game read side by side (sync-site with concurrency): the other one inserted it a moment
+    // ago. Use that row; the caller updates it like any game it found.
+    if (/duplicate key|uq_college_games_fixture/i.test(error.message) && row.home_program_id && row.away_program_id) {
+      const { data: found } = await db.from('college_games').select('*').eq('game_date', row.game_date as string).eq('home_program_id', row.home_program_id as string).eq('away_program_id', row.away_program_id as string).maybeSingle();
+      if (found) return found as GameRow;
+    }
+    throw new Error(`insert game: ${error.message}`);
+  }
   return data as GameRow;
 }
 

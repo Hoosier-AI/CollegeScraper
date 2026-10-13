@@ -1,4 +1,5 @@
 // Composite jobs used by the Render cron entries. Each runs a sequence of the atomic jobs.
+import { kvGet, kvSet } from '../db/client.js';
 import { getJob, registerJob, type JobContext } from './runner.js';
 import { currentSeason } from './seasons.js';
 
@@ -34,7 +35,7 @@ registerJob('nightly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
   await step(ctx, 'fetch-games-ncaa', { season, recent_days: 2, refetch: true });
-  await step(ctx, 'sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'] });
+  await step(ctx, 'sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'], concurrency: 4 });
   await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: true });
@@ -66,7 +67,7 @@ registerJob('weekly', async (ctx) => {
   // Every program's schedule and box scores once a week, whatever NCAA.com listed: games NCAA.com never carried
   // (UT Tyler's conference games in September) only reach us through the school's own schedule, and the nightly
   // sync is limited to programs NCAA.com saw play in the last two days.
-  await step(ctx, 'sync-site', { season, stages: ['schedule', 'boxscores'] });
+  await step(ctx, 'sync-site', { season, stages: ['schedule', 'boxscores'], concurrency: 4 });
   await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
   await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season, all: true });
@@ -79,10 +80,24 @@ registerJob('weekly', async (ctx) => {
 /** Full backfill of one season, in dependency order. params: { season } */
 registerJob('backfill', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
-  await step(ctx, 'discover-teams', { season });
-  await step(ctx, 'verify-membership', { season });
-  await step(ctx, 'detect-sites', { season });
-  await step(ctx, 'sync-site', { season, stages: ['roster', 'schedule', 'stats', 'boxscores', 'bios'] });
+  // A backfill takes a day or more and a deploy cuts it off; the next worker picks it up from the top. Steps already
+  // done (in the last 3 days, this season and division) are skipped, and the site pass skips schools it has read, so
+  // the run carries on where it stopped.
+  const key = `backfill:${season}:${String(ctx.params.division ?? 'all')}`;
+  const doneAt = (await kvGet<Record<string, string>>(ctx.db, key)) ?? {};
+  const fresh = (job: string) => !!doneAt[job] && Date.now() - Date.parse(doneAt[job]!) < 3 * 86400_000 && !ctx.params.force;
+  const once = async (job: string, params: Record<string, unknown>) => {
+    if (fresh(job)) { ctx.inc(`${job}.skipped_done`); return; }
+    await step(ctx, job, params);
+    if (await ctx.cancelled()) return;
+    doneAt[job] = new Date().toISOString();
+    await kvSet(ctx.db, key, doneAt);
+  };
+  await once('discover-teams', { season });
+  await once('verify-membership', { season });
+  await once('detect-sites', { season });
+  // Six schools at a time (each its own site), skipping schools read in the last 10 days.
+  await once('sync-site', { season, stages: ['roster', 'schedule', 'stats', 'boxscores', 'bios'], concurrency: Number(ctx.params.concurrency) || 6, skip_synced_days: 10 });
   await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
   await step(ctx, 'fetch-games-ncaa', { season });
   await step(ctx, 'resolve-orphans', { season });

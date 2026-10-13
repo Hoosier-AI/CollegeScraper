@@ -11,11 +11,12 @@ import { setMembership, setKnownConferences, buildAliasIndex, makeResolver, isPl
 import { listConferences } from '../db/standingsRepo.js';
 import type { Fetcher, SiteContext } from '../model.js';
 import { log } from '../log.js';
+import PQueue from 'p-queue';
 
 type Stage = 'roster' | 'schedule' | 'stats' | 'boxscores' | 'bios';
 const ALL_STAGES: Stage[] = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
-/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean, from_cache?: boolean } */
+/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean, from_cache?: boolean, concurrency?: number, skip_synced_days?: number } */
 /** gender_division → first NCAA-listed contest date of the season (written by reconcile-games). */
 let seasonOpeners: Record<string, string> = {};
 
@@ -59,27 +60,43 @@ export async function syncSite(ctx: JobContext): Promise<void> {
     recentSet = new Set(games.filter((g) => g.game_date >= since && g.game_date <= new Date(Date.now() + 86400000).toISOString().slice(0, 10)).flatMap((g) => [g.home_program_id, g.away_program_id]).filter((x): x is string => !!x));
   }
 
+  // skip_synced_days: a program whose every asked stage was read in the last N days is done (a backfill that was cut
+  // off by a deploy carries on where it stopped instead of starting over).
+  const skipSince = Number(ctx.params.skip_synced_days) > 0 ? new Date(Date.now() - Number(ctx.params.skip_synced_days) * 86400_000).toISOString() : null;
+  const stamp: Record<Stage, string> = { roster: 'roster_synced_at', schedule: 'schedule_synced_at', stats: 'stats_synced_at', boxscores: 'boxscores_synced_at', bios: 'roster_synced_at' };
+  const done = (ps: Record<string, unknown>) => !!skipSince && [...stages].every((s) => typeof ps[stamp[s]] === 'string' && (ps[stamp[s]] as string) >= skipSince);
+
+  // concurrency: programs read side by side. Each school is its own site (and keeps its one-request-a-second limit in
+  // the shared fetch client), so several at once is polite; a game both schools insert at once is merged (insertGame).
+  const queue = new PQueue({ concurrency: Math.max(1, Math.min(8, Number(ctx.params.concurrency) || 1)) });
+  let stopped = false;
   for (const p of programs) {
-    if (await ctx.cancelled()) return;
     const ps = seasonByProgram.get(p.id);
     if (!ps || (wantedDivision && ps.division !== wantedDivision)) continue;
     // only_never_synced: programs whose roster has never been read (newly detected sites), nothing else.
     if (ctx.params.only_never_synced && ps.roster_synced_at) continue;
     if (recentSet && !recentSet.has(p.id)) continue;
+    if (done(ps as Record<string, unknown>)) { ctx.inc('programs_already_done'); continue; }
     const school = schools.get(p.school_seo);
     const adapter = school ? adapterFor(school.site_platform) : null;
     if (!school?.athletics_host || !adapter || p.site_status !== 'ok') { ctx.inc('programs_without_site'); continue; }
     const site: SiteContext = { host: school.athletics_host, baseUrl: `https://${school.athletics_host}`, gender: p.gender, season, sportSlug: p.site_sport_slug, sportId: p.site_sport_id, teamSlug: p.site_team_slug };
-    ctx.inc('programs');
-    try {
-      await syncOne(ctx, fetcher, adapter, site, p, school, season, ps.division, stages, aliasIndex, games, divisionOf, conferenceOf, ps.conference_id ?? null, namesOf);
-    } catch (err) {
-      ctx.inc('program_failures');
-      await markProgramSeason(db, p.id, season, { site_parse_failures: (Number(ps.site_parse_failures) || 0) + 1 });
-      log.warn({ seo: p.school_seo, gender: p.gender, err: err instanceof Error ? err.message : String(err) }, 'sync-site program failed');
-    }
-    await ctx.heartbeat();
+    queue.add(async () => {
+      if (stopped || await ctx.cancelled()) { stopped = true; return; }
+      ctx.inc('programs');
+      try {
+        await syncOne(ctx, fetcher, adapter, site, p, school, season, ps.division, stages, aliasIndex, games, divisionOf, conferenceOf, ps.conference_id ?? null, namesOf);
+      } catch (err) {
+        ctx.inc('program_failures');
+        await markProgramSeason(db, p.id, season, { site_parse_failures: (Number(ps.site_parse_failures) || 0) + 1 });
+        log.warn({ seo: p.school_seo, gender: p.gender, err: err instanceof Error ? err.message : String(err) }, 'sync-site program failed');
+      }
+      await ctx.heartbeat();
+    });
+    // Keep the queue short so a cancel stops the run quickly.
+    if (queue.size > 16) await queue.onSizeLessThan(8);
   }
+  await queue.onIdle();
 }
 
 async function syncOne(ctx: JobContext, fetcher: ReturnType<typeof makeFetcher>, adapter: NonNullable<ReturnType<typeof adapterFor>>, site: SiteContext, p: ProgramRow, school: SchoolRow, season: number, division: 'd1' | 'd2' | 'd3', stages: Set<Stage>, aliasIndex: AliasIndex, games: Awaited<ReturnType<typeof listGames>>, divisionOf: Map<string, string>, conferenceOf: Map<string, string | null>, ownConference: string | null, namesOf: (id: string) => (string | null | undefined)[]): Promise<void> {
