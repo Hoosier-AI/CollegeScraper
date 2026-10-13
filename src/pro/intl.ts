@@ -74,18 +74,51 @@ export async function nations(db: Db): Promise<IntlNation[]> {
  * international window is a few days every month or two), the last week's results, the tournaments playing now or
  * next, and the counts.
  */
+const easternDate = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+/** International competitions we show, of one game or both. */
+async function intlLeagueIds(db: Db, gender?: 'm' | 'w'): Promise<number[]> {
+  const rows = await selectAll<{ id: number }>(db, 'pro_leagues', 'id', (q) => { const b = q.eq('enabled', true).eq('scope', 'intl'); return gender ? b.eq('gender', gender) : b; });
+  return rows.map((l) => l.id).concat([-1]);
+}
+
+/**
+ * The nearest match day after (or before) a date with international matches of one game, as that day's scoreboard.
+ * National teams play in windows a few days long, a month or two apart: an empty day shows the next window (and the
+ * last one's results) instead of nothing.
+ */
+export async function adjacentDay(db: Db, date: string, gender: 'm' | 'w', dir: 'next' | 'prev') {
+  const { from, to } = easternDayRange(date);
+  const ids = await intlLeagueIds(db, gender);
+  const { data } = dir === 'next'
+    ? await db.from('pro_fixtures').select('kickoff').in('league_id', ids).in('status', ['scheduled', 'live', 'final']).gte('kickoff', to).order('kickoff').limit(1)
+    : await db.from('pro_fixtures').select('kickoff').in('league_id', ids).eq('status', 'final').lt('kickoff', from).order('kickoff', { ascending: false }).limit(1);
+  const kickoff = (data?.[0] as { kickoff?: string } | undefined)?.kickoff;
+  if (!kickoff) return null;
+  const day = easternDate(kickoff);
+  const board = await matchesByDate(db, { date: day, scope: 'intl' });
+  const groups = board.groups.filter((g) => g.league.gender === gender);
+  const total = groups.reduce((n, g) => n + g.matches.length, 0);
+  return { date: day, total, live: groups.reduce((n, g) => n + g.matches.filter((m) => m.status === 'live').length, 0), groups };
+}
+
+/**
+ * The section's front door: today's international matches (live first), the next ones (an international window is a
+ * few days every month or two: each game's own, so a busy women's day never crowds out the men's next window), the
+ * last ten days' results, the tournaments playing now or next, and the counts.
+ */
 export async function home(db: Db, date: string) {
-  const { from } = easternDayRange(date);
-  const intlIds = (await selectAll<{ id: number }>(db, 'pro_leagues', 'id', (q) => q.eq('enabled', true).eq('scope', 'intl'))).map((l) => l.id).concat([-1]);
-  const [today, upcomingRes, recentRes, ts, ns] = await Promise.all([
+  const { from, to } = easternDayRange(date);
+  const [men, women, all] = await Promise.all([intlLeagueIds(db, 'm'), intlLeagueIds(db, 'w'), intlLeagueIds(db)]);
+  const next = (ids: number[]) => db.from('pro_fixtures').select(FIXTURE_SELECT).in('league_id', ids).eq('status', 'scheduled').gte('kickoff', to).order('kickoff').limit(40);
+  const [today, upM, upW, recentRes, ts, ns] = await Promise.all([
     matchesByDate(db, { date, scope: 'intl' }),
-    db.from('pro_fixtures').select(FIXTURE_SELECT).in('league_id', intlIds).eq('status', 'scheduled').gte('kickoff', from).order('kickoff').limit(60),
-    db.from('pro_fixtures').select(FIXTURE_SELECT).in('league_id', intlIds).eq('status', 'final').lt('kickoff', from).gte('kickoff', new Date(Date.parse(from) - 10 * 86400_000).toISOString()).order('kickoff', { ascending: false }).limit(80),
+    next(men), next(women),
+    db.from('pro_fixtures').select(FIXTURE_SELECT).in('league_id', all).eq('status', 'final').lt('kickoff', from).gte('kickoff', new Date(Date.parse(from) - 10 * 86400_000).toISOString()).order('kickoff', { ascending: false }).limit(80),
     tournaments(db),
     nations(db),
   ]);
-  const todayIds = new Set(today.groups.flatMap((g) => g.matches.map((m) => m.id)));
-  const upcoming: ProMatchRow[] = ((upcomingRes.data ?? []) as any[]).map(toMatchRow).filter((m) => !todayIds.has(m.id));
+  const upcoming: ProMatchRow[] = [...((upM.data ?? []) as any[]), ...((upW.data ?? []) as any[])].map(toMatchRow).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   const recent: ProMatchRow[] = ((recentRes.data ?? []) as any[]).map(toMatchRow);
   return {
     date, matches: today, upcoming, recent,

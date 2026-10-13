@@ -27,6 +27,15 @@ export function registerIntlApi(app: FastifyInstance): void {
     const league = int(req.query.league);
     return reply.header('Cache-Control', CACHE).send(await pro.matchesByDate(getDb(), { date, league, status: req.query.status ?? null, featured: req.query.featured === '1', scope: 'intl' }));
   });
+  // An empty day's neighbours: the next match day and the last one, as scoreboards (one game: ?gender=m|w).
+  app.get<{ Querystring: Record<string, string> }>('/api/intl/around', async (req, reply) => {
+    const date = req.query.date ?? eastern().date;
+    if (!DATE.test(date)) return reply.code(400).send({ error: 'date must be YYYY-MM-DD' });
+    const gender = req.query.gender === 'w' ? 'w' : 'm';
+    const db = getDb();
+    const [next, prev] = await Promise.all([intl.adjacentDay(db, date, gender, 'next'), intl.adjacentDay(db, date, gender, 'prev')]);
+    return reply.header('Cache-Control', 'public, max-age=120').send({ date, gender, next, prev });
+  });
   app.get('/api/intl/tournaments', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=300').send(await intl.tournaments(getDb())));
   app.get('/api/intl/nations', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=600').send(await intl.nations(getDb())));
   app.get<{ Querystring: Record<string, string> }>('/api/intl/search', async (req, reply) =>
