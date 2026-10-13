@@ -229,5 +229,11 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
   // Requests per site for the hub's Crawling page (pro_source_requests).
   startRequestFlush(getDb());
+  // The hub's Crawling tab reads take 10-25 s to build: build them once a minute after boot (a deploy empties the
+  // cache), so the first visit after a deploy does not time out.
+  setTimeout(() => {
+    const warm = (path: string) => app.inject({ method: 'GET', url: path, headers: { authorization: `Bearer ${cfg.COLLEGE_TRIGGER_SECRET ?? ''}` } }).catch(() => {});
+    void (async () => { for (const path of ['/api/console/pro', '/api/console/pro?parts=summary', '/api/console/pro/leagues?scope=us&seasons=current', '/api/console/insights?days=30']) await warm(path); })();
+  }, 60_000).unref();
   controller.signal.addEventListener('abort', () => { void flushRequests(getDb()); void analytics.flush(); void usage.flush(); });
 }).catch((err) => { log.error({ err: String(err) }, 'listen failed'); process.exit(1); });
