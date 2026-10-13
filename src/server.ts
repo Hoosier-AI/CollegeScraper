@@ -22,6 +22,8 @@ import { PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
 import { runningJobs, type WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
+import { PerformanceObserver } from 'node:perf_hooks';
+import { getHeapStatistics } from 'node:v8';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { log } from './log.js';
@@ -168,9 +170,18 @@ setInterval(() => {
   while (stalls.length > 200 || (stalls[0] && now - stalls[0].at > 3600_000)) stalls.shift();
   log.warn({ lag_ms: lag, jobs }, 'event loop stalled');
 }, 500).unref();
+// Garbage collection pauses, to tell a full heap from a job's own work when the loop stalls.
+const gcs: { at: number; ms: number }[] = [];
+new PerformanceObserver((list) => {
+  for (const e of list.getEntries()) if (e.duration >= 200) { gcs.push({ at: Date.now(), ms: Math.round(e.duration) }); if (gcs.length > 200) gcs.shift(); }
+}).observe({ entryTypes: ['gc'] });
 const loopStats = () => {
   const recent = stalls.filter((x) => Date.now() - x.at < 3600_000);
-  return { stalls_1h: recent.length, max_ms_1h: recent.reduce((m, x) => Math.max(m, x.ms), 0), last: recent.slice(-5).map((x) => ({ at: new Date(x.at).toISOString(), ms: x.ms, jobs: x.jobs })) };
+  const gc = gcs.filter((x) => Date.now() - x.at < 3600_000);
+  const heap = getHeapStatistics(), mem = process.memoryUsage();
+  return { stalls_1h: recent.length, max_ms_1h: recent.reduce((m, x) => Math.max(m, x.ms), 0), last: recent.slice(-5).map((x) => ({ at: new Date(x.at).toISOString(), ms: x.ms, jobs: x.jobs })),
+    gc_over_200ms_1h: gc.length, gc_ms_1h: gc.reduce((n, x) => n + x.ms, 0), gc_max_ms_1h: gc.reduce((m, x) => Math.max(m, x.ms), 0),
+    heap_mb: Math.round(heap.used_heap_size / 1e6), heap_limit_mb: Math.round(heap.heap_size_limit / 1e6), rss_mb: Math.round(mem.rss / 1e6) };
 };
 
 // Liveness for Render: the database answers and both worker lanes have beaten recently (see src/ops/health.ts).
