@@ -11,7 +11,7 @@ import { makeFetcher } from './fetcher.js';
 import { kvGet, kvSet, selectAll, type Db } from '../db/client.js';
 import { loadConfig } from '../config.js';
 import { EntityIndex, teamIndexRows } from '../news/entities.js';
-import { classicSidearmFeed, isSoccerItem, FEDERATION_SITES, GDELT_QUERIES, gdeltUrl, GUARDIAN_URL, LEAGUE_RUN, LEAGUE_RUN_IDS, LEAGUE_RUN_PAGE, PUBLISHER_FEEDS, schoolFeedUrl } from '../news/feeds.js';
+import { classicSidearmFeed, ENGLISH_COUNTRIES, isSoccerItem, YOUTH_STORY, FEDERATION_SITES, GDELT_QUERIES, gdeltUrl, GUARDIAN_URL, LEAGUE_RUN, LEAGUE_RUN_IDS, LEAGUE_RUN_PAGE, PUBLISHER_FEEDS, schoolFeedUrl } from '../news/feeds.js';
 import { loadRecent, prepare, store, urlHash, type NewsSource } from '../news/ingest.js';
 import { feedLinks, parseFeed, parseGdelt, parseGuardian, type FeedItem } from '../news/rss.js';
 import { setNewsHosts } from '../ops/sourceRequests.js';
@@ -152,7 +152,9 @@ registerJob('news-feeds', async (ctx: JobContext) => {
       if (!cfg.GUARDIAN_API_KEY) throw new Error('GUARDIAN_API_KEY is not set');
       return parseGuardian(await fetchFeed(ctx, GUARDIAN_URL(cfg.GUARDIAN_API_KEY), true));
     }
-    return parseFeed(await fetchFeed(ctx, s.url, false, s.kind === 'publisher'), s.url);
+    const items = parseFeed(await fetchFeed(ctx, s.url, false, s.kind === 'publisher'), s.url);
+    // A club's own feed carries its youth teams too: first-team news only.
+    return s.kind === 'club' ? items.filter((i) => !YOUTH_STORY.test(i.title)) : items;
   }));
   await queue.onIdle();
 });
@@ -179,9 +181,9 @@ registerJob('news-discover', async (ctx: JobContext) => {
   const db = ctx.db;
   const f = makeFetcher(db);
   const maxPriority = Number(ctx.params.max_priority) || 60;
-  const teams = (await teamIndexRows(db)) as { id: number; display_name: string; gender: string; is_national: boolean; slug: string; priority: number }[];
+  const teams = (await teamIndexRows(db)) as { id: number; display_name: string; gender: string; is_national: boolean; slug: string; priority: number; country: string | null }[];
   const leagueRun = new Set((await selectAll<{ team_id: number }>(db, 'pro_league_teams', 'team_id', (q) => q.in('league_id', [...LEAGUE_RUN_IDS]))).map((r) => r.team_id));
-  const clubs = teams.filter((t) => !t.is_national && t.priority <= maxPriority && !leagueRun.has(t.id));
+  const clubs = teams.filter((t) => !t.is_national && t.priority <= maxPriority && !leagueRun.has(t.id) && ENGLISH_COUNTRIES.has(t.country ?? ''));
   const wiki = await selectAll<{ qid: string; pro_team_id: number }>(db, 'pro_wiki_clubs', 'qid,pro_team_id', (q) => q.in('pro_team_id', clubs.map((c) => c.id)).not('qid', 'is', null));
   const qidOf = new Map(wiki.map((w) => [w.pro_team_id, w.qid]));
   const sites: { team: (typeof teams)[number]; url: string; kind: 'club' | 'federation' }[] = [];

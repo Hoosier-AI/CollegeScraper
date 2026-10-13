@@ -39,7 +39,7 @@ export const CRAWL_SITES: CrawlSite[] = [
   { id: 'news-publishers', name: 'Publisher feeds', url: 'https://www.plaibook.live/pro/news', license: 'public RSS, headline and link with credit (per-feed terms in Settings)', scraped: true,
     feeds: ['news'], jobs: ['news-feeds'], cadence: 'every 15 min' },
   { id: 'gdelt', name: 'GDELT', url: 'https://www.gdeltproject.org', license: 'open data, any use, credited', scraped: true,
-    feeds: ['news'], jobs: ['news-gdelt'], cadence: 'one query every 15 min, in turn' },
+    feeds: ['news'], jobs: ['news-gdelt'], cadence: 'one query an hour, in turn' },
   { id: 'guardian', name: 'The Guardian', url: 'https://open-platform.theguardian.com', license: 'Content API key; free tier is non-commercial', scraped: true,
     feeds: ['news'], jobs: ['news-feeds'], cadence: 'every 30 min (when GUARDIAN_API_KEY is set)' },
   { id: 'news-clubs', name: 'Club and federation feeds', url: 'https://www.plaibook.live/intl/news', license: 'official feeds, robots.txt honoured; league-run sites skipped', scraped: true,

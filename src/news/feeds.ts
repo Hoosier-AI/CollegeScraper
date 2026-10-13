@@ -92,6 +92,12 @@ export function classicSidearmFeed(url: string): string | null {
 export const LEAGUE_RUN = /(^|\.)(mlssoccer\.com|nwslsoccer\.com|premierleague\.com|laliga\.com|bundesliga\.com|legaseriea\.it|ligue1\.com|uslchampionship\.com|uslleagueone\.com|uslsuperleague\.com)$/i;
 export const LEAGUE_RUN_PAGE = /mlssoccer\.com\/(legal|terms)|nwslsoccer\.com\/(legal|terms)|Major League Soccer, L\.L\.C\.|National Women's Soccer League, LLC/i;
 
+/** Club feeds are read from English-speaking countries only: the rules read English, and the readers are in the US. */
+export const ENGLISH_COUNTRIES = new Set(['USA', 'England', 'Scotland', 'Wales', 'Northern-Ireland', 'Ireland', 'Canada', 'Australia', 'New-Zealand']);
+
+/** A club's youth or academy story (its feed carries every team): not first-team news. */
+export const YOUTH_STORY = /\b((u-?1\d|u-?2[0-3])s?|under[- ]?1\d|under[- ]?2[0-3]|academy|youth|juniors?|reserves|development squad)\b/i;
+
 /** Leagues whose clubs' sites are run by the league (see LEAGUE_RUN): no club feeds for them. */
 export const LEAGUE_RUN_IDS = new Set([253, 254]);
 

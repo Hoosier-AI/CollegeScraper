@@ -56,7 +56,8 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'football-data-sync', label: 'Sources: football-data.co.uk results and match stats (Europe)', cadence: 'daily 08:45 UTC', due: (c) => c.h === 8 && c.m === 45 },
   { job: 'football-data-fill', label: 'Sources: football-data match stats onto pro matches', cadence: 'daily 09:45 UTC (after matching)', due: (c) => c.h === 9 && c.m === 45 },
   { job: 'news-feeds', label: 'News: publishers, clubs and federations', cadence: 'every 15 min (:07, :22, :37, :52)', due: (c) => c.m % 15 === 7 },
-  { job: 'news-gdelt', label: 'News: GDELT (one query, in turn)', cadence: 'every 15 min (:11, :26, :41, :56)', due: (c) => c.m % 15 === 11 },
+  // GDELT limits by IP and Render's addresses are shared: one query an hour gives its limit room.
+  { job: 'news-gdelt', label: 'News: GDELT (one query, in turn)', cadence: 'every hour at :11', due: (c) => c.m === 11 },
   { job: 'news-schools', label: 'News: school athletics feeds', cadence: 'every hour at :47 (each school every 3 hours in season, daily otherwise)', due: (c) => c.m === 47 },
   { job: 'news-discover', label: 'News: find club and federation feeds', cadence: 'Mondays 10:15 UTC', due: (c) => c.dow === 1 && c.h === 10 && c.m === 15 },
   { job: 'wikidata-sync', label: 'Sources: Wikipedia and Wikidata people (US clubs first)', cadence: 'every hour at :20', due: (c) => c.m === 20 },

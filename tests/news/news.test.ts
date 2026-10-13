@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { classify } from '../../src/news/classify.js';
 import { clusterFor, overlap, titleTokens } from '../../src/news/cluster.js';
 import { EntityIndex, personCandidates, resolvePeople, type PersonHit } from '../../src/news/entities.js';
-import { classicSidearmFeed, isSoccerItem, LEAGUE_RUN, LEAGUE_RUN_PAGE, PUBLISHER_FEEDS, schoolFeedUrl } from '../../src/news/feeds.js';
+import { classicSidearmFeed, ENGLISH_COUNTRIES, isSoccerItem, YOUTH_STORY, LEAGUE_RUN, LEAGUE_RUN_PAGE, PUBLISHER_FEEDS, schoolFeedUrl } from '../../src/news/feeds.js';
 import { genderOf, prepare, urlHash, type NewsSource } from '../../src/news/ingest.js';
 import { cleanUrl, feedLinks, parseFeed, parseGdelt, parseGuardian, plainText } from '../../src/news/rss.js';
 
@@ -63,6 +63,13 @@ describe('feeds', () => {
   it('ships only feeds whose terms allow headlines and links switched on', () => {
     for (const f of PUBLISHER_FEEDS.filter((x) => x.on)) expect(f.terms).not.toMatch(/review/i);
     for (const f of PUBLISHER_FEEDS.filter((x) => !x.on)) expect(f.terms).toMatch(/review/i);
+  });
+  it('keeps club feeds to first-team stories in English-speaking countries', () => {
+    expect(ENGLISH_COUNTRIES.has('England')).toBe(true);
+    expect(ENGLISH_COUNTRIES.has('Portugal')).toBe(false);
+    expect(YOUTH_STORY.test('Under 16: Lecce 3 – Lazio 3')).toBe(true);
+    expect(YOUTH_STORY.test('U21s beat Spurs')).toBe(true);
+    expect(YOUTH_STORY.test('Matchday at Turf: Burnley v Charlton Athletic')).toBe(false);
   });
   it('skips league-run club sites', () => {
     expect(LEAGUE_RUN.test('www.mlssoccer.com')).toBe(true);
