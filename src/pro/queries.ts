@@ -305,6 +305,15 @@ export async function team(db: Db, slug: string, season?: number | null) {
     // The provider's season stats per competition (teams/statistics): formations, biggest results, streaks ...
     s == null ? [] : selectAll<any>(db, 'pro_team_season_detail', '*', (q) => q.eq('team_id', tm.id).eq('season', s)),
   ]);
+  // Two open coaching spells (the provider gave Spain a South African coach in 2024 beside Luis de la Fuente): the one
+  // named on the side's latest team sheet is the current coach.
+  const openSpells = new Set(coachRows.filter((c) => c.coach && !c.end).map((c) => c.coach.id));
+  const sheetCoach = openSpells.size > 1 ? ((await db.from('pro_fixture_lineups').select('coach_name').eq('team_id', tm.id).not('coach_name', 'is', null).order('fixture_id', { ascending: false }).limit(1)).data?.[0] as { coach_name: string } | undefined)?.coach_name ?? null : null;
+  const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const sheetWords = sheetCoach ? fold(sheetCoach).split(/[^a-z]+/).filter((w) => w.length >= 3) : [];
+  const onSheet = (name: string) => { const words = new Set(fold(name).split(/[^a-z]+/)); return sheetWords.some((w) => words.has(w)); };
+  const sheetMatch = sheetWords.length ? coachRows.filter((c) => c.coach && !c.end && onSheet(c.coach.display_name)).map((c) => c.coach.id) : [];
+  const isCurrent = (c: any) => !c.end && (sheetMatch.length !== 1 || sheetMatch[0] === c.coach.id);
   const lgs = await leaguesById(db, [...totals.map((x) => x.league_id), ...games.map((g) => g.league.id), ...standingRows.map((x) => x.league_id), ...detailRows.map((x) => x.league_id)]);
   // One squad line per player: the listed squad first, plus anyone who played for the club this season.
   const squad = new Map<number, any>();
@@ -393,7 +402,8 @@ export async function team(db: Db, slug: string, season?: number | null) {
     standings: standingRows.map((x) => ({ league: lgs.get(x.league_id) ?? null, group: x.group_name, rank: x.rank, points: x.points, played: x.played, win: x.win, draw: x.draw, lose: x.lose, gf: x.gf, ga: x.ga, gd: x.gd, form: x.form })),
     squad: mergeSquadDuplicates([...squad.values()]).map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
     coaches: coachRows.filter((c) => c.coach && !coachSeen.has(c.coach.id) && coachSeen.add(c.coach.id)).slice(0, 8)
-      .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: !c.end, ...honoursOf(c.coach.id) })),
+      .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: isCurrent(c), ...honoursOf(c.coach.id) }))
+      .sort((a, b) => Number(b.current) - Number(a.current)),
     transfers: cleanMoves((moves.data ?? []) as any[], people).slice(0, 80).map((t) => ({ ...t, direction: t.to_team_id === tm.id ? 'in' : 'out',
       player: { name: people.get(t.player_id)?.display_name ?? t.player_name ?? 'Unknown', slug: people.get(t.player_id)?.slug ?? null },
       from_slug: clubSlugs.get(t.from_team_id)?.slug ?? null, to_slug: clubSlugs.get(t.to_team_id)?.slug ?? null })),

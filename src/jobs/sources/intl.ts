@@ -146,6 +146,13 @@ async function intlWcSync(ctx: JobContext): Promise<void> {
 // ---------- intl-caps-sync ----------
 /** Caps from the Wikipedia careers wikidata-sync reads (the infobox's national-team rows): senior sides only, a
  *  nation's spells summed. Linked to the pro player through his Wikidata item. */
+/** A Wikidata label written in several languages ("Catalan: Alèxia Putellas i SeguraSpanish: Alexia Putellas
+ *  Segura"): the last one. */
+export const cleanName = (name: string) => {
+  const parts = name.split(/(?=[A-Z][a-z]+: )/).map((p) => p.replace(/^[A-Z][a-z]+: /, '').trim()).filter(Boolean);
+  return /^[A-Z][a-z]+: /.test(name) && parts.length ? parts[parts.length - 1]! : name;
+};
+
 async function intlCapsSync(ctx: JobContext): Promise<void> {
   const off = await sourcesOff(ctx.db);
   if (off.has('wikipedia')) { ctx.note('skipped', 'wikipedia switched off'); return; }
@@ -159,9 +166,28 @@ async function intlCapsSync(ctx: JobContext): Promise<void> {
   for (let i = 0; i < qids.length; i += 200) {
     for (const p of await selectAll<{ id: number; wikidata_qid: string; display_name: string; gender: string | null }>(ctx.db, 'pro_players', 'id,wikidata_qid,display_name,gender', (q) => q.in('wikidata_qid', qids.slice(i, i + 200)))) people.set(p.wikidata_qid, p);
   }
-  const names = new Map<string, string>();
+  const names = new Map<string, string>(), born = new Map<string, string>();
   for (let i = 0; i < qids.length; i += 200) {
-    for (const p of await selectAll<{ ext_id: string; name: string }>(ctx.db, 'pro_src_players', 'ext_id,name', (q) => q.eq('source', 'wikidata').in('ext_id', qids.slice(i, i + 200)))) names.set(p.ext_id, p.name);
+    for (const p of await selectAll<{ ext_id: string; name: string; birth_date: string | null }>(ctx.db, 'pro_src_players', 'ext_id,name,birth_date', (q) => q.eq('source', 'wikidata').in('ext_id', qids.slice(i, i + 200)))) {
+      names.set(p.ext_id, cleanName(p.name));
+      if (p.birth_date) born.set(p.ext_id, String(p.birth_date).slice(0, 10));
+    }
+  }
+  // A person without the Wikidata id on their player record (Alexia Putellas): the same birth date and the same person
+  // by name, one candidate only. Without it her women's caps counted as Spain's men's.
+  const unmatched = qids.filter((q) => !people.has(q) && born.has(q) && names.has(q));
+  const dates = [...new Set(unmatched.map((q) => born.get(q)!))];
+  const byDate = new Map<string, { id: number; display_name: string; gender: string | null; birth_date: string }[]>();
+  for (let i = 0; i < dates.length; i += 150) {
+    for (const p of await selectAll<{ id: number; display_name: string; gender: string | null; birth_date: string }>(ctx.db, 'pro_players', 'id,display_name,gender,birth_date', (q) => q.in('birth_date', dates.slice(i, i + 150)))) {
+      const d = String(p.birth_date).slice(0, 10);
+      byDate.set(d, [...(byDate.get(d) ?? []), p]);
+    }
+    await ctx.heartbeat();
+  }
+  for (const q of unmatched) {
+    const hits = (byDate.get(born.get(q)!) ?? []).filter((p) => samePerson({ name: names.get(q)!, birth_date: born.get(q)! }, { name: p.display_name, birth_date: p.birth_date }));
+    if (hits.length === 1) people.set(q, hits[0]!);
   }
   const rows = new Map<string, Record<string, unknown> & { caps: number | null; goals: number | null; first_year: number | null; last_year: number | null }>();
   let skipped = 0;
