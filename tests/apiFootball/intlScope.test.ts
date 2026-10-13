@@ -9,6 +9,7 @@ describe('leagueScope: International is national teams, Pro is clubs', () => {
     [10, 'Friendlies', 'World', 'intl'],
     [666, 'Friendlies Women', 'World', 'intl'],
     [490, 'World Cup - U20', 'World', 'intl'],
+    [766, 'China Cup', 'World', 'intl'],
     [2, 'UEFA Champions League', 'World', 'club'],
     [15, 'FIFA Club World Cup', 'World', 'club'],
     [1186, 'FIFA Club World Cup - Play-In', 'World', 'club'],

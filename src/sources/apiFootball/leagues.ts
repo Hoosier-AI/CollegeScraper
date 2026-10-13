@@ -80,6 +80,7 @@ export const INTL_SENIOR = new Set([
   770, 803, 804, 805, 806, 807, 808, 849, 858, 859, 860, 880, 894, 897, 902, 904, 911, 913, 916, 919, 922, 926, 927, 941,
   960, 1008, 1016, 1038, 1040, 1045, 1046, 1057, 1072, 1083, 1105, 1163, 1169, 1188, 1189, 1206, 1207, 1222, 1237, 1245,
   1247,
+  766, // China Cup: a national-team invitational (Uruguay, Wales, Croatia, Czechia, Thailand...), 2026-10-13
 ]);
 /** Youth national teams: the U-17/U-20 World Cups, the age-group continental championships and their qualifiers. Club
  *  youth competitions (UEFA Youth League, Libertadores U20, Viareggio, COTIF) stay in Pro. */
@@ -116,7 +117,7 @@ export function leagueConfederation(id: number, name: string, scope: LeagueScope
   if (/\bCONMEBOL\b|copa am[eé]rica|sudamericano|south america/i.test(name)) return 'CONMEBOL';
   if (/\bCONCACAF\b|gold cup|caribbean|centroamericana|central american|shebelieves/i.test(name)) return 'CONCACAF';
   if (/\bCAF\b|\bafrica|\bCOSAFA\b|\bCECAFA\b|\bWAFU\b/i.test(name)) return 'CAF';
-  if (/\bAFC\b|\basian?\b|\bASEAN\b|\bEAFF\b|\bSAFF\b|\bWAFF\b|\bCAFA\b|\bgulf\b|\bkirin\b|\bking'?s cup\b/i.test(name)) return 'AFC';
+  if (/\bAFC\b|\basian?\b|\bASEAN\b|\bEAFF\b|\bSAFF\b|\bWAFF\b|\bCAFA\b|\bgulf\b|\bkirin\b|\bking'?s cup\b|\bchina cup\b/i.test(name)) return 'AFC';
   if (/\bOFC\b|\boceania\b|\bpacific\b/i.test(name)) return 'OFC';
   if (/\bworld cup\b|\bolympics?\b|\bfriendlies\b|\bFIFA\b|\bconfederations\b|finalissima/i.test(name)) return 'FIFA';
   return 'Other';
