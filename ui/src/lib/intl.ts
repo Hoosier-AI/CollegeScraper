@@ -16,7 +16,7 @@ export interface NationHistory {
   scorers: { name: string; goals: number; penalties: number; first: string; last: string; slug: string | null }[];
   caps: { name: string; caps: number | null; goals: number | null; first_year: number | null; last_year: number | null; slug: string | null; photo: string | null }[];
   world_cups: { editions: number; years: number[] };
-  elo: { rating: number; rank: number | null; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string; series: { date: string; rating: number }[] } | null;
+  elo: { rating: number; rank: number | null; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string; best_rank: number | null; best_rank_date: string | null; series: { date: string; rating: number }[] } | null;
   credits: Credit[];
 }
 export interface IntlTournament {
@@ -25,7 +25,10 @@ export interface IntlTournament {
 }
 export interface IntlNation { id: number; name: string; slug: string; logo: string | null; gender: 'm' | 'w'; level: 'senior' | 'youth'; confederation: string; competitions: number; country: string | null }
 export interface IntlHome { date: string; matches: { date: string; total: number; live: number; groups: { league: ProMatch['league']; priority: number; matches: ProMatch[] }[] }; upcoming: ProMatch[]; recent: ProMatch[]; tournaments: IntlTournament[]; counts: { tournaments: number; nations: number; nations_all: number } }
-export interface IntlRankings { gender: 'm' | 'w'; updated_at: string | null; credit: Credit | null; rows: { nation: NationRef; rating: number; rank: number; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string }[] }
+export interface IntlRankings { gender: 'm' | 'w'; updated_at: string | null; credit: Credit | null; rows: { nation: NationRef; rating: number; rank: number; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string; best_rank: number | null; best_rank_date: string | null }[] }
+
+/** "Sep 2005": the month of a best rank. */
+export const monthLabel = (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 7)}-15T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '');
 
 /** The confederations in the section's order, and how they read. */
 export const CONFEDERATIONS = ['FIFA', 'CONCACAF', 'UEFA', 'CONMEBOL', 'CAF', 'AFC', 'OFC', 'Other'] as const;

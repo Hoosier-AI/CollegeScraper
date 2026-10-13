@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
 import { useUrlState } from '../../lib/urlState';
-import { CONFEDERATIONS, CONFEDERATION_LABEL, type IntlRankings as Rankings } from '../../lib/intl';
+import { CONFEDERATIONS, CONFEDERATION_LABEL, monthLabel, type IntlRankings as Rankings } from '../../lib/intl';
 import { DataTable, type Column } from '../../components/DataTable';
 import { Credits, nationHref } from '../../components/intl/NationHistory';
 import { ErrorBox, Field, PageHeader, Select, TeamLogo } from '../../components/primitives';
@@ -23,7 +23,7 @@ export default function IntlRankings() {
     { key: 'conf', label: 'Confederation', priority: 2, value: (r) => r.nation.confederation ?? '' },
     { key: 'rating', label: 'Rating', num: true, value: (r) => r.rating },
     { key: 'change', label: '1 year', title: 'Change over the last year', num: true, value: (r) => r.change_1y, render: (r) => (r.change_1y == null ? '–' : <span className={r.change_1y > 0 ? 'text-win' : r.change_1y < 0 ? 'text-loss' : ''}>{r.change_1y > 0 ? '+' : ''}{r.change_1y}</span>) },
-    { key: 'best', label: 'Best', title: 'Highest rating ever', num: true, priority: 2, value: (r) => r.best, render: (r) => `${r.best} (${r.best_date.slice(0, 4)})` },
+    { key: 'best', label: 'Best rank', title: 'Best world rank ever (month-end tables)', num: true, priority: 2, value: (r) => r.best_rank, render: (r) => (r.best_rank ? `#${r.best_rank} (${monthLabel(r.best_rank_date)})` : '–') },
     { key: 'matches', label: 'Matches', num: true, priority: 3, value: (r) => r.matches },
     { key: 'last', label: 'Last match', priority: 3, value: (r) => r.last_match, render: (r) => fmt.date(r.last_match) },
   ];
@@ -32,7 +32,7 @@ export default function IntlRankings() {
       <PageHeader title={`${gender === 'w' ? "Women's" : "Men's"} national team rankings`} meta={q.data?.updated_at ? `Plaibook Elo, updated ${fmt.date(q.data.updated_at)}` : 'Plaibook Elo'}>
         <Field label="Confederation">{(id) => <Select id={id} value={conf} onChange={setConf} options={[{ value: '', label: 'Every confederation' }, ...CONFEDERATIONS.filter((c) => c !== 'FIFA').map((c) => ({ value: c, label: CONFEDERATION_LABEL[c] ?? c }))]} />}</Field>
       </PageHeader>
-      <p className="max-w-3xl text-xs text-chalk-400">Plaibook Elo is our own rating, worked out from every international result since 1872 with the World Football Elo method: a win against a strong side is worth more, a World Cup match more than a friendly, a big win more than a narrow one, and home advantage counts. It is not FIFA's ranking. Sides that have not played in four years are left out.{gender === 'w' ? " Women's ratings use the results our sources have, which are thinner before 2010." : ''}</p>
+      <p className="max-w-3xl text-xs text-chalk-400">Plaibook Elo is our own rating, worked out from every international result since 1872 with the World Football Elo method: a win against a strong side is worth more, a World Cup match more than a friendly, a big win more than a narrow one, and home advantage counts. A new side's first 15 matches move only its own rating, so ratings do not creep upward over the decades; they sit within about 25 points of the published World Football Elo ratings. Ratings from different eras do not compare, so a side's best is its best world rank. It is not FIFA's ranking. Sides that have not played in four years are left out.{gender === 'w' ? " Women's ratings use the results our sources have, which are thinner before 2010." : ''}</p>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       <DataTable rows={rows} columns={cols} rowKey={(r) => r.nation.key} caption="Plaibook Elo rankings" rowHref={(r) => nationHref(r.nation)} loading={q.isPending} dense
         empty={<p className="p-4 text-sm text-chalk-400">Ratings appear after the first results sync.</p>} />

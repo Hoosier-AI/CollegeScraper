@@ -5,7 +5,7 @@ import { applyShootouts, parseGoals, parseResults, parseShootouts, TOURNAMENT_LE
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, wcdbCodes } from '../../src/sources/intl/worldcupDb.js';
 import { parseWorldCupTxt } from '../../src/sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../src/sources/intl/nations.js';
-import { expected, goalFactor, kFactor, runElo } from '../../src/sources/intl/elo.js';
+import { bestRanks, confederationsFrom, expected, goalFactor, kFactor, PROVISIONAL, runElo, worldCupSides } from '../../src/sources/intl/elo.js';
 import { dedupeResults } from '../../src/jobs/sources/intl.js';
 
 const RESULTS = `date,home_team,away_team,home_score,away_score,tournament,city,country,neutral
@@ -129,6 +129,33 @@ describe('Plaibook Elo', () => {
     const home = runElo([{ date: '2020-01-01', home: 'a', away: 'b', home_score: 1, away_score: 1, tournament: 'Friendly', neutral: false }]);
     expect(home.ratings.get('a')!).toBeLessThan(1500);
     expect(home.ratings.get('a')! + home.ratings.get('b')!).toBeCloseTo(3000);
+  });
+  it('the Olympics counted as a world championship until 1980', () => {
+    expect(kFactor('Olympic Games', '1928-06-13')).toBe(60);
+    expect(kFactor('Olympic Games', '1984-08-01')).toBe(30);
+  });
+  it('a new side is provisional: against an established side only its own rating moves (no inflation)', () => {
+    // a and b play each other until both are established; then newcomer n loses heavily to a.
+    const games = Array.from({ length: PROVISIONAL }, (_, i) => ({ date: `2000-01-${String(i + 1).padStart(2, '0')}`, home: 'a', away: 'b', home_score: 1, away_score: 1, tournament: 'Friendly', neutral: true }));
+    const before = runElo(games).ratings;
+    const after = runElo([...games, { date: '2000-02-01', home: 'a', away: 'n', home_score: 5, away_score: 0, tournament: 'Friendly', neutral: true }]).ratings;
+    expect(after.get('a')).toBeCloseTo(before.get('a')!);
+    expect(after.get('n')!).toBeLessThan(1500);
+  });
+  it("a side's best is its best month-end world rank, ties to its most dominant spell", () => {
+    const sides = Array.from({ length: 12 }, (_, i) => `s${i}`);
+    const games: Parameters<typeof runElo>[0] = [];
+    let day = 0;
+    const date = () => new Date(Date.UTC(2000, 0, 1) + day++ * 86400_000).toISOString().slice(0, 10);
+    // A round robin three times over (everyone established), s0 winning every game.
+    for (let r = 0; r < 3; r++) for (let i = 0; i < sides.length; i++) for (let j = i + 1; j < sides.length; j++) games.push({ date: date(), home: sides[i]!, away: sides[j]!, home_score: i === 0 ? 3 : 1, away_score: i === 0 ? 0 : 1, tournament: 'FIFA World Cup qualification', neutral: true });
+    const best = bestRanks(games, { members: worldCupSides(games), confederations: new Map(), minInter: 0, minPool: 10 });
+    expect(best.get('s0')?.rank).toBe(1);
+    expect(best.get('s0')!.margin).toBeGreaterThan(0);
+  });
+  it('confederations come from the continental competitions a side plays', () => {
+    const c = confederationsFrom([{ home: 'mexico', away: 'united-states', tournament: 'Gold Cup' }, { home: 'spain', away: 'italy', tournament: 'UEFA Euro qualification' }, { home: 'mexico', away: 'spain', tournament: 'Friendly' }]);
+    expect([c.get('mexico'), c.get('united-states'), c.get('spain')]).toEqual(['CONCACAF', 'CONCACAF', 'UEFA']);
   });
   it('one copy of each match: the World Cup database over martj42 over openfootball, either way round', () => {
     const rows = dedupeResults([

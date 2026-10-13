@@ -19,7 +19,7 @@ import { applyShootouts, NON_FIFA_TOURNAMENT, parseGoals, parseResults, parseSho
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, WCDB_BASE, WCDB_SOURCE, wcdbCodes } from '../../sources/intl/worldcupDb.js';
 import { parseWorldCupTxt, WC_FOLDERS, WC_TXT_BASE, WC_TXT_SOURCE } from '../../sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../sources/intl/nations.js';
-import { runElo } from '../../sources/intl/elo.js';
+import { bestRanks, confederationsFrom, runElo, worldCupSides } from '../../sources/intl/elo.js';
 
 const hash = (s: string) => createHash('sha1').update(s).digest('hex');
 
@@ -305,6 +305,8 @@ async function intlMatch(ctx: JobContext): Promise<void> {
 }
 
 // ---------- intl-elo ----------
+/** Bumped when the Elo method changes (v2 2026-10-13: provisional sides, Olympic weight, best rank). */
+const ELO_METHOD = 'v2';
 /** Every senior result once (the best source of each match), without switched-off sources. */
 export async function intlResults(db: Db, gender: 'm' | 'w', o: { nation?: string } = {}) {
   const off = await sourcesOff(db);
@@ -331,9 +333,12 @@ export function dedupeResults<T extends { source: string; date: string; home: st
 async function intlElo(ctx: JobContext): Promise<void> {
   for (const gender of ['m', 'w'] as const) {
     const results = (await intlResults(ctx.db, gender)).filter((r) => !NON_FIFA_TOURNAMENT.test(r.tournament));
-    const c = await changed(ctx, `elo-${gender}`, [JSON.stringify(results.map((r) => [r.date, r.home, r.away, r.home_score, r.away_score, r.tournament, r.neutral]))]);
+    // The method's version is part of the key: a change to the method recomputes everything once.
+    const c = await changed(ctx, `elo-${gender}-${ELO_METHOD}`, [JSON.stringify(results.map((r) => [r.date, r.home, r.away, r.home_score, r.away_score, r.tournament, r.neutral]))]);
     if (!c.changed) { ctx.note(`${gender}_unchanged`, 'no new results'); continue; }
     const { steps, ratings, played } = runElo(results);
+    // Women's internationals are thinner on record (mostly since 2010): looser bars for a ranked month.
+    const bestRank = bestRanks(results, { members: worldCupSides(results), confederations: confederationsFrom(results), ...(gender === 'w' ? { minMatches: 15, minInter: 3, minPool: 10 } : {}) });
     const at = new Date().toISOString();
     ctx.inc(`${gender}_steps`, await upsertChunked(ctx.db, 'intl_elo', steps.map((s) => ({ gender, nation: s.nation, date: s.date, opponent: s.opponent, rating: Math.round(s.rating * 10) / 10, delta: Math.round(s.delta * 10) / 10, tournament: s.tournament, updated_at: at })),
       { onConflict: 'gender,nation,date,opponent', chunk: 1000 }));
@@ -353,7 +358,8 @@ async function intlElo(ctx: JobContext): Promise<void> {
       if (!b || s.rating > b.r) best.set(s.nation, { r: s.rating, d: s.date });
     }
     const rows = [...ratings].map(([nation, rating]) => ({ gender, nation, rating: Math.round(rating * 10) / 10, matches: played.get(nation)!.n, last_match: played.get(nation)!.last, change_1y: then.has(nation) ? Math.round((rating - then.get(nation)!) * 10) / 10 : null,
-      best: Math.round(best.get(nation)!.r * 10) / 10, best_date: best.get(nation)!.d, rank: null as number | null, updated_at: at }));
+      best: Math.round(best.get(nation)!.r * 10) / 10, best_date: best.get(nation)!.d, rank: null as number | null, updated_at: at,
+      best_rank: bestRank.get(nation)?.rank ?? null, best_rank_date: bestRank.has(nation) ? `${bestRank.get(nation)!.month}-01` : null }));
     const ranked = rows.filter((r) => fifa.has(r.nation) && r.last_match >= fourYears && r.matches >= (gender === 'w' ? 10 : 20)).sort((a, b) => b.rating - a.rating);
     ranked.forEach((r, i) => { r.rank = i + 1; });
     ctx.inc(`${gender}_ranked`, ranked.length);

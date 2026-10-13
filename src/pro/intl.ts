@@ -217,7 +217,7 @@ export async function nationHistory(db: Db, key: string, gender: 'm' | 'w') {
     results(db, gender, key),
     selectAll<any>(db, 'intl_caps', 'source,person,player_name,caps,goals,first_year,last_year,pro_player_id', (q) => q.eq('nation', key).eq('gender', gender).order('caps', { ascending: false, nullsFirst: false }).limit(60)),
     selectAll<{ date: string; rating: number }>(db, 'intl_elo', 'date,rating', (q) => q.eq('gender', gender).eq('nation', key).order('date')),
-    db.from('intl_elo_current').select('rating,rank,matches,last_match,change_1y,best,best_date').eq('gender', gender).eq('nation', key).maybeSingle().then((r) => r.data as any),
+    db.from('intl_elo_current').select('rating,rank,matches,last_match,change_1y,best,best_date,best_rank,best_rank_date').eq('gender', gender).eq('nation', key).maybeSingle().then((r) => r.data as any),
   ]);
   if (!nationRow) return null;
   const record = tallyOf(rows, key);
@@ -273,7 +273,7 @@ export async function headToHead(db: Db, a: string, b: string, gender: 'm' | 'w'
 
 /** Plaibook Elo rankings: FIFA nations that played in the last four years. */
 export async function rankings(db: Db, gender: 'm' | 'w') {
-  const rows = await selectAll<{ nation: string; rating: number; rank: number; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string; updated_at: string }>(db, 'intl_elo_current', 'nation,rating,rank,matches,last_match,change_1y,best,best_date,updated_at',
+  const rows = await selectAll<{ nation: string; rating: number; rank: number; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string; best_rank: number | null; best_rank_date: string | null; updated_at: string }>(db, 'intl_elo_current', 'nation,rating,rank,matches,last_match,change_1y,best,best_date,best_rank,best_rank_date,updated_at',
     (q) => q.eq('gender', gender).not('rank', 'is', null).order('rank'));
   const refs = await nationRefs(db, rows.map((r) => r.nation), gender);
   return { gender, updated_at: rows[0]?.updated_at ?? null, credit: HISTORY_CREDIT.elo, rows: rows.map((r) => ({ ...r, rating: Math.round(Number(r.rating)), change_1y: r.change_1y == null ? null : Math.round(Number(r.change_1y)), best: Math.round(Number(r.best)), nation: refs.get(r.nation) ?? { key: r.nation, name: r.nation, slug: r.nation, logo: null, fifa_code: null, confederation: null } })) };
