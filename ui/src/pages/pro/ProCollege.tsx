@@ -1,5 +1,5 @@
 // College to Pro (/pro/college): every professional player we know played NCAA soccer, grouped by school.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { GraduationCap } from 'lucide-react';
@@ -13,9 +13,15 @@ import { useProGender } from '../../lib/proGender';
 interface Alum { id: number; name: string; slug: string; photo: string | null; nationality: string | null; position: string | null; gender: 'm' | 'w' | null; birth_date: string | null; minutes_recent: number; team: ProTeamRef | null; college_years: number[] }
 interface Hub { total: number; schools: number; groups: { school: { seo: string | null; name: string; logo: string | null }; players: Alum[] }[] }
 
+// Over 3,000 players from 600+ schools: the biggest schools first, a few players each, the rest a click away (all of
+// them at once was thousands of rows and photos). A search shows every match.
+const SCHOOLS_STEP = 30, PER_SCHOOL = 6;
+
 export default function ProCollege() {
   const [gender] = useProGender();
   const search = useUrlText('q');
+  const [shownSchools, setShownSchools] = useState(SCHOOLS_STEP);
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
   const q = useQuery({ queryKey: ['pro-college', gender], queryFn: () => api<Hub>(`/api/pro/college${qs({ gender })}`) });
   const term = search.value.trim().toLowerCase();
   const groups = useMemo(() => (q.data?.groups ?? []).filter((g) => !term || g.school.name.toLowerCase().includes(term) || g.players.some((p) => p.name.toLowerCase().includes(term))), [q.data, term]);
@@ -30,15 +36,18 @@ export default function ProCollege() {
       {q.isPending && <Skeleton className="h-96" />}
       {q.data && !groups.length && <EmptyState title="No links yet" body="Links appear as player profiles with birth dates arrive and the weekly college match runs." />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {groups.map((g) => (
-          <section key={g.school.seo ?? g.school.name} className="frame" aria-label={g.school.name}>
+        {(term ? groups : groups.slice(0, shownSchools)).map((g) => {
+          const key = g.school.seo ?? g.school.name;
+          const all = !!term || open.has(key) || g.players.length <= PER_SCHOOL + 1;
+          return (
+          <section key={key} className="frame" aria-label={g.school.name}>
             <h2 className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-chalk-100">
               <TeamLogo src={g.school.logo} seo={g.school.seo} name={g.school.name} size={22} />
               {g.school.seo ? <Link to={`/teams/${g.school.seo}/${(gender || g.players[0]?.gender) === 'w' ? 'women' : 'men'}`} className="truncate hover:text-pitch-300">{g.school.name}</Link> : <span className="truncate">{g.school.name}</span>}
               <span className="ml-auto text-2xs font-normal tnum text-chalk-500">{g.players.length}</span>
             </h2>
             <ul className="divide-y divide-field-700 border-t border-field-700">
-              {g.players.map((p) => (
+              {(all ? g.players : g.players.slice(0, PER_SCHOOL)).map((p) => (
                 <li key={p.id}>
                   <Link to={proPath.player(p.slug)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-field-800">
                     <PlayerAvatar src={p.photo} name={p.name} size={24} />
@@ -49,9 +58,17 @@ export default function ProCollege() {
                 </li>
               ))}
             </ul>
+            {!all && <button type="button" className="w-full border-t border-field-700 px-3 py-1.5 text-left text-xs text-pitch-300 hover:bg-field-800 hover:text-pitch-200"
+              onClick={() => setOpen((s) => new Set(s).add(key))}>Show all {g.players.length}</button>}
           </section>
-        ))}
+          );
+        })}
       </div>
+      {!term && groups.length > shownSchools && (
+        <div className="flex justify-center">
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setShownSchools((n) => n + SCHOOLS_STEP)}>Show more schools ({fmt.num(groups.length - shownSchools)} left)</button>
+        </div>
+      )}
     </div>
   );
 }

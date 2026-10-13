@@ -8,6 +8,7 @@ import type { QuotaState } from '../sources/apiFootball/client.js';
 import { byKind, byTier, callsPerDay, etaDays, type ProgressRow, type RunCounters } from '../ops/proProgress.js';
 import { schedule as cqSchedule } from '../ops/consoleQueries.js';
 import * as pro from '../pro/queries.js';
+import { memo, memoKey } from '../pro/memo.js';
 import { eastern } from '../jobs/seasons.js';
 import { SLUG } from '../seo/util.js';
 import { PRO_QUOTA_KEY } from '../jobs/pro/shared.js';
@@ -95,17 +96,18 @@ export function registerProApi(app: FastifyInstance): void {
   app.get<{ Querystring: Record<string, string> }>('/api/pro/leaders', async (req, reply) => {
     const q = req.query;
     if (q.position && !(pro.POSITIONS as readonly string[]).includes(q.position)) return reply.code(400).send({ error: 'bad position' });
-    return reply.header('Cache-Control', 'public, max-age=300').send(await pro.leaders(getDb(), {
+    const f: pro.LeadersFilter = {
       stat: q.stat, league: int(q.league), season: season(q.season), position: q.position || null, nationality: q.nationality || null,
       min_age: int(q.min_age), max_age: int(q.max_age), min_minutes: int(q.min_minutes), per90: q.per90 === '1', gender: q.gender === 'w' || q.gender === 'm' ? q.gender : null,
       abroad: q.abroad || null, country: q.country && /^[A-Za-z-]{2,40}$/.test(q.country) ? q.country : null, limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0,
-    }));
+    };
+    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('leaders', f), () => pro.leaders(getDb(), f)));
   });
   app.get('/api/pro/countries', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=3600').send(await pro.countries(getDb())));
   app.get<{ Params: { slug: string }; Querystring: { gender?: string } }>('/api/pro/countries/:slug', async (req, reply) => {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const g = req.query.gender === 'm' || req.query.gender === 'w' ? req.query.gender : undefined;
-    const r = await pro.country(getDb(), req.params.slug, g);
+    const r = await memo(memoKey('country', [req.params.slug, g]), () => pro.country(getDb(), req.params.slug, g));
     return r ? reply.header('Cache-Control', 'public, max-age=600').send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/compare', async (req, reply) => {
@@ -116,8 +118,10 @@ export function registerProApi(app: FastifyInstance): void {
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/transfers', async (req, reply) =>
     reply.header('Cache-Control', 'public, max-age=600').send(await pro.transfersFeed(getDb(), { limit: int(req.query.limit) ?? 50, offset: int(req.query.offset) ?? 0, team: int(req.query.team), us: req.query.scope !== 'world' })));
-  app.get<{ Querystring: Record<string, string> }>('/api/pro/americans-abroad', async (req, reply) =>
-    reply.header('Cache-Control', 'public, max-age=300').send(await pro.americansAbroad(getDb(), { gender: req.query.gender === 'w' || req.query.gender === 'm' ? req.query.gender : null, stat: (pro.LEADER_STATS as readonly string[]).includes(req.query.stat ?? '') ? req.query.stat : 'goals', leaderboard: true })));
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/americans-abroad', async (req, reply) => {
+    const o = { gender: (req.query.gender === 'w' || req.query.gender === 'm' ? req.query.gender : null) as 'm' | 'w' | null, stat: (pro.LEADER_STATS as readonly string[]).includes(req.query.stat ?? '') ? req.query.stat! : 'goals', leaderboard: true };
+    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('abroad', o), () => pro.americansAbroad(getDb(), o), { fresh: 5 * 60_000 }));
+  });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/college', async (req, reply) =>
     reply.header('Cache-Control', 'public, max-age=600').send(await pro.collegeHub(getDb(), { gender: req.query.gender === 'w' || req.query.gender === 'm' ? req.query.gender : null })));
   app.get<{ Params: { school: string; gender: string } }>('/api/pro/college/:school/:gender', async (req, reply) => {

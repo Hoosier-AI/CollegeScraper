@@ -19,7 +19,7 @@ import { registerConsoleApi } from './ui/consoleApi.js';
 import { evaluateHealth } from './ops/health.js';
 import { heartbeats, LANES } from './ops/consoleQueries.js';
 import { PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
-import type { WorkerHeartbeat } from './jobs/runner.js';
+import { runningJobs, type WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -140,6 +140,13 @@ const seo = cfg.SUPABASE_URL ? registerSeo(app, {
 // Built stats viewer (ui/dist); API and health routes are registered above it.
 if (existsSync(uiDist)) {
   // wildcard: true serves whatever is on disk at request time, so a UI rebuild does not need a restart.
+  // Vite's /assets files carry a content hash in their name, so they never change: a year in the browser and at
+  // Cloudflare's edge (max-age=0 had every page view re-ask the server for every script).
+  // (An onSend hook: @fastify/static's own max-age=0 header is written after its setHeaders option.)
+  app.addHook('onSend', async (req, reply, payload) => {
+    if (req.url.startsWith('/assets/') && reply.statusCode === 200) reply.header('cache-control', 'public, max-age=31536000, immutable');
+    return payload;
+  });
   app.register(fastifyStatic, { root: uiDist, prefix: '/', wildcard: true });
 }
 app.setNotFoundHandler((req, reply) => {
@@ -147,6 +154,24 @@ app.setNotFoundHandler((req, reply) => {
   if (req.url.startsWith('/api/') || req.url.startsWith('/v1/') || req.url.startsWith('/health') || !existsSync(uiDist)) return reply.code(404).send({ error: 'not found' });
   return reply.sendFile('index.html');
 });
+
+// Event-loop watchdog: the site and eleven worker lanes share one process, so a job that holds the CPU stalls every
+// page. A tick late by over a second is logged with the jobs running then, and /health reports the last hour's stalls.
+const stalls: { at: number; ms: number; jobs: Record<string, string> }[] = [];
+let lastTick = Date.now();
+setInterval(() => {
+  const now = Date.now(), lag = now - lastTick - 500;
+  lastTick = now;
+  if (lag < 1000) return;
+  const jobs = Object.fromEntries(runningJobs);
+  stalls.push({ at: now, ms: lag, jobs });
+  while (stalls.length > 200 || (stalls[0] && now - stalls[0].at > 3600_000)) stalls.shift();
+  log.warn({ lag_ms: lag, jobs }, 'event loop stalled');
+}, 500).unref();
+const loopStats = () => {
+  const recent = stalls.filter((x) => Date.now() - x.at < 3600_000);
+  return { stalls_1h: recent.length, max_ms_1h: recent.reduce((m, x) => Math.max(m, x.ms), 0), last: recent.slice(-5).map((x) => ({ at: new Date(x.at).toISOString(), ms: x.ms, jobs: x.jobs })) };
+};
 
 // Liveness for Render: the database answers and both worker lanes have beaten recently (see src/ops/health.ts).
 let dbLastOkAt: number | null = null;
@@ -158,7 +183,7 @@ app.get('/health', async (_req, reply) => {
   const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : Object.fromEntries(LANES.map((l) => [l, null]));
   const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: LANES });
   reply.code(h.ok ? 200 : 503);
-  return { ...h, jobs: jobNames().length, api: '/v1', time: new Date().toISOString() };
+  return { ...h, jobs: jobNames().length, api: '/v1', time: new Date().toISOString(), loop: loopStats() };
 });
 
 const port = cfg.PORT;

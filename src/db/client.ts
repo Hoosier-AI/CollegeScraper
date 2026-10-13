@@ -53,6 +53,16 @@ export async function selectAll<T>(db: Db, table: string, columns: string, apply
   return out;
 }
 
+/** selectAll for `column IN (values)`, a few hundred values a request: a long list in one request makes the URL too
+ *  long and PostgREST answers "Bad Request" (thousands of player ids, hundreds of school slugs). */
+export async function selectIn<T>(db: Db, table: string, columns: string, column: string, values: (string | number)[], apply?: (q: any) => any, chunk = 200): Promise<T[]> {
+  const uniq = [...new Set(values)];
+  const parts: (string | number)[][] = [];
+  for (let i = 0; i < uniq.length; i += chunk) parts.push(uniq.slice(i, i + chunk));
+  const rows = await Promise.all(parts.map((p) => selectAll<T>(db, table, columns, (q) => { const b = q.in(column, p); return apply ? apply(b) : b; })));
+  return rows.flat();
+}
+
 export async function kvGet<T = unknown>(db: Db, key: string): Promise<T | null> {
   const { data, error } = await db.from('college_kv').select('value').eq('key', key).maybeSingle();
   if (error) throw new Error(`kv get ${key}: ${error.message}`);

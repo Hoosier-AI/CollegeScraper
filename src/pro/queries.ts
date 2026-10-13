@@ -2,7 +2,8 @@
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
 import { sourcesOff } from './sources.js';
 import type { Db } from '../db/client.js';
-import { kvGet, kvSet, selectAll } from '../db/client.js';
+import { kvGet, kvSet, selectAll, selectIn } from '../db/client.js';
+import { memo, memoKey } from './memo.js';
 import { isUsScene, type LeagueLevel, type LeagueScope } from '../sources/apiFootball/leagues.js';
 import { SHOW_AT } from '../jobs/pro/collegeMatch.js';
 import { leagueAdvancedLeaders, matchAdvanced, playerAdvanced, teamAdvanced } from './sources.js';
@@ -228,14 +229,14 @@ export function mergeSquadDuplicates<T extends { player: { id: number; name?: st
 export async function teamsById(db: Db, ids: number[]): Promise<Map<number, ProTeamRef>> {
   const uniq = [...new Set(ids.filter((n) => Number.isFinite(n)))];
   if (!uniq.length) return new Map();
-  const rows = await selectAll<any>(db, 'pro_teams', TEAM_COLS, (q) => q.in('id', uniq));
+  const rows = await selectIn<any>(db, 'pro_teams', TEAM_COLS, 'id', uniq);
   return new Map(rows.map((t) => [t.id, teamRef(t)]));
 }
 
 export async function leaguesById(db: Db, ids: number[]): Promise<Map<number, ProLeagueRef & { priority: number }>> {
   const uniq = [...new Set(ids)];
   if (!uniq.length) return new Map();
-  const rows = await selectAll<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority', (q) => q.in('id', uniq));
+  const rows = await selectIn<any>(db, 'pro_leagues', LEAGUE_COLS + ',priority', 'id', uniq);
   return new Map(rows.map((l) => [l.id, { ...leagueRef(l), priority: l.priority }]));
 }
 
@@ -735,12 +736,16 @@ export async function transfersFeed(db: Db, o: { limit?: number; offset?: number
 
 /** College to Pro: every confident link, by school. */
 export async function collegeHub(db: Db, o: { gender?: 'm' | 'w' | null } = {}) {
+  return memo(memoKey('college', o.gender ?? null), () => loadCollegeHub(db, o));
+}
+
+async function loadCollegeHub(db: Db, o: { gender?: 'm' | 'w' | null }) {
   const links = await selectAll<any>(db, 'pro_college_links', 'pro_player_id,college_name,school_seo,first_season,last_season,confidence,verified', (q) => q.eq('rejected', false));
   const shown = links.filter((l) => l.verified || Number(l.confidence) >= SHOW_AT);
   const ids = [...new Set(shown.map((l) => l.pro_player_id))];
-  const ppl = new Map((ids.length ? await selectAll<any>(db, 'pro_players', 'id,display_name,slug,photo,nationality,position,gender,current_team_id,minutes_recent,birth_date', (q) => q.in('id', ids)) : []).map((p) => [p.id, p]));
+  const ppl = new Map((ids.length ? await selectIn<any>(db, 'pro_players', 'id,display_name,slug,photo,nationality,position,gender,current_team_id,minutes_recent,birth_date', 'id', ids) : []).map((p) => [p.id, p]));
   const teams = await teamsById(db, [...ppl.values()].map((p) => p.current_team_id).filter(Boolean));
-  const schools = new Map((await selectAll<any>(db, 'college_schools', 'seo,name,logo_svg_url', (q) => q.in('seo', [...new Set(shown.map((l) => l.school_seo).filter(Boolean))].concat(['-'])))).map((s) => [s.seo, s]));
+  const schools = new Map((await selectIn<any>(db, 'college_schools', 'seo,name,logo_svg_url', 'seo', shown.map((l) => l.school_seo).filter(Boolean))).map((s) => [s.seo, s]));
   const bySchool = new Map<string, { school: { seo: string | null; name: string; logo: string | null }; players: any[] }>();
   for (const l of shown) {
     const p = ppl.get(l.pro_player_id);
@@ -800,8 +805,8 @@ export async function americansAbroad(db: Db, o: { gender?: 'm' | 'w' | null; st
   const playerIds = [...new Set([...lines.map((l) => l.player_id), ...upcoming.flatMap((u) => u.player_ids.slice(0, 4))])];
   const fixtureIds = [...new Set([...lines.map((l) => l.fixture_id), ...upcoming.map((u) => u.fixture_id)])];
   const [people, fixtures, board, prio] = await Promise.all([
-    playerIds.length ? selectAll<any>(db, 'pro_players', 'id,display_name,slug,photo,position', (q) => q.in('id', playerIds)) : Promise.resolve([] as any[]),
-    fixtureIds.length ? selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => q.in('id', fixtureIds)) : Promise.resolve([] as any[]),
+    playerIds.length ? selectIn<any>(db, 'pro_players', 'id,display_name,slug,photo,position', 'id', playerIds) : Promise.resolve([] as any[]),
+    fixtureIds.length ? selectIn<any>(db, 'pro_fixtures', FIXTURE_SELECT, 'id', fixtureIds) : Promise.resolve([] as any[]),
     o.leaderboard ? leaders(db, { stat: o.stat ?? 'goals', nationality: 'USA', abroad: 'USA', gender: g, limit: 25 }) : Promise.resolve(null),
     priorities(db),
   ]);

@@ -100,6 +100,9 @@ async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise
   return ctx.counters;
 }
 
+/** The job each lane of this process is running now (the event-loop watchdog in server.ts names them on a stall). */
+export const runningJobs = new Map<string, string>();
+
 export interface WorkerHeartbeat { at: string; pid: number; host: string; run_id: string | null; job: string | null; started_at: string }
 
 /** Worker loop: claim → execute → repeat; idles when the queue is empty. A named lane writes a heartbeat to
@@ -131,7 +134,9 @@ export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: Abort
     }
     const ctx = makeContext(db, run.id, run.params ?? {});
     current = { run_id: run.id, job: run.job }; await beat();
+    runningJobs.set(opts.lane ?? 'default', run.job);
     try { await execute(db, ctx, run.job, fn); } catch { /* recorded */ }
+    runningJobs.delete(opts.lane ?? 'default');
     current = null;
   }
   clearInterval(beatTimer);

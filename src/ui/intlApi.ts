@@ -4,6 +4,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/client.js';
 import * as pro from '../pro/queries.js';
+import { memo, memoKey } from '../pro/memo.js';
 import * as intl from '../pro/intl.js';
 import { eastern } from '../jobs/seasons.js';
 import { intlConsole } from '../ops/intlConsole.js';
@@ -44,11 +45,12 @@ export function registerIntlApi(app: FastifyInstance): void {
   app.get<{ Querystring: Record<string, string> }>('/api/intl/leaders', async (req, reply) => {
     const q = req.query;
     if (q.position && !(pro.POSITIONS as readonly string[]).includes(q.position)) return reply.code(400).send({ error: 'bad position' });
-    return reply.header('Cache-Control', 'public, max-age=300').send(await pro.leaders(getDb(), {
+    const f: pro.LeadersFilter = {
       stat: q.stat, league: int(q.league), season: season(q.season), position: q.position || null, nationality: q.nationality || null,
       min_age: int(q.min_age), max_age: int(q.max_age), min_minutes: int(q.min_minutes), per90: q.per90 === '1', gender: q.gender === 'w' || q.gender === 'm' ? q.gender : null,
       limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0, scope: 'intl', level: level(q.level),
-    }));
+    };
+    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('leaders', f), () => pro.leaders(getDb(), f)));
   });
 
   // A nation's history (open sources): its address is its senior side's slug, or the nation's key when the provider
