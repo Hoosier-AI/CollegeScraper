@@ -17,6 +17,7 @@ import type { KeyStore } from '../api/keys.js';
 import type { UsageMeter } from '../api/usage.js';
 import type { AnalyticsMeter } from '../api/analytics.js';
 import { insights } from '../ops/insights.js';
+import { forgetSwr } from '../ops/swr.js';
 
 export interface ConsoleOptions {
   keyStore: KeyStore | null;
@@ -59,6 +60,7 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
     const overrides = { ...(await schedulerOverrides(db)) };
     overrides[req.params.job] = { enabled: req.body?.enabled !== false };
     await setKv(db, KV.schedulerOverrides, overrides);
+    forgetSwr('console-pro');
     return cq.schedule(db);
   });
   app.post<{ Params: { job: string } }>('/api/console/schedule/:job/run', async (req, reply) => {
@@ -88,6 +90,7 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
     // One news feed on or off (publishers, GDELT queries, the Guardian): ids like 'feed:bbc-football'.
     if (b.news_feeds && typeof b.news_feeds === 'object') for (const [id, on] of Object.entries(b.news_feeds)) if (/^(feed|gdelt|guardian):[a-z0-9-]+$/.test(id) && typeof on === 'boolean') await db.from('news_sources').update({ enabled: on }).eq('id', id);
     forgetKv();
+    forgetSwr('console-pro');
     return cq.settings(db);
   });
 

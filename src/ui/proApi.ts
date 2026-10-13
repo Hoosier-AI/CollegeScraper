@@ -17,6 +17,7 @@ import { isBot, refreshPlayerOnView } from '../pro/playerRefresh.js';
 import { refreshTeamOnView } from '../pro/teamRefresh.js';
 import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
 import { BROKEN_AT, sourcesOff } from '../pro/sources.js';
+import { swr } from '../ops/swr.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1900 && n < 2100 ? n : null; };
@@ -142,12 +143,16 @@ export function registerProApi(app: FastifyInstance): void {
   // document so the 30-second poll stays small. ?scope=us|top|all&seasons=current|all
   app.get<{ Querystring: Record<string, string> }>('/api/console/pro/leagues', async (req) => {
     const scope = (['us', 'top', 'all'] as const).find((x) => x === req.query.scope) ?? 'us';
-    return crawlLeagues(getDb(), { scope, seasons: req.query.seasons === 'all' ? 'all' : 'current' });
+    const seasons = req.query.seasons === 'all' ? 'all' : 'current';
+    return swr(`console-pro:leagues:${scope}:${seasons}`, 60_000, () => crawlLeagues(getDb(), { scope, seasons }));
   });
 
   // ?parts=summary leaves out the sources and crawl blocks (the heavy part) for callers that only show the numbers.
   app.get<{ Querystring: Record<string, string> }>('/api/console/pro', async (req) => {
     const summary = req.query.parts === 'summary';
+    return swr(`console-pro:${summary ? 'summary' : 'full'}`, 45_000, () => proConsole(summary));
+  });
+  async function proConsole(summary: boolean) {
     const db = getDb();
     const cfg = loadConfig();
     const count = (t: string, f?: (q: any) => any, mode: 'exact' | 'estimated' = 'exact') => { let q = db.from(t).select('*', { count: mode, head: true }); if (f) q = f(q); return q.then((r: { count: number | null }) => r.count ?? 0); };
@@ -194,7 +199,7 @@ export function registerProApi(app: FastifyInstance): void {
       // Kept for the Stats console's own Pro card (older shape).
       leagues, enabled, fixtures, finals, detailed, players, profiled, college_links: links,
     };
-  });
+  }
 }
 
 /**

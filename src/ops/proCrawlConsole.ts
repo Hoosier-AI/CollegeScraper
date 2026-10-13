@@ -180,14 +180,18 @@ const NEWS_KINDS: Record<string, string[]> = { 'news-schools': ['school'], 'news
 async function newsBlock(db: Db): Promise<Record<string, { feeds: number; on: number; failing: number; stories_7d: number; last_ok_at: string | null }>> {
   const sources = await selectAll<{ id: string; kind: string; enabled: boolean; fails: number; last_ok_at: string | null }>(db, 'news_sources', 'id,kind,enabled,fails,last_ok_at');
   const since = new Date(Date.now() - 7 * 86400_000).toISOString();
-  const arts = await selectAll<{ source_id: string }>(db, 'news_articles', 'source_id', (q) => q.gte('fetched_at', since));
-  const kindOf = new Map(sources.map((s) => [s.id, s.kind]));
+  // Stories per source kind by their id prefix ('school:', 'feed:' ...): counts, not rows.
+  const PREFIX: Record<string, string> = { school: 'school:', publisher: 'feed:', gdelt: 'gdelt:', guardian: 'guardian:', club: 'club:', federation: 'federation:' };
+  const counts = Object.fromEntries(await Promise.all(Object.entries(PREFIX).map(async ([kind, pre]) => {
+    const { count } = await db.from('news_articles').select('id', { count: 'exact', head: true }).like('source_id', `${pre}%`).gte('fetched_at', since);
+    return [kind, count ?? 0] as const;
+  })));
   const out: Record<string, { feeds: number; on: number; failing: number; stories_7d: number; last_ok_at: string | null }> = {};
   for (const [site, kinds] of Object.entries(NEWS_KINDS)) {
     const mine = sources.filter((s) => kinds.includes(s.kind));
     out[site] = {
       feeds: mine.length, on: mine.filter((s) => s.enabled).length, failing: mine.filter((s) => s.enabled && s.fails >= 3).length,
-      stories_7d: arts.filter((a) => kinds.includes(kindOf.get(a.source_id) ?? '')).length,
+      stories_7d: kinds.reduce((n, k) => n + (counts[k] ?? 0), 0),
       last_ok_at: mine.map((s) => s.last_ok_at).filter(Boolean).sort().pop() ?? null,
     };
   }
