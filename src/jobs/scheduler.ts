@@ -82,7 +82,11 @@ export const SCHEDULE: ScheduleEntry[] = [
 const proEnabled = () => !!loadConfig().API_FOOTBALL_KEY;
 
 export function clockAt(now: Date, live: LiveSettings): ScheduleClock {
-  return { m: now.getUTCMinutes(), h: now.getUTCHours(), month: now.getUTCMonth() + 1, dow: now.getUTCDay(), et: eastern(now), live };
+  // Eastern time only when an entry reads it: nextFire walks up to 8 days a minute at a time for every entry, and
+  // working out Eastern time for each of those minutes held the whole process (every page of the site) ~12 s a minute.
+  const t = new Date(now);
+  let et: ScheduleClock['et'] | undefined;
+  return { m: t.getUTCMinutes(), h: t.getUTCHours(), month: t.getUTCMonth() + 1, dow: t.getUTCDay(), get et() { return (et ??= eastern(t)); }, live };
 }
 
 /** The next minute after `from` at which the entry is due (gate not considered), or null within 8 days. */
@@ -100,6 +104,16 @@ export interface SchedulerState { tick_at: string; last_fired: Record<string, st
 export function startScheduler(db: Db, opts: { signal?: AbortSignal } = {}): void {
   let lastSlot = '';
   const lastFired: Record<string, string> = {};
+  // Each entry's next fire, worked out again only once it has passed (or the live settings change).
+  // None within 8 days (out of season) is asked again after an hour.
+  const nextCache = new Map<string, { at: string | null; live: string; checked: number }>();
+  const nextOf = (e: ScheduleEntry, now: Date, live: LiveSettings) => {
+    const key = JSON.stringify(live), hit = nextCache.get(e.job);
+    if (hit && hit.live === key && (hit.at ? Date.parse(hit.at) > now.getTime() : now.getTime() - hit.checked < 3600_000)) return hit.at;
+    const at = nextFire(e, now, live)?.toISOString() ?? null;
+    nextCache.set(e.job, { at, live: key, checked: now.getTime() });
+    return at;
+  };
   const tick = async () => {
     const now = new Date();
     const key = now.toISOString().slice(0, 16); // minute resolution
@@ -117,7 +131,7 @@ export function startScheduler(db: Db, opts: { signal?: AbortSignal } = {}): voi
           lastFired[e.job] = now.toISOString();
         }
       }
-      const state: SchedulerState = { tick_at: now.toISOString(), last_fired: lastFired, next: Object.fromEntries(SCHEDULE.map((e) => [e.job, nextFire(e, now, live)?.toISOString() ?? null])), paused };
+      const state: SchedulerState = { tick_at: now.toISOString(), last_fired: lastFired, next: Object.fromEntries(SCHEDULE.map((e) => [e.job, nextOf(e, now, live)])), paused };
       await setKv(db, KV.schedulerState, state);
     } catch (err) { log.warn({ err: err instanceof Error ? err.message : String(err) }, 'scheduler tick failed'); }
   };

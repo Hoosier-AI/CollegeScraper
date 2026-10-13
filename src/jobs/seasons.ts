@@ -20,8 +20,10 @@ export function* eachDate(from: string, to: string): Generator<string> {
 }
 
 /** Wall-clock parts in America/New_York: NCAA scoreboards and college_games.game_date are Eastern dates. */
+// One formatter for the process: building one is slow, and the scheduler asks thousands of times a minute.
+const EASTERN = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
 export function eastern(d: Date = new Date()): { date: string; hour: number; minute: number; month: number } {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d);
+  const parts = EASTERN.formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
   const hour = Number(get('hour')) % 24; // some ICU builds print midnight as "24"
   return { date: `${get('year')}-${get('month')}-${get('day')}`, hour, minute: Number(get('minute')), month: Number(get('month')) };
