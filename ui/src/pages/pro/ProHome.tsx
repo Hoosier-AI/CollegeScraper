@@ -1,5 +1,6 @@
 // Plaibook Stats Pro front door, US first (most visitors are American): today's US matches (MLS, NWSL, USL and the
 // leagues below, and the cups US clubs play in), Americans abroad, then the big competitions around the world.
+import { NewsSection } from '../../components/news/News';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
@@ -103,6 +104,8 @@ export default function ProHome() {
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{abroad.map((l) => <AbroadCard key={`${l.player.id}-${l.match.id}`} l={l} />)}</ul>
             </Section>
           )}
+
+          <NewsSection title="Latest news" q={{ scope: 'pro', gender }} max={5} right={<Link to="/pro/news" className="text-sm text-pitch-300 hover:text-pitch-200">All pro news</Link>} />
 
           {world.length > 0 && (
             <Section title="Around the world today">

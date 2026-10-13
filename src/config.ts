@@ -36,6 +36,8 @@ const schema = z.object({
   // minute; shared, so the crawler keeps a floor of requests untouched each day). PRO_RESERVE is the floor for everyday
   // jobs, PRO_BACKFILL_RESERVE for the crawl. PRO_PER_MIN is a ceiling: the pace is two thirds of the plan's per-minute limit.
   API_FOOTBALL_KEY: z.string().min(10).optional(),
+  // News: the Guardian's Content API (football section). Off until set; the free key is for non-commercial use.
+  GUARDIAN_API_KEY: z.string().min(10).optional(),
   API_FOOTBALL_BASE: z.string().url().optional(),
   PRO_RESERVE: z.coerce.number().int().nonnegative().default(1500),
   PRO_BACKFILL_RESERVE: z.coerce.number().int().nonnegative().default(2500),
@@ -75,6 +77,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     SEO_BOT_URL: env.SEO_BOT_URL || undefined,
     SEO_BOT_SECRET: env.SEO_BOT_SECRET || undefined,
     API_FOOTBALL_KEY: env.API_FOOTBALL_KEY || undefined,
+    GUARDIAN_API_KEY: env.GUARDIAN_API_KEY || undefined,
     API_FOOTBALL_BASE: env.API_FOOTBALL_BASE || undefined,
     PRO_RESERVE: env.PRO_RESERVE || undefined,
     PRO_BACKFILL_RESERVE: env.PRO_BACKFILL_RESERVE || undefined,

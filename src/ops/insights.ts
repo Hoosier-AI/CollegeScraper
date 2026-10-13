@@ -33,6 +33,8 @@ export interface AttentionInput {
   sources: { source: string; league: string; season: number; rate: number; compared: number }[];
   deploy: { status: string; commit: string | null; at: string | null } | null;
   traffic: { views_7d: number; views_prev_7d: number; zero_searches_7d: number };
+  /** News sources switched on, by kind, with how many keep failing (3+ in a row and nothing read for a day). */
+  news?: { kind: string; name: string; on: number; failing: number }[];
 }
 
 const FAILED_DEPLOY = new Set(['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']);
@@ -102,15 +104,36 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   if (t.views_prev_7d >= 50 && t.views_7d < t.views_prev_7d * 0.6) add('warn', 'traffic:drop', 'Site traffic down', `${t.views_7d.toLocaleString('en-US')} page views in the last 7 days, ${Math.round((1 - t.views_7d / t.views_prev_7d) * 100)}% fewer than the 7 days before.`, '/stats/traffic');
   if (t.zero_searches_7d >= 5) add('info', 'search:zero', `${t.zero_searches_7d} searches found nothing this week`, 'What visitors looked for and did not find: content to add.', '/stats/traffic#searches');
 
+  // News: a publisher, GDELT, Guardian, club or federation source that keeps failing, or school feeds failing at scale.
+  for (const n of i.news ?? []) {
+    if (!n.failing) continue;
+    if (n.kind === 'school') { if (n.on >= 20 && n.failing / n.on > 0.2) add('warn', 'news:schools', `${n.failing} of ${n.on} school news feeds failing`, 'Their athletics sites stopped answering the feed. The rest keep coming in.', '/stats/crawling?part=pro'); }
+    else add('warn', `news:${n.kind}`, `${n.name} news ${n.failing === 1 ? 'feed' : `feeds (${n.failing})`} failing`, 'No stories read from it for a day. See its card on Crawling; switch it off in Settings if it moved.', '/stats/crawling?part=pro');
+  }
+
   const rank: Record<Level, number> = { error: 0, warn: 1, info: 2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
+}
+
+/** News sources by kind (publishers one by one): how many are on and how many keep failing (3+ failures, nothing for a day). */
+export function newsGroups(rows: { kind: string; name: string; enabled: boolean; fails: number; last_ok_at: string | null }[], now = Date.now()): NonNullable<AttentionInput['news']> {
+  const failing = (r: (typeof rows)[number]) => r.fails >= 3 && (!r.last_ok_at || now - Date.parse(r.last_ok_at) > 86400_000);
+  const out = new Map<string, { kind: string; name: string; on: number; failing: number }>();
+  for (const r of rows) {
+    const key = r.kind === 'school' ? 'school' : r.kind === 'publisher' ? `publisher:${r.name}` : r.kind === 'gdelt' ? 'gdelt' : r.kind;
+    const name = r.kind === 'school' ? 'School' : r.kind === 'gdelt' ? 'GDELT' : r.kind === 'club' ? 'Club' : r.kind === 'federation' ? 'Federation' : r.name;
+    const g = out.get(key) ?? { kind: r.kind, name, on: 0, failing: 0 };
+    g.on += 1; if (failing(r)) g.failing += 1;
+    out.set(key, g);
+  }
+  return [...out.values()];
 }
 
 /** The content counts charted day by day. Cheap: the world numbers come from their 5-minute cache. */
 export async function contentCounts(db: Db): Promise<Record<string, number>> {
   const season = currentSeason();
   const n = (t: string, f?: (q: any) => any, mode: 'exact' | 'estimated' = 'exact') => { let q = db.from(t).select('*', { count: mode, head: true }); if (f) q = f(q); return q.then((r: { count: number | null }) => r.count ?? 0); };
-  const [world, games, finals, boxed, programs, links, predictions, americans] = await Promise.all([
+  const [world, games, finals, boxed, programs, links, predictions, americans, newsTotal, newsLinked] = await Promise.all([
     worldCoverage(db),
     n('college_games', (q) => q.eq('season', season)),
     n('college_games', (q) => q.eq('season', season).eq('status', 'final')),
@@ -119,6 +142,8 @@ export async function contentCounts(db: Db): Promise<Record<string, number>> {
     n('pro_college_links', (q) => q.eq('rejected', false).or('verified.eq.true,confidence.gte.0.85')),
     n('pro_fixture_predictions', undefined, 'estimated'),
     n('pro_players', (q) => q.eq('american', true), 'estimated'),
+    n('news_articles', (q) => q.gte('fetched_at', new Date(Date.now() - 86400_000).toISOString())),
+    db.from('news_links').select('article_id', { count: 'exact', head: true }).eq('is_primary', true).gte('published_at', new Date(Date.now() - 86400_000).toISOString()).then((r: { count: number | null }) => r.count ?? 0),
   ]);
   return {
     college_games: games, college_finals: finals, college_finals_with_box: boxed, college_programs: programs,
@@ -128,6 +153,7 @@ export async function contentCounts(db: Db): Promise<Record<string, number>> {
     pro_players_with_stats: world?.players_with_season_stats ?? 0, pro_clubs_with_squad: world?.clubs_with_squad ?? 0,
     pro_leagues_live: world?.leagues_current_with_fixtures ?? 0, pro_transfers: world?.transfers ?? 0,
     college_to_pro_links: links, predictions, americans, db_bytes: world?.db_bytes ?? 0,
+    news_stories_24h: newsTotal, news_linked_24h: newsLinked,
   };
 }
 
@@ -186,7 +212,7 @@ async function build(db: Db, days: number, startedAt: number) {
   const render = cfg.RENDER_API_KEY && cfg.RENDER_SERVICE_ID ? new RenderClient(cfg.RENDER_API_KEY, cfg.RENDER_SERVICE_ID) : null;
   const n = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);
 
-  const [h, sched, rollup, paused, traffic, traffic14, usage, growth, quota, progress, proRuns, live, liveFresh, running, queued, quality, agreement, deploys, world, stages] = await Promise.all([
+  const [h, sched, rollup, paused, traffic, traffic14, usage, growth, quota, progress, proRuns, live, liveFresh, running, queued, quality, agreement, deploys, world, stages, newsSources] = await Promise.all([
     serviceHealth(db, startedAt),
     scheduleState(db),
     jobRollup(db),
@@ -207,6 +233,7 @@ async function build(db: Db, days: number, startedAt: number) {
     render ? render.deploys(1).catch(() => [] as RenderDeploy[]) : Promise.resolve([] as RenderDeploy[]),
     worldCoverage(db),
     db.rpc('college_sync_progress', { p_season: season }).then((r) => (r.data ?? []) as any[]),
+    selectAll<{ kind: string; name: string; enabled: boolean; fails: number; last_ok_at: string | null }>(db, 'news_sources', 'kind,name,enabled,fails,last_ok_at', (q) => q.eq('enabled', true)).catch(() => []),
   ]);
 
   // Traffic: names for the top pages, and this week against last week.
@@ -254,6 +281,7 @@ async function build(db: Db, days: number, startedAt: number) {
     live: { games_live: live, with_fresh_stats: liveFresh },
     quality: (latestQ?.checks ?? []).map((c) => ({ id: c.id, label: c.label, count: c.count, previous: prevCount.get(c.id) ?? null })),
     sources, deploy, traffic: { views_7d: views7, views_prev_7d: viewsPrev7, zero_searches_7d: zero7 },
+    news: newsGroups(newsSources, now),
   });
 
   const lanes = Object.values(h.lanes);

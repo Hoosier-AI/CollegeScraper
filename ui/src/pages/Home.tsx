@@ -1,5 +1,6 @@
 // The front door: a matchday dashboard. Search and what is happening right now up top; then one switch
 // (men's/women's, division) drives the matches, the poll, the scoring leaders and the conference races below.
+import { NewsPanel } from './home/NewsPanel';
 import { SearchBox } from '../components/SearchBox';
 import { RightNow } from './home/RightNow';
 import { ScopeBar, useScope } from './home/Scope';
@@ -36,6 +37,10 @@ export default function Home() {
         <MatchesPanel scope={scope} className="md:col-span-2 lg:col-span-8 lg:row-span-2" />
         <PollPanel scope={scope} className="lg:col-span-4" />
         <LeadersPanel scope={scope} className="lg:col-span-4" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <NewsPanel scope={scope} className="lg:col-span-12" />
       </div>
 
       <ConferenceRaces scope={scope} />

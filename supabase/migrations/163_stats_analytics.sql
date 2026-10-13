@@ -68,8 +68,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     'search_days', coalesce((SELECT jsonb_agg(t ORDER BY day) FROM (SELECT day, sum(searches)::int AS searches, sum(zero_results)::int AS zero_results FROM stats_searches_daily, since WHERE day >= since.d GROUP BY day) t), '[]'),
     'section_days', coalesce((SELECT jsonb_agg(t ORDER BY day) FROM (
       SELECT day,
-        sum(views) FILTER (WHERE page_group LIKE 'College%' OR page_group = 'Search')::int AS college,
-        sum(views) FILTER (WHERE page_group LIKE 'Pro%' OR page_group IN ('College to Pro', 'Americans abroad'))::int AS pro
+        sum(views) FILTER (WHERE (page_group LIKE 'College%' AND page_group <> 'College to Pro') OR page_group = 'Search')::int AS college,
+        sum(views) FILTER (WHERE page_group LIKE 'Pro%' OR page_group LIKE 'International%' OR page_group IN ('College to Pro', 'Americans abroad'))::int AS pro
       FROM stats_views_daily, since WHERE day >= since.d GROUP BY day) t), '[]')
   );
 $$;

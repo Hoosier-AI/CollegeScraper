@@ -60,12 +60,12 @@ export class Sitemaps {
     const file = m[1]!;
     if (file === 'core.xml') {
       const confs = await this.data.sitemapConferences();
-      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, ...confs]);
+      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/news' }, ...confs]);
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
     if (this.intl && file === 'intl-core.xml') return urlsetXml(this.baseUrl, await this.intl.sitemap());
     if (this.pro) {
-      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/sources' }, ...(await this.pro.sitemapLeagues())]);
+      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro' }, { path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/news' }, { path: '/intl/news' }, { path: '/pro/sources' }, ...(await this.pro.sitemapLeagues())]);
       if (file === 'pro-countries.xml') return urlsetXml(this.baseUrl, await this.pro.sitemapCountries());
       const p = PRO_FILE.exec(file);
       if (p) {

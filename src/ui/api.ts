@@ -8,6 +8,7 @@ import { isBot } from '../pro/onView.js';
 import { eastern } from '../jobs/seasons.js';
 import { registerProApi } from './proApi.js';
 import { registerIntlApi } from './intlApi.js';
+import { registerNewsApi } from '../news/queries.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -45,6 +46,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   // Plaibook Stats Pro (/pro pages) and International (/intl pages).
   registerProApi(app);
   registerIntlApi(app);
+  // News for College, Pro and International (src/news).
+  registerNewsApi(app);
 
   app.get<{ Querystring: Record<string, string> }>('/api/programs', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

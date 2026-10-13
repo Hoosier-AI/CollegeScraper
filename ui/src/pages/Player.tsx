@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
+import { NewsSection } from '../components/news/News';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
@@ -109,6 +110,7 @@ export default function Player() {
       {latest?.ranks?.length > 0 && <Section title={`National ranks, ${latest.season}`}><ul className="flex flex-wrap gap-1.5">{latest.ranks.map((r: any) => <li key={r.category} className="chip"><span className="text-chalk-100 tnum">{fmt.ordinal(r.rank)}</span>{r.category}<span className="text-chalk-500 tnum">{n(r.value, Number(r.value) % 1 ? 2 : 0)}</span></li>)}</ul></Section>}
       {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => <li key={t.id} className="px-3 py-2">{t.from_season} to {t.to_season}{admin && <span className="text-chalk-500"> (confidence {t.confidence}, {t.evidence?.rule})</span>}</li>)}</ul></Section>}
       {honors.length > 0 && <Section title="Honors"><ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any) => <li key={h.id} className="flex items-center gap-2 px-3 py-2"><span>{h.text}</span>{h.source_url && <a className="ml-auto inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={h.source_url} target="_blank" rel="noreferrer">source <ExternalLink size={11} aria-hidden /></a>}</li>)}</ul></Section>}
+      {id && <NewsSection title="In the news" q={{ player: id }} hide={`college_player:${id}`} max={5} />}
       <Section title="Game log">
         <DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} caption="Game by game" rowHref={(r) => href(`/matches/${r.game.id}`)} dense defaultSort={{ key: 'date', dir: 'desc' }} empty={<EmptyState title="No box scores yet" body="Game-by-game lines appear once box scores are collected." />} />
       </Section>

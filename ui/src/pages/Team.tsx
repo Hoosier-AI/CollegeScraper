@@ -10,9 +10,10 @@ import { RunProgress } from '../components/RunProgress';
 import { TeamMasthead } from './team/Masthead';
 import { RosterTable } from './team/RosterTable';
 import { GamesList } from './team/GamesList';
+import { NewsFeed } from '../components/news/News';
 
-type Tab = 'roster' | 'games' | 'season' | 'coaches' | 'honors' | 'pros';
-const TABS: Tab[] = ['roster', 'games', 'season', 'coaches', 'honors', 'pros'];
+type Tab = 'roster' | 'games' | 'season' | 'news' | 'coaches' | 'honors' | 'pros';
+const TABS: Tab[] = ['roster', 'games', 'season', 'news', 'coaches', 'honors', 'pros'];
 
 export default function Team() {
   // /teams/<uuid> (links inside the app) or /teams/<school>/<men|women> (the address search engines see).
@@ -46,6 +47,7 @@ export default function Team() {
     { id: 'roster' as Tab, label: 'Roster', count: roster.data?.length },
     { id: 'games' as Tab, label: 'Matches', count: games.data?.length },
     { id: 'season' as Tab, label: 'Season profile' },
+    { id: 'news' as Tab, label: 'News' },
     { id: 'coaches' as Tab, label: 'Coaches', count: t.coaches?.length },
     ...(alumni.data?.players.length ? [{ id: 'pros' as Tab, label: 'Pro alumni', count: alumni.data.players.length }] : []),
     { id: 'honors' as Tab, label: 'Honors', count: honors.length || undefined },
@@ -76,6 +78,7 @@ export default function Team() {
       {tab === 'roster' && <RosterTable rows={roster.data ?? []} loading={roster.isPending} playerHref={(r) => `/players/${r.player?.id}`} />}
       {tab === 'games' && <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />}
       {tab === 'season' && <SeasonProfile t={t} id={id} href={href} admin={admin} />}
+      {tab === 'news' && <NewsFeed q={{ program: id }} hide={`program:${id}`} empty="No news for this team yet" />}
       {tab === 'coaches' && (t.coaches?.length
         ? <ul className="frame divide-y divide-field-700">{t.coaches.map((c: any) => <li key={c.college_coaches?.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={36} /><div><div className="font-medium text-chalk-100">{c.college_coaches?.name}</div><div className="text-xs text-chalk-400">{c.title}{c.is_head && <Badge tone="teal" className="ml-2">Head coach</Badge>}</div></div></li>)}</ul>
         : <EmptyState title="No coaches listed" body="The staff page has not been collected for this season." />)}

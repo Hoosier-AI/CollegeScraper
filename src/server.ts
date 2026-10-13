@@ -29,6 +29,7 @@ import { registerSeo } from './seo/routes.js';
 import { DbSeoData } from './seo/data.js';
 import { DbProSeoData } from './seo/pro/data.js';
 import { DbIntlSeoData } from './seo/intl/data.js';
+import { feed as newsFeed } from './news/queries.js';
 import { fileTemplate } from './seo/template.js';
 import { BotVerifier } from './seo/bots.js';
 import { DEFAULT_PUBLIC_URL } from './seo/util.js';
@@ -132,6 +133,7 @@ const seo = cfg.SUPABASE_URL ? registerSeo(app, {
   indexNowKey: cfg.INDEXNOW_KEY ?? null,
   pro: new DbProSeoData(getDb()),
   intl: new DbIntlSeoData(getDb()),
+  news: (area) => newsFeed(getDb(), { scope: area, limit: 40 }),
   log,
 }) : null;
 

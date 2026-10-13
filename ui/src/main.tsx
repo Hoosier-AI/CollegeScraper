@@ -41,6 +41,9 @@ const IntlTournaments = lazy(() => import('./pages/intl/IntlTournaments'));
 const IntlTeams = lazy(() => import('./pages/intl/IntlTeams'));
 const IntlRankings = lazy(() => import('./pages/intl/IntlRankings'));
 const IntlH2H = lazy(() => import('./pages/intl/IntlH2H'));
+const ProNews = lazy(() => import('./pages/pro/ProNews'));
+const IntlNews = lazy(() => import('./pages/intl/IntlNews'));
+const News = lazy(() => import('./pages/News'));
 
 // A deploy replaces the chunk files; a page opened before it would fail to load the next chunk. Reload once.
 window.addEventListener('vite:preloadError', (e) => {
@@ -83,6 +86,7 @@ const router = createBrowserRouter([
           { path: 'players/:id', element: <Player /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
+          { path: 'news', element: <News /> },
           { path: 'admin', element: <Admin /> },
           { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
           { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
@@ -114,6 +118,8 @@ const router = createBrowserRouter([
           { path: 'intl/players/:slug', element: <ProPlayer /> },
           { path: 'intl/rankings', element: <IntlRankings /> },
           { path: 'intl/h2h', element: <IntlH2H /> },
+          { path: 'intl/news', element: <IntlNews /> },
+          { path: 'pro/news', element: <ProNews /> },
           { path: '*', element: <NotFound /> },
         ],
       },

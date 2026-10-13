@@ -155,6 +155,13 @@ describe('attention rules', () => {
     i.rollup.live!.last_done = { finished_at: iso(20 * 60_000) };
     expect(attentionFrom(i).map((a) => a.id)).toEqual(['live:stopped']);
   });
+  it('flags news sources that keep failing, and school feeds only at scale', () => {
+    const i = base();
+    i.news = [{ kind: 'publisher', name: 'ESPN', on: 1, failing: 1 }, { kind: 'school', name: 'School', on: 1500, failing: 40 }];
+    expect(attentionFrom(i).map((a) => a.id)).toEqual(['news:publisher']);
+    i.news = [{ kind: 'school', name: 'School', on: 1500, failing: 400 }];
+    expect(attentionFrom(i)[0]).toMatchObject({ id: 'news:schools', title: '400 of 1500 school news feeds failing' });
+  });
   it('reports a block instead of the floor', () => {
     const i = base();
     i.quota = { ...i.quota!, remaining: 0, blocked_until: iso(-3600_000) };

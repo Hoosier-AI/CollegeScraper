@@ -18,6 +18,8 @@ import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, pro
 import type { IntlSeoData } from './intl/data.js';
 import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlHomeBody, intlHomeHead, intlLeadersBody, intlLeadersHead, intlMatchesBody, intlMatchesHead, intlPlayerBody, intlPlayerHead, intlRankingsBody, intlRankingsHead, intlTeamsBody, intlTeamsHead, intlTournamentsBody, intlTournamentsHead } from './intl/pages.js';
 import { eastern } from '../jobs/seasons.js';
+import { newsBody, newsHead, type NewsArea } from './news.js';
+import type { Story } from '../news/queries.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 const REDIRECT_CACHE_CONTROL = 'public, max-age=3600';
@@ -45,6 +47,8 @@ export interface SeoOptions {
   pro?: ProSeoData | null;
   /** International pages (/intl/...): national teams. Needs pro (a tournament, team or match page is Pro's model). */
   intl?: IntlSeoData | null;
+  /** The News pages' stories (src/news). Absent in tests and without a database. */
+  news?: ((area: NewsArea) => Promise<Story[]>) | null;
 }
 
 export type CachedPage = { status: 200; html: string } | { status: 301; path: string };
@@ -118,6 +122,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     return { head: teamsHead(t, c), body: teamsBody(t, c) };
   }));
 
+  if (opts.news) { const news = opts.news; app.get('/news', (req, reply) => serve(req, reply, keyOf(req), async () => { const s = await news('college'); return { head: newsHead('college', s, ctx()), body: newsBody('college', s) }; })); }
   app.get('/rankings', (req, reply) => serve(req, reply, keyOf(req), async () => {
     const c = ctx(); const r = await data.rankings(seasonParam(req) ?? c.currentSeason);
     return { head: rankingsHead(r, c), body: rankingsBody(r, c) };
@@ -197,6 +202,11 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     app.get('/pro/sources', (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: proSourcesHead(ctx()), body: proSourcesBody() })));
     app.get('/pro/transfers', (req, reply) => serve(req, reply, keyOf(req), async () => { const t = await pro.transfers(); return { head: proTransfersHead(t, ctx()), body: proTransfersBody(t) }; }));
     app.get('/pro/abroad', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.abroad(); return { head: proAbroadHead(p, ctx()), body: proAbroadBody(p) }; }));
+    if (opts.news) {
+      const news = opts.news;
+      app.get('/pro/news', (req, reply) => serve(req, reply, keyOf(req), async () => { const s = await news('pro'); return { head: newsHead('pro', s, ctx()), body: newsBody('pro', s) }; }));
+      app.get('/intl/news', (req, reply) => serve(req, reply, keyOf(req), async () => { const s = await news('international'); return { head: newsHead('international', s, ctx()), body: newsBody('international', s) }; }));
+    }
     // A slug page, or a 301 when the slug was renamed or lives in the other section (a national team asked for under
     // /pro, a club under /intl), or a real 404. section: where the page belongs, from its own model.
     const proPage = <T>(kind: 'league' | 'team' | 'player' | 'match', load: (slug: string, req: FastifyRequest) => Promise<T | null>, render: (page: T) => { head: HeadMeta; body: string }, path: (slug: string) => string, home?: (page: T, slug: string) => string) =>

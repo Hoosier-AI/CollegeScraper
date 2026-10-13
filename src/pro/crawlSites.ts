@@ -7,7 +7,7 @@ import { WIKI_TARGETS } from '../jobs/sources/wikipedia.js';
 import { OF_LEAGUES } from '../sources/openfootball/leagues.js';
 import { FD_LEAGUES } from '../sources/footballData/parse.js';
 
-export type Feed = 'results' | 'tables' | 'players' | 'club stats' | 'bios' | 'careers' | 'squads' | 'transfers' | 'injuries' | 'xG and shots';
+export type Feed = 'results' | 'tables' | 'players' | 'club stats' | 'bios' | 'careers' | 'squads' | 'transfers' | 'injuries' | 'xG and shots' | 'news';
 
 export interface CrawlSite {
   id: SourceId;
@@ -33,6 +33,17 @@ export const CRAWL_SITES: CrawlSite[] = [
     feeds: ['results', 'club stats'], jobs: ['football-data-sync', 'football-data-fill'], cadence: 'daily 08:45 UTC (the season in play; finished seasons once)' },
   { id: 'wikidata', name: 'Wikidata', url: 'https://www.wikidata.org', license: 'CC0 (careers from Wikipedia, CC BY-SA 4.0)', scraped: true,
     feeds: ['bios', 'careers'], jobs: ['wikidata-sync', 'wikidata-fill'], cadence: 'every hour at :20 (US clubs first)' },
+  // News: headlines and links only, each publisher's terms recorded in src/news/feeds.ts.
+  { id: 'news-schools', name: 'School athletics news', url: 'https://www.plaibook.live/news', license: 'official school feeds, headline and link', scraped: true,
+    feeds: ['news'], jobs: ['news-schools'], cadence: 'every hour; each school every 3 hours in season' },
+  { id: 'news-publishers', name: 'Publisher feeds', url: 'https://www.plaibook.live/pro/news', license: 'public RSS, headline and link with credit (per-feed terms in Settings)', scraped: true,
+    feeds: ['news'], jobs: ['news-feeds'], cadence: 'every 15 min' },
+  { id: 'gdelt', name: 'GDELT', url: 'https://www.gdeltproject.org', license: 'open data, any use, credited', scraped: true,
+    feeds: ['news'], jobs: ['news-gdelt'], cadence: 'one query every 15 min, in turn' },
+  { id: 'guardian', name: 'The Guardian', url: 'https://open-platform.theguardian.com', license: 'Content API key; free tier is non-commercial', scraped: true,
+    feeds: ['news'], jobs: ['news-feeds'], cadence: 'every 30 min (when GUARDIAN_API_KEY is set)' },
+  { id: 'news-clubs', name: 'Club and federation feeds', url: 'https://www.plaibook.live/intl/news', license: 'official feeds, robots.txt honoured; league-run sites skipped', scraped: true,
+    feeds: ['news'], jobs: ['news-feeds', 'news-discover'], cadence: 'hourly; found weekly' },
   { id: 'api-football', name: 'API-Football', url: 'https://www.api-football.com', license: 'paid plan, shown on our pages only', scraped: false,
     feeds: ['results', 'tables', 'players', 'club stats', 'bios', 'squads', 'transfers', 'injuries'], jobs: ['pro-crawl', 'pro-scoreboard', 'pro-live', 'pro-final-detail', 'pro-standings', 'pro-plan'],
     cadence: 'crawl every 10 min until the daily floor; scores every 3 min' },

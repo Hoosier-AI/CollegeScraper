@@ -2,7 +2,7 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { BarChart3, CalendarDays, Flag, Gauge, Globe, GraduationCap, Home as HomeIcon, Medal, Search, Shield, Trophy, Users, X } from 'lucide-react';
+import { BarChart3, CalendarDays, Flag, Gauge, Globe, GraduationCap, Home as HomeIcon, Medal, Newspaper, Search, Shield, Trophy, Users, X } from 'lucide-react';
 import { PRO_GENDER_PAGES, useProGender } from '../lib/proGender';
 import { isIntlPath, isProPath as isProSection, sectionOf, type Section } from '../lib/section';
 import { useAdmin, clearToken } from '../lib/api';
@@ -17,6 +17,7 @@ export const NAV = [
   { to: '/matches', label: 'Matches', icon: CalendarDays },
   { to: '/teams', label: 'Teams', icon: Users },
   { to: '/rankings', label: 'Rankings', icon: Trophy },
+  { to: '/news', label: 'News', icon: Newspaper },
 ] as const;
 // Plaibook Stats Pro's own sections; the header switch moves between the college and pro halves of the site.
 // wide: the label where the header has room (xl and up); the short one elsewhere.
@@ -27,6 +28,7 @@ export const PRO_NAV: { to: string; label: string; wide?: string; icon: typeof C
   { to: '/pro/leaders', label: 'Leaders', icon: BarChart3 },
   { to: '/pro/abroad', label: 'Abroad', wide: 'Americans abroad', icon: Globe },
   { to: '/pro/college', label: 'College to Pro', icon: GraduationCap },
+  { to: '/pro/news', label: 'News', icon: Newspaper },
 ];
 // International: national teams (Pro is club football only).
 export const INTL_NAV: { to: string; label: string; wide?: string; icon: typeof CalendarDays }[] = [
@@ -35,6 +37,7 @@ export const INTL_NAV: { to: string; label: string; wide?: string; icon: typeof 
   { to: '/intl/teams', label: 'Teams', wide: 'National teams', icon: Flag },
   { to: '/intl/players', label: 'Players', icon: Users },
   { to: '/intl/rankings', label: 'Rankings', icon: Medal },
+  { to: '/intl/news', label: 'News', icon: Newspaper },
 ];
 const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
 /** Pro or International: the halves that share pages, search and the men's/women's toggle. */
@@ -102,10 +105,10 @@ export function BottomBar() {
   const pro = isProPath(pathname);
   const items = isIntlPath(pathname)
     // Phones: five slots; Players is a link away on the tournament and team pages.
-    ? [{ to: '/intl', label: 'Intl', icon: HomeIcon }, ...INTL_NAV.filter((n) => n.to !== '/intl/players')]
+    ? [{ to: '/intl', label: 'Intl', icon: HomeIcon }, ...INTL_NAV.filter((n) => n.to !== '/intl/players' && n.to !== '/intl/rankings')]
     : pro
     // Phones: five slots; Leaders is a tab away on the players page, and the College/Pro switch stays in the top bar.
-    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => n.to !== '/pro/leaders' && n.to !== '/pro/college')]
+    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => ['/pro/matches', '/pro/leagues', '/pro/abroad', '/pro/news'].includes(n.to))]
     : [...NAV, { to: '/search', label: 'Search', icon: Search }, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -153,6 +156,7 @@ export function Footer() {
           : <span>Plaibook Stats collects NCAA soccer data from each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, and shows where they agree.</span>}
         <Link to="/admin" className="ml-auto hover:text-chalk-300">Admin</Link>
       </div>
+      <p className="mt-2">News: headlines link to the schools and outlets that published them (school athletics sites, BBC Sport, ESPN, and outlets found through GDELT); tags and links to our pages are ours.</p>
       <p className="mt-3"><a href="https://www.plaibook.soccer/?utm_source=stats&utm_medium=referral&utm_campaign=footer" className="text-pitch-400 hover:text-pitch-300">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
     </footer>
   );

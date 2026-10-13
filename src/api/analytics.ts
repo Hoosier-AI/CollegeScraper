@@ -23,6 +23,7 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/players\/[^/]+$/, 'College player', 'college'],
   [/^\/rankings$/, 'College rankings', 'college'],
   [/^\/search$/, 'Search', 'college'],
+  [/^\/news$/, 'College news', 'college'],
   [/^\/pro$/, 'Pro home', 'pro'],
   [/^\/pro\/matches$/, 'Pro matches', 'pro'],
   [/^\/pro\/matches\/[^/]+$/, 'Pro match', 'pro'],
@@ -39,6 +40,14 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/pro\/college$/, 'College to Pro', 'pro'],
   [/^\/pro\/abroad$/, 'Americans abroad', 'pro'],
   [/^\/pro\/sources$/, 'Pro sources', 'pro'],
+  [/^\/pro\/news$/, 'Pro news', 'pro'],
+  [/^\/intl$/, 'International home', 'pro'],
+  [/^\/intl\/news$/, 'International news', 'pro'],
+  [/^\/intl\/matches(\/[^/]+)?$/, 'International match', 'pro'],
+  [/^\/intl\/tournaments(\/[^/]+)?$/, 'International tournament', 'pro'],
+  [/^\/intl\/teams(\/[^/]+)?$/, 'International team', 'pro'],
+  [/^\/intl\/players(\/[^/]+)?$/, 'International player', 'pro'],
+  [/^\/intl\/(rankings|h2h)$/, 'International rankings', 'pro'],
 ];
 /** Pages that are never counted: the owner's own. */
 const SKIP = /^\/(admin|console|jobs|quality)(\/|$)/;

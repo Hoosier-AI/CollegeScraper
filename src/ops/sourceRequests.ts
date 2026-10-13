@@ -6,7 +6,16 @@ import { log } from '../log.js';
 
 export type SourceId = 'api-football' | 'asa' | 'wikipedia' | 'wikidata' | 'openfootball' | 'football-data'
   // International (national teams): martj42's results, openfootball's World Cups, Fjelstul's World Cup database, RSSSF.
-  | 'intl-results' | 'openfootball-wc' | 'worldcup-db' | 'rsssf';
+  | 'intl-results' | 'openfootball-wc' | 'worldcup-db' | 'rsssf'
+  // News (src/news).
+  | 'news-schools' | 'news-publishers' | 'gdelt' | 'guardian' | 'news-clubs';
+
+// News feeds (src/news/feeds.ts): publisher hosts, and the club and federation feed hosts found by news-discover
+// (set by the news jobs as they read them).
+// NCAA.com only for its news feeds: its other hosts (sdataprod, data APIs) are the college crawl.
+const PUBLISHER_HOSTS = /(^|\.)(bbci\.co\.uk|espn\.com|topdrawersoccer\.com|socceramerica\.com|unitedsoccercoaches\.org|equalizersoccer\.com|cbssports\.com|sports\.yahoo\.com|skysports\.com)$/;
+const newsHosts = new Set<string>();
+export function setNewsHosts(urls: string[]): void { for (const u of urls) { try { newsHosts.add(new URL(u).host.toLowerCase()); } catch { /* skip */ } } }
 
 /** Which pro source a URL belongs to; null for everything else (college sites, NCAA). */
 export function sourceOfUrl(url: string): { source: SourceId; host: string } | null {
@@ -23,6 +32,11 @@ export function sourceOfUrl(url: string): { source: SourceId; host: string } | n
   if (host === 'raw.githubusercontent.com' && u.pathname.startsWith('/jfjelstul/')) return { source: 'worldcup-db', host };
   if (host === 'www.rsssf.org' || host === 'rsssf.org') return { source: 'rsssf', host };
   if (host.endsWith('football-data.co.uk')) return { source: 'football-data', host };
+  if (host === 'api.gdeltproject.org') return { source: 'gdelt', host };
+  if (host === 'content.guardianapis.com') return { source: 'guardian', host };
+  if (u.pathname === '/api/v2/rss/xml') return { source: 'news-schools', host };
+  if (PUBLISHER_HOSTS.test(host) || (host === 'www.ncaa.com' && u.pathname.startsWith('/news/'))) return { source: 'news-publishers', host };
+  if (newsHosts.has(host)) return { source: 'news-clubs', host };
   return null;
 }
 

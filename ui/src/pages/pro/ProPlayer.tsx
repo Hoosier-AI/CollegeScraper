@@ -8,6 +8,7 @@
 //   Career    college, transfers, honours, injury history
 // Pro (/pro/players) shows his club football; International (/intl/players) the same page over his national-team
 // matches, with caps by nation (Wikipedia careers) and World Cup squads.
+import { NewsSection } from '../../components/news/News';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -262,6 +263,7 @@ export default function ProPlayer() {
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_23rem]">
           <div className="space-y-5">
+            <NewsSection title="In the news" q={{ pro_player: String(p.id) }} hide={`pro_player:${p.id}`} max={4} />
             {!shown.length && <EmptyState title={onIntl ? 'No international numbers here yet' : 'No season stats yet'} body={onIntl ? 'Caps from his career are beside this; match lines arrive with his national team\'s matches.' : "Season totals arrive as the crawl reaches this player's competitions."} />}
             {(bySeason.some((r) => r.a || r.b) || form.length >= 3) && (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

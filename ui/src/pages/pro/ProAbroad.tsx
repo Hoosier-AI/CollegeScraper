@@ -1,5 +1,6 @@
 // Americans abroad (/pro/abroad): US players at clubs outside the US. Last week's match lines, who plays in the coming
 // week, and the season's leaders among them. Men's or women's from the header toggle.
+import { NewsSection } from '../../components/news/News';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -59,6 +60,7 @@ export default function ProAbroad() {
                 </>
               ) : <EmptyState title="No games in the last seven days" body="Lines appear after each club match, as soon as its player stats are in." />}
             </Section>
+            <NewsSection title="In the news" q={{ american: true, gender }} max={6} />
             <Section title={`Season leaders: ${statLabel(stat).toLowerCase()}`} right={<Field label="Stat">{(id) => <Select id={id} value={stat} onChange={setStat} options={PRO_STATS.map((s) => ({ value: s.key, label: s.label }))} />}</Field>}>
               <LeadersTable rows={d.leaderboard?.rows ?? []} stat={stat} caption={`Americans abroad, ${statLabel(stat)}`} loading={q.isPlaceholderData} />
               <Link to={`${proPaths2.leaders}${qs({ scope: 'world', nationality: 'USA', stat })}`} className="text-sm text-pitch-300 hover:text-pitch-200">Every American, at home and abroad</Link>

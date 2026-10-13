@@ -1,4 +1,5 @@
 // One match: the scoreline masthead, then Summary / Lineups / Stats / Head-to-head / Preview.
+import { TeamNews } from '../components/news/News';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { liveClock } from '../lib/liveClock';
 import { Link, useLocation, useParams } from 'react-router-dom';
@@ -179,7 +180,9 @@ export default function Match() {
 
       {tab === 'h2h' && <HeadToHead g={g} h2h={p.head_to_head} sides={sides} />}
       {tab === 'preview' && (played ? <KeyPlayers g={g} sides={sides} /> : (
-        // Before kickoff, one page: the season side by side, head to head, each side's last lineup and key players.
+        // Before kickoff, one page: each side's team news, the season side by side, head to head, each side's last lineup and key players.
+        <div className="space-y-6">
+        {(g.home.program_id || g.away.program_id) && <TeamNews sides={[g.home, g.away].filter((t) => t.program_id).map((t) => ({ label: t.name, q: { program: t.program_id! }, hide: `program:${t.program_id}`, href: `/teams/${t.program_id}` }))} />}
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <HeadToHead g={g} h2h={p.head_to_head} sides={sides} compact allHref={href(pathname, { tab: 'h2h' })} />
           <div className="space-y-6">
@@ -195,6 +198,7 @@ export default function Match() {
             )}
             <section className="space-y-2"><h3 className="text-sm font-semibold text-chalk-100">Key players</h3><KeyPlayers g={g} sides={sides} narrow /></section>
           </div>
+        </div>
         </div>
       ))}
       {tab === 'raw' && admin && <div className="space-y-2">{raw.map((r) => <JsonViewer key={r.source} title={`${r.source} payload (fetched ${fmt.dt(r.fetched_at)})`} value={r.payload} />)}<JsonViewer title="Game header row" value={box.data?.game} /><Badge>{players.length} player lines</Badge></div>}

@@ -2,6 +2,7 @@
 // injuries, ground, goals by 15-minute period, home/away splits, the provider's season stats (formations, biggest
 // results, streaks, clean sheets, penalties, cards by minute), transfers in and out, results and fixtures. A national team (its page is International's) has its history instead of
 // transfers.
+import { NewsFeed, NewsSection } from '../../components/news/News';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Ambulance } from 'lucide-react';
@@ -43,7 +44,7 @@ interface TeamData {
   splits: { home: Split; away: Split };
   results: ProMatch[]; fixtures: ProMatch[];
 }
-type Tab = 'squad' | 'history' | 'matches' | 'stats' | 'transfers';
+type Tab = 'squad' | 'history' | 'matches' | 'stats' | 'transfers' | 'news';
 const GROUPS = [['Goalkeeper', 'Goalkeepers'], ['Defender', 'Defenders'], ['Midfielder', 'Midfielders'], ['Attacker', 'Forwards'], ['', 'Other players']] as const;
 
 export default function ProTeam() {
@@ -51,7 +52,7 @@ export default function ProTeam() {
   const intl = useSection() === 'intl';
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
-  const [tab] = useUrlState('tab', 'squad', { allow: ['squad', 'history', 'matches', 'stats', 'transfers'] });
+  const [tab] = useUrlState('tab', 'squad', { allow: ['squad', 'history', 'matches', 'stats', 'transfers', 'news'] });
   const q = useQuery({ queryKey: ['pro-team', slug, seasonParam], queryFn: () => api<TeamData>(`/api/pro/teams/${slug}${qs({ season: seasonParam })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   // International: a nation the provider never had a side for is its history alone.
   if (q.error instanceof ApiError && q.error.status === 404) return intl ? <IntlNation slug={slug} /> : <ProMoved kind="team" slug={slug} />;
@@ -77,8 +78,8 @@ export default function ProTeam() {
     { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 3, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
   ];
   const tabs: { id: Tab; label: string; count?: number }[] = t.national
-    ? [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'history', label: 'History' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }]
-    : [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'transfers', label: 'Transfers', count: d.transfers.length }];
+    ? [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'history', label: 'History' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'news', label: 'News' }]
+    : [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'transfers', label: 'Transfers', count: d.transfers.length }, { id: 'news', label: 'News' }];
   // The season across competitions: averages over the matches that have each number (shots and the rest need detail).
   const sum = total.p > 0 ? (() => {
     const withStats = d.competitions.filter((c) => c.shots != null);
@@ -139,6 +140,7 @@ export default function ProTeam() {
             {!d.squad.length && <EmptyState title="No squad yet" body="The squad arrives as the crawl reaches this club." />}
           </div>
           <aside className="space-y-4">
+            <NewsSection title="Latest news" q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} max={4} dense right={<Link to={hrefFor('news')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>} />
             {t.venue && <Section title="Ground"><GroundCard ground={t.venue} /></Section>}
             {d.coaches.length > 0 && (
               <Section title="Coaches">
@@ -218,6 +220,7 @@ export default function ProTeam() {
         </div>
       )}
       {tab === 'history' && <NationHistoryTab slug={slug} />}
+      {tab === 'news' && <NewsFeed q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} empty={`No news for ${t.name} yet`} />}
       {tab === 'transfers' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <Section title={`In (${ins.length})`}><TransfersList rows={ins} showPlayer empty="No arrivals recorded yet." /></Section>

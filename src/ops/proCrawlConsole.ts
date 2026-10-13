@@ -98,7 +98,9 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
   for (const r of recent) if (!lastRun.has(r.job)) lastRun.set(r.job, r);
   const runningJobs = running.filter((r) => r.job.startsWith('pro-') || jobs.includes(r.job));
 
+  const news = await newsBlock(db).catch(() => null);
   const sites = CRAWL_SITES.map((site) => {
+    const isNews = site.feeds.includes('news');
     const mine = reqs.filter((r) => r.source === site.id);
     const today = mine.filter((r) => r.day === day());
     // API-Football: its runs have counted requests all along (and the quota knows today's), so the larger number wins.
@@ -123,11 +125,12 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
       on: !(Array.isArray(offList) && offList.includes(site.id)),
       status: isRunning ? 'crawling' : failed ? 'error' : 'idle',
       requests: { today: perDay[6]!.requests, errors_today: today.reduce((n, r) => n + r.errors, 0), week: perDay.reduce((n, d) => n + d.requests, 0), errors_week: mine.reduce((n, r) => n + r.errors, 0), bytes_week: mine.reduce((n, r) => n + Number(r.bytes), 0), per_day: perDay, last_at: last?.last_at ?? null, last_error: mine.find((r) => r.last_error)?.last_error ?? null },
-      seasons: site.id === 'wikidata' ? null : site.scraped ? { done, total: want.length, errors } : null,
+      seasons: site.id === 'wikidata' || isNews ? null : site.scraped ? { done, total: want.length, errors } : null,
+      news: isNews ? news?.[site.id] ?? null : null,
       people: site.id === 'wikidata' ? people : null,
       rows: { games: mineSeasons.reduce((n, s) => n + (s.games ?? 0), 0), player_rows: mineSeasons.reduce((n, s) => n + (s.player_rows ?? 0), 0) },
-      agreement: site.scraped ? { ...ag, rate: compared ? Math.round((ag.agree / compared) * 1000) / 1000 : null } : null,
-      eta_days: site.id === 'wikidata' ? null : site.scraped ? (left <= 0 ? 0 : recentDone ? Math.ceil(left / (recentDone / 7)) : null) : ctx.overall.eta_days,
+      agreement: site.scraped && !isNews ? { ...ag, rate: compared ? Math.round((ag.agree / compared) * 1000) / 1000 : null } : null,
+      eta_days: site.id === 'wikidata' || isNews ? null : site.scraped ? (left <= 0 ? 0 : recentDone ? Math.ceil(left / (recentDone / 7)) : null) : ctx.overall.eta_days,
       tasks: site.scraped ? null : { tasks: ctx.overall.tasks, done: ctx.overall.done, pct: ctx.overall.pct, calls_left: ctx.overall.calls_left },
       quota: site.scraped ? null : ctx.quota ? { remaining: ctx.quota.remaining, limit: ctx.quota.limit, used_today: ctx.quota.usedToday, blocked_until: ctx.quota.blockedUntil } : null,
       last_runs: runs.map((r) => ({ id: r.id, job: r.job, status: r.status, started_at: r.started_at, finished_at: r.finished_at, error: r.error ?? null, counters: r.counters ?? {} })),
@@ -170,4 +173,23 @@ export async function crawlBlock(db: Db, ctx: { quota: (QuotaState & { saved_at?
     league_seasons: leagueRows.length,
     leagues: o.leagues ? leagueRows : [],
   };
+}
+
+/** The news sites' cards: feeds read, switched on, failing (3+ failures in a row), and stories in the last 7 days. */
+const NEWS_KINDS: Record<string, string[]> = { 'news-schools': ['school'], 'news-publishers': ['publisher'], gdelt: ['gdelt'], guardian: ['guardian'], 'news-clubs': ['club', 'federation'] };
+async function newsBlock(db: Db): Promise<Record<string, { feeds: number; on: number; failing: number; stories_7d: number; last_ok_at: string | null }>> {
+  const sources = await selectAll<{ id: string; kind: string; enabled: boolean; fails: number; last_ok_at: string | null }>(db, 'news_sources', 'id,kind,enabled,fails,last_ok_at');
+  const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const arts = await selectAll<{ source_id: string }>(db, 'news_articles', 'source_id', (q) => q.gte('fetched_at', since));
+  const kindOf = new Map(sources.map((s) => [s.id, s.kind]));
+  const out: Record<string, { feeds: number; on: number; failing: number; stories_7d: number; last_ok_at: string | null }> = {};
+  for (const [site, kinds] of Object.entries(NEWS_KINDS)) {
+    const mine = sources.filter((s) => kinds.includes(s.kind));
+    out[site] = {
+      feeds: mine.length, on: mine.filter((s) => s.enabled).length, failing: mine.filter((s) => s.enabled && s.fails >= 3).length,
+      stories_7d: arts.filter((a) => kinds.includes(kindOf.get(a.source_id) ?? '')).length,
+      last_ok_at: mine.map((s) => s.last_ok_at).filter(Boolean).sort().pop() ?? null,
+    };
+  }
+  return out;
 }

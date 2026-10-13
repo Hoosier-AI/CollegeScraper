@@ -1,5 +1,6 @@
 // International front door: national teams. Today's internationals (live first), or the next window's when today has
 // none; the latest results; the tournaments playing now or next; the Plaibook Elo top ten.
+import { NewsSection } from '../../components/news/News';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
@@ -71,6 +72,7 @@ export default function IntlHome() {
             {d && !groups.length && (upcoming.length ? <MatchList rows={upcoming} /> : <p className="text-sm text-chalk-400">No international matches scheduled yet.</p>)}
           </Section>
           {recent.length > 0 && <Section title="Latest results"><MatchList rows={recent} /></Section>}
+          <NewsSection title="Latest news" q={{ scope: 'international', gender }} max={5} right={<Link to="/intl/news" className="text-sm text-pitch-300 hover:text-pitch-200">All international news</Link>} />
         </div>
         <aside className="space-y-5 lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100vh-5.5rem)] lg:self-start lg:overflow-y-auto">
           {tournaments.length > 0 && (

@@ -1,5 +1,6 @@
 // Countries (/pro/countries) and one country (/pro/countries/:slug): its competitions, its clubs in competitions we
 // follow, its players at home and abroad.
+import { NewsSection } from '../../components/news/News';
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -55,6 +56,7 @@ export function ProCountry() {
       </PageHeader>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <div className="space-y-5 lg:col-span-8">
+          <NewsSection title={`${c.name} national teams in the news`} q={{ country: c.name, gender }} max={5} />
           <Section title={`${c.name} players abroad`}><LeadersTable rows={d.abroad} stat="minutes" caption={`${c.name} players abroad`} empty={<p className="px-3 py-4 text-sm text-chalk-400">No players of this nationality abroad in our records yet.</p>} /></Section>
           <Section title={`Most-used ${c.name} players`}><LeadersTable rows={d.players} stat="minutes" caption={`${c.name} players by minutes`} empty={<p className="px-3 py-4 text-sm text-chalk-400">No season stats yet.</p>} /></Section>
         </div>

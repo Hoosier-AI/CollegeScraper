@@ -13,6 +13,10 @@ describe('requests per site', () => {
     expect(sourceOfUrl('https://raw.githubusercontent.com/someone/else/main/x.txt')).toBeNull();
     expect(sourceOfUrl('https://sdataprod.ncaa.com/?x=1')).toBeNull();
     expect(sourceOfUrl('not a url')).toBeNull();
+    expect(sourceOfUrl('https://www.ncaa.com/news/soccer-men/d1/rss.xml')?.source).toBe('news-publishers');
+    expect(sourceOfUrl('https://feeds.bbci.co.uk/sport/football/rss.xml')?.source).toBe('news-publishers');
+    expect(sourceOfUrl('https://iuhoosiers.com/api/v2/rss/xml?path=msoc')?.source).toBe('news-schools');
+    expect(sourceOfUrl('https://api.gdeltproject.org/api/v2/doc/doc?query=x')?.source).toBe('gdelt');
   });
 
   it('tallies requests, errors and 304s by day and host, and keeps them when a save fails', async () => {
