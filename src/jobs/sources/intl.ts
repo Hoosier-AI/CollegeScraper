@@ -188,7 +188,7 @@ async function intlCapsSync(ctx: JobContext): Promise<void> {
   for (const q of unmatched) {
     // Or a fuller name that holds every word of the shorter one (a Spanish second surname: "Alexia Putellas Segura").
     const words = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
-    const within = (a: string, b: string) => { const [x, y] = [words(a), words(b)].sort((m, n) => m.length - n.length); return x.length >= 2 && x.every((w) => y!.includes(w)); };
+    const within = (a: string, b: string) => { const [x, y] = words(a).length <= words(b).length ? [words(a), words(b)] : [words(b), words(a)]; return x.length >= 2 && x.every((w) => y.includes(w)); };
     const hits = (byDate.get(born.get(q)!) ?? []).filter((p) => samePerson({ name: names.get(q)!, birth_date: born.get(q)! }, { name: p.display_name, birth_date: p.birth_date }) || within(names.get(q)!, p.display_name));
     if (hits.length === 1) people.set(q, hits[0]!);
   }
