@@ -105,7 +105,7 @@ export function intlHistorySection(h: IntlHistoryPage): string {
   return `<h2>All-time record</h2><p>${esc(r.played)} matches since ${esc(h.first_match ?? '')}: ${esc(r.w)} won, ${esc(r.d)} drawn, ${esc(r.l)} lost, ${esc(r.gf)} goals for and ${esc(r.ga)} against.${h.elo?.rank ? ` Plaibook Elo rank ${esc(h.elo.rank)} (${esc(Math.round(Number(h.elo.rating)))}).` : ''}${h.world_cups.editions ? ` ${esc(h.world_cups.editions)} World Cups.` : ''}</p>
 ${comps.length ? `<h2>By competition</h2>${table(`${h.nation.name} by competition`, ['Competition', 'P', 'W', 'D', 'L', 'GF', 'GA'], comps)}` : ''}
 ${scorers.length ? `<h2>Top scorers</h2>${table(`${h.nation.name} top scorers`, ['Player', 'Goals', 'Years'], scorers)}` : ''}
-${caps.length ? `<h2>Most caps</h2>${table(`${h.nation.name} most caps`, ['Player', 'Caps', 'Goals'], caps)}` : ''}
+${caps.length ? `<h2>Most caps among the players we follow</h2>${table(`${h.nation.name} most caps`, ['Player', 'Caps', 'Goals'], caps)}` : ''}
 ${h.recent.length ? `<h2>Latest results</h2><ul>${h.recent.slice(0, 15).map((x) => `<li>${resultLine(x)}</li>`).join('')}</ul>` : ''}${credits(h.credits)}`;
 }
 export function intlHistoryBody(h: IntlHistoryPage): string {

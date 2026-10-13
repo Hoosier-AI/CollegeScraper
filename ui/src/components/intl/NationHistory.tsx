@@ -108,14 +108,15 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
               {s.slug ? <Link to={proPath.player(s.slug)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{s.name}</Link> : <span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{s.name}</span>}
               <span className="text-2xs tnum text-chalk-500">{s.first.slice(0, 4)}–{s.last.slice(0, 4)}</span><span className="display w-8 text-right tnum text-chalk-100">{s.goals}</span></li>
           ))}</ol> : <p className="text-sm text-chalk-400">No scorers on record yet.</p>}
-          {h.scorers.length > 0 && <p className="text-2xs text-chalk-500">Goals in the matches our sources name scorers for: every World Cup and most competitive matches, fewer friendlies. Most caps has each player's full total.</p>}
+          {h.scorers.length > 0 && <p className="text-2xs text-chalk-500">Goals in the matches our sources name scorers for: every World Cup and most competitive matches, fewer friendlies. Caps are each player's full total.</p>}
         </Section>
-        <Section title="Most caps">
+        <Section title="Most caps, players we follow">
           {h.caps.length ? <ol className="frame divide-y divide-field-700 text-sm">{h.caps.slice(0, 15).map((c, i) => (
             <li key={`${c.name}-${i}`} className="flex items-center gap-2 px-3 py-1.5"><span className="w-5 text-right text-xs tnum text-chalk-500">{i + 1}</span><PlayerAvatar src={c.photo} name={c.name} size={22} />
               {c.slug ? <Link to={proPath.player(c.slug)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.name}</Link> : <span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{c.name}</span>}
               <span className="text-2xs tnum text-chalk-500">{c.goals != null ? `${c.goals} goals` : ''}</span><span className="display w-8 text-right tnum text-chalk-100">{c.caps}</span></li>
           ))}</ol> : <p className="text-sm text-chalk-400">Caps come from players' Wikipedia careers as the people crawl reads them.</p>}
+          {h.caps.length > 0 && <p className="text-2xs text-chalk-500">From the Wikipedia careers of the players Plaibook Stats follows (today's and recent players); earlier greats are added as the people crawl reaches them.</p>}
         </Section>
       </div>
       <Section title="Latest results"><ResultList rows={h.recent} nation={key} /></Section>
