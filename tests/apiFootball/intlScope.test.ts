@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { leagueConfederation, leagueLevel, leagueScope } from '../../src/sources/apiFootball/leagues.js';
+import { parseLeagues } from '../../src/sources/apiFootball/parse.js';
 
 describe('leagueScope: International is national teams, Pro is clubs', () => {
   it.each([
@@ -49,4 +50,12 @@ describe('leagueLevel and leagueConfederation', () => {
     [913, 'CONMEBOL - UEFA Finalissima', 'FIFA'],
   ] as const)('%i %s', (id, name, conf) => expect(leagueConfederation(id, name, 'intl')).toBe(conf));
   it('clubs have none', () => expect(leagueConfederation(2, 'UEFA Champions League', 'club')).toBeNull());
+});
+
+describe('the catalog crawls national teams\' friendlies', () => {
+  it('Friendlies (national) on, Friendlies Clubs off', () => {
+    const item = (id: number, name: string) => ({ league: { id, name, type: 'Cup', logo: null }, country: { name: 'World', code: null, flag: null }, seasons: [{ year: 2026, start: '2026-01-01', end: '2026-12-31', current: true, coverage: {} }] });
+    const { leagues } = parseLeagues([item(10, 'Friendlies'), item(667, 'Friendlies Clubs')] as any);
+    expect(leagues.map((l) => [l.id, l.scope, l.enabled])).toEqual([[10, 'intl', true], [667, 'club', false]]);
+  });
 });

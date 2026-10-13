@@ -54,7 +54,7 @@ describe('parseLeagues', () => {
     expect(on.get(254)).toBe(true);
     expect(on.get(256)).toBe(true); // USL League Two: amateur, but American
     expect(leagues.find((l) => l.id === 256)).toMatchObject({ kind: 'amateur', priority: 13 });
-    expect(on.get(10)).toBe(false); // friendlies
+    expect(on.get(10)).toBe(true); // national teams' friendlies (International, 2026-10-12)
     expect(on.get(14)).toBe(false); // youth
   });
   it('one row per league season even when the provider repeats a year', () => {

@@ -115,8 +115,8 @@ export function parseLeagues(items: AfLeagueItem[]): { leagues: LeagueRow[]; sea
       id, name, type, country: str(it.country?.name), country_code: str(it.country?.code), country_flag: str(it.country?.flag), logo: str(it.league.logo),
       gender: leagueGender(id, name), kind, priority: leaguePriority(id, type, kind), current_season: current?.year ?? null,
       // Crawled when professional and still running (a current season the provider covers with fixtures); the whole US
-      // scene is crawled whatever its level.
-      enabled: (kind === 'pro' || isUsScene(id, str(it.country?.name))) && !!current,
+      // scene is crawled whatever its level, and national teams' friendlies (International's scoreboard, 2026-10-12).
+      enabled: (kind === 'pro' || isUsScene(id, str(it.country?.name)) || (scope === 'intl' && kind === 'friendly')) && !!current,
       scope, level: leagueLevel(id, name), confederation: leagueConfederation(id, name, scope),
     });
     // The provider sometimes lists a season year twice for one league; keep one row (the current one if either is).

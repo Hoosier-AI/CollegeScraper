@@ -54,6 +54,8 @@ UPDATE public.pro_leagues l SET scope = 'intl', level = v.level, confederation =
   ) AS v(id, level, conf)
  WHERE l.id = v.id AND (l.scope, l.level, l.confederation) IS DISTINCT FROM ('intl', v.level, v.conf);
 UPDATE public.pro_leagues SET level = 'youth' WHERE scope = 'club' AND kind = 'youth' AND level <> 'youth';
+-- National teams' friendlies are crawled (the catalog keeps them on from now: parse.ts).
+UPDATE public.pro_leagues SET enabled = true WHERE scope = 'intl' AND kind = 'friendly' AND NOT enabled AND NOT enabled_locked AND current_season IS NOT NULL;
 
 ALTER TABLE public.pro_teams ADD COLUMN IF NOT EXISTS intl boolean NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS pro_teams_intl_idx ON public.pro_teams(display_name) WHERE intl;
