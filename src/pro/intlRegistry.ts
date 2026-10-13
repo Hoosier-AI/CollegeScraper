@@ -1,5 +1,5 @@
 // Which competitions and teams live in the International section (/intl) rather than Pro (/pro): the slugs of every
-// competition with scope 'intl' and every national team (pro_teams.intl, migration 163), kept in memory so a page
+// competition with scope 'intl' and every national team (pro_teams.intl, migration 164), kept in memory so a page
 // or a sitemap links straight to the right section. Refreshed every ten minutes; empty (everything Pro, as before the
 // split) until the first load or when the columns are missing.
 import type { Db } from '../db/client.js';
@@ -16,7 +16,7 @@ async function load(db: Db): Promise<void> {
     ]);
     state = { leagues: new Set(leagues.map((l) => l.slug)), teams: new Set(teams.map((t) => t.slug)), at: Date.now() };
   } catch {
-    // Before migration 163: keep what we had (empty: every address stays under /pro), try again in a minute.
+    // Before migration 164: keep what we had (empty: every address stays under /pro), try again in a minute.
     state = { ...state, at: Date.now() - 9 * 60_000 };
   }
 }

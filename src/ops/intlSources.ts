@@ -41,7 +41,7 @@ export const INTL_SITES: IntlSite[] = [
 ];
 export const INTL_SCRAPED = INTL_SITES.filter((s) => s.scraped).map((s) => s.id as string);
 
-/** Rows a source has given (missing tables, before migration 164, count as none). */
+/** Rows a source has given (missing tables, before migration 165, count as none). */
 async function count(db: Db, table: string, f?: (q: any) => any): Promise<number | null> {
   let q = db.from(table).select('*', { count: 'exact', head: true });
   if (f) q = f(q);

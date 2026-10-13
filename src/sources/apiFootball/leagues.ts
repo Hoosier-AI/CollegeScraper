@@ -67,7 +67,7 @@ export function leaguePriority(id: number, type: 'league' | 'cup', kind: LeagueK
 // The site's International section holds every national-team competition; Pro is club football only. The provider
 // files both under country "World" and its national-team flag on teams is patchy (half of the OFC Nations Cup's sides
 // are not marked), so the split is this hand-kept list, built from who actually played in each competition
-// (2026-10-12), plus a name rule for competitions the provider adds later. pro_intl_audit() (migration 163) lists
+// (2026-10-12), plus a name rule for competitions the provider adds later. pro_intl_audit() (migration 164) lists
 // competitions whose sides disagree with it.
 export type LeagueScope = 'club' | 'intl';
 export type LeagueLevel = 'senior' | 'youth';

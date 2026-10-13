@@ -1,5 +1,5 @@
 // Reads for the International section (/intl): national-team football. Matches, tournaments, nations and players come
-// from the same pro_* tables as Pro (one crawl, one live job), filtered to scope 'intl' (migration 163); a tournament,
+// from the same pro_* tables as Pro (one crawl, one live job), filtered to scope 'intl' (migration 164); a tournament,
 // nation, player or match page is the Pro page's model. Only the lists that differ live here.
 import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
@@ -94,7 +94,7 @@ export async function home(db: Db, date: string) {
   };
 }
 
-// ---------- nations' history (open sources, migration 164) ----------
+// ---------- nations' history (open sources, migration 165) ----------
 const HISTORY_CREDIT: Record<string, { name: string; url: string; license: string }> = {
   'intl-results': { name: 'international_results (Mart Jürisoo)', url: 'https://github.com/martj42/international_results', license: 'public domain (CC0)' },
   'worldcup-db': { name: 'The Fjelstul World Cup Database (Joshua C. Fjelstul, Ph.D.)', url: 'https://github.com/jfjelstul/worldcup', license: 'CC BY-SA 4.0' },

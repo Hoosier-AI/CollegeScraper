@@ -30,7 +30,7 @@ league:pro_leagues!pro_fixtures_league_id_fkey(${LEAGUE_COLS}),
 home:pro_teams!pro_fixtures_home_team_id_fkey(${TEAM_COLS}),
 away:pro_teams!pro_fixtures_away_team_id_fkey(${TEAM_COLS})`;
 
-// National: pro_teams.intl (migration 163), a side that plays international football and never club football; the
+// National: pro_teams.intl (migration 164), a side that plays international football and never club football; the
 // provider's own flag is wrong both ways.
 const teamRef = (t: any): ProTeamRef => ({ id: t?.id, name: t?.display_name ?? 'TBD', slug: t?.slug ?? '', logo: t?.logo ?? null, country: t?.country ?? null, gender: t?.gender ?? null, national: !!(t?.intl ?? t?.national) });
 const leagueRef = (l: any): ProLeagueRef => ({ id: l?.id, name: l?.name ?? '', slug: l?.slug ?? '', logo: l?.logo ?? null, country: l?.country ?? null, country_flag: l?.country_flag ?? null, gender: l?.gender ?? 'm', type: l?.type, us: l?.id != null && isUsScene(Number(l.id), l?.country),
