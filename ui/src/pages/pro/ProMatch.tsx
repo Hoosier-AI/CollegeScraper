@@ -9,6 +9,7 @@ import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ErrorBox, Section, Skeleton, TeamLogo } from '../../components/primitives';
 import { ProMoved } from './ProMoved';
 import { MoveSection } from '../../components/pro/MoveSection';
+import { EloMatchCard } from '../../components/intl/EloMatchCard';
 import { useSection } from '../../lib/section';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
@@ -71,6 +72,8 @@ export default function ProMatch() {
         {kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}
       </p>
       {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
+      {/* International: Plaibook Elo's chances before kickoff, each side's rating move once played. */}
+      {intl && <EloMatchCard slug={slug} />}
       {m.status === 'final' && !m.detail && !d.events.length && <p className="text-center text-sm text-chalk-400">Lineups and match stats arrive shortly after full time.</p>}
       {/* Before kickoff (and until announced lineups arrive): the preview in place of events and stats. */}
       {d.preview && !hasLineups && <MatchPreview m={m} p={d.preview} h2h={d.h2h} />}

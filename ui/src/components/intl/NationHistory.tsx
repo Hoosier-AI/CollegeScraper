@@ -9,6 +9,7 @@ import { monthLabel, outcome, winPct, type Credit, type IntlResult, type NationH
 import { DataTable, type Column } from '../DataTable';
 import { EmptyState, ErrorBox, PlayerAvatar, Section, Skeleton, TeamLogo } from '../primitives';
 import { StatTile } from '../pro/Hero';
+import { EloChart } from './EloChart';
 
 export function useNationHistory(slug: string, gender?: 'm' | 'w') {
   return useQuery({ queryKey: ['intl-history', slug, gender ?? ''], queryFn: () => api<History>(`/api/intl/teams/${slug}/history${qs({ gender })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1, staleTime: 300_000 });
@@ -46,34 +47,6 @@ export function ResultList({ rows, nation, empty = 'No results.' }: { rows: Intl
   );
 }
 
-/** Plaibook Elo through the years: one point a month, the month of the side's best world rank marked. Ratings from
- *  different eras do not compare (the pool of sides changes), so the mark is the best rank, not the highest number. */
-export function EloLine({ series, caption, bestRank, bestMonth }: { series: { date: string; rating: number }[]; caption: string; bestRank?: number | null; bestMonth?: string | null }) {
-  if (series.length < 3) return null;
-  const W = 640, H = 160, PAD = 28;
-  const t = (d: string) => Date.parse(`${d}T00:00:00Z`);
-  const t0 = t(series[0]!.date), t1 = t(series[series.length - 1]!.date);
-  const lo = Math.floor(Math.min(...series.map((p) => p.rating)) / 100) * 100, hi = Math.ceil(Math.max(...series.map((p) => p.rating)) / 100) * 100;
-  const x = (d: string) => PAD + ((t(d) - t0) / Math.max(1, t1 - t0)) * (W - PAD * 2);
-  const y = (v: number) => H - PAD - ((v - lo) / Math.max(1, hi - lo)) * (H - PAD * 2);
-  const path = series.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(1)},${y(p.rating).toFixed(1)}`).join(' ');
-  const month = bestMonth?.slice(0, 7);
-  const best = (month && series.find((p) => p.date.slice(0, 7) >= month)) || series.reduce((a, b) => (b.rating > a.rating ? b : a));
-  const years = Array.from(new Set(series.map((p) => Math.floor(Number(p.date.slice(0, 4)) / 20) * 20))).filter((yr) => yr >= Number(series[0]!.date.slice(0, 4)));
-  const grid = Array.from({ length: Math.round((hi - lo) / 100) + 1 }, (_, i) => lo + i * 100).filter((_, i, a) => a.length <= 6 || i % 2 === 0);
-  return (
-    <figure className="frame p-3">
-      <figcaption className="mb-1 flex flex-wrap justify-between gap-2 text-xs text-chalk-400"><span>{caption}</span>{bestRank ? <span className="tnum">best world rank #{bestRank} ({monthLabel(bestMonth)})</span> : null}</figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${caption}: from ${Math.round(series[0]!.rating)} in ${series[0]!.date.slice(0, 4)} to ${Math.round(series[series.length - 1]!.rating)} now${bestRank ? `, best world rank ${bestRank} in ${monthLabel(bestMonth)}` : ''}`}>
-        {grid.map((g) => <g key={g}><line x1={PAD} x2={W - PAD} y1={y(g)} y2={y(g)} className="stroke-field-700" strokeWidth={1} /><text x={2} y={y(g) + 4} className="fill-chalk-500 text-[10px]">{g}</text></g>)}
-        {years.map((yr) => { const d = `${yr}-01-01`; return t(d) >= t0 ? <text key={yr} x={x(d)} y={H - 8} textAnchor="middle" className="fill-chalk-500 text-[10px]">{yr}</text> : null; })}
-        <path d={path} className="fill-none stroke-pitch-300" strokeWidth={1.75} strokeLinejoin="round" />
-        {bestRank ? <circle cx={x(best.date)} cy={y(best.rating)} r={4} className="fill-note stroke-field-900" strokeWidth={2}><title>{`Best world rank: #${bestRank}, ${monthLabel(bestMonth)}`}</title></circle> : null}
-      </svg>
-    </figure>
-  );
-}
-
 type OppRow = History['opponents'][number];
 type CompRow = History['competitions'][number];
 
@@ -102,7 +75,7 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
         {h.elo ? <StatTile label="Plaibook Elo" value={Math.round(h.elo.rating)} sub={`${h.elo.rank ? `rank ${h.elo.rank}` : 'unranked'}${h.elo.change_1y != null ? ` · ${h.elo.change_1y > 0 ? '+' : ''}${Math.round(h.elo.change_1y)} in a year` : ''}${h.elo.best_rank ? ` · best #${h.elo.best_rank} (${monthLabel(h.elo.best_rank_date)})` : ''}`} accent /> : <StatTile label="Plaibook Elo" value="–" sub="not rated yet" />}
         <StatTile label="World Cups" value={h.world_cups.editions || '–'} sub={h.world_cups.years.length ? `last ${h.world_cups.years[0]}` : 'squads from the World Cup database'} />
       </div>
-      {h.elo && <EloLine series={h.elo.series} bestRank={h.elo.best_rank} bestMonth={h.elo.best_rank_date} caption={`${h.nation.name}${h.gender === 'w' ? " women" : ''}: Plaibook Elo since ${h.elo.series[0]?.date.slice(0, 4) ?? ''}`} />}
+      {h.elo && <EloChart slug={slug} gender={h.gender} caption={`${h.nation.name}${h.gender === 'w' ? ' women' : ''}: Plaibook Elo since ${h.elo.series[0]?.date.slice(0, 4) ?? ''}`} />}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Section title="Top scorers">
           {h.scorers.length ? <ol className="frame divide-y divide-field-700 text-sm">{h.scorers.slice(0, 15).map((s, i) => (

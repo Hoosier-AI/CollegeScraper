@@ -6,6 +6,7 @@ import { api, ApiError, qs } from '../../lib/api';
 import { useUrlPatch, useUrlState } from '../../lib/urlState';
 import { winPct, type IntlNation, type IntlResult, type NationRef, type Tally } from '../../lib/intl';
 import { ResultList, nationHref } from '../../components/intl/NationHistory';
+import { EloChart } from '../../components/intl/EloChart';
 import { EmptyState, ErrorBox, Field, PageHeader, Select, Skeleton, TeamLogo } from '../../components/primitives';
 import { StatTile } from '../../components/pro/Hero';
 import { useProGender } from '../../lib/proGender';
@@ -44,6 +45,7 @@ export default function IntlH2H() {
             <StatTile label={`${d.b.name} won`} value={d.record.l} sub={d.record.played ? `${Math.round((d.record.l / d.record.played) * 100)}%` : undefined} />
           </div>
           <p className="text-center text-sm text-chalk-300 tnum">Goals {d.record.gf}–{d.record.ga}</p>
+          <EloChart slug={a} compareSlug={b} gender={d.gender} caption={`Plaibook Elo: ${d.a.name} and ${d.b.name}`} />
           <ResultList rows={d.results} nation={d.a.key} empty="They have never met." />
         </>
       )}

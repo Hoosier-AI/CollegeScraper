@@ -42,7 +42,14 @@ export function goalFactor(diff: number): number {
 export const expected = (dr: number) => 1 / (10 ** (-dr / 400) + 1);
 
 export interface EloMatch { date: string; home: string; away: string; home_score: number | null; away_score: number | null; tournament: string; neutral: boolean | null }
-export interface EloStep { date: string; nation: string; rating: number; delta: number; opponent: string; tournament: string }
+/** One side's move in one match, with everything that explains it (the chart's "why"). */
+export interface EloStep {
+  date: string; nation: string; rating: number; delta: number; opponent: string; tournament: string;
+  /** The score from this side's view. */ gf: number; ga: number;
+  /** The opponent's rating before the match, this side's expected score (0..1), the match weight and the goal factor. */
+  oppRating: number; expected: number; k: number; goalFactor: number;
+  venue: 'home' | 'away' | 'neutral';
+}
 const scored = (matches: EloMatch[]) => [...matches].filter((m) => m.home_score != null && m.away_score != null).sort((a, b) => a.date.localeCompare(b.date));
 const resultOf = (m: EloMatch) => { const d = m.home_score! - m.away_score!; return { diff: d, w: d > 0 ? 1 : d < 0 ? 0 : 0.5 }; };
 
@@ -56,14 +63,16 @@ export function runElo(matches: EloMatch[], o: { provisional?: number } = {}): {
     const rh = ratings.get(m.home) ?? START, ra = ratings.get(m.away) ?? START;
     const dr = rh + (m.neutral ? 0 : HOME_EDGE) - ra;
     const { diff, w } = resultOf(m);
-    const change = kFactor(m.tournament, m.date) * goalFactor(diff) * (w - expected(dr));
+    const k = kFactor(m.tournament, m.date), g = goalFactor(diff), we = expected(dr);
+    const change = k * g * (w - we);
     // A provisional side's results move only its own rating against an established side.
     const ph = (played.get(m.home)?.n ?? 0) < provisional, pa = (played.get(m.away)?.n ?? 0) < provisional;
     const dh = pa && !ph ? 0 : change, da = ph && !pa ? 0 : -change;
     ratings.set(m.home, rh + dh); ratings.set(m.away, ra + da);
     for (const side of [m.home, m.away]) { const p = played.get(side) ?? { n: 0, last: m.date }; p.n += 1; p.last = m.date; played.set(side, p); }
-    steps.push({ date: m.date, nation: m.home, rating: rh + dh, delta: dh, opponent: m.away, tournament: m.tournament });
-    steps.push({ date: m.date, nation: m.away, rating: ra + da, delta: da, opponent: m.home, tournament: m.tournament });
+    const common = { date: m.date, tournament: m.tournament, k, goalFactor: g };
+    steps.push({ ...common, nation: m.home, rating: rh + dh, delta: dh, opponent: m.away, gf: m.home_score!, ga: m.away_score!, oppRating: ra, expected: we, venue: m.neutral ? 'neutral' : 'home' });
+    steps.push({ ...common, nation: m.away, rating: ra + da, delta: da, opponent: m.home, gf: m.away_score!, ga: m.home_score!, oppRating: rh, expected: 1 - we, venue: m.neutral ? 'neutral' : 'away' });
   }
   return { steps, ratings, played };
 }
@@ -100,11 +109,13 @@ export function confederationsFrom(matches: { home: string; away: string; tourna
  * years, 5+ matches against other confederations in the last eight, in a table of 20+ such sides. The ratings shown
  * stay the plain Elo above (the published method); this only decides the best rank (2026-10-13).
  */
-export function bestRanks(matches: EloMatch[], o: { members: Set<string>; confederations: Map<string, string>; lambda?: number; minMatches?: number; minInter?: number; minPool?: number }): Map<string, BestRank> {
+export function bestRanks(matches: EloMatch[], o: { members: Set<string>; confederations: Map<string, string>; lambda?: number; minMatches?: number; minInter?: number; minPool?: number }): { best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]> } {
   const lambda = o.lambda ?? 0.25, minMatches = o.minMatches ?? 30, minInter = o.minInter ?? 5, minPool = o.minPool ?? 20;
   const team = new Map<string, number>(), level = new Map<string, number>(), n = new Map<string, number>(), last = new Map<string, string>(), inter = new Map<string, string[]>();
   const rating = (t: string) => (team.get(t) ?? START) + (level.get(o.confederations.get(t) ?? '') ?? 0);
   const best = new Map<string, BestRank>();
+  // Every month-end rank of every ranked side (the chart's World rank view; its minimum is the best rank).
+  const history = new Map<string, { m: string; r: number }[]>();
   const table = (month: string) => {
     const y = Number(month.slice(0, 4));
     const since4 = `${y - 4}${month.slice(4)}`, since8 = `${y - 8}${month.slice(4)}`;
@@ -115,6 +126,7 @@ export function bestRanks(matches: EloMatch[], o: { members: Set<string>; confed
       const margin = r - (pool[i + 1]?.[1] ?? r);
       const b = best.get(t);
       if (!b || i + 1 < b.rank || (i + 1 === b.rank && margin > b.margin)) best.set(t, { rank: i + 1, month, margin });
+      const h = history.get(t) ?? []; h.push({ m: month, r: i + 1 }); history.set(t, h);
     });
   };
   let month = '';
@@ -134,5 +146,31 @@ export function bestRanks(matches: EloMatch[], o: { members: Set<string>; confed
     for (const t of [m.home, m.away]) { n.set(t, (n.get(t) ?? 0) + 1); last.set(t, m.date); }
   }
   if (month) table(month);
-  return best;
+  return { best, history };
+}
+
+// ---------- win, draw, win ----------
+/** How often a match is drawn, by how even it was expected to be: ten buckets of |expected − 0.5|, from every result
+ *  (an even match is drawn about a quarter of the time, a mismatch seldom). */
+export type DrawModel = number[];
+/** Where the intl-elo job keeps each game's draw model (college_kv). */
+export const DRAW_MODEL_KEY = (gender: 'm' | 'w') => `intl:elo:draw:${gender}`;
+const bucketOf = (we: number) => Math.min(9, Math.floor(Math.abs(we - 0.5) * 20));
+
+export function drawModel(steps: EloStep[]): DrawModel {
+  const draws = new Array(10).fill(0), all = new Array(10).fill(0);
+  // runElo writes each match as two steps, the home (first-listed) side first: count each match once.
+  for (let i = 0; i < steps.length; i += 2) {
+    const s = steps[i]!, b = bucketOf(s.expected);
+    all[b] += 1; if (s.gf === s.ga) draws[b] += 1;
+  }
+  return all.map((n, i) => (n >= 30 ? Math.round((draws[i] / n) * 1000) / 1000 : [0.27, 0.26, 0.24, 0.22, 0.2, 0.17, 0.14, 0.11, 0.08, 0.05][i]!));
+}
+
+/** Win, draw and loss chances for a side whose expected score is `we` (they add up to 1). */
+export function predict(we: number, model: DrawModel): { win: number; draw: number; loss: number } {
+  const draw = Math.min(model[bucketOf(we)] ?? 0.2, 2 * Math.min(we, 1 - we));
+  const win = Math.max(0, we - draw / 2), loss = Math.max(0, 1 - we - draw / 2);
+  const total = win + draw + loss;
+  return { win: win / total, draw: draw / total, loss: loss / total };
 }

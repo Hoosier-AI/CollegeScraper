@@ -19,7 +19,7 @@ import { applyShootouts, NON_FIFA_TOURNAMENT, parseGoals, parseResults, parseSho
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, WCDB_BASE, WCDB_SOURCE, wcdbCodes } from '../../sources/intl/worldcupDb.js';
 import { parseWorldCupTxt, WC_FOLDERS, WC_TXT_BASE, WC_TXT_SOURCE } from '../../sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../sources/intl/nations.js';
-import { bestRanks, confederationsFrom, runElo, worldCupSides } from '../../sources/intl/elo.js';
+import { bestRanks, confederationsFrom, DRAW_MODEL_KEY, drawModel, runElo, worldCupSides } from '../../sources/intl/elo.js';
 
 const hash = (s: string) => createHash('sha1').update(s).digest('hex');
 
@@ -305,8 +305,9 @@ async function intlMatch(ctx: JobContext): Promise<void> {
 }
 
 // ---------- intl-elo ----------
-/** Bumped when the Elo method changes (v2 2026-10-13: provisional sides, Olympic weight, best rank). */
-const ELO_METHOD = 'v2';
+/** Bumped when the Elo method or what it stores changes (v2 2026-10-13: provisional sides, Olympic weight, best rank;
+ *  v3: each move's reasons, rank history, draw model). */
+const ELO_METHOD = 'v3';
 /** Every senior result once (the best source of each match), without switched-off sources. */
 export async function intlResults(db: Db, gender: 'm' | 'w', o: { nation?: string } = {}) {
   const off = await sourcesOff(db);
@@ -338,11 +339,17 @@ async function intlElo(ctx: JobContext): Promise<void> {
     if (!c.changed) { ctx.note(`${gender}_unchanged`, 'no new results'); continue; }
     const { steps, ratings, played } = runElo(results);
     // Women's internationals are thinner on record (mostly since 2010): looser bars for a ranked month.
-    const bestRank = bestRanks(results, { members: worldCupSides(results), confederations: confederationsFrom(results), ...(gender === 'w' ? { minMatches: 15, minInter: 3, minPool: 10 } : {}) });
+    const { best: bestRank, history: rankHistory } = bestRanks(results, { members: worldCupSides(results), confederations: confederationsFrom(results), ...(gender === 'w' ? { minMatches: 15, minInter: 3, minPool: 10 } : {}) });
     const at = new Date().toISOString();
-    ctx.inc(`${gender}_steps`, await upsertChunked(ctx.db, 'intl_elo', steps.map((s) => ({ gender, nation: s.nation, date: s.date, opponent: s.opponent, rating: Math.round(s.rating * 10) / 10, delta: Math.round(s.delta * 10) / 10, tournament: s.tournament, updated_at: at })),
+    const r1 = (v: number) => Math.round(v * 10) / 10;
+    ctx.inc(`${gender}_steps`, await upsertChunked(ctx.db, 'intl_elo', steps.map((s) => ({ gender, nation: s.nation, date: s.date, opponent: s.opponent, rating: r1(s.rating), delta: r1(s.delta), tournament: s.tournament,
+      gf: s.gf, ga: s.ga, opp_rating: r1(s.oppRating), expected: Math.round(s.expected * 1000) / 1000, k: s.k, goal_factor: Math.round(s.goalFactor * 1000) / 1000, venue: s.venue, updated_at: at })),
       { onConflict: 'gender,nation,date,opponent', chunk: 1000 }));
     await ctx.db.from('intl_elo').delete().eq('gender', gender).lt('updated_at', at);
+    // Each side's month-end world ranks (the chart's World rank view), and the draw model (match predictions).
+    ctx.inc(`${gender}_rank_series`, await upsertChunked(ctx.db, 'intl_elo_ranks', [...rankHistory].map(([nation, ranks]) => ({ gender, nation, ranks, updated_at: at })), { onConflict: 'gender,nation', chunk: 50 }));
+    await ctx.db.from('intl_elo_ranks').delete().eq('gender', gender).lt('updated_at', at);
+    await kvSet(ctx.db, DRAW_MODEL_KEY(gender), drawModel(steps));
     // Current rating, rank among FIFA members that played in the last four years, a year's change, the best ever. A
     // FIFA member: men, a World Cup qualifier in the last eight years (every member enters); women, a national side in
     // the provider's data (Basque Country and Zanzibar play friendlies too, and are not ranked).

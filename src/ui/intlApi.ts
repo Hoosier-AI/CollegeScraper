@@ -62,6 +62,21 @@ export function registerIntlApi(app: FastifyInstance): void {
     const h = await intl.nationHistory(db, n.key, gender);
     return h ? reply.header('Cache-Control', 'public, max-age=600').send(h) : reply.code(404).send({ error: 'not found' });
   });
+  // A nation's every Elo move with its reasons, its world ranks and its moments (the Elo chart).
+  app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>('/api/intl/teams/:slug/elo', async (req, reply) => {
+    if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const db = getDb();
+    const n = await intl.nationOf(db, req.params.slug);
+    if (!n) return reply.code(404).send({ error: 'not found' });
+    const r = await intl.eloSeries(db, n.key, n.team_id == null && req.query.gender === 'w' ? 'w' : n.gender);
+    return r ? reply.header('Cache-Control', 'public, max-age=600').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  // An international match's Plaibook Elo: the chances before kickoff, each side's move once played.
+  app.get<{ Params: { slug: string } }>('/api/intl/matches/:slug/elo', async (req, reply) => {
+    if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const r = await intl.matchElo(getDb(), req.params.slug);
+    return r ? reply.header('Cache-Control', 'public, max-age=120').send(r) : reply.code(404).send({ error: 'not found' });
+  });
   app.get<{ Querystring: Record<string, string> }>('/api/intl/rankings', async (req, reply) =>
     reply.header('Cache-Control', 'public, max-age=600').send(await intl.rankings(getDb(), req.query.gender === 'w' ? 'w' : 'm')));
   app.get<{ Querystring: Record<string, string> }>('/api/intl/h2h', async (req, reply) => {

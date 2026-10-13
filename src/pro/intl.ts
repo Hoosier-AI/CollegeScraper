@@ -2,7 +2,8 @@
 // from the same pro_* tables as Pro (one crawl, one live job), filtered to scope 'intl' (migration 164); a tournament,
 // nation, player or match page is the Pro page's model. Only the lists that differ live here.
 import type { Db } from '../db/client.js';
-import { selectAll } from '../db/client.js';
+import { kvGet, selectAll } from '../db/client.js';
+import { DRAW_MODEL_KEY, expected as eloExpected, HOME_EDGE, predict, type DrawModel } from '../sources/intl/elo.js';
 import type { LeagueLevel } from '../sources/apiFootball/leagues.js';
 import { easternDayRange, FIXTURE_SELECT, matchesByDate, toMatchRow, type ProMatchRow } from './queries.js';
 import { sourcesOff } from './sources.js';
@@ -276,7 +277,112 @@ export async function rankings(db: Db, gender: 'm' | 'w') {
   const rows = await selectAll<{ nation: string; rating: number; rank: number; matches: number; last_match: string; change_1y: number | null; best: number; best_date: string; best_rank: number | null; best_rank_date: string | null; updated_at: string }>(db, 'intl_elo_current', 'nation,rating,rank,matches,last_match,change_1y,best,best_date,best_rank,best_rank_date,updated_at',
     (q) => q.eq('gender', gender).not('rank', 'is', null).order('rank'));
   const refs = await nationRefs(db, rows.map((r) => r.nation), gender);
-  return { gender, updated_at: rows[0]?.updated_at ?? null, credit: HISTORY_CREDIT.elo, rows: rows.map((r) => ({ ...r, rating: Math.round(Number(r.rating)), change_1y: r.change_1y == null ? null : Math.round(Number(r.change_1y)), best: Math.round(Number(r.best)), nation: refs.get(r.nation) ?? { key: r.nation, name: r.nation, slug: r.nation, logo: null, fifa_code: null, confederation: null } })) };
+  // The last two years, a rating at each month's end (the rankings' sparklines).
+  const since = new Date(Date.now() - 730 * 86400_000).toISOString().slice(0, 10);
+  const recent = await selectAll<{ nation: string; date: string; rating: number }>(db, 'intl_elo', 'nation,date,rating', (q) => q.eq('gender', gender).gte('date', since).order('date'));
+  const ranked = new Set(rows.map((r) => r.nation));
+  const trend = new Map<string, { m: string; r: number }[]>();
+  for (const e of recent) {
+    if (!ranked.has(e.nation)) continue;
+    const list = trend.get(e.nation) ?? [], m = String(e.date).slice(0, 7), last = list[list.length - 1];
+    if (last && last.m === m) last.r = Math.round(Number(e.rating)); else list.push({ m, r: Math.round(Number(e.rating)) });
+    trend.set(e.nation, list);
+  }
+  const out = rows.map((r) => ({ ...r, rating: Math.round(Number(r.rating)), change_1y: r.change_1y == null ? null : Math.round(Number(r.change_1y)), best: Math.round(Number(r.best)),
+    nation: refs.get(r.nation) ?? { key: r.nation, name: r.nation, slug: r.nation, logo: null, fifa_code: null, confederation: null }, trend: trend.get(r.nation) ?? [] }));
+  // The year's biggest movers among sides that played this year.
+  const withChange = out.filter((r) => r.change_1y != null && r.last_match >= new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10));
+  const pick = (dir: 1 | -1) => [...withChange].sort((a, b) => dir * (b.change_1y! - a.change_1y!)).slice(0, 5).filter((r) => dir * r.change_1y! > 0)
+    .map((r) => ({ nation: r.nation, rank: r.rank, rating: r.rating, change_1y: r.change_1y }));
+  return { gender, updated_at: rows[0]?.updated_at ?? null, credit: HISTORY_CREDIT.elo, movers: { up: pick(1), down: pick(-1) }, rows: out };
+}
+
+// ---------- Plaibook Elo, explained ----------
+type EloRow = { date: string; opponent: string; rating: number; delta: number; tournament: string | null; gf: number | null; ga: number | null; opp_rating: number | null; expected: number | null; k: number | null; goal_factor: number | null; venue: string | null };
+const ELO_COLS = 'date,opponent,rating,delta,tournament,gf,ga,opp_rating,expected,k,goal_factor,venue';
+
+/**
+ * A nation's every Elo move, with its reasons (the chart's hover): the match, the score, the opponent's rating, the
+ * expected result, the weight and the goal factor; its month-end world ranks; its current rating and rank; and the
+ * moments to mark: the best rank, the biggest one-match gain and loss, World Cup wins.
+ */
+export async function eloSeries(db: Db, key: string, gender: 'm' | 'w') {
+  const [rows, rankRow, now, nation, finals, links] = await Promise.all([
+    selectAll<EloRow>(db, 'intl_elo', ELO_COLS, (q) => q.eq('gender', gender).eq('nation', key).order('date')),
+    db.from('intl_elo_ranks').select('ranks').eq('gender', gender).eq('nation', key).maybeSingle().then((r) => ((r.data as { ranks?: { m: string; r: number }[] } | null)?.ranks ?? [])),
+    db.from('intl_elo_current').select('rating,rank,best_rank,best_rank_date').eq('gender', gender).eq('nation', key).maybeSingle().then((r) => r.data as any),
+    nationRefs(db, [key], gender).then((m) => m.get(key) ?? null),
+    // World Cup finals (the World Cup database names the stage).
+    selectAll<{ date: string; home: string; away: string; home_score: number | null; away_score: number | null; shootout_winner: string | null }>(db, 'intl_src_matches', 'date,home,away,home_score,away_score,shootout_winner',
+      (q) => q.eq('source', 'worldcup-db').eq('gender', gender).eq('stage', 'final').or(`home.eq.${key},away.eq.${key}`)),
+    selectAll<{ date: string; home: string; away: string; pro_fixture_id: number | null }>(db, 'intl_src_matches', 'date,home,away,pro_fixture_id',
+      (q) => q.eq('gender', gender).or(`home.eq.${key},away.eq.${key}`).not('pro_fixture_id', 'is', null)),
+  ]);
+  if (!nation) return null;
+  const refs = await nationRefs(db, rows.map((r) => r.opponent), gender);
+  const fixtureIds = [...new Set(links.map((l) => Number(l.pro_fixture_id)))];
+  const slugs = new Map<number, string>();
+  for (let i = 0; i < fixtureIds.length; i += 300) for (const f of await selectAll<{ id: number; slug: string }>(db, 'pro_fixtures', 'id,slug', (q) => q.in('id', fixtureIds.slice(i, i + 300)))) slugs.set(Number(f.id), f.slug);
+  const slugOf = new Map(links.map((l) => [`${l.date}|${l.home === key ? l.away : l.home}`, slugs.get(Number(l.pro_fixture_id)) ?? null]));
+  const opp = (k: string) => { const r = refs.get(k); return { key: k, name: r?.name ?? k, slug: r?.slug ?? k, logo: r?.logo ?? null }; };
+  const points = rows.map((r) => ({
+    date: String(r.date).slice(0, 10), rating: Math.round(Number(r.rating) * 10) / 10, delta: Math.round(Number(r.delta) * 10) / 10, opponent: opp(r.opponent), tournament: r.tournament,
+    gf: r.gf, ga: r.ga, opp_rating: r.opp_rating == null ? null : Math.round(Number(r.opp_rating)), expected: r.expected == null ? null : Number(r.expected), k: r.k, goal_factor: r.goal_factor == null ? null : Number(r.goal_factor), venue: r.venue,
+    match_slug: slugOf.get(`${String(r.date).slice(0, 10)}|${r.opponent}`) ?? null,
+  }));
+  const titles = finals.filter((f) => f.home_score != null && (f.shootout_winner ? f.shootout_winner === key : (f.home === key ? f.home_score! > f.away_score! : f.away_score! > f.home_score!)))
+    .map((f) => ({ date: String(f.date).slice(0, 10), title: gender === 'w' ? "Women's World Cup" : 'World Cup' }));
+  const gain = points.reduce<typeof points[number] | null>((b, p) => (!b || p.delta > b.delta ? p : b), null);
+  const loss = points.reduce<typeof points[number] | null>((b, p) => (!b || p.delta < b.delta ? p : b), null);
+  return {
+    nation, gender, current: now ? { rating: Math.round(Number(now.rating)), rank: now.rank ?? null } : null,
+    points, ranks: rankRow,
+    moments: { best_rank: now?.best_rank ? { rank: now.best_rank as number, month: String(now.best_rank_date).slice(0, 7) } : null, biggest_gain: gain && gain.delta > 0 ? gain.date : null, biggest_loss: loss && loss.delta < 0 ? loss.date : null, titles },
+  };
+}
+
+const sideOf = async (db: Db, teamId: number) => {
+  const { data } = await db.from('intl_nations').select('key,team_m,team_w').or(`team_m.eq.${teamId},team_w.eq.${teamId}`).limit(1).maybeSingle();
+  const n = data as { key: string; team_w: number | null } | null;
+  return n ? { key: n.key, gender: (n.team_w === teamId ? 'w' : 'm') as 'm' | 'w' } : null;
+};
+
+/**
+ * Plaibook Elo on an international match page. Before kickoff: both ratings and the chances of each result (the
+ * expected score split by how often such matches are drawn). Played: each side's rating before and after, with the
+ * same reasons as the chart. The home side gets the 100-point edge except at a finals tournament (neutral ground).
+ */
+export async function matchElo(db: Db, slug: string) {
+  const { data: f } = await db.from('pro_fixtures').select('id,kickoff,status,home_team_id,away_team_id,league:pro_leagues!pro_fixtures_league_id_fkey(name,type)').eq('slug', slug).maybeSingle();
+  const fx = f as any;
+  if (!fx) return null;
+  const [h, a] = await Promise.all([sideOf(db, fx.home_team_id), sideOf(db, fx.away_team_id)]);
+  if (!h || !a || h.gender !== a.gender) return null;
+  const gender = h.gender;
+  const [cur, model, refs] = await Promise.all([
+    selectAll<{ nation: string; rating: number; rank: number | null }>(db, 'intl_elo_current', 'nation,rating,rank', (q) => q.eq('gender', gender).in('nation', [h.key, a.key])),
+    kvGet<DrawModel>(db, DRAW_MODEL_KEY(gender)).catch(() => null),
+    nationRefs(db, [h.key, a.key], gender),
+  ]);
+  const curOf = (k: string) => cur.find((c) => c.nation === k) ?? null;
+  // The match itself, once played: each side's move on that day (a day either side: kickoff is UTC).
+  const day = String(fx.kickoff).slice(0, 10);
+  const shift = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
+  const moves = fx.status === 'final' ? await selectAll<EloRow & { nation: string }>(db, 'intl_elo', `nation,${ELO_COLS}`, (q) => q.eq('gender', gender).in('nation', [h.key, a.key]).gte('date', shift(day, -1)).lte('date', shift(day, 1))) : [];
+  const moveOf = (k: string, other: string) => moves.find((m) => m.nation === k && m.opponent === other) ?? null;
+  const mh = moveOf(h.key, a.key), ma = moveOf(a.key, h.key);
+  const league = fx.league ?? {};
+  const neutral = mh?.venue ? mh.venue === 'neutral' : !/qualif|friendl|nations league/i.test(String(league.name ?? '')) && league.type === 'cup';
+  const before = (m: EloRow | null, k: string) => (m ? Math.round(Number(m.rating) - Number(m.delta)) : curOf(k) ? Math.round(Number(curOf(k)!.rating)) : null);
+  const rh = before(mh, h.key), ra = before(ma, a.key);
+  const we = mh?.expected != null ? Number(mh.expected) : rh != null && ra != null ? eloExpected(rh + (neutral ? 0 : HOME_EDGE) - ra) : null;
+  const side = (k: string, r: number | null, m: EloRow | null) => ({ nation: refs.get(k) ?? null, rating_before: r, rank: curOf(k)?.rank ?? null,
+    move: m ? { rating_after: Math.round(Number(m.rating)), delta: Math.round(Number(m.delta) * 10) / 10, gf: m.gf, ga: m.ga, expected: m.expected == null ? null : Number(m.expected), k: m.k, goal_factor: m.goal_factor == null ? null : Number(m.goal_factor), venue: m.venue, opp_rating: m.opp_rating == null ? null : Math.round(Number(m.opp_rating)) } : null });
+  return {
+    gender, neutral, played: !!(mh && ma),
+    home: side(h.key, rh, mh), away: side(a.key, ra, ma),
+    prediction: we == null ? null : { home_expected: Math.round(we * 1000) / 1000, ...(() => { const p = predict(we, model ?? []); return { home: Math.round(p.win * 1000) / 1000, draw: Math.round(p.draw * 1000) / 1000, away: Math.round(p.loss * 1000) / 1000 }; })() },
+  };
 }
 
 /** A player's international career for the International player page: caps by nation (Wikipedia careers) and the

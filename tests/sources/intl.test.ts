@@ -5,7 +5,7 @@ import { applyShootouts, parseGoals, parseResults, parseShootouts, TOURNAMENT_LE
 import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, wcdbCodes } from '../../src/sources/intl/worldcupDb.js';
 import { parseWorldCupTxt } from '../../src/sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../src/sources/intl/nations.js';
-import { bestRanks, confederationsFrom, expected, goalFactor, kFactor, PROVISIONAL, runElo, worldCupSides } from '../../src/sources/intl/elo.js';
+import { bestRanks, confederationsFrom, drawModel, expected, goalFactor, kFactor, predict, PROVISIONAL, runElo, worldCupSides } from '../../src/sources/intl/elo.js';
 import { dedupeResults } from '../../src/jobs/sources/intl.js';
 
 const RESULTS = `date,home_team,away_team,home_score,away_score,tournament,city,country,neutral
@@ -149,9 +149,29 @@ describe('Plaibook Elo', () => {
     const date = () => new Date(Date.UTC(2000, 0, 1) + day++ * 86400_000).toISOString().slice(0, 10);
     // A round robin three times over (everyone established), s0 winning every game.
     for (let r = 0; r < 3; r++) for (let i = 0; i < sides.length; i++) for (let j = i + 1; j < sides.length; j++) games.push({ date: date(), home: sides[i]!, away: sides[j]!, home_score: i === 0 ? 3 : 1, away_score: i === 0 ? 0 : 1, tournament: 'FIFA World Cup qualification', neutral: true });
-    const best = bestRanks(games, { members: worldCupSides(games), confederations: new Map(), minInter: 0, minPool: 10 });
+    const { best, history } = bestRanks(games, { members: worldCupSides(games), confederations: new Map(), minInter: 0, minPool: 10 });
     expect(best.get('s0')?.rank).toBe(1);
     expect(best.get('s0')!.margin).toBeGreaterThan(0);
+    // The best rank is the minimum of the month-end history, for every side.
+    for (const [t, b] of best) expect(Math.min(...history.get(t)!.map((h) => h.r))).toBe(b.rank);
+  });
+  it('each move carries its reasons: score, expected result, weight, goal factor, venue', () => {
+    const { steps } = runElo([{ date: '2021-06-06', home: 'united-states', away: 'mexico', home_score: 3, away_score: 2, tournament: 'CONCACAF Nations League', neutral: true }]);
+    const [us, mx] = steps;
+    expect(us).toMatchObject({ nation: 'united-states', opponent: 'mexico', gf: 3, ga: 2, oppRating: 1500, expected: 0.5, k: 40, goalFactor: 1, venue: 'neutral' });
+    expect(us!.delta).toBeCloseTo(40 * 1 * (1 - 0.5));
+    expect(mx).toMatchObject({ gf: 2, ga: 3, expected: 0.5, venue: 'neutral' });
+    const home = runElo([{ date: '2021-06-06', home: 'a', away: 'b', home_score: 0, away_score: 0, tournament: 'Friendly', neutral: false }]).steps;
+    expect(home[0]).toMatchObject({ venue: 'home' });
+    expect(home[0]!.expected).toBeCloseTo(expected(100));
+    expect(home[1]).toMatchObject({ venue: 'away' });
+  });
+  it('win, draw, win: the draw rate comes from how often even matches are drawn, and the chances add up', () => {
+    const games = Array.from({ length: 40 }, (_, i) => ({ date: `2000-01-${String((i % 28) + 1).padStart(2, '0')}`, home: `h${i}`, away: `a${i}`, home_score: i % 4 === 0 ? 1 : 2, away_score: 1, tournament: 'Friendly', neutral: true }));
+    const model = drawModel(runElo(games).steps);
+    expect(model[0]).toBeCloseTo(0.25); // ten of forty even matches drawn
+    for (const we of [0.05, 0.3, 0.5, 0.8, 0.97]) { const p = predict(we, model); expect(p.win + p.draw + p.loss).toBeCloseTo(1); expect(p.win - p.loss).toBeCloseTo(we - (1 - we), 1); }
+    expect(predict(0.9, model).win).toBeGreaterThan(predict(0.6, model).win);
   });
   it('confederations come from the continental competitions a side plays', () => {
     const c = confederationsFrom([{ home: 'mexico', away: 'united-states', tournament: 'Gold Cup' }, { home: 'spain', away: 'italy', tournament: 'UEFA Euro qualification' }, { home: 'mexico', away: 'spain', tournament: 'Friendly' }]);
