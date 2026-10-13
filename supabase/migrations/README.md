@@ -62,5 +62,6 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 166_intl_elo_best_rank.sql | Plaibook Elo corrected: `intl_elo_current.best_rank` / `best_rank_date` (a side's best world rank, comparable across eras, replacing its highest rating as its best; see `bestRanks` in src/sources/intl/elo.ts) | yes (2026-10-13) |
 | 167_intl_elo_detail.sql | Why each Plaibook Elo move happened: `intl_elo` gains gf, ga, opp_rating, expected, k, goal_factor, venue (the chart's hover reasons); `intl_elo_ranks` holds each nation's month-end world rank history (service role only) | yes (2026-10-13) |
 | 168_intl_teams_majority.sql | National teams the provider also lists in a club competition (Spain in a South African cup, the China Cup filed as club): `pro_refresh_intl_teams()` counts a side national when it has played more internationals than club matches; China Cup (766) scoped intl | yes (2026-10-13) |
+| 169_intl_team_gender.sql | A national side's gender from its internationals (90% of 10+): one stray women's friendly had made the Central African Republic's men's side a women's one; `pro_refresh_intl_teams()` sets it daily | yes (2026-10-13) |
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
