@@ -360,6 +360,9 @@ export async function proRank(ctx: JobContext): Promise<void> {
   const gd = await ctx.db.rpc('pro_refresh_player_gender');
   if (gd.error) throw new Error(`gender: ${gd.error.message}`);
   ctx.inc('genders_changed', Number(gd.data) || 0);
+  // Squads for clubs the provider has none for: the players who played for them this season (migration 171).
+  const sq = await ctx.db.rpc('pro_fill_squads_from_play');
+  if (sq.error) ctx.note('squads_from_play', sq.error.message); else ctx.inc('squad_rows_from_play', Number(sq.data) || 0);
   // The day's content counts for the hub's growth charts (stats_daily_counts, migration 163).
   await saveDailyCounts(ctx.db).then(() => ctx.inc('daily_counts_saved'), (err) => ctx.note('daily_counts', String(err)));
 }
