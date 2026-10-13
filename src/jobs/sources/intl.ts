@@ -246,8 +246,9 @@ async function intlMatch(ctx: JobContext): Promise<void> {
     if (id !== (m.pro_fixture_id == null ? null : Number(m.pro_fixture_id))) links.push({ source: m.source, gender: m.gender, date: m.date, home: m.home, away: m.away, fixture: id });
   }
   // 3. API-Football's own finals as the last source: the matches no open source has (most women's internationals,
-  //    the latest window before martj42 catches up). Senior sides only; never a match another source already has.
-  const covered = new Set(src.map((m) => {
+  //    the latest window before martj42 catches up). Senior sides only; never a match another source already has (its
+  //    own stored rows are not "another source": counting them left only new matches, and the shrink guard refused).
+  const covered = new Set(src.filter((m) => m.source !== 'api-football').map((m) => {
     const [x, y] = [m.home, m.away].sort();
     return fx.get(`${m.gender}|${m.date}|${x}|${y}`) ?? fx.get(`${m.gender}|${shift(m.date, 1)}|${x}|${y}`) ?? fx.get(`${m.gender}|${shift(m.date, -1)}|${x}|${y}`) ?? null;
   }).filter((id): id is number => id != null));
