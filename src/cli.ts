@@ -58,7 +58,7 @@ for (const job of ['discover-teams', 'detect-sites', 'sweep-scoreboard', 'fetch-
 }
 
 // Plaibook Stats Pro jobs (API-Football). Each spends from Plaibook's shared daily quota.
-for (const job of ['pro-catalog', 'pro-scoreboard', 'pro-live', 'pro-final-detail', 'pro-standings', 'pro-backfill', 'pro-players', 'pro-college-link', 'pro-plan', 'pro-crawl', 'pro-rank']) {
+for (const job of ['pro-catalog', 'pro-scoreboard', 'pro-live', 'pro-final-detail', 'pro-standings', 'pro-backfill', 'pro-players', 'pro-college-link', 'pro-plan', 'pro-crawl', 'pro-rank', 'pro-leaders']) {
   program.command(job).description(`run the ${job} job inline`)
     .option('--days <auto|today|recent>', 'pro-scoreboard: which UTC days')
     .option('--dates <list>', 'pro-scoreboard: comma list of YYYY-MM-DD (UTC)')

@@ -364,6 +364,15 @@ export async function proRank(ctx: JobContext): Promise<void> {
   await saveDailyCounts(ctx.db).then(() => ctx.inc('daily_counts_saved'), (err) => ctx.note('daily_counts', String(err)));
 }
 
+/** The current-season leader lists (pro_leader_rows, migration 172): Leaders, Players, Americans abroad and the
+ *  country pages read them instead of summing ~100k season rows on every view. */
+export async function proLeaders(ctx: JobContext): Promise<void> {
+  const { data, error } = await ctx.db.rpc('pro_refresh_leader_rows');
+  if (error) throw new Error(error.message);
+  ctx.inc('rows', Number(data) || 0);
+}
+
 registerJob('pro-plan', proPlan);
+registerJob('pro-leaders', proLeaders);
 registerJob('pro-crawl', proCrawl);
 registerJob('pro-rank', proRank);
