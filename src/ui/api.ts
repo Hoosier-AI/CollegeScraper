@@ -67,6 +67,10 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return q.programGames(getDb(), req.params.id, s);
   });
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/periods', async (req, reply) => {
+    const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
+    return reply.header('Cache-Control', 'public, max-age=300').send(await q.goalsByPeriod(getDb(), req.params.id, s));
+  });
   app.post<{ Params: { id: string }; Body: { season?: number; force?: boolean } | null }>('/api/programs/:id/sync', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const db = getDb();
@@ -102,7 +106,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
 
   app.get<{ Querystring: Record<string, string> }>('/api/leaders', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    const page = await q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all' });
+    const page = await q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all', position: str(req.query.position), class_year: req.query.class_year });
     return { stats: req.query.kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS, ...page };
   });
   app.get<{ Querystring: Record<string, string> }>('/api/matches', async (req, reply) => {

@@ -4,7 +4,7 @@
 // and so is a player row whose minutes disagree with API-Football's (most likely a wrong match). Agreement is shown in
 // the hub's Crawling page rather than hidden behind a gate.
 import type { Db } from '../db/client.js';
-import { selectAll } from '../db/client.js';
+import { selectAll, selectIn } from '../db/client.js';
 import { cachedKv, KV } from '../ops/settings.js';
 import { ASA_CREDIT } from '../sources/asa/leagues.js';
 import { leaguesById, teamsById } from './queries.js';
@@ -64,6 +64,28 @@ async function proIdsOf(db: Db, kind: 'team' | 'player', exts: string[]): Promis
 }
 
 const n = (v: unknown): number | null => (v == null ? null : Number(v));
+
+/** xG and xA for leaderboard rows (player, competition, season), where the source covers that competition and passes
+ *  the gate; summed over a player's clubs in the competition. Key: `${player}|${league}|${season}`. */
+export async function advForLeaders(db: Db, rows: { player: number; league: number; season: number }[]): Promise<Map<string, { xg: number | null; xa: number | null }>> {
+  const out = new Map<string, { xg: number | null; xa: number | null }>();
+  const ok = rows.length ? await gate(db) : null;
+  if (!ok) return out;
+  const want = rows.filter((r) => ok(r.league, r.season));
+  if (!want.length) return out;
+  const ids = await selectIn<{ ext_id: string; pro_id: number }>(db, 'pro_source_ids', 'ext_id,pro_id', 'pro_id', [...new Set(want.map((r) => r.player))], (q) => q.eq('source', SOURCE).eq('kind', 'player').eq('rejected', false));
+  if (!ids.length) return out;
+  const proOf = new Map(ids.map((r) => [r.ext_id, Number(r.pro_id)]));
+  const adv = await selectIn<{ player_ext: string; league_id: number; season: number; xg: number | null; xa: number | null }>(db, 'pro_adv_player_seasons', 'player_ext,league_id,season,xg,xa', 'player_ext', [...proOf.keys()], (q) => q.eq('source', SOURCE));
+  const wanted = new Set(want.map((r) => `${r.player}|${r.league}|${r.season}`));
+  for (const a of adv) {
+    const k = `${proOf.get(a.player_ext)}|${a.league_id}|${a.season}`;
+    if (!wanted.has(k)) continue;
+    const cur = out.get(k) ?? { xg: null, xa: null };
+    out.set(k, { xg: a.xg == null ? cur.xg : (cur.xg ?? 0) + Number(a.xg), xa: a.xa == null ? cur.xa : (cur.xa ?? 0) + Number(a.xa) });
+  }
+  return out;
+}
 
 /** A player's advanced seasons (one row per club and competition), newest first. */
 export async function playerAdvanced(db: Db, playerId: number) {

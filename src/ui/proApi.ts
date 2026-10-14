@@ -16,7 +16,7 @@ import { cachedKv, KV } from '../ops/settings.js';
 import { isBot, refreshPlayerOnView } from '../pro/playerRefresh.js';
 import { refreshTeamOnView } from '../pro/teamRefresh.js';
 import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
-import { BROKEN_AT, sourcesOff } from '../pro/sources.js';
+import { BROKEN_AT, advForLeaders, sourcesOff } from '../pro/sources.js';
 import { swr } from '../ops/swr.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -102,12 +102,22 @@ export function registerProApi(app: FastifyInstance): void {
       min_age: int(q.min_age), max_age: int(q.max_age), min_minutes: int(q.min_minutes), per90: q.per90 === '1', gender: q.gender === 'w' || q.gender === 'm' ? q.gender : null,
       abroad: q.abroad || null, country: q.country && /^[A-Za-z-]{2,40}$/.test(q.country) ? q.country : null, limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0,
     };
-    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('leaders', f), () => pro.leaders(getDb(), f)));
+    // xG and xA beside each row where American Soccer Analysis covers the competition (MLS, NWSL, USL…).
+    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('leaders', f), async () => {
+      const page = await pro.leaders(getDb(), f);
+      const adv = await advForLeaders(getDb(), page.rows.filter((r) => r.league).map((r) => ({ player: r.player.id, league: r.league!.id, season: r.season }))).catch(() => new Map<string, { xg: number | null; xa: number | null }>());
+      return { ...page, rows: page.rows.map((r) => { const a = r.league ? adv.get(`${r.player.id}|${r.league.id}|${r.season}`) : undefined; return a ? { ...r, xg: a.xg, xa: a.xa } : r; }) };
+    }));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/teams', async (req, reply) => {
     const q = req.query;
     const f = { gender: q.gender === 'w' ? 'w' as const : 'm' as const, scope: q.scope === 'world' ? 'world' as const : 'us' as const, league: int(q.league) };
     return reply.header('Cache-Control', 'public, max-age=600').send(await memo(memoKey('teams-list', f), () => pro.teamsList(getDb(), f)));
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/team-leaders', async (req, reply) => {
+    const q = req.query;
+    const f: pro.TeamLeadersFilter = { stat: q.stat, scope: 'club', gender: q.gender === 'w' ? 'w' : 'm', league: int(q.league), us: q.scope !== 'world', limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0 };
+    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('team-leaders', f), () => pro.teamLeaders(getDb(), f)));
   });
   app.get('/api/pro/countries', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=3600').send(await pro.countries(getDb())));
   app.get<{ Params: { slug: string }; Querystring: { gender?: string } }>('/api/pro/countries/:slug', async (req, reply) => {

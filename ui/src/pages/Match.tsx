@@ -89,6 +89,12 @@ export default function Match() {
     { key: 'goals_allowed', label: 'GA', num: true, priority: 3, render: (r) => r.is_goalie ? fmt.num(r.goals_allowed) : '' }, { key: 'saves', label: 'Saves', num: true, priority: 3, render: (r) => r.is_goalie ? fmt.num(r.saves) : '' },
     { key: 'gwg', label: 'GWG', num: true, priority: 3 }, { key: 'unassisted_goals', label: 'Unassisted', num: true, priority: 3 }, { key: 'first_goals', label: 'First goal', num: true, priority: 3 }, { key: 'ot_goals', label: 'OT goals', num: true, priority: 3 }, { key: 'tying_goals', label: 'Tying', num: true, priority: 3 }, { key: 'hat_trick', label: 'Hat trick', priority: 3, render: (r) => r.hat_trick ? 'Yes' : '' },
   ];
+  // Officials and the match's running time, from the box score.
+  const officials: { name: string; title: string | null }[] = Array.isArray(box.data?.game?.officials) ? box.data.game.officials : [];
+  const referee = officials.find((o) => /^referee$/i.test(o.title ?? ''))?.name ?? null;
+  const assistants = officials.filter((o) => /asst|assistant/i.test(o.title ?? '')).map((o) => o.name);
+  const dm = Number(box.data?.game?.duration_min);
+  const duration = g.status === 'final' && dm > 60 && dm < 400 ? `${Math.floor(dm / 60)} h ${String(dm % 60).padStart(2, '0')} min` : null;
   const periodLines = (['site', 'ncaa'] as Src[]).map((s) => ({ s, rows: team.filter((t) => t.source === s && t.period_lines) })).find((x) => x.rows.length);
   return (
     <div className="space-y-5">
@@ -96,6 +102,8 @@ export default function Match() {
       <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
         {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
+        {referee && <span>Referee <span className="text-chalk-300">{referee}</span>{assistants.length ? `, assistants ${assistants.join(' and ')}` : ''}</span>}
+        {duration && <span>Played in {duration}</span>}
         {g.ncaa_contest_id && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={`https://www.ncaa.com/game/${g.ncaa_contest_id}`} target="_blank" rel="noreferrer">NCAA.com <ExternalLink size={12} aria-hidden /></a>}
         {Object.entries(box.data?.game?.site_game_refs ?? {}).map(([host, url]) => (url ? <a key={host} className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={String(url)} target="_blank" rel="noreferrer">{host} <ExternalLink size={12} aria-hidden /></a> : null))}
         {g.status === 'live' && (
@@ -109,7 +117,7 @@ export default function Match() {
         <div className="space-y-6">
           {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of NCAA.com's in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
           {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}
-          <Section title="Key events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
+          <Section title="Events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
           {g.status === 'live' && players.length > 0 && (
             <Section title="Match stats so far">
               <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />

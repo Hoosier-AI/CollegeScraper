@@ -96,7 +96,7 @@ export function GoalsByPeriod({ rows }: { rows: { period: string; for: number; a
   );
 }
 
-export interface LeaderRow { rank: number; player: { id: number; name: string; slug: string; photo: string | null; nationality: string | null; birth_date: string | null; position: string | null }; team: ProTeamRef | null; league: ProLeagueRef | null; season: number; apps: number; minutes: number; goals: number; assists: number; rating: number | null; value: number | null }
+export interface LeaderRow { rank: number; player: { id: number; name: string; slug: string; photo: string | null; nationality: string | null; birth_date: string | null; position: string | null }; team: ProTeamRef | null; league: ProLeagueRef | null; season: number; apps: number; minutes: number; goals: number; assists: number; rating: number | null; value: number | null; /** American Soccer Analysis, where it covers the competition. */ xg?: number | null; xa?: number | null }
 
 /** The leaders / directory table: rank, player (flag, age, position), club, competition, the sorted stat. */
 export function LeadersTable({ rows, stat, per90, caption, loading, showLeague = true, empty }: { rows: LeaderRow[]; stat: string; per90?: boolean; caption: string; loading?: boolean; showLeague?: boolean; empty?: React.ReactNode }) {
@@ -112,6 +112,11 @@ export function LeadersTable({ rows, stat, per90, caption, loading, showLeague =
     { key: 'apps', label: 'Apps', num: true, sortable: false, priority: 2, value: (r) => r.apps },
     { key: 'minutes', label: 'Min', num: true, sortable: false, priority: 3, value: (r) => r.minutes },
     { key: 'value', label: valueLabel, num: true, sortable: false, decimals: per90 || stat === 'rating' ? 2 : 0, value: (r) => r.value, className: 'font-semibold text-chalk-100' },
+    // Expected goals and assists where American Soccer Analysis covers the competition (shown only when a row has them).
+    ...(rows.some((r) => r.xg != null) ? [
+      { key: 'xg', label: 'xG', title: 'Expected goals (American Soccer Analysis)', num: true, sortable: false, priority: 2 as const, decimals: 1, value: (r: LeaderRow) => r.xg ?? null },
+      { key: 'xa', label: 'xA', title: 'Expected assists (American Soccer Analysis)', num: true, sortable: false, priority: 2 as const, decimals: 1, value: (r: LeaderRow) => r.xa ?? null },
+    ] : []),
   ];
   return <DataTable rows={rows} columns={cols} rowKey={(r) => `${r.player.id}-${r.team?.id}-${r.league?.id}`} caption={caption} rowHref={(r) => proPath.player(r.player.slug)} loading={loading} dense
     empty={empty ?? <EmptyState title="No players match" body="Loosen the filters, or try another competition." />} />;

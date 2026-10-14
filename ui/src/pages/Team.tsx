@@ -11,6 +11,7 @@ import { TeamMasthead } from './team/Masthead';
 import { RosterTable } from './team/RosterTable';
 import { GamesList } from './team/GamesList';
 import { NewsFeed } from '../components/news/News';
+import { GoalsByPeriod } from '../components/pro/People';
 import { Crumbs } from '../components/shell';
 import { genderLabel } from '../lib/filters';
 
@@ -84,7 +85,7 @@ export default function Team() {
       <TabsNav label="Team sections" tabs={tabs} value={tab as Tab} hrefFor={tabHref} />
       {tab === 'roster' && <RosterTable rows={roster.data ?? []} loading={roster.isPending} playerHref={(r) => `/players/${r.player?.id}`} />}
       {tab === 'matches' && <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />}
-      {tab === 'stats' && <SeasonProfile t={t} id={id} href={href} admin={admin} />}
+      {tab === 'stats' && <SeasonProfile t={t} id={id} season={f.season} href={href} admin={admin} />}
       {tab === 'news' && <NewsFeed q={{ program: id }} hide={`program:${id}`} empty="No news for this team yet" />}
       {tab === 'coaches' && (t.coaches?.length
         ? <ul className="frame divide-y divide-field-700">{t.coaches.map((c: any) => <li key={c.college_coaches?.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={36} /><div><div className="font-medium text-chalk-100">{c.college_coaches?.name}</div><div className="text-xs text-chalk-400">{c.title}{c.is_head && <Badge tone="teal" className="ml-2">Head coach</Badge>}</div></div></li>)}</ul>
@@ -100,8 +101,12 @@ export default function Team() {
 }
 
 /** The long tail of team numbers, plus the conference table and poll history, in one calm place. */
-function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: string, o?: Record<string, string | number | null | undefined>) => string; admin: boolean }) {
+function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; season: number; href: (p: string, o?: Record<string, string | number | null | undefined>) => string; admin: boolean }) {
   const s = t.teamStats;
+  // Goals by 15-minute period from the play-by-play, once it covers most of the season's finished games.
+  const periods = useQuery({ queryKey: ['periods', id, season], queryFn: () => api<{ games: number; timed: number; rows: { period: string; for: number; against: number }[] }>(`/api/programs/${id}/periods${qs({ season })}`), staleTime: 300_000 });
+  const pd = periods.data;
+  const periodsShown = !!pd && pd.games > 0 && pd.timed >= 0.6 * pd.games;
   const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td !whitespace-normal text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td !whitespace-normal text-xs text-chalk-500">{note ?? ''}</td></tr>;
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
@@ -135,6 +140,10 @@ function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: s
         ) : <EmptyState title="No conference table yet" body={admin ? 'Run compute-standings.' : undefined} />}
       </Section>
       <div className="space-y-6">
+        <Section title="Goals by period">
+          {periodsShown ? <><GoalsByPeriod rows={pd!.rows} /><p className="mt-1 text-xs text-chalk-500">Scored and conceded by 15-minute period, from the play-by-play of {pd!.timed} of {pd!.games} matches.</p></>
+            : <p className="text-sm text-chalk-500">{periods.isPending ? 'Loading…' : 'Shows once goal times are in for most of the season\'s matches.'}</p>}
+        </Section>
         <Section title="United Soccer Coaches poll">
           {t.uscHistory?.length ? (
             <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Poll history</caption>

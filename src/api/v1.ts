@@ -249,7 +249,7 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     const kind = req.query.kind === 'team' ? 'team' : 'player';
     const allowed = kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS;
     if (req.query.stat && !allowed.includes(req.query.stat)) return bad(reply, `stat must be one of: ${allowed.join(', ')}`);
-    const page = await q.leaders(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind, stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all' });
+    const page = await q.leaders(getDb(), { season, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind, stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all', position: str(req.query.position), class_year: req.query.class_year });
     return { kind, stats: allowed, ...page };
   });
 

@@ -11,6 +11,10 @@ import { PlayerAvatar, Chip, EmptyState, ErrorBox, Field, PageHeader, Pager, Seg
 const PAGE = 100;
 const DIV_OPTIONS = [{ value: '', label: 'All' }, { value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
 const MIN_CHIPS = [0, 180, 450, 900];
+const POS_OPTIONS = [{ value: '', label: 'All' }, { value: 'GK', label: 'GK' }, { value: 'D', label: 'D' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }];
+const CLASS_OPTIONS = [{ value: '', label: 'Any' }, { value: '1', label: 'Fr' }, { value: '2', label: 'So' }, { value: '3', label: 'Jr' }, { value: '4', label: 'Sr' }, { value: '5', label: 'Gr' }];
+// Stats with a per-90 version: the Per 90 switch reads that one instead (450+ minutes unless a minimum is set).
+const PER90: Record<string, string> = { goals: 'goals_p90', assists: 'assists_p90', points: 'points_p90', shots: 'shots_p90', sog: 'sog_p90', saves: 'saves_p90' };
 
 // Supporting columns shown next to the chosen stat, by the stat's group.
 const PLAYER_SUPPORT: Record<string, string[]> = {
@@ -35,20 +39,25 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
   const kind = dir ? 'player' : kindParam;
   const isTeam = kind === 'team';
   const [statParam, setStat] = useUrlState('stat', isTeam ? 'w' : 'goals');
-  const stat = dir ? 'minutes' : statParam;
+  const [rate, setRate] = useUrlState('per90', '', { allow: ['1'] });
+  const [position, setPosition] = useUrlState('position', '', { allow: ['GK', 'D', 'M', 'F'] });
+  const [classYear, setClassYear] = useUrlState('class', '', { allow: ['1', '2', '3', '4', '5'] });
+  const per90 = !dir && !isTeam && rate === '1' && !!PER90[statParam];
+  const stat = dir ? 'minutes' : per90 ? PER90[statParam]! : statParam;
   const [division, setDivision] = useUrlState('division', '', { allow: ['d1', 'd2', 'd3'] });
   const [conferenceParam, setConference] = useUrlState('conference');
   const conference = props.conference ?? conferenceParam;
   const [minParam, setMinMin] = useUrlNumber('min', 0, { min: 0, max: 5000 });
-  const minMin = dir ? 0 : minParam;
+  const minMin = dir ? 0 : per90 && !minParam ? 450 : minParam;
+  const pos = isTeam ? '' : position, cls = isTeam ? '' : classYear;
   const [page, setPage] = useUrlNumber('page', 0, { min: 0, replace: true, resetPage: false });
   const search = useUrlText('q');
   const meta = useQuery({ queryKey: ['meta'], queryFn: () => api<{ conferences: { id: string; name: string; division: string | null }[] }>('/api/meta') });
   const q = useQuery({
-    queryKey: ['leaders', f.season, f.gender, kind, stat, division, conference, minMin, search.value, page],
-    queryFn: () => api<{ stats: string[]; stat: string; rows: any[]; total: number; limit: number; offset: number }>(`/api/leaders${qs({ season: f.season, gender: f.gender, kind, stat, division, conference, min_minutes: minMin, q: search.value, limit: PAGE, offset: page * PAGE })}`),
+    queryKey: ['leaders', f.season, f.gender, kind, stat, division, conference, minMin, search.value, pos, cls, page],
+    queryFn: () => api<{ stats: string[]; stat: string; rows: any[]; total: number; limit: number; offset: number }>(`/api/leaders${qs({ season: f.season, gender: f.gender, kind, stat, division, conference, min_minutes: minMin, q: search.value, position: pos, class_year: cls, limit: PAGE, offset: page * PAGE })}`),
     // Keep the table on screen while paging within the same list; a new list gets fresh rows.
-    placeholderData: (prev, prevQuery) => (prevQuery && prevQuery.queryKey.slice(0, 9).join('|') === [ 'leaders', f.season, f.gender, kind, stat, division, conference, minMin, search.value ].join('|') ? prev : undefined),
+    placeholderData: (prev, prevQuery) => (prevQuery && prevQuery.queryKey.slice(0, 11).join('|') === [ 'leaders', f.season, f.gender, kind, stat, division, conference, minMin, search.value, pos, cls ].join('|') ? prev : undefined),
   });
   const def = statDef(isTeam ? 'team' : 'player', stat);
   const dec = (k: string) => statDef(isTeam ? 'team' : 'player', k).decimals ?? 0;
@@ -85,16 +94,23 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
     <div className="space-y-4">
       <PageHeader as={props.embedded ? 'h2' : 'h1'} title={dir ? 'Players' : 'Leaders'} meta={dir ? `Everyone who has played, most minutes first, ${scope}` : `${def.label}, ${scope}`}>
         {!dir && <Field label="Show">{() => <SegmentedControl label="Players or teams" size="sm" value={kind as 'player' | 'team'} onChange={(v) => patch({ kind: v === 'player' ? null : v, stat: null, min: null })} options={[{ value: 'player', label: 'Players' }, { value: 'team', label: 'Teams' }]} />}</Field>}
-        {!dir && <Field label="Stat">{(id) => <Select id={id} value={stat} onChange={setStat} options={statOptions} className="max-w-[240px]" />}</Field>}
+        {!dir && <Field label="Stat">{(id) => <Select id={id} value={statParam} onChange={setStat} options={statOptions} className="max-w-[240px]" />}</Field>}
+        {!dir && !isTeam && PER90[statParam] && <Field label="Numbers">{() => <SegmentedControl label="Totals or per 90" size="sm" value={rate} onChange={setRate} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>}
         {!props.conference && <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v || null, conference: null })} options={DIV_OPTIONS} />}</Field>}
         {!props.conference && <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[200px]" />}</Field>}
         <Field label={isTeam ? 'Find team' : 'Find player or team'}>{(id) => <input id={id} type="search" className="input w-44" placeholder="Name" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
-      {!isTeam && !dir && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Minimum minutes">
-          <span className="mr-1">Minimum minutes</span>
-          {MIN_CHIPS.map((m) => <Chip key={m} on={minMin === m} onClick={() => setMinMin(m)}>{m === 0 ? 'Any' : `${m}+`}</Chip>)}
-          {!MIN_CHIPS.includes(minMin) && <Chip on>{minMin}+</Chip>}
+      {!isTeam && (
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+          <Field label="Position">{() => <SegmentedControl label="Position" size="sm" value={position} onChange={setPosition} options={POS_OPTIONS} />}</Field>
+          <Field label="Class">{() => <SegmentedControl label="Class" size="sm" value={classYear} onChange={setClassYear} options={CLASS_OPTIONS} />}</Field>
+          {!dir && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Minimum minutes">
+              <span className="mr-1">Minimum minutes</span>
+              {MIN_CHIPS.filter((m) => !per90 || m > 0).map((m) => <Chip key={m} on={minMin === m} onClick={() => setMinMin(m)}>{m === 0 ? 'Any' : `${m}+`}</Chip>)}
+              {!MIN_CHIPS.includes(minMin) && <Chip on>{minMin}+</Chip>}
+            </div>
+          )}
         </div>
       )}
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}

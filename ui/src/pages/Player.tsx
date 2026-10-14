@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { NewsFeed } from '../components/news/News';
 import { Crumbs } from '../components/shell';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Trophy } from 'lucide-react';
+import { ArrowRight, ExternalLink, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
 import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
@@ -133,7 +133,10 @@ export default function Player() {
         <Section title="Colleges">
           <ul className="frame divide-y divide-field-700 text-sm">{[...new Map(seasons.filter((s) => s.program).map((s) => [s.program.id, s])).values()].map((s: any) => { const yrs = seasons.filter((x) => x.program?.id === s.program.id).map((x) => x.season).sort(); return <li key={s.program.id}><Link to={href(`/teams/${s.program.id}`, { season: s.season, gender: s.program.gender })} className="flex items-center gap-2 px-3 py-2 hover:bg-field-800"><TeamLogo src={s.program.college_schools?.logo_svg_url} name={s.program.name} size={20} /><span className="font-medium text-chalk-100">{s.program.name}</span><span className="ml-auto text-xs text-chalk-400 tnum">{yrs[0] === yrs[yrs.length - 1] ? yrs[0] : `${yrs[0]}–${yrs[yrs.length - 1]}`}</span></Link></li>; })}</ul>
         </Section>
-        {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => <li key={t.id} className="px-3 py-2">{t.from_season} to {t.to_season}{admin && <span className="text-chalk-500"> (confidence {t.confidence}, {t.evidence?.rule})</span>}</li>)}</ul></Section>}
+        {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => {
+          const school = (x: any, season: number) => x ? <Link to={href(`/teams/${x.id}`, { season, gender: x.gender })} className="inline-flex items-center gap-1.5 font-medium text-chalk-100 hover:text-pitch-300"><TeamLogo src={x.logo} seo={x.seo} name={x.name} size={18} />{x.name}</Link> : <span className="text-chalk-400">another school</span>;
+          return <li key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2">{school(t.from, t.from_season)}<span className="text-xs text-chalk-500">{t.from_season}</span><ArrowRight size={14} aria-hidden className="text-chalk-500" />{school(t.to, t.to_season)}<span className="text-xs text-chalk-500">{t.to_season}</span>{admin && <span className="text-xs text-chalk-500">(confidence {t.confidence}, {t.evidence?.rule})</span>}</li>;
+        })}</ul></Section>}
       </div>}
       {tab === 'news' && id && <NewsFeed q={{ player: id }} hide={`college_player:${id}`} empty="No news for this player yet" />}
       {tab === 'matches' && <Section title="Game log">

@@ -124,7 +124,7 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
   };
   return (
     <div className="space-y-2">
-      <ol className="frame divide-y divide-field-700" aria-label="Key events">
+      <ol className="frame divide-y divide-field-700" aria-label="Events">
         {rows.map((r) => {
           if (r.sub) {
             const text = <span className="text-sm text-chalk-300">{r.sub.on.length > 0 && <span>On: <span className="text-chalk-100">{r.sub.on.join(', ')}</span></span>}{r.sub.on.length > 0 && r.sub.off.length > 0 && '. '}{r.sub.off.length > 0 && <span>Off: {r.sub.off.join(', ')}</span>}</span>;

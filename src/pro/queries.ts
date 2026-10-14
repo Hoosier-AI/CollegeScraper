@@ -708,7 +708,7 @@ export async function country(db: Db, slug: string, gender?: 'm' | 'w') {
 export async function teamsList(db: Db, o: { gender: 'm' | 'w'; scope: 'us' | 'world'; league?: number | null }) {
   const all = await leagues(db);
   const pick = all.filter((l) => l.gender === o.gender && (o.league ? l.id === o.league : l.type === 'league' && l.current_season != null && (o.scope === 'us' ? l.country === 'USA' : l.priority < 100))).slice(0, 40);
-  const rows = pick.length ? await selectAll<{ league_id: number; team_id: number; season: number }>(db, 'pro_league_teams', 'league_id,team_id,season', (q) => q.in('league_id', pick.map((l) => l.id))) : [];
+  const rows = pick.length ? await selectAll<{ league_id: number; team_id: number; season: number }>(db, 'pro_league_teams', 'league_id,team_id,season', (q) => q.in('league_id', pick.map((l) => l.id)).order('league_id').order('season').order('team_id')) : [];
   const current = rows.filter((r) => r.season === pick.find((l) => l.id === r.league_id)?.current_season);
   const teams = await teamsById(db, current.map((r) => r.team_id));
   return {
@@ -717,6 +717,36 @@ export async function teamsList(db: Db, o: { gender: 'm' | 'w'; scope: 'us' | 'w
       // The provider can hold one club twice (two ids, one name): one row per name.
       teams: [...new Map(current.filter((r) => r.league_id === l.id).map((r) => teams.get(r.team_id)).filter((t): t is ProTeamRef => !!t).map((t) => [t.name.toLowerCase(), t])).values()].sort((a, b) => a.name.localeCompare(b.name)),
     })).filter((g) => g.teams.length),
+  };
+}
+
+export const TEAM_LEADER_STATS = ['points', 'ppg', 'w', 'gf', 'gf_pg', 'ga', 'ga_pg', 'gd', 'clean_sheets', 'shots', 'shots_on', 'possession', 'corners', 'yellow', 'red'] as const;
+const TEAM_ASC = new Set(['ga', 'ga_pg', 'yellow', 'red']);
+export interface TeamLeadersFilter { stat?: string; scope: LeagueScope; gender: 'm' | 'w'; league?: number | null; us?: boolean; level?: LeagueLevel | null; limit?: number; offset?: number }
+
+/** Team leaders (Leaders, Teams): each club's or national team's current season in each competition, by a stat. Pro
+ *  is US competitions unless `us` is false (then the competitions we rank highest); International every tournament's
+ *  current edition at the level asked. Rates need three matches; possession comes from match detail. */
+export async function teamLeaders(db: Db, f: TeamLeadersFilter) {
+  const stat = (TEAM_LEADER_STATS as readonly string[]).includes(f.stat ?? '') ? f.stat! : 'points';
+  const limit = Math.min(100, Math.max(1, f.limit ?? 50)), offset = Math.max(0, f.offset ?? 0);
+  const all = await leagues(db, f.scope);
+  const pick = all.filter((l) => l.gender === f.gender && l.current_season != null && (f.league ? l.id === f.league
+    : f.scope === 'intl' ? (l.level ?? 'senior') === (f.level ?? 'senior') : l.type === 'league' && (f.us !== false ? l.country === 'USA' : l.priority < 100)));
+  const season = new Map(pick.map((l) => [l.id, l.current_season!]));
+  const rows = pick.length ? [...new Map((await selectIn<any>(db, 'pro_team_season_stats', 'team_id,league_id,season,played,w,d,l,gf,ga,clean_sheets,shots,shots_on,corners,yellow,red,possession', 'league_id', pick.map((l) => l.id), (q) => q.order('team_id').order('league_id').order('season')))
+    .filter((r) => r.season === season.get(r.league_id) && r.played > 0).map((r) => [`${r.team_id}|${r.league_id}`, r])).values()] : [];
+  const per = (n: number | null, p: number) => (n == null || p < 3 ? null : n / p);
+  const scored = rows.map((r) => ({ ...r, points: r.w * 3 + r.d, ppg: per(r.w * 3 + r.d, r.played), gd: r.gf - r.ga, gf_pg: per(r.gf, r.played), ga_pg: per(r.ga, r.played), possession: r.possession == null ? null : Number(r.possession) }))
+    .filter((r) => (r as any)[stat] != null);
+  const dir = TEAM_ASC.has(stat) ? 1 : -1;
+  scored.sort((a, b) => dir * ((a as any)[stat] - (b as any)[stat]) || b.played - a.played || a.team_id - b.team_id);
+  const page = scored.slice(offset, offset + limit);
+  const teams = await teamsById(db, page.map((r) => r.team_id));
+  const lg = new Map(pick.map((l) => [l.id, l]));
+  return {
+    stat, total: scored.length, limit, offset,
+    rows: page.map((r, i) => ({ rank: offset + i + 1, team: teams.get(r.team_id) ?? null, league: lg.get(r.league_id) ?? null, season: r.season, played: r.played, w: r.w, d: r.d, l: r.l, gf: r.gf, ga: r.ga, points: r.points, value: (r as any)[stat] as number })),
   };
 }
 

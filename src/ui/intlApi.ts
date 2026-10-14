@@ -42,6 +42,11 @@ export function registerIntlApi(app: FastifyInstance): void {
   app.get<{ Querystring: Record<string, string> }>('/api/intl/search', async (req, reply) =>
     reply.header('Cache-Control', 'public, max-age=60').send(await pro.search(getDb(), String(req.query.q ?? ''), Math.min(20, Number(req.query.limit) || 8), 'intl')));
   // International leaders and the player directory: pro_leaders over national-team competitions.
+  app.get<{ Querystring: Record<string, string> }>('/api/intl/team-leaders', async (req, reply) => {
+    const q = req.query;
+    const f: pro.TeamLeadersFilter = { stat: q.stat, scope: 'intl', gender: q.gender === 'w' ? 'w' : 'm', league: int(q.league), level: level(q.level), limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0 };
+    return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('team-leaders', f), () => pro.teamLeaders(getDb(), f)));
+  });
   app.get<{ Querystring: Record<string, string> }>('/api/intl/leaders', async (req, reply) => {
     const q = req.query;
     if (q.position && !(pro.POSITIONS as readonly string[]).includes(q.position)) return reply.code(400).send({ error: 'bad position' });

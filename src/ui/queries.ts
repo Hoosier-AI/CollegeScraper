@@ -1,6 +1,6 @@
 // Read helpers for the stats-viewer API. Service-role reads (internal tool).
 import type { Db } from '../db/client.js';
-import { selectAll, kvGet } from '../db/client.js';
+import { selectAll, selectIn, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
 import { teamCategories } from '../normalize/logos.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
@@ -154,13 +154,45 @@ export async function player(db: Db, id: string) {
   const names = new Map<string, string>();
   for (let i = 0; i < pids.length; i += 100) for (const x of await selectAll<any>(db, 'college_programs', 'id,name', (q) => q.in('id', pids.slice(i, i + 100)))) names.set(x.id, x.name);
   for (const r of truthLog) { r.game.home_name = names.get(r.game.home_program_id) ?? r.game.home_name; r.game.away_name = names.get(r.game.away_program_id) ?? r.game.away_name; }
+  // Transfers name both schools (the program ids alone said nothing on the page).
+  const progs = new Map<string, any>();
+  if (transfers.length) for (const x of await selectAll<any>(db, 'college_programs', 'id,name,gender,school_seo,college_schools(logo_svg_url)', (q) => q.in('id', [...new Set(transfers.flatMap((t) => [t.from_program_id, t.to_program_id]).filter(Boolean))]))) progs.set(x.id, x);
+  const prog = (id: string | null) => { const x = id ? progs.get(id) : null; return x ? { id: x.id, name: x.name, gender: x.gender, seo: x.school_seo, logo: x.college_schools?.logo_svg_url ?? null } : null; };
+  const transfersNamed = transfers.sort((a, b) => b.to_season - a.to_season).map((t) => ({ ...t, from: prog(t.from_program_id), to: prog(t.to_program_id) }));
   // The same honor is re-extracted from the bio every season: keep one row per text (latest season first).
   const seen = new Set<string>();
   const honorsDedup = honors.sort((a, b) => (seasons.findIndex((s) => s.id === a.player_season_id)) - (seasons.findIndex((s) => s.id === b.player_season_id))).filter((h) => { const k = h.text.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers, gameLog: truthLog };
+  return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers: transfersNamed, gameLog: truthLog };
 }
 
-export interface LeadersFilter { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown; offset?: unknown; q?: string; members?: boolean }
+export const PERIODS = ['0-15', '16-30', '31-45', '46-60', '61-75', '76-90', 'ET'] as const;
+/** A program's goals for and against by 15-minute period over a season's finished games, from the play-by-play (one
+ *  source per game: the box score's source of truth when it has goal times, else the other). `games`/`timed` say how
+ *  much of the season the play-by-play covers. Minutes past 90 in regulation (stoppage) count in 76-90. */
+export async function goalsByPeriod(db: Db, programId: string, season: number) {
+  const games = await selectAll<any>(db, 'college_games', 'id,source_of_truth', (q) => q.eq('season', season).eq('status', 'final').or(`home_program_id.eq.${programId},away_program_id.eq.${programId}`));
+  const events = games.length ? await selectIn<any>(db, 'college_game_events', 'game_id,source,program_id,period,clock_seconds', 'game_id', games.map((g) => g.id), (q) => q.eq('event_type', 'goal').order('id')) : [];
+  const byGame = new Map<string, any[]>(); for (const e of events) byGame.set(e.game_id, [...(byGame.get(e.game_id) ?? []), e]);
+  const rows = PERIODS.map((period) => ({ period, for: 0, against: 0 }));
+  let timed = 0;
+  for (const g of games) {
+    const evs = byGame.get(g.id) ?? [];
+    const sources = [...new Set(evs.map((e) => e.source))];
+    const src = sources.includes(g.source_of_truth) ? g.source_of_truth : sources[0];
+    const mine = evs.filter((e) => e.source === src && e.clock_seconds != null);
+    if (!mine.length) continue;
+    timed += 1;
+    for (const e of mine) {
+      const minute = Math.floor(e.clock_seconds / 60) + 1;
+      const i = e.period >= 3 || minute > 95 ? 6 : Math.min(5, Math.floor((Math.min(minute, 90) - 1) / 15));
+      if (e.program_id === programId) rows[i]!.for += 1; else if (e.program_id) rows[i]!.against += 1;
+    }
+  }
+  return { games: games.length, timed, rows };
+}
+
+export interface LeadersFilter { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown; offset?: unknown; q?: string; members?: boolean;
+  /** Players only: GK, D, M or F; class year 1 (freshman) to 5 (graduate and fifth year). */ position?: string; class_year?: unknown }
 
 /** One page of a leaderboard plus the total so callers can page through every player or team. */
 export async function leaders(db: Db, o: LeadersFilter) {
@@ -177,7 +209,11 @@ export async function leaders(db: Db, o: LeadersFilter) {
     if (o.division) q = q.eq('division', o.division);
     if (o.conference) q = q.eq('conference_id', o.conference);
     if (o.members !== false) q = q.eq('ncaa_member', true);
-    if (!team) { q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm); }
+    if (!team) {
+      q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm);
+      if (o.position && ['GK', 'D', 'M', 'F'].includes(o.position)) q = q.eq('position', o.position);
+      const cy = clamp(o.class_year, 0, 5, 0); if (cy) q = cy === 5 ? q.gte('class_year', 5) : q.eq('class_year', cy);
+    }
     // Name search: PostgREST's `or` syntax reserves commas and parentheses, so they are dropped from the term.
     if (term) q = team ? q.ilike('program_name', `%${term}%`) : q.or(`display_name.ilike.%${term}%,program_name.ilike.%${term}%`);
     return q;
