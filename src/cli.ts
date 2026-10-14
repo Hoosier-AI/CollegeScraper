@@ -85,6 +85,11 @@ for (const job of ['pro-catalog', 'pro-scoreboard', 'pro-live', 'pro-final-detai
 }
 
 // International (national teams): open sources, no API-Football requests.
+// Plaibook Elo for college programs and pro clubs (no requests).
+for (const job of ['college-elo', 'pro-elo']) {
+  program.command(job).description(`run the ${job} job inline`).action(async () => console.log(JSON.stringify(await runInline(getDb(), job, {}), null, 2)));
+}
+
 for (const job of ['intl-refresh', 'intl-results-sync', 'intl-wcdb-sync', 'intl-wc-sync', 'intl-caps-sync', 'intl-match', 'intl-elo']) {
   program.command(job).description(`run the ${job} job inline`).option('--force', 'read the files even when they have not changed')
     .action(async (opts) => console.log(JSON.stringify(await runInline(getDb(), job, opts.force ? { force: true } : {}), null, 2)));

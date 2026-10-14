@@ -74,9 +74,16 @@ export interface BestRank { rank: number; month: string }
 /** Ratings after every match, in date order (the input order within a day). Matches without a score are skipped. With
  *  `confederations`, each side's rating carries its confederation's level; with `ranks`, the month-end world rank
  *  tables too: every side's rank history, its best rank, and today's rank (`current`). */
-export function runElo(matches: EloMatch[], o: { provisional?: number; confederations?: Map<string, string>; share?: number; ranks?: RankRules } = {}): {
+/** Options for other competitions (college, pro clubs): `k` weighs each match (default kFactor by tournament),
+ *  `homeEdge` replaces HOME_EDGE, `keepSteps: false` skips the per-match log (half a million club matches), `onMatch`
+ *  sees each match's expected score and result, and a side idle `regressAfterDays`+ (an off-season) starts again
+ *  `regress` of the way back to START (its own part; the level stays). */
+export interface EloOptions { provisional?: number; confederations?: Map<string, string>; share?: number; ranks?: RankRules;
+  k?: (m: EloMatch) => number; homeEdge?: number; keepSteps?: boolean; regressAfterDays?: number; regress?: number; onMatch?: (m: EloMatch, we: number, w: number) => void;
+  /** Every side's rating at the end of this date (the result's `snapshot`): a month ago, without a second run. */ snapshotAt?: string }
+export function runElo(matches: EloMatch[], o: EloOptions = {}): {
   steps: EloStep[]; ratings: Map<string, number>; played: Map<string, { n: number; last: string }>;
-  best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]>; current: Map<string, number>; levels: Map<string, number>;
+  best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]>; current: Map<string, number>; levels: Map<string, number>; snapshot: Map<string, number> | null;
 } {
   const provisional = o.provisional ?? PROVISIONAL, share = o.share ?? CONFED_SHARE, confs = o.confederations ?? new Map<string, string>();
   const team = new Map<string, number>(), levels = new Map<string, number>(), inter = new Map<string, number>();
@@ -97,14 +104,21 @@ export function runElo(matches: EloMatch[], o: { provisional?: number; confedera
       const h = history.get(t) ?? []; h.push({ m: month, r: i + 1 }); history.set(t, h);
     });
   };
+  const homeEdge = o.homeEdge ?? HOME_EDGE, keep = o.keepSteps !== false, gapMs = (o.regressAfterDays ?? 0) * 86400_000;
   let month = '';
+  let snapshot: Map<string, number> | null = null;
+  const snap = () => new Map([...team.keys()].map((t) => [t, rating(t)]));
   for (const m of scored(matches)) {
+    if (o.snapshotAt && !snapshot && m.date > o.snapshotAt) snapshot = snap();
+    // Back from an off-season: part of the way back to the start.
+    if (gapMs && o.regress) for (const side of [m.home, m.away]) { const p = played.get(side); if (p && Date.parse(m.date) - Date.parse(p.last) >= gapMs) team.set(side, START + ((team.get(side) ?? START) - START) * (1 - o.regress)); }
     const mm = m.date.slice(0, 7);
     if (mm !== month) { if (month) table(month); month = mm; }
     const rh = rating(m.home), ra = rating(m.away);
-    const dr = rh + (m.neutral ? 0 : HOME_EDGE) - ra;
+    const dr = rh + (m.neutral ? 0 : homeEdge) - ra;
     const { diff, w } = resultOf(m);
-    const k = kFactor(m.tournament, m.date), g = goalFactor(diff), we = expected(dr);
+    const k = o.k ? o.k(m) : kFactor(m.tournament, m.date), g = goalFactor(diff), we = expected(dr);
+    o.onMatch?.(m, we, w);
     const change = k * g * (w - we);
     // A provisional side's results move only its own rating against an established side.
     const ph = (played.get(m.home)?.n ?? 0) < provisional, pa = (played.get(m.away)?.n ?? 0) < provisional;
@@ -116,6 +130,7 @@ export function runElo(matches: EloMatch[], o: { provisional?: number; confedera
     if (viaLevel) { levels.set(ch!, (levels.get(ch!) ?? 0) + viaLevel * dh); levels.set(ca!, (levels.get(ca!) ?? 0) + viaLevel * da); }
     if (across) for (const side of [m.home, m.away]) inter.set(side, (inter.get(side) ?? 0) + 1);
     for (const side of [m.home, m.away]) { const p = played.get(side) ?? { n: 0, last: m.date }; p.n += 1; p.last = m.date; played.set(side, p); }
+    if (!keep) continue;
     const common = { date: m.date, tournament: m.tournament, k, goalFactor: g };
     steps.push({ ...common, nation: m.home, rating: rh + dh, delta: dh, opponent: m.away, gf: m.home_score!, ga: m.away_score!, oppRating: ra, expected: we, venue: m.neutral ? 'neutral' : 'home' });
     steps.push({ ...common, nation: m.away, rating: ra + da, delta: da, opponent: m.home, gf: m.away_score!, ga: m.home_score!, oppRating: rh, expected: 1 - we, venue: m.neutral ? 'neutral' : 'away' });
@@ -127,7 +142,8 @@ export function runElo(matches: EloMatch[], o: { provisional?: number; confedera
   const lastMonth = now > month ? now : month;
   for (const [t, h] of history) { const l = h[h.length - 1]!; if (l.m === lastMonth) current.set(t, l.r); }
   const ratings = new Map([...team.keys()].map((t) => [t, rating(t)]));
-  return { steps, ratings, played, best, history, current, levels };
+  if (o.snapshotAt && !snapshot) snapshot = snap();
+  return { steps, ratings, played, best, history, current, levels, snapshot };
 }
 
 /** FIFA members among the results: every side that has played the World Cup or its qualifiers. */
@@ -157,7 +173,19 @@ export function confederationsFrom(matches: { home: string; away: string; tourna
 export type DrawModel = number[];
 /** Where the intl-elo job keeps each game's draw model (college_kv). */
 export const DRAW_MODEL_KEY = (gender: 'm' | 'w') => `intl:elo:draw:${gender}`;
+/** The college-elo and pro-elo jobs' draw models. */
+export const COLLEGE_DRAW_KEY = (g: 'm' | 'w') => `college:elo:draw:${g}`;
+export const PRO_DRAW_KEY = (g: 'm' | 'w') => `pro:elo:draw:${g}`;
 const bucketOf = (we: number) => Math.min(9, Math.floor(Math.abs(we - 0.5) * 20));
+
+/** The draw model counted as matches go by (runElo's onMatch), for runs that keep no steps. */
+export function drawCounter() {
+  const draws = new Array(10).fill(0), all = new Array(10).fill(0);
+  return {
+    add: (we: number, w: number) => { const b = bucketOf(we); all[b] += 1; if (w === 0.5) draws[b] += 1; },
+    model: (): DrawModel => all.map((n, i) => (n >= 30 ? Math.round((draws[i] / n) * 1000) / 1000 : [0.27, 0.26, 0.24, 0.22, 0.2, 0.17, 0.14, 0.11, 0.08, 0.05][i]!)),
+  };
+}
 
 export function drawModel(steps: EloStep[]): DrawModel {
   const draws = new Array(10).fill(0), all = new Array(10).fill(0);

@@ -25,6 +25,7 @@ const H2H = lazy(() => import('./pages/H2H'));
 const Coach = lazy(() => import('./pages/Coach'));
 const ProH2H = lazy(() => import('./pages/pro/ProH2H'));
 const ProCoach = lazy(() => import('./pages/pro/ProCoach'));
+const ProRankings = lazy(() => import('./pages/pro/ProRankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
@@ -99,6 +100,7 @@ const router = createBrowserRouter([
           { path: 'coaches/:id', element: <Coach /> },
           { path: 'pro/h2h', element: <ProH2H /> },
           { path: 'pro/coaches/:id', element: <ProCoach /> },
+          { path: 'pro/rankings', element: <ProRankings /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
           { path: 'news', element: <News /> },

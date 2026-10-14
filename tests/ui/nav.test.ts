@@ -6,9 +6,7 @@ describe('one menu for every area', () => {
     const order = ['matches', 'competitions', 'teams', 'players', 'leaders', 'rankings', 'news'];
     for (const area of ['college', 'pro', 'intl'] as const) {
       const keys = AREA_NAV[area].slots.map((s) => s.key);
-      // Pro has no Rankings until club Elo exists; the rest keep their places.
-      expect(keys).toEqual(order.filter((k) => keys.includes(k)));
-      expect(keys.slice(0, 5)).toEqual(order.slice(0, 5));
+      expect(keys).toEqual(order);
     }
   });
   it('names the competitions slot in each area\'s own word', () => {

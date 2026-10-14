@@ -1,10 +1,20 @@
-// College rankings: the United Soccer Coaches poll and NCAA.com's statistical rankings, week by week. Standings and
-// leaders were tabs here until 2026-10-14; they are Conferences and Leaders now, and their old addresses lead there.
-import { Navigate, useSearchParams } from 'react-router-dom';
+// College rankings: the United Soccer Coaches poll and NCAA.com's statistical rankings week by week, and Plaibook
+// Elo (tab=elo). Standings and leaders were tabs here until 2026-10-14; they are Conferences and Leaders now, and
+// their old addresses lead there.
+import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useHref } from '../lib/filters';
+import { useUrlState } from '../lib/urlState';
+import { PageHeader, TabsNav } from '../components/primitives';
 import { PollsView } from './rankings/PollsView';
+import { EloView } from './rankings/EloView';
+
+type Tab = 'polls' | 'elo';
 
 export default function Rankings() {
   const [sp] = useSearchParams();
+  const { pathname } = useLocation();
+  const href = useHref();
+  const [tab] = useUrlState('tab', 'polls', { allow: ['polls', 'elo'] });
   const view = sp.get('view');
   if (view === 'standings' || view === 'leaders' || view === 'polls') {
     const p = new URLSearchParams(sp); p.delete('view');
@@ -17,5 +27,11 @@ export default function Rankings() {
     const q = p.toString();
     return <Navigate to={`${to}${q ? `?${q}` : ''}`} replace />;
   }
-  return <PollsView />;
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Rankings" meta="The coaches' poll and NCAA.com's statistical rankings, and Plaibook Elo, our own rating from every result" />
+      <TabsNav label="Rankings sections" tabs={[{ id: 'polls' as Tab, label: 'Polls' }, { id: 'elo' as Tab, label: 'Plaibook Elo' }]} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'polls' ? null : x, page: null, conference: null })} />
+      {tab === 'elo' ? <EloView /> : <PollsView />}
+    </div>
+  );
 }

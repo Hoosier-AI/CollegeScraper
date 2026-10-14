@@ -42,7 +42,7 @@ export function useGenderSync() {
 
 /** The pages the toggle applies to, in every area: lists across teams and competitions. A team, player or match is
  *  one game already. A college conference page is a list of that conference's men's or women's teams. */
-export const GENDER_PAGES = /^\/(matches|conferences(\/[^/]+)?|teams|players|leaders|rankings|transfers|h2h|news)\/?$|^\/pro(\/(matches|leagues|teams|players|leaders|countries(\/[^/]+)?|college|abroad|news))?\/?$|^\/intl(\/(matches|tournaments|teams|players|leaders|rankings|h2h|news))?\/?$/;
+export const GENDER_PAGES = /^\/(matches|conferences(\/[^/]+)?|teams|players|leaders|rankings|transfers|h2h|news)\/?$|^\/pro(\/(matches|leagues|teams|players|leaders|rankings|countries(\/[^/]+)?|college|abroad|news))?\/?$|^\/intl(\/(matches|tournaments|teams|players|leaders|rankings|h2h|news))?\/?$/;
 /** @deprecated GENDER_PAGES covers every area. */
 export const PRO_GENDER_PAGES = GENDER_PAGES;
 /** One setting for every area. */

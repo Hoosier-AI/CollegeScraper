@@ -69,6 +69,8 @@ export const JOB_META: Record<string, JobMeta> = {
   'intl-wc-sync': { description: 'International: World Cup results from openfootball (public domain), a second source checked against the others.', lane: 'sources', params: [force] },
   'intl-caps-sync': { description: 'International: caps and international goals per player from the Wikipedia careers the people crawl reads (no requests).', lane: 'sources', params: [] },
   'intl-match': { description: 'International: nations onto their national teams, results onto API-Football fixtures (checked against them), World Cup squads onto players. No requests.', lane: 'sources', params: [] },
+  'college-elo': { description: 'College: Plaibook Elo for every program from every result since 2024 (conference levels), ranks by gender and division. No requests.', lane: 'aux', params: [] },
+  'pro-elo': { description: 'Pro: Plaibook Elo for every club from every result since 2023 (country levels), world ranks by gender. No requests.', lane: 'aux', params: [] },
   'intl-elo': { description: 'International: Plaibook Elo for every nation from every result since 1872 (the World Football Elo method), current ratings and ranks. No requests.', lane: 'sources', params: [force] },
   'hourly': { description: 'Every 30 minutes in season: recent scoreboard days, NCAA box scores, pending school box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season] },
   'nightly': { description: 'Daily: two-day sweep, NCAA re-fetch, school sync (no bios), orphans, reconcile, aggregates, standings, polls, quality, retention.', lane: 'crawl', composite: true, params: [season], dangerous: true },

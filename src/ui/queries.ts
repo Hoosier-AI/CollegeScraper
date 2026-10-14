@@ -4,6 +4,7 @@ import { selectAll, selectIn, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
 import { teamCategories } from '../normalize/logos.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
+import { eloChances } from './elo.js';
 
 export const PLAYER_STATS = ['goals', 'assists', 'points', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
 export const TEAM_STATS = ['w', 'l', 't', 'gp', 'ppg', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'gf_home', 'gf_away', 'ga_home', 'ga_away', 'gf_1h', 'gf_2h', 'ga_1h', 'ga_2h', 'shots', 'sog', 'shots_pg', 'sog_pg', 'sog_pct', 'shots_per_goal', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'pk_goals', 'pk_att', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t', 'vs_ranked_w', 'vs_ranked_l', 'vs_ranked_t', 'last5_gf', 'last5_ga', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'div_pct_gf_pg', 'div_pct_ga_pg', 'div_pct_shots_pg'];
@@ -626,7 +627,9 @@ export async function matchPreview(db: Db, id: string, opts: { queue?: boolean }
   // scores once, on the side lane, the first time a match page asks. The page shows them on its next load.
   const scorersPending = await requestMeetingDetail(db, opts.queue !== false, h2hGames.filter((m) => !(scorersByGame.get(m.id) ?? []).length && m.ncaa_contest_id != null && (m.home.score ?? 0) + (m.away.score ?? 0) > 0));
   const h2h = { ...h2hSummary(h2hGames.map((m) => ({ ...m, scorers: scorersByGame.get(m.id) ?? [] })), A), scorers_pending: scorersPending };
-  return { game, head_to_head: h2h, sides: { home, away } };
+  // Before kickoff: Plaibook Elo's chances (current ratings say nothing fair about a match already played).
+  const elo = g.status === 'scheduled' && A && B ? await eloChances(db, 'college', A, B, g.gender, !!g.neutral_site).catch(() => null) : null;
+  return { game, head_to_head: h2h, sides: { home, away }, elo };
 }
 
 const requestedDetail = new Set<string>();

@@ -8,6 +8,7 @@ import type { QuotaState } from '../sources/apiFootball/client.js';
 import { byKind, byTier, callsPerDay, etaDays, type ProgressRow, type RunCounters } from '../ops/proProgress.js';
 import { schedule as cqSchedule } from '../ops/consoleQueries.js';
 import * as pro from '../pro/queries.js';
+import { proElo as proEloList } from './elo.js';
 import { memo, memoKey } from '../pro/memo.js';
 import { eastern } from '../jobs/seasons.js';
 import { SLUG } from '../seo/util.js';
@@ -113,6 +114,10 @@ export function registerProApi(app: FastifyInstance): void {
     const q = req.query;
     const f = { gender: q.gender === 'w' ? 'w' as const : 'm' as const, scope: q.scope === 'world' ? 'world' as const : 'us' as const, league: int(q.league) };
     return reply.header('Cache-Control', 'public, max-age=600').send(await memo(memoKey('teams-list', f), () => pro.teamsList(getDb(), f)));
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/rankings', async (req, reply) => {
+    const country = req.query.scope === 'world' ? null : req.query.country && /^[A-Za-z' -]{2,40}$/.test(req.query.country) ? req.query.country : 'USA';
+    return reply.header('Cache-Control', 'public, max-age=600').send(await proEloList(getDb(), { gender: req.query.gender === 'w' ? 'w' : 'm', country, limit: req.query.limit, offset: req.query.offset }));
   });
   app.get<{ Params: { id: string } }>('/api/pro/coaches/:id', async (req, reply) => {
     const id = int(req.params.id); if (!id || id < 1) return reply.code(400).send({ error: 'id required' });

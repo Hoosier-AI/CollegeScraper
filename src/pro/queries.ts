@@ -3,6 +3,7 @@
 import { sourcesOff } from './sources.js';
 import type { Db } from '../db/client.js';
 import { kvGet, kvSet, selectAll, selectIn } from '../db/client.js';
+import { eloChances } from '../ui/elo.js';
 import { memo, memoKey } from './memo.js';
 import { isUsScene, type LeagueLevel, type LeagueScope } from '../sources/apiFootball/leagues.js';
 import { SHOW_AT } from '../jobs/pro/collegeMatch.js';
@@ -570,6 +571,8 @@ export async function match(db: Db, slug: string) {
     advanced: await matchAdvanced(db, fx.id, fx.home_team_id),
     // Before kickoff: form, the table, each side's last starting XI, top scorers and who is out.
     preview: m.status === 'live' || m.status === 'final' ? null : await matchPreview(db, fx).catch(() => null),
+    // Club matches before kickoff: Plaibook Elo's chances (national teams have their own on International).
+    elo: m.status === 'scheduled' && m.league.scope !== 'intl' ? await eloChances(db, 'pro', fx.home_team_id, fx.away_team_id, m.league.gender).catch(() => null) : null,
   };
 }
 

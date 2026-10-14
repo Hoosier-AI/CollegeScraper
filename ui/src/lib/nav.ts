@@ -38,6 +38,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       slot('teams', '/pro/teams', 'Teams'),
       slot('players', '/pro/players', 'Players'),
       slot('leaders', '/pro/leaders', 'Leaders'),
+      slot('rankings', '/pro/rankings', 'Rankings'),
       slot('news', '/pro/news', 'News'),
     ],
     more: [

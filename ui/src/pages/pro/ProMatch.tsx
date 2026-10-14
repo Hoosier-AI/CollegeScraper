@@ -15,11 +15,12 @@ type Tab = 'summary' | 'preview' | 'lineups' | 'stats' | 'h2h';
 import { ProMoved } from './ProMoved';
 import { MoveSection } from '../../components/pro/MoveSection';
 import { EloMatchCard } from '../../components/intl/EloMatchCard';
+import { WinChances, type EloChances } from '../../components/elo/WinChances';
 import { useSection } from '../../lib/section';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
 
-interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null }
+interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null; elo?: EloChances | null }
 
 function Scoreline({ m }: { m: MatchData['match'] }) {
   const played = m.status === 'live' || m.status === 'final';
@@ -85,6 +86,7 @@ export default function ProMatch() {
       {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
       {/* International: Plaibook Elo's chances before kickoff, each side's rating move once played. */}
       {intl && <EloMatchCard slug={slug} />}
+      {!intl && d.elo && <WinChances elo={d.elo} home={m.home.name} away={m.away.name} rankingsHref="/pro/rankings?scope=world" />}
       {tabs.length > 1 && <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => `${pathname}${x === defaultTab ? '' : `?tab=${x}`}`} />}
       {tab === 'summary' && (d.events.length
         ? <Section title="Events" className="mx-auto w-full max-w-4xl"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>

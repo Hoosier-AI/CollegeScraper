@@ -75,6 +75,8 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'intl-wcdb-sync', label: 'International: World Cup database (Fjelstul)', cadence: 'Mondays 10:50 UTC', due: (c) => c.dow === 1 && c.h === 10 && c.m === 50 },
   { job: 'intl-caps-sync', label: 'International: caps from Wikipedia careers', cadence: 'daily 11:20 UTC', due: (c) => c.h === 11 && c.m === 20 },
   { job: 'intl-match', label: 'International: match to teams, fixtures and players', cadence: 'daily 11:30 UTC', due: (c) => c.h === 11 && c.m === 30 },
+  { job: 'college-elo', label: 'College: Plaibook Elo', cadence: 'daily 10:50 UTC', due: (c) => c.h === 10 && c.m === 50 },
+  { job: 'pro-elo', label: 'Pro: Plaibook Elo', cadence: 'daily 11:50 UTC', due: (c) => c.h === 11 && c.m === 50 },
   { job: 'intl-elo', label: 'International: Plaibook Elo', cadence: 'daily 11:40 UTC (when results changed)', due: (c) => c.h === 11 && c.m === 40 },
   { job: 'asa-shots', label: 'Sources: shot maps', cadence: 'every 30 minutes at :15 and :45, until every final has its shots', due: (c) => c.m === 15 || c.m === 45 },
 ];

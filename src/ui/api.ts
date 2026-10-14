@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
 import * as q from './queries.js';
+import { collegeElo } from './elo.js';
 import { isBot } from '../pro/onView.js';
 import { eastern } from '../jobs/seasons.js';
 import { registerProApi } from './proApi.js';
@@ -66,6 +67,10 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/games', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return q.programGames(getDb(), req.params.id, s);
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/elo', async (req, reply) => {
+    const div = str(req.query.division), conf = str(req.query.conference);
+    return reply.header('Cache-Control', 'public, max-age=600').send(await collegeElo(getDb(), { gender: req.query.gender === 'w' ? 'w' : 'm', division: div && ['d1', 'd2', 'd3'].includes(div) ? div : undefined, conference: conf && UUID.test(conf) ? conf : undefined, limit: req.query.limit, offset: req.query.offset }));
   });
   app.get<{ Params: { id: string } }>('/api/coaches/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'id required' });
