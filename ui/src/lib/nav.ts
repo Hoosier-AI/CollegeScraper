@@ -25,7 +25,10 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       slot('rankings', '/rankings', 'Rankings'),
       slot('news', '/news', 'News'),
     ],
-    more: [],
+    more: [
+      { key: 'transfers', to: '/transfers', label: 'Transfers', icon: ArrowLeftRight, hint: 'Players at a new school this season' },
+      { key: 'compare', to: '/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
+    ],
   },
   pro: {
     slots: [
@@ -61,9 +64,9 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
 };
 
 /** The first three slots stay on the header from the md breakpoint; the rest join More until there is room
- *  (lg shows five, xl all). The class hides a slot on the header bar, or its copy in More, at the right width. */
-export const slotBarClass = (i: number) => (i < 3 ? 'flex' : i < 5 ? 'hidden lg:flex' : 'hidden xl:flex');
-export const slotMoreClass = (i: number) => (i < 3 ? 'hidden' : i < 5 ? 'lg:hidden' : 'xl:hidden');
+ *  (lg shows five, 2xl all). The class hides a slot on the header bar, or its copy in More, at the right width. */
+export const slotBarClass = (i: number) => (i < 3 ? 'flex' : i < 5 ? 'hidden lg:flex' : 'hidden 2xl:flex');
+export const slotMoreClass = (i: number) => (i < 3 ? 'hidden' : i < 5 ? 'lg:hidden' : '2xl:hidden');
 
 /** The phone bar: Home, then the same four on every area (Matches, the competitions slot, Teams) and More. */
 export const PHONE_SLOTS: SlotKey[] = ['matches', 'competitions', 'teams'];

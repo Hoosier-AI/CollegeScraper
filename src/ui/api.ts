@@ -67,6 +67,11 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return q.programGames(getDb(), req.params.id, s);
   });
+  app.get<{ Querystring: Record<string, string> }>('/api/transfers', async (req, reply) => {
+    const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
+    const conf = str(req.query.conference);
+    return reply.header('Cache-Control', 'public, max-age=300').send(await q.transfersFeed(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: conf && UUID.test(conf) ? conf : undefined, q: str(req.query.q), limit: req.query.limit, offset: req.query.offset }));
+  });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/periods', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return reply.header('Cache-Control', 'public, max-age=300').send(await q.goalsByPeriod(getDb(), req.params.id, s));

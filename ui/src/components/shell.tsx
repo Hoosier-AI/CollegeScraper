@@ -73,7 +73,7 @@ function AreaNav({ area, admin }: { area: Section; admin: boolean }) {
   return (
     <nav aria-label="Main" className="hidden min-w-0 items-center gap-0.5 md:flex">
       {slots.map((n, i) => <NavLink key={n.key} to={n.to} className={({ isActive }) => `${barLink(isActive)} ${slotBarClass(i)}`}>{n.label}</NavLink>)}
-      <div ref={root} className={`relative ${extras.length ? '' : 'xl:hidden'}`}>
+      <div ref={root} className={`relative ${extras.length ? '' : '2xl:hidden'}`}>
         <button type="button" className={`${barLink(inMore)} inline-flex items-center gap-1`} aria-expanded={open} aria-haspopup="true" aria-controls="more-menu" onClick={() => setOpen((v) => !v)}>
           More<ChevronDown size={14} aria-hidden className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
         </button>

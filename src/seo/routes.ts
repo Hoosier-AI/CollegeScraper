@@ -294,6 +294,8 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   app.get('/conferences', (_req, reply) => shell(reply));
   app.get('/leaders', (_req, reply) => shell(reply));
   app.get('/players', (_req, reply) => shell(reply));
+  app.get('/transfers', (_req, reply) => shell(reply));
+  app.get('/compare', (_req, reply) => shell(reply));
   app.get('/games/:id', async (req: P<{ id: string }>, reply) => {
     const id = req.params.id;
     // Straight to the slug when we know it, so crawlers do not follow two hops.

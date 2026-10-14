@@ -165,6 +165,42 @@ export async function player(db: Db, id: string) {
   return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers: transfersNamed, gameLog: truthLog };
 }
 
+/** The college transfer feed (/transfers): players found at a new school in `season`, the newest finds first, with
+ *  both schools and the player's numbers at the new one. Filters read the new school's season (gender, division,
+ *  conference). Transfers are matched by name and bio across rosters (college_transfers), not announced. */
+export async function transfersFeed(db: Db, o: { season: number; gender?: string; division?: string; conference?: string; q?: string; limit?: unknown; offset?: unknown }) {
+  const limit = clamp(o.limit, 1, 100, 50), offset = clamp(o.offset, 0, 100_000, 0);
+  const all = await selectAll<any>(db, 'college_transfers', 'id,player_id,from_program_id,to_program_id,from_season,to_season,confidence,created_at', (q) => q.eq('to_season', o.season).order('created_at', { ascending: false }).order('id'));
+  const progIds = [...new Set(all.flatMap((t) => [t.from_program_id, t.to_program_id]).filter(Boolean))] as string[];
+  const [progs, seasons] = await Promise.all([
+    selectIn<any>(db, 'college_programs', 'id,name,gender,school_seo,college_schools(logo_svg_url)', 'id', progIds),
+    selectIn<any>(db, 'college_program_seasons', 'program_id,season,division,conference_id,college_conferences(name,short_name)', 'program_id', progIds, (q) => q.in('season', [o.season, o.season - 1, o.season - 2])),
+  ]);
+  const prog = new Map(progs.map((p) => [p.id, p]));
+  const ps = new Map(seasons.map((s) => [`${s.program_id}|${s.season}`, s]));
+  const side = (id: string | null, season: number) => {
+    const p = id ? prog.get(id) : null; if (!p) return null;
+    const s = ps.get(`${id}|${season}`);
+    return { id: p.id, name: p.name, gender: p.gender, seo: p.school_seo, logo: p.college_schools?.logo_svg_url ?? null, division: s?.division ?? null, conference: s?.college_conferences?.short_name ?? s?.college_conferences?.name ?? null, conference_id: s?.conference_id ?? null };
+  };
+  let rows = all.map((t) => ({ ...t, from: side(t.from_program_id, t.from_season), to: side(t.to_program_id, t.to_season) })).filter((t) => t.to
+    && (!o.gender || t.to.gender === o.gender) && (!o.division || t.to.division === o.division) && (!o.conference || t.to.conference_id === o.conference));
+  const term = (o.q ?? '').trim().toLowerCase();
+  const people = new Map((rows.length ? await selectIn<any>(db, 'college_players', 'id,display_name,slug,headshot_url,suppress', 'id', [...new Set(rows.map((t) => t.player_id))]) : []).map((p) => [p.id, p]));
+  rows = rows.filter((t) => { const p = people.get(t.player_id); return p && !p.suppress && (!term || p.display_name.toLowerCase().includes(term) || t.to!.name.toLowerCase().includes(term) || (t.from?.name ?? '').toLowerCase().includes(term)); });
+  const page = rows.slice(offset, offset + limit);
+  // This season's line at the new school.
+  const lines = page.length ? await selectIn<any>(db, 'college_v_player_leaders', 'player_id,program_id,position,class_raw,gp,minutes,goals,assists,saves', 'player_id', page.map((t) => t.player_id), (q) => q.eq('season', o.season)) : [];
+  return {
+    season: o.season, total: rows.length, limit, offset,
+    rows: page.map((t) => {
+      const p = people.get(t.player_id); const l = lines.find((x) => x.player_id === t.player_id && x.program_id === t.to_program_id);
+      return { id: t.id, from_season: t.from_season, to_season: t.to_season, found_at: t.created_at, player: { id: p.id, name: p.display_name, slug: p.slug, headshot: p.headshot_url ?? null }, from: t.from, to: t.to,
+        line: l ? { position: l.position, class: l.class_raw, gp: l.gp, minutes: l.minutes, goals: l.goals, assists: l.assists, saves: l.saves } : null };
+    }),
+  };
+}
+
 export const PERIODS = ['0-15', '16-30', '31-45', '46-60', '61-75', '76-90', 'ET'] as const;
 /** A program's goals for and against by 15-minute period over a season's finished games, from the play-by-play (one
  *  source per game: the box score's source of truth when it has goal times, else the other). `games`/`timed` say how

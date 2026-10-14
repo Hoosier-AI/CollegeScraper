@@ -19,6 +19,8 @@ const Rankings = lazy(() => import('./pages/Rankings'));
 const Conferences = lazy(() => import('./pages/Conferences'));
 const Leaders = lazy(() => import('./pages/Leaders'));
 const Players = lazy(() => import('./pages/Players'));
+const Transfers = lazy(() => import('./pages/Transfers'));
+const Compare = lazy(() => import('./pages/Compare'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
@@ -87,6 +89,8 @@ const router = createBrowserRouter([
           { path: 'leaders', element: <Leaders /> },
           { path: 'players', element: <Players /> },
           { path: 'players/:id', element: <Player /> },
+          { path: 'transfers', element: <Transfers /> },
+          { path: 'compare', element: <Compare /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
           { path: 'news', element: <News /> },
