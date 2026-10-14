@@ -438,6 +438,18 @@ async function playerSalary(db: Db, playerId: number) {
   const history = [...bySeason.values()].map((r) => ({ season: r.season, release_date: String(r.release_date).slice(0, 10), team: teams.get(r.team_id) ?? null, base: money(r.base_salary), guaranteed: money(r.guaranteed_comp) }));
   return { latest: history[0]!, history, source: 'MLS Players Association via American Soccer Analysis' };
 }
+/** Why a player has no salary on his page: only MLS publishes them (the MLS Players Association, about twice a season),
+ *  so an MLS player missing from the latest release joined after it; anyone else plays where salaries are private. */
+async function salaryNote(db: Db, playerId: number): Promise<string | null> {
+  const { data: has } = await db.from('pro_salaries').select('season').eq('player_id', playerId).limit(1);
+  if ((has ?? []).length) return null;
+  const { data: mls } = await db.from('pro_player_season_stats').select('season').eq('player_id', playerId).eq('league_id', 253).order('season', { ascending: false }).limit(1);
+  const { data: rel } = await db.from('pro_salaries').select('release_date').order('release_date', { ascending: false }).limit(1);
+  const last = (rel ?? [])[0] ? String((rel as any[])[0].release_date).slice(0, 10) : null;
+  if ((mls ?? []).length) return `Joined after the MLSPA list of ${last ? new Date(`${last}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'this season'}`;
+  return 'Only MLS publishes player salaries';
+}
+
 /** An MLS club's payroll in a season: the latest release's guaranteed compensation, total and top earners. */
 async function teamPayroll(db: Db, teamId: number, season: number) {
   const rows = await selectAll<any>(db, 'pro_salaries', 'player_id,player_ext,release_date,base_salary,guaranteed_comp', (q) => q.eq('team_id', teamId).eq('season', season));
@@ -529,6 +541,7 @@ export async function player(db: Db, slug: string) {
     injury_history: injuryHistory,
     advanced: await playerAdvanced(db, pl.id),
     salary: await playerSalary(db, pl.id).catch(() => null),
+    salary_note: await salaryNote(db, pl.id).catch(() => null),
     matches,
     college: shown.map((l) => ({ college_name: l.college_name, school_seo: l.school_seo, first_season: l.first_season, last_season: l.last_season, college_player_slug: l.college?.slug ?? null, verified: l.verified })),
     career: await playerCareer(db, pl.wikidata_qid ?? null),

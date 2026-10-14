@@ -58,6 +58,7 @@ export interface PlayerData {
   injury_history?: { type: string; start: string; end: string | null; days: number; matches_missed: number | null }[];
   advanced?: { credit: SourceCredit; seasons: AdvPlayerSeason[] } | null;
   salary?: { latest: Salary; history: (Salary & { team: ProTeamRef | null })[]; source: string } | null;
+  salary_note?: string | null;
   matches: MatchLine[];
   college: { college_name: string; school_seo: string | null; first_season: number | null; last_season: number | null; college_player_slug: string | null; verified: boolean }[];
   career?: { rows: CareerRow[]; credit: CareerCredit } | null;
@@ -237,7 +238,7 @@ export default function ProPlayer() {
         chips={[...chips, p.birth_date ? `Born ${fmt.date(p.birth_date)}${p.birth_place ? `, ${p.birth_place}` : ''}` : null]}
         actions={<Link to={proPaths2.compare(p.slug)} className="btn-ghost btn-sm"><GitCompare size={14} /> Compare</Link>}
       >
-        <div className="mb-3"><KeyFacts position={p.position ?? now?.position} season={latest} apps={now?.res_apps} pts={now?.res_pts} starts={now?.res_starts45} startPts={now?.res_pts45} salary={!onIntl ? d.salary?.latest : null} /></div>
+        <div className="mb-3"><KeyFacts position={p.position ?? now?.position} season={latest} apps={now?.res_apps} pts={now?.res_pts} starts={now?.res_starts45} startPts={now?.res_pts45} salary={d.salary?.latest} salaryNote={d.salary_note} /></div>
         {now && (
           <section aria-label={`${latest} at a glance`}>
             <h2 className="mb-1.5 text-2xs text-chalk-400">{latest}, {onIntl ? 'international matches' : 'club competitions'}</h2>

@@ -22,7 +22,7 @@ function Fact({ label, value, sub, accent }: { label: string; value: ReactNode; 
 
 /** apps/pts: result points over appearances; starts/startPts: over starts of 45+ minutes. Five of each before a
  *  number shows (fewer is noise); the count is always shown. */
-export function KeyFacts({ position, salary, apps, pts, starts, startPts, season, other }: { position: string | null | undefined; salary?: Salary | null; apps?: number | null; pts?: number | null; starts?: number | null; startPts?: number | null; season?: number | null;
+export function KeyFacts({ position, salary, salaryNote, apps, pts, starts, startPts, season, other }: { position: string | null | undefined; salary?: Salary | null; salaryNote?: string | null; apps?: number | null; pts?: number | null; starts?: number | null; startPts?: number | null; season?: number | null;
   /** In place of salary (college players have none): another fact, such as class. */ other?: { label: string; value: ReactNode; sub?: ReactNode } }) {
   const ppg = (apps ?? 0) >= 5 ? avg(pts, apps) : null, pps = (starts ?? 0) >= 5 ? avg(startPts, starts) : null;
   return (
@@ -31,7 +31,7 @@ export function KeyFacts({ position, salary, apps, pts, starts, startPts, season
       <Fact label="Points per game" value={ppg ?? '–'} sub={apps ? `${season ? `${season}, ` : ''}${apps} ${apps === 1 ? 'game' : 'games'}${ppg ? '' : ' (5+ to show)'}` : 'no games yet'} accent />
       <Fact label="Points per start" value={pps ?? '–'} sub={starts ? `${starts} ${starts === 1 ? 'start' : 'starts'} of 45+ min${pps ? '' : ' (5+ to show)'}` : 'no starts of 45+ min'} accent />
       {other ? <Fact label={other.label} value={other.value} sub={other.sub} /> : salary ? <Fact label={`${salary.season} guaranteed pay`} value={salary.guaranteed != null ? usd(salary.guaranteed) : '–'} sub={salary.base != null ? `Base ${usd(salary.base)}, MLSPA ${salary.release_date.slice(0, 7)}` : 'MLSPA'} />
-        : <Fact label="Salary" value="–" sub="Published for MLS players only" />}
+        : <Fact label="Salary" value="Not published" sub={<span title={salaryNote ?? undefined}>{salaryNote ?? 'Only MLS publishes player salaries'}</span>} />}
     </section>
   );
 }
