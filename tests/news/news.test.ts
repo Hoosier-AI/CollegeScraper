@@ -193,3 +193,14 @@ describe('same story, several outlets', () => {
     expect(clusterFor({ tokens: titleTokens('Arsenal sign a new striker from Leeds'), entities: new Set(['pro_team|42']), at, publisher: 'BBC Sport' }, recent)).toBeNull();
   });
 });
+
+import { liveDateOk } from '../../src/db/repos.js';
+describe('live status', () => {
+  it('is possible only on the game date, a day either side', () => {
+    const now = Date.parse('2026-10-14T15:00:00Z');
+    expect(liveDateOk('2026-10-14', now)).toBe(true);
+    expect(liveDateOk('2026-10-13', now)).toBe(true);
+    expect(liveDateOk('2026-10-17', now)).toBe(false);
+    expect(liveDateOk('2026-09-19', now)).toBe(false);
+  });
+});

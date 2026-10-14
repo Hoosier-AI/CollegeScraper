@@ -205,7 +205,7 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   process.on('SIGINT', () => controller.abort());
   // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
   if (cfg.WORKERS_ENABLED !== '0') {
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', 'backfill', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', 'backfill', 'weekly', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
@@ -215,6 +215,8 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_BULK_JOBS, idleMs: 15_000, lane: 'pro-bulk' }).catch((err) => { log.error({ err: String(err) }, 'pro-bulk worker crashed'); process.exit(1); });
   // A past season's full backfill (2024, 2025: days of school-site pages): its own lane, so hourly, nightly and the
   // standings never wait behind it. School sites keep their per-host limits in the shared fetch client.
+  // The weekly full pass takes about a day: its own lane, so the nightly, hourly and standings runs never queue behind it.
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['weekly'], idleMs: 60_000, lane: 'weekly' }).catch((err) => { log.error({ err: String(err) }, 'weekly worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['backfill'], idleMs: 30_000, lane: 'history' }).catch((err) => { log.error({ err: String(err) }, 'history worker crashed'); process.exit(1); });
   // Box scores for earlier meetings a match page asked for: their own lane, so a backlog never holds up final-detail.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['h2h-detail'], idleMs: 15_000, lane: 'h2h' }).catch((err) => { log.error({ err: String(err) }, 'h2h worker crashed'); process.exit(1); });

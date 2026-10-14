@@ -353,13 +353,17 @@ export async function proRank(ctx: JobContext): Promise<void> {
   ctx.inc('players_updated', Number(data) || 0);
   // Who counts as American (migration 159): nationality USA or capped by a US national team; read by Americans
   // abroad, the USA country page, the nationality filter and search.
-  const am = await ctx.db.rpc('pro_refresh_americans');
-  if (am.error) throw new Error(`americans: ${am.error.message}`);
-  ctx.inc('american_flags_changed', Number(am.data) || 0);
+  // These run for a minute or more on the full player table: past the API gateway's 60 s the request gives up but the
+  // database finishes the work, so a gateway timeout is noted, not a failure (the next day's run checks again).
+  const tolerant = async (fn: string, counter: string) => {
+    const r = await ctx.db.rpc(fn);
+    if (!r.error) { ctx.inc(counter, Number(r.data) || 0); return; }
+    if (/upstream request timeout|gateway|timed? ?out|statement timeout/i.test(r.error.message)) { ctx.note(`${fn}`, 'gateway timeout: finishing in the database'); return; }
+    throw new Error(`${fn}: ${r.error.message}`);
+  };
+  await tolerant('pro_refresh_americans', 'american_flags_changed');
   // Men's or women's from the competitions and squads a player is in (migration 160): the college-to-pro matcher needs it.
-  const gd = await ctx.db.rpc('pro_refresh_player_gender');
-  if (gd.error) throw new Error(`gender: ${gd.error.message}`);
-  ctx.inc('genders_changed', Number(gd.data) || 0);
+  await tolerant('pro_refresh_player_gender', 'genders_changed');
   // Squads for clubs the provider has none for: the players who played for them this season (migration 171).
   const sq = await ctx.db.rpc('pro_fill_squads_from_play');
   if (sq.error) ctx.note('squads_from_play', sq.error.message); else ctx.inc('squad_rows_from_play', Number(sq.data) || 0);

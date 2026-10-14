@@ -400,6 +400,12 @@ export const isOthersFixture = (opponentName: string): boolean => /\S\s+vs?\.?\s
  * posted a result yet says "scheduled", which is no information: it must never undo a final, live or postponed
  * game another source (the opponent's site, NCAA.com) already recorded. Postponed/cancelled never override a score.
  */
+/** True when a game on this date (YYYY-MM-DD) can be live now: today in the US, give or take a day. */
+export function liveDateOk(date: string, now = Date.now()): boolean {
+  const d = Date.parse(`${date.slice(0, 10)}T12:00:00Z`);
+  return Number.isFinite(d) && Math.abs(d - now) <= 36 * 3600_000;
+}
+
 export function scheduleStatusPatch(game: Pick<GameRow, 'status' | 'home_score' | 'away_score'>, entry: string | null, entryHasScore: boolean): string | null {
   if (!entry || entry === game.status || game.status === 'final') return null;
   if (entry === 'scheduled') return null;
@@ -454,7 +460,9 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
       const orphan = input.existing.find((g) => g.game_date === e.date && (isHome ? g.home_program_id === input.programId && g.away_program_id == null : g.away_program_id === input.programId && g.home_program_id == null));
       if (orphan) { game = orphan; if (oppId) { await updateGame(db, orphan.id, isHome ? { away_program_id: oppId } : { home_program_id: oppId }); if (isHome) orphan.away_program_id = oppId; else orphan.home_program_id = oppId; } }
     }
-    const status = e.state === 'final' ? 'final' : e.state;
+    // A school site can show "Live" (a live-stats link, a status word) on a game days away: a game is live only on
+    // its own date (a day either side for time zones), else it is still scheduled.
+    const status = e.state === 'final' ? 'final' : e.state === 'live' && !liveDateOk(e.date) ? 'scheduled' : e.state;
     const refs = { [input.host]: e.boxScoreUrl ?? '' };
     const homeScore = e.result ? (isHome ? e.result.teamScore : e.result.opponentScore) : null;
     const awayScore = e.result ? (isHome ? e.result.opponentScore : e.result.teamScore) : null;

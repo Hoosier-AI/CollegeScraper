@@ -73,7 +73,7 @@ export const JOB_META: Record<string, JobMeta> = {
   'hourly': { description: 'Every 30 minutes in season: recent scoreboard days, NCAA box scores, pending school box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season] },
   'nightly': { description: 'Daily: two-day sweep, NCAA re-fetch, school sync (no bios), orphans, reconcile, aggregates, standings, polls, quality, retention.', lane: 'crawl', composite: true, params: [season], dangerous: true },
   'standings': { description: 'Every 3 hours in season: membership verification, conference standings, polls.', lane: 'crawl', composite: true, params: [season] },
-  'weekly': { description: 'Tuesdays: discover teams, verify membership, detect sites, rankings with categories, every schedule and box score, full sweep, orphans, reconcile all.', lane: 'crawl', composite: true, params: [season], dangerous: true },
+  'weekly': { description: 'Tuesdays: discover teams, verify membership, detect sites, rankings with categories, every schedule and box score, full sweep, orphans, reconcile all. Its own lane: it takes a day and would hold up the nightly and hourly runs.', lane: 'weekly', composite: true, params: [season], dangerous: true },
   'backfill': { description: 'Everything for a season from scratch (hours to days): its own worker, so the in-season jobs keep running.', lane: 'history', composite: true, params: [season, gender, division, force], dangerous: true },
   'sync-program': { description: 'One program end to end: site sync, NCAA box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season, program, gender, force, { name: 'conference', type: 'string', label: 'Conference (NCAA seo)' }] },
 };

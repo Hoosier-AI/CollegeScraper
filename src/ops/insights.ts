@@ -224,7 +224,7 @@ async function build(db: Db, days: number, startedAt: number) {
     kvGet<QuotaState & { saved_at?: string }>(db, PRO_QUOTA_KEY),
     db.rpc('pro_crawl_progress').then((r) => (r.data ?? []) as ProgressRow[]),
     selectAll<RunCounters>(db, 'college_crawl_runs', 'job,finished_at,counters', (q) => q.like('job', 'pro-%').gte('finished_at', new Date(now - 7 * 86400_000).toISOString())),
-    n('college_games', (q) => q.eq('season', season).eq('status', 'live')),
+    n('college_games', (q) => q.eq('season', season).eq('status', 'live').gte('game_date', new Date(now - 36 * 3600_000).toISOString().slice(0, 10)).lte('game_date', new Date(now + 36 * 3600_000).toISOString().slice(0, 10))),
     n('college_games', (q) => q.eq('season', season).eq('status', 'live').gte('live_stats_at', new Date(now - 5 * 60_000).toISOString())),
     db.from('college_crawl_runs').select('id,job,heartbeat_at,started_at').eq('status', 'running').then((r) => (r.data ?? []) as { id: string; job: string; heartbeat_at: string | null; started_at: string | null }[]),
     n('college_crawl_runs', (q) => q.eq('status', 'queued')),
