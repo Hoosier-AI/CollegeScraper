@@ -14,7 +14,8 @@ export interface PageKind { group: string; section: Section; /** False when the 
 
 /** Every page of the viewer as a template, from ui/src/main.tsx. Anything else is counted as "other" without its address. */
 const PAGES: [RegExp, string, Section][] = [
-  [/^\/$/, 'College home', 'college'],
+  // The one home page for every area (2026-10-14).
+  [/^\/$/, 'Home', 'other'],
   [/^\/teams$/, 'College teams', 'college'],
   [/^\/teams\/[^/]+(\/[mw])?$/, 'College team', 'college'],
   [/^\/matches$/, 'College matches', 'college'],
@@ -24,7 +25,6 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/rankings$/, 'College rankings', 'college'],
   [/^\/search$/, 'Search', 'college'],
   [/^\/news$/, 'College news', 'college'],
-  [/^\/pro$/, 'Pro home', 'pro'],
   [/^\/pro\/matches$/, 'Pro matches', 'pro'],
   [/^\/pro\/matches\/[^/]+$/, 'Pro match', 'pro'],
   [/^\/pro\/leagues$/, 'Pro leagues', 'pro'],
@@ -41,7 +41,6 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/pro\/abroad$/, 'Americans abroad', 'pro'],
   [/^\/pro\/sources$/, 'Pro sources', 'pro'],
   [/^\/pro\/news$/, 'Pro news', 'pro'],
-  [/^\/intl$/, 'International home', 'pro'],
   [/^\/intl\/news$/, 'International news', 'pro'],
   [/^\/intl\/matches(\/[^/]+)?$/, 'International match', 'pro'],
   [/^\/intl\/tournaments(\/[^/]+)?$/, 'International tournament', 'pro'],

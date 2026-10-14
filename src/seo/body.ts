@@ -179,13 +179,16 @@ export function teamsBody(t: TeamsIndexPage, ctx: HeadContext): string {
   return wrapBody('teams', [{ name: SITE_NAME, path: '/' }, { name: 'Teams', path: '/teams' }], inner);
 }
 
-export function homeBody(h: HomePage, ctx: HeadContext): string {
+/** The one home page: college (polls, conferences), and today's pro and international matches when those are on. */
+export function homeBody(h: HomePage, ctx: HeadContext, more: { pro?: string | null; intl?: string | null } = {}): string {
   const polls = h.polls.filter((p) => p.division === 'd1').map((p) => pollBlock(p, h.season, ctx, 10)).join('');
   const confs = h.conferences.length
     ? `<h2>Conferences</h2><ul>${h.conferences.map((c) => `<li>${a(conferencePath(c.seo, h.season, ctx.currentSeason), c.name)}${c.division ? ` (${esc(divisionLabel(c.division))})` : ''}</li>`).join('')}</ul>`
     : '';
-  const inner = `<h1>NCAA College Soccer Stats</h1>
-<p>Every NCAA soccer program, Division I to III, men's and women's: ${esc(h.teams)} teams with rosters, box scores, season stats, conference standings and the United Soccer Coaches polls for ${esc(h.season)}. Browse ${a('/teams', 'all teams')} or the ${a('/rankings', 'rankings')}.</p>${polls}${confs}`;
+  const inner = `<h1>Soccer stats from college to the World Cup</h1>
+<p>Every NCAA program, MLS, the NWSL and the pro leagues abroad, and national teams back to 1872: live scores, box scores, tables, rankings and player stats.</p>
+<h2>College soccer</h2>
+<p>Every NCAA soccer program, Division I to III, men's and women's: ${esc(h.teams)} teams with rosters, box scores, season stats, conference standings and the United Soccer Coaches polls for ${esc(h.season)}. Browse ${a('/matches', "today's matches")}, ${a('/teams', 'all teams')} or the ${a('/rankings', 'rankings')}.</p>${polls}${confs}${more.pro ?? ''}${more.intl ?? ''}`;
   return wrapBody('home', [], inner);
 }
 

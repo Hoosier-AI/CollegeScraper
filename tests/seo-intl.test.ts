@@ -94,7 +94,9 @@ describe('international seo routes', () => {
   });
 
   it('the section pages render and the sitemap index lists the international sitemap', async () => {
-    for (const u of ['/intl', '/intl/matches', '/intl/tournaments', '/intl/teams', '/intl/rankings', '/intl/players', '/intl/h2h']) expect([u, (await app.inject({ url: u, headers: HTML })).statusCode]).toEqual([u, 200]);
+    const old = await app.inject({ url: '/intl', headers: HTML });
+    expect([old.statusCode, old.headers.location]).toEqual([301, '/']);
+    for (const u of ['/intl/matches', '/intl/tournaments', '/intl/teams', '/intl/rankings', '/intl/players', '/intl/h2h']) expect([u, (await app.inject({ url: u, headers: HTML })).statusCode]).toEqual([u, 200]);
     const rank = await app.inject({ url: '/intl/rankings', headers: HTML });
     expect(rank.body).toContain('Plaibook Elo');
     expect(rank.body).toContain('Spain');

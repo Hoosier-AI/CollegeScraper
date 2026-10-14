@@ -14,9 +14,9 @@ import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
-import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proHomeBody, proHomeHead, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
+import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proTodayBlock, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
 import type { IntlSeoData } from './intl/data.js';
-import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlHomeBody, intlHomeHead, intlLeadersBody, intlLeadersHead, intlMatchesBody, intlMatchesHead, intlPlayerBody, intlPlayerHead, intlRankingsBody, intlRankingsHead, intlTeamsBody, intlTeamsHead, intlTournamentsBody, intlTournamentsHead } from './intl/pages.js';
+import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlTodayBlock, intlLeadersBody, intlLeadersHead, intlMatchesBody, intlMatchesHead, intlPlayerBody, intlPlayerHead, intlRankingsBody, intlRankingsHead, intlTeamsBody, intlTeamsHead, intlTournamentsBody, intlTournamentsHead } from './intl/pages.js';
 import { eastern } from '../jobs/seasons.js';
 import { newsBody, newsHead, type NewsArea } from './news.js';
 import type { Story } from '../news/queries.js';
@@ -112,9 +112,17 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   type P<T> = FastifyRequest<{ Params: T }>;
 
   // ---------- pages ----------
+  // The one home page for college, pro and international (2026-10-14): today's pro and international matches join
+  // the college summary when those sections are on; a slow or failed one is left out rather than failing the page.
   app.get('/', (req, reply) => serve(req, reply, keyOf(req), async () => {
-    const c = ctx(); const h = await data.home(seasonParam(req) ?? c.currentSeason);
-    return { head: homeHead(h, c), body: homeBody(h, c) };
+    const c = ctx();
+    const date = eastern().date;
+    const [h, p, i] = await Promise.all([
+      data.home(seasonParam(req) ?? c.currentSeason),
+      opts.pro ? opts.pro.home(date).catch(() => null) : null,
+      opts.pro && opts.intl ? opts.intl.home(date).catch(() => null) : null,
+    ]);
+    return { head: homeHead(h, c), body: homeBody(h, c, { pro: p ? proTodayBlock(p) : null, intl: i ? intlTodayBlock(i) : null }) };
   }));
 
   app.get('/teams', (req, reply) => serve(req, reply, keyOf(req), async () => {
@@ -177,10 +185,8 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   // ---------- Plaibook Stats Pro ----------
   const pro = opts.pro;
   if (pro) {
-    app.get('/pro', (req, reply) => serve(req, reply, keyOf(req), async () => {
-      const c = ctx(); const h = await pro.home(eastern().date);
-      return { head: proHomeHead(h, c), body: proHomeBody(h) };
-    }));
+    // The Pro and International homes became the one home page (2026-10-14).
+    app.get('/pro', (req, reply) => reply.code(301).header('location', `/${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`).send());
     // Today's scoreboard; another day (?date=) is the app's own view of the same page.
     app.get('/pro/matches', (req, reply) => serve(req, reply, keyOf(req), async () => {
       const c = ctx(); const h = await pro.home(eastern().date);
@@ -238,7 +244,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     if (intl) {
       // Links on every /pro and /intl page go to the right section: the registry of national-team slugs first.
       app.addHook('onRequest', async (req) => { if (/^\/(pro|intl|sitemap)/.test(pathOf(req.url))) await intl.ensureRegistry().catch(() => {}); });
-      app.get('/intl', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await intl.home(eastern().date); return { head: intlHomeHead(h, ctx()), body: intlHomeBody(h) }; }));
+      app.get('/intl', (req, reply) => reply.code(301).header('location', `/${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`).send());
       app.get('/intl/matches', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await intl.home(eastern().date); return { head: intlMatchesHead(h, ctx()), body: intlMatchesBody(h) }; }));
       app.get('/intl/tournaments', (req, reply) => serve(req, reply, keyOf(req), async () => { const ts = await intl.tournaments(); return { head: intlTournamentsHead(ts, ctx()), body: intlTournamentsBody(ts) }; }));
       app.get('/intl/teams', (req, reply) => serve(req, reply, keyOf(req), async () => { const ns = await intl.nations(); return { head: intlTeamsHead(ns, ctx()), body: intlTeamsBody(ns) }; }));

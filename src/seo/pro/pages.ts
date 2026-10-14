@@ -365,3 +365,10 @@ export function proSourcesBody(): string {
   const items = PRO_SOURCES.map((s) => `<li><a href="${esc(s.url)}" rel="noopener">${esc(s.name)}</a>: ${esc(s.what)} ${esc(s.terms)}</li>`).join('');
   return wrapBody('pro', [...crumbsHome, { name: 'Sources', path: '/pro/sources' }], `<h1>Where the data comes from</h1><ul>${items}</ul><p>${esc('Numbers from other sources are compared with API-Football before they are shown: every score, and each player\'s minutes, goals and assists. A competition season only shows them when at least 97% agree, and a player row whose minutes disagree is left out.')}</p>`);
 }
+
+/** Today's pro matches for the one home page (/): the top competitions, linked. */
+export function proTodayBlock(h: ProHomePage): string {
+  const groups = h.matches.groups.filter((g) => g.priority < 100).slice(0, 8).map((g) =>
+    `<h4>${a(proPaths.league(g.league.slug), g.league.name)}</h4><ul>${g.matches.map((m) => `<li>${a(proPaths.match(m.slug, m.league.scope), proIsFinal(m) || m.status === 'live' ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>`).join('');
+  return `<h2>Pro soccer</h2><p>Scores, tables and player stats from ${esc(h.counts.leagues)} professional competitions, MLS and the NWSL first. See ${a(proPaths.matches, "today's pro matches")} or ${a(proPaths.leagues, 'every competition')}.</p>${groups ? `<h3>Pro matches on ${esc(longDate(h.date))}</h3>${groups}` : ''}`;
+}

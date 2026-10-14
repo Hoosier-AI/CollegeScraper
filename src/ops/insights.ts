@@ -189,7 +189,7 @@ async function pageTitles(db: Db, paths: string[]): Promise<Record<string, strin
   for (const path of paths) {
     if (out[path]) continue;
     const m = path.match(/^\/(?:pro\/)?(?:matches|teams|players|leagues|countries|conferences)\/(.+)$/);
-    if (path === '/') out[path] = 'College home';
+    if (path === '/') out[path] = 'Home';
     else if (m && !UUID.test(m[1]!)) out[path] = humanize(m[1]!.replace(/\//g, ' '));
   }
   return out;

@@ -121,7 +121,10 @@ describe('pro seo routes', () => {
     const l = await app.inject({ url: '/pro/leagues/usa-nwsl-women', headers: HTML });
     expect(between(l.body, '<title>', '</title>')).toBe('NWSL Women 2026: Table, Results, Fixtures and Top Scorers | Plaibook Stats');
     expect(l.body).toContain('Portland Thorns top the table on 47 points');
-    const h = await app.inject({ url: '/pro', headers: HTML });
+    // The Pro home is the one home page now: /pro moves there (query kept), and / carries today's pro matches.
+    const old = await app.inject({ url: '/pro?gender=w', headers: HTML });
+    expect([old.statusCode, old.headers.location]).toEqual([301, '/?gender=w']);
+    const h = await app.inject({ url: '/', headers: HTML });
     expect(h.statusCode).toBe(200);
     expect(between(h.body, '<section id="ssr">', '</section>')).toContain('640 professional competitions');
   });

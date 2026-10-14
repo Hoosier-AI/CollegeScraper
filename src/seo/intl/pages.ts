@@ -129,3 +129,10 @@ export function intlPlayerBody(p: { player: NonNullable<Awaited<ReturnType<typeo
   return wrapBody('intl', [...home, { name: 'Players', path: '/intl/players' }, { name: pl.name, path: `/intl/players/${pl.slug}` }],
     `<h1>${esc(pl.name)}: International Career</h1><p>${a(proPaths.player(pl.slug), `${pl.name}'s club career`)}.</p>${caps.length ? `<h2>Caps</h2>${table(`${pl.name} caps`, ['Nation', 'Caps', 'Goals', 'Years'], caps)}` : ''}${seasons.length ? `<h2>By competition</h2>${table(`${pl.name} international competitions`, ['Season', 'Competition', 'Team', 'Apps', 'Goals', 'Assists'], seasons)}` : ''}${wcs ? `<h2>World Cups</h2><ul>${wcs}</ul>` : ''}${credits(p.intl.credits)}`);
 }
+
+/** Today's (or the next) national-team matches for the one home page (/). */
+export function intlTodayBlock(h: IntlHomePage): string {
+  const today = h.matches.groups.flatMap((g) => g.matches).slice(0, 20).map((m) => `<li>${matchLine(m)}</li>`).join('');
+  const next = today ? '' : h.upcoming.slice(0, 10).map((m) => `<li>${esc(day(m.kickoff))}: ${matchLine(m)}</li>`).join('');
+  return `<h2>International soccer</h2><p>National teams, men's and women's: ${esc(h.counts.tournaments)} competitions and ${esc(h.counts.nations)} nations, every result since 1872. See ${a('/intl/matches', 'the international scoreboard')} or the ${a('/intl/rankings', 'Plaibook Elo rankings')}.</p>${today ? `<h3>International matches today</h3><ul>${today}</ul>` : next ? `<h3>Coming up</h3><ul>${next}</ul>` : ''}`;
+}

@@ -20,7 +20,6 @@ const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
 // Plaibook Stats Pro.
-const ProHome = lazy(() => import('./pages/pro/ProHome'));
 const ProMatches = lazy(() => import('./pages/pro/ProMatches'));
 const ProLeagues = lazy(() => import('./pages/pro/ProLeagues'));
 const ProLeague = lazy(() => import('./pages/pro/ProLeague'));
@@ -36,7 +35,6 @@ const ProCollege = lazy(() => import('./pages/pro/ProCollege'));
 const ProAbroad = lazy(() => import('./pages/pro/ProAbroad'));
 const ProSources = lazy(() => import('./pages/pro/ProSources'));
 // International (national teams): its own lists; a tournament, team, player or match page is Pro's.
-const IntlHome = lazy(() => import('./pages/intl/IntlHome'));
 const IntlTournaments = lazy(() => import('./pages/intl/IntlTournaments'));
 const IntlTeams = lazy(() => import('./pages/intl/IntlTeams'));
 const IntlRankings = lazy(() => import('./pages/intl/IntlRankings'));
@@ -91,7 +89,8 @@ const router = createBrowserRouter([
           { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
           { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
           { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
-          { path: 'pro', element: <ProHome /> },
+          // One home page for every area (2026-10-14): the old Pro and International homes lead there.
+          { path: 'pro', element: <Redirect to={() => '/'} /> },
           { path: 'pro/sources', element: <ProSources /> },
           { path: 'pro/matches', element: <ProMatches /> },
           { path: 'pro/matches/:slug', element: <ProMatch /> },
@@ -107,7 +106,7 @@ const router = createBrowserRouter([
           { path: 'pro/transfers', element: <ProTransfers /> },
           { path: 'pro/college', element: <ProCollege /> },
           { path: 'pro/abroad', element: <ProAbroad /> },
-          { path: 'intl', element: <IntlHome /> },
+          { path: 'intl', element: <Redirect to={() => '/'} /> },
           { path: 'intl/matches', element: <ProMatches key="intl" /> },
           { path: 'intl/matches/:slug', element: <ProMatch /> },
           { path: 'intl/tournaments', element: <IntlTournaments /> },

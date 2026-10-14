@@ -116,7 +116,7 @@ describe('seo routes', () => {
     expect(player.body).not.toContain('name="robots"');
     const match = await app.inject({ url: '/matches/2026-09-12-wake-forest-at-duke-men', headers: HTML });
     expect(match.body).toContain('"@type":"SportsEvent"');
-    for (const [url, h1] of [['/conferences/acc', 'Atlantic Coast Conference Soccer Standings 2026'], ['/rankings', 'College Soccer Rankings 2026'], ['/teams', 'NCAA Soccer Teams 2026'], ['/', 'NCAA College Soccer Stats']] as const) {
+    for (const [url, h1] of [['/conferences/acc', 'Atlantic Coast Conference Soccer Standings 2026'], ['/rankings', 'College Soccer Rankings 2026'], ['/teams', 'NCAA Soccer Teams 2026'], ['/', 'Soccer stats from college to the World Cup']] as const) {
       const r = await app.inject({ url, headers: HTML });
       expect(r.statusCode, url).toBe(200);
       expect(r.body, url).toContain(`<h1>${h1}</h1>`);

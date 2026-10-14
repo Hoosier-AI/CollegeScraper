@@ -274,3 +274,13 @@ export function JsonViewer({ value, title }: { value: unknown; title?: string })
     </details>
   );
 }
+
+/** A match or count that is in play now: the pulsing dot (still under reduced motion) with an optional label. */
+export function LiveDot({ label, className = '' }: { label?: ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-win ${className}`}>
+      <span aria-hidden className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-win motion-reduce:animate-none" />
+      {label}
+    </span>
+  );
+}

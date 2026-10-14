@@ -43,13 +43,15 @@ const ADMIN_NAV = [{ to: '/console', label: 'Console' }] as const;
 /** Pro or International: the halves that share pages, search and the men's/women's toggle. */
 export const isProPath = (path: string) => isProSection(path) || isIntlPath(path);
 
-function SectionSwitch({ section }: { section: Section }) {
+/** The three areas. There is one home page (/) for all of them, so each area opens on its matches; on the home page
+ *  none is lit. */
+function SectionSwitch({ section }: { section: Section | null }) {
   const cls = (on: boolean) => `rounded px-2 py-1 text-xs font-semibold transition-colors duration-150 ${on ? 'bg-pitch-400/20 text-pitch-300' : 'text-chalk-400 hover:text-chalk-100'}`;
   return (
-    <nav aria-label="Section" className="flex shrink-0 items-center gap-0.5 rounded-md border border-field-700 p-0.5">
-      <Link to="/" className={cls(section === 'college')} aria-current={section === 'college' ? 'page' : undefined}>College</Link>
-      <Link to="/pro" className={cls(section === 'pro')} aria-current={section === 'pro' ? 'page' : undefined}>Pro</Link>
-      <Link to="/intl" className={cls(section === 'intl')} aria-current={section === 'intl' ? 'page' : undefined}><span className="sm:hidden">Intl</span><span className="hidden sm:inline">International</span></Link>
+    <nav aria-label="Area" className="flex shrink-0 items-center gap-0.5 rounded-md border border-field-700 p-0.5">
+      <Link to="/matches" className={cls(section === 'college')} aria-current={section === 'college' ? 'true' : undefined}>College</Link>
+      <Link to="/pro/matches" className={cls(section === 'pro')} aria-current={section === 'pro' ? 'true' : undefined}>Pro</Link>
+      <Link to="/intl/matches" className={cls(section === 'intl')} aria-current={section === 'intl' ? 'true' : undefined}><span className="sm:hidden">Intl</span><span className="hidden sm:inline">International</span></Link>
     </nav>
   );
 }
@@ -59,6 +61,7 @@ const FILTERLESS = ['/', '/admin', '/search', '/console'];
 export function TopBar() {
   const admin = useAdmin();
   const { pathname } = useLocation();
+  const home = pathname === '/';
   const pro = isProPath(pathname);
   const section = sectionOf(pathname);
   // Season and gender are college filters; pro pages carry their own season pickers.
@@ -74,13 +77,14 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950">
       <div className="mx-auto flex h-14 max-w-page items-center gap-3 px-4 sm:gap-4 sm:px-6">
-        <Link to={section === 'intl' ? '/intl' : pro ? '/pro' : '/'} className="shrink-0 rounded" aria-label={section === 'intl' ? 'Plaibook Stats International home' : pro ? 'Plaibook Stats Pro home' : 'Plaibook Stats home'}><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
-        <SectionSwitch section={section} />
-        <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">
+        <Link to="/" className="shrink-0 rounded" aria-label="Plaibook Stats home"><Logo withText={false} size={26} className="sm:hidden" /><Logo size={34} className="hidden sm:inline-flex" /></Link>
+        <SectionSwitch section={home ? null : section} />
+        {/* The home page belongs to no one area: its search and the switch are the way in. */}
+        {!home && <nav aria-label="Main" className="hidden items-center gap-0.5 md:flex">
           {nav.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}>{'wide' in n && n.wide ? <><span className="xl:hidden">{n.label}</span><span className="hidden xl:inline">{n.wide}</span></> : n.label}</NavLink>)}
           {admin && ADMIN_NAV.map((n) => <NavLink key={n.to} to={n.to} className={({ isActive }) => `rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-field-800 text-chalk-100' : 'text-note/80 hover:text-note'}`}>{n.label}</NavLink>)}
-        </nav>
-        {pro ? <>
+        </nav>}
+        {home ? <div className="ml-auto" /> : pro ? <>
           <div className="ml-auto hidden w-72 xl:block"><ProSearchBox /></div>
           <button type="button" className="btn-ghost btn-icon ml-auto shrink-0 xl:hidden" aria-label={searching ? 'Close search' : 'Search'} aria-expanded={searching} aria-controls="pro-search-row" onClick={() => setSearching((v) => !v)}>
             {searching ? <X size={18} /> : <Search size={18} />}
@@ -103,18 +107,20 @@ export function BottomBar() {
   const admin = useAdmin();
   const { pathname } = useLocation();
   const pro = isProPath(pathname);
-  const items = isIntlPath(pathname)
-    // Phones: five slots; Players is a link away on the tournament and team pages.
-    ? [{ to: '/intl', label: 'Intl', icon: HomeIcon }, ...INTL_NAV.filter((n) => n.to !== '/intl/players' && n.to !== '/intl/rankings')]
+  // Phones: five slots, Home first everywhere. On the home page itself, the three areas.
+  const homeItem = { to: '/', label: 'Home', icon: HomeIcon };
+  const items = pathname === '/'
+    ? [homeItem, { to: '/matches', label: 'College', icon: GraduationCap }, { to: '/pro/matches', label: 'Pro', icon: Trophy }, { to: '/intl/matches', label: 'Intl', icon: Flag }, { to: '/search', label: 'Search', icon: Search }]
+    : isIntlPath(pathname)
+    ? [homeItem, ...INTL_NAV.filter((n) => ['/intl/matches', '/intl/tournaments', '/intl/teams', '/intl/news'].includes(n.to))]
     : pro
-    // Phones: five slots; Leaders is a tab away on the players page, and the College/Pro switch stays in the top bar.
-    ? [{ to: '/pro', label: 'Pro', icon: HomeIcon }, ...PRO_NAV.filter((n) => ['/pro/matches', '/pro/leagues', '/pro/abroad', '/pro/news'].includes(n.to))]
-    : [...NAV, { to: '/search', label: 'Search', icon: Search }, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
+    ? [homeItem, ...PRO_NAV.filter((n) => ['/pro/matches', '/pro/leagues', '/pro/abroad', '/pro/news'].includes(n.to))]
+    : [homeItem, ...NAV, ...(admin ? [{ to: '/console', label: 'Console', icon: Gauge }] : [])];
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/pro' || n.to === '/intl' || n.to === '/'} className={({ isActive }) => `flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-2xs font-medium ${isActive ? 'text-pitch-300' : 'text-chalk-400'}`}>
+          <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-2xs font-medium ${isActive ? 'text-pitch-300' : 'text-chalk-400'}`}>
             {({ isActive }) => <><n.icon size={20} aria-hidden strokeWidth={isActive ? 2.25 : 1.75} /><span>{n.label}</span></>}
           </NavLink>
         ))}
@@ -146,10 +152,13 @@ function GlobalFilters() {
 export function Footer() {
   const { pathname } = useLocation();
   const pro = isProPath(pathname);
+  const home = pathname === '/';
   return (
     <footer className="mx-auto mt-12 max-w-page border-t border-field-700 px-4 py-6 text-xs text-chalk-500 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {isIntlPath(pathname)
+        {home
+          ? <span>College: each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, checked against each other. Pro: API-Football (api-sports.io) with scraped and open sources first. International: international_results (CC0), the Fjelstul World Cup Database (CC BY-SA 4.0), openfootball (CC0) and Wikipedia caps; Plaibook Elo is our own.</span>
+          : isIntlPath(pathname)
           ? <span>Plaibook Stats International: results since 1872 from international_results (Mart Jürisoo, CC0), World Cups from the Fjelstul World Cup Database (CC BY-SA 4.0) and openfootball (CC0), caps from Wikipedia (CC BY-SA 4.0); live scores, lineups and player stats from API-Football (api-sports.io). Rankings are Plaibook Elo, our own.</span>
           : pro
           ? <span>Plaibook Stats Pro: professional match data from API-Football (api-sports.io); college links from Wikidata and Plaibook Stats.</span>

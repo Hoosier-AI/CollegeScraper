@@ -187,10 +187,10 @@ export function teamsHead(t: TeamsIndexPage, ctx: HeadContext): HeadMeta {
 export function homeHead(h: HomePage, ctx: HeadContext): HeadMeta {
   const url = abs(ctx, '/');
   return {
-    title: `${SITE_NAME}: NCAA College Soccer Stats, Rosters, Standings and Rankings`,
-    description: clip(`Every NCAA soccer program, Division I to III, men's and women's: rosters, box scores, season stats, conference standings and polls for ${h.season}. Free to browse.`),
+    title: `${SITE_NAME}: College, Pro and International Soccer Scores and Stats`,
+    description: clip(`Soccer stats from college to the World Cup: every NCAA program (Division I to III, men's and women's), MLS, the NWSL and the pro leagues abroad, and national teams back to 1872. Live scores, box scores, tables, rankings and player stats for ${h.season}.`),
     canonical: url, robots: null, ogType: 'website', image: ogImage(ctx),
-    jsonLd: [ld('WebSite', { '@id': `${url}#website`, name: SITE_NAME, url, description: 'NCAA college soccer data: rosters, box scores, season stats, standings and polls.', publisher: { '@type': 'Organization', name: 'Plaibook', url: 'https://www.plaibook.soccer/' } })],
+    jsonLd: [ld('WebSite', { '@id': `${url}#website`, name: SITE_NAME, url, description: 'College, pro and international soccer data: live scores, box scores, tables, rankings and player stats.', publisher: { '@type': 'Organization', name: 'Plaibook', url: 'https://www.plaibook.soccer/' } })],
   };
 }
 

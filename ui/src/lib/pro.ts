@@ -20,7 +20,8 @@ export interface ProLeader { player: { id: number; name: string; slug: string; p
  *  half the reader is in (see lib/section.ts). */
 const intl = (scope?: 'club' | 'intl' | null) => (scope ? scope === 'intl' : currentLinkSection() === 'intl');
 export const proPath = {
-  get home() { return intl() ? '/intl' : '/pro'; },
+  /** The one home page (the Pro and International homes moved there). */
+  get home() { return '/'; },
   get matches() { return intl() ? '/intl/matches' : '/pro/matches'; },
   get leagues() { return intl() ? '/intl/tournaments' : '/pro/leagues'; },
   league: (slug: string, season?: number | null, current?: number | null, scope?: 'club' | 'intl' | null) => `${intl(scope) ? '/intl/tournaments' : '/pro/leagues'}/${slug}${season && season !== current ? `?season=${season}` : ''}`,

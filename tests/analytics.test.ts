@@ -18,7 +18,8 @@ describe('page templates', () => {
     expect(normalizePath('/' + 'a'.repeat(200))).toBeNull();
   });
   it('knows every page type of the viewer', () => {
-    expect(pageKind('/')).toMatchObject({ group: 'College home', section: 'college', keep: true });
+    expect(pageKind('/')).toMatchObject({ group: 'Home', section: 'other', keep: true });
+    expect(pageKind('/pro/matches')).toMatchObject({ group: 'Pro matches', section: 'pro' });
     expect(pageKind('/teams/indiana/m')).toMatchObject({ group: 'College team' });
     expect(pageKind('/teams/0b6c1f9e-0000-4000-8000-000000000000')).toMatchObject({ group: 'College team' });
     expect(pageKind('/pro/players/christian-pulisic')).toMatchObject({ group: 'Pro player', section: 'pro' });
@@ -61,13 +62,13 @@ describe('AnalyticsMeter', () => {
   it('counts views per page, visitors once a day, referrers and devices', () => {
     const m = new AnalyticsMeter(null, ['plaibook.live']);
     const t = Date.parse('2026-10-13T12:00:00Z');
-    expect(m.view({ path: '/pro', ref: 'https://www.google.com/', ua: IPHONE, ip: '1.1.1.1' }, t)).toBe(true);
+    expect(m.view({ path: '/pro/matches', ref: 'https://www.google.com/', ua: IPHONE, ip: '1.1.1.1' }, t)).toBe(true);
     m.view({ path: '/pro/players/christian-pulisic', ua: IPHONE, ip: '1.1.1.1' }, t + 1000);
-    m.view({ path: '/pro', ua: MAC, ip: '2.2.2.2' }, t + 2000);
+    m.view({ path: '/pro/matches', ua: MAC, ip: '2.2.2.2' }, t + 2000);
     m.view({ path: '/wp-login.php', ua: MAC, ip: '2.2.2.2' }, t + 3000);
     expect(m.view({ path: '/console', ua: MAC, ip: '2.2.2.2' }, t + 4000)).toBe(false);
     const p = m.pending();
-    expect(p.views).toContainEqual({ day: '2026-10-13', path: '/pro', group: 'Pro home', n: 2 });
+    expect(p.views).toContainEqual({ day: '2026-10-13', path: '/pro/matches', group: 'Pro matches', n: 2 });
     expect(p.views).toContainEqual({ day: '2026-10-13', path: '(other)', group: 'Other', n: 1 });
     expect(p.visitors).toEqual([{ day: '2026-10-13', uniques: 2, views: 4 }]);
     expect(p.refs).toEqual([{ day: '2026-10-13', host: 'google', n: 1 }]);
