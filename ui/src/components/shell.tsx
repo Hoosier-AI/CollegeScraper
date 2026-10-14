@@ -1,11 +1,11 @@
 // The frame around every page: a one-line top bar, a bottom tab bar on phones, the season/gender controls,
 // and the pages shown when a route is missing or throws.
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Flag, Gauge, GraduationCap, Home as HomeIcon, MoreHorizontal, Search, Shield, Trophy, X } from 'lucide-react';
 import { GENDER_PAGES, useGender, useGenderSync } from '../lib/proGender';
 import { isIntlPath, isProPath as isProSection, sectionOf, type Section } from '../lib/section';
-import { AREA_LABEL, AREA_NAV, PHONE_SLOTS, navItemFor, slotBarClass, slotMoreClass, under, type NavItem } from '../lib/nav';
+import { AREA_LABEL, AREA_NAV, PHONE_SLOTS, navItemFor, under, type NavItem } from '../lib/nav';
 import { useAdmin, clearToken } from '../lib/api';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
@@ -61,30 +61,66 @@ function AreaSwitch({ section }: { section: Section | null }) {
 
 const barLink = (on: boolean) => `whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors duration-150 ${on ? 'bg-field-800 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`;
 
-/** The area's menu on the header: the slots that fit, then More with the rest and the area's own pages. */
+/** The area's menu on the header: as many slots as fit in the room between the area switch and search, in order,
+ *  then More with the rest and the area's own pages. Measured, not set by breakpoints: the room depends on the logo,
+ *  the search box, the season and gender controls and the browser's fonts, and fixed breakpoints left the last slots
+ *  under the search box at some widths (2026-10-14). */
 function AreaNav({ area, admin }: { area: Section; admin: boolean }) {
   const { pathname } = useLocation();
   const { slots, more } = AREA_NAV[area];
   const extras = admin ? [...more, ADMIN_ITEM] : more;
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const room = useRef<HTMLDivElement>(null);
+  const ruler = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(slots.length);
   useDismiss(open, () => setOpen(false), root);
-  const inMore = extras.some((i) => under(pathname, i.to));
+  useLayoutEffect(() => {
+    const el = room.current, r = ruler.current;
+    if (!el || !r) return;
+    const measure = () => {
+      // The ruler holds every slot then the More button, at their real sizes.
+      const widths = [...r.children].map((c) => (c as HTMLElement).getBoundingClientRect().width);
+      const moreW = widths.pop() ?? 0, gap = 2, avail = el.clientWidth;
+      let k = widths.length;
+      const need = (n: number) => widths.slice(0, n).reduce((a, w) => a + w + gap, 0) + (n < widths.length || extras.length ? moreW : 0);
+      while (k > 0 && need(k) > avail) k -= 1;
+      setFit(k);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => ro.disconnect();
+  }, [area, extras.length]);
+  const shown = slots.slice(0, fit), rest = slots.slice(fit);
+  const inMore = [...rest, ...extras].some((i) => under(pathname, i.to));
   return (
-    <nav aria-label="Main" className="hidden min-w-0 items-center gap-0.5 md:flex">
-      {slots.map((n, i) => <NavLink key={n.key} to={n.to} className={({ isActive }) => `${barLink(isActive)} ${slotBarClass(i)}`}>{n.label}</NavLink>)}
-      <div ref={root} className={`relative ${extras.length ? '' : '2xl:hidden'}`}>
-        <button type="button" className={`${barLink(inMore)} inline-flex items-center gap-1`} aria-expanded={open} aria-haspopup="true" aria-controls="more-menu" onClick={() => setOpen((v) => !v)}>
-          More<ChevronDown size={14} aria-hidden className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
-        </button>
-        {open && (
-          <div id="more-menu" className="absolute left-0 top-full z-40 mt-1 w-72 rounded-lg border border-field-700 bg-field-900 p-1 shadow-xl shadow-black/50">
-            <ul>{slots.map((n, i) => <li key={n.key} className={slotMoreClass(i)}><MenuLink n={n} on={under(pathname, n.to)} /></li>)}</ul>
-            {extras.length > 0 && <ul className="mt-1 border-t border-field-700 pt-1 [&:first-child]:mt-0">{extras.map((n) => <li key={n.key}><MenuLink n={n} on={under(pathname, n.to)} /></li>)}</ul>}
+    <div ref={room} className="relative hidden min-w-0 flex-1 md:block">
+      {/* Clipped so the full-width ruler never widens the page. */}
+      <div aria-hidden className="pointer-events-none invisible absolute inset-0 overflow-hidden">
+        <div ref={ruler} className="flex w-max gap-0.5">
+          {slots.map((n) => <span key={n.key} className={barLink(false)}>{n.label}</span>)}
+          <span className={`${barLink(false)} inline-flex items-center gap-1`}>More<ChevronDown size={14} /></span>
+        </div>
+      </div>
+      <nav aria-label="Main" className="flex items-center gap-0.5">
+        {shown.map((n) => <NavLink key={n.key} to={n.to} className={({ isActive }) => barLink(isActive)}>{n.label}</NavLink>)}
+        {(rest.length > 0 || extras.length > 0) && (
+          <div ref={root} className="relative">
+            <button type="button" className={`${barLink(inMore)} inline-flex items-center gap-1`} aria-expanded={open} aria-haspopup="true" aria-controls="more-menu" onClick={() => setOpen((v) => !v)}>
+              More<ChevronDown size={14} aria-hidden className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+              <div id="more-menu" className="absolute right-0 top-full z-40 mt-1 w-72 rounded-lg border border-field-700 bg-field-900 p-1 shadow-xl shadow-black/50">
+                {rest.length > 0 && <ul>{rest.map((n) => <li key={n.key}><MenuLink n={n} on={under(pathname, n.to)} /></li>)}</ul>}
+                {extras.length > 0 && <ul className={rest.length ? 'mt-1 border-t border-field-700 pt-1' : ''}>{extras.map((n) => <li key={n.key}><MenuLink n={n} on={under(pathname, n.to)} /></li>)}</ul>}
+              </div>
+            )}
           </div>
         )}
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 }
 
@@ -110,7 +146,7 @@ export function TopBar() {
   const showSeason = section === 'college' && !FILTERLESS.includes(pathname);
   // Men's or women's on every list page, in every area; a team, player or match is one already.
   const showGender = GENDER_PAGES.test(pathname);
-  // Search: one box over all three areas. A box on the widest screens; elsewhere an icon opening a full-width row.
+  // Search: one box over all three areas, behind an icon that opens a full-width row (the menu keeps the header's room).
   const [searching, setSearching] = useState(false);
   useEffect(() => { setSearching(false); }, [pathname]);
   const searchRow = useRef<HTMLDivElement>(null);
@@ -122,9 +158,9 @@ export function TopBar() {
         <AreaSwitch section={home ? null : section} />
         {/* The home page belongs to no one area: its search and the switch are the way in. */}
         {!home && <AreaNav area={section} admin={admin} />}
+        {!home && <div className="flex-1 md:hidden" />}
         {!home && <>
-          <div className="ml-auto hidden w-80 2xl:block"><UniversalSearch size="md" /></div>
-          <button type="button" className="btn-ghost btn-icon ml-auto shrink-0 2xl:hidden" aria-label={searching ? 'Close search' : 'Search'} aria-expanded={searching} aria-controls="site-search-row" onClick={() => setSearching((v) => !v)}>
+          <button type="button" className="btn-ghost btn-icon shrink-0" aria-label={searching ? 'Close search' : 'Search'} aria-expanded={searching} aria-controls="site-search-row" onClick={() => setSearching((v) => !v)}>
             {searching ? <X size={18} /> : <Search size={18} />}
           </button>
         </>}
@@ -134,7 +170,7 @@ export function TopBar() {
         {admin && <button className="btn-quiet btn-sm hidden lg:inline-flex" onClick={() => clearToken()}><Shield size={14} /> Sign out</button>}
       </div>
       {searching && (
-        <div id="site-search-row" ref={searchRow} className="mx-auto max-w-page border-t border-field-700 px-4 py-2 sm:px-6 2xl:hidden" onKeyDown={(e) => { if (e.key === 'Escape') setSearching(false); }}>
+        <div id="site-search-row" ref={searchRow} className="mx-auto max-w-page border-t border-field-700 px-4 py-2 sm:px-6" onKeyDown={(e) => { if (e.key === 'Escape') setSearching(false); }}>
           <UniversalSearch size="md" />
         </div>
       )}

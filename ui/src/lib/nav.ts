@@ -66,11 +66,6 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
   },
 };
 
-/** The first three slots stay on the header from the md breakpoint; the rest join More until there is room
- *  (lg shows five, 2xl all). The class hides a slot on the header bar, or its copy in More, at the right width. */
-export const slotBarClass = (i: number) => (i < 3 ? 'flex' : i < 5 ? 'hidden lg:flex' : 'hidden 2xl:flex');
-export const slotMoreClass = (i: number) => (i < 3 ? 'hidden' : i < 5 ? 'lg:hidden' : '2xl:hidden');
-
 /** The phone bar: Home, then the same four on every area (Matches, the competitions slot, Teams) and More. */
 export const PHONE_SLOTS: SlotKey[] = ['matches', 'competitions', 'teams'];
 
