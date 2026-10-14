@@ -11,6 +11,7 @@ const force: ParamSpec = { name: 'force', type: 'boolean', label: 'Force', help:
 const STAGES = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
 export const JOB_META: Record<string, JobMeta> = {
+  'fix-divisions': { description: 'College: each team-season\'s division from its own games (5+ games, 70%+ in one division), repairing labels a per-division discovery got wrong. No requests.', lane: 'aux', params: [season] },
   'discover-teams': { description: 'Find every program from the NCAA.com scoreboard and school pages; creates programs and program-seasons.', lane: 'crawl', params: [season, gender, division, program, force, { name: 'skip_school_pages', type: 'boolean', label: 'Skip school pages' }], dangerous: true },
   'detect-sites': { description: 'Work out which platform (Sidearm, Presto, WMT) each school\'s athletics site runs.', lane: 'crawl', params: [season, program, force, { name: 'only_unknown', type: 'boolean', label: 'Only unclassified schools' }, { name: 'platforms', type: 'string[]', label: 'Re-probe platforms', help: 'e.g. unknown, other' }, { name: 'program_status', type: 'string[]', label: 'Only site statuses', help: 'unknown, failed, not_found' }] },
   'sweep-scoreboard': { description: 'Read the NCAA.com scoreboard for each day and division: creates fixtures, links contest ids, records finals.', lane: 'crawl', params: [season, gender, division, { name: 'days', type: 'enum', label: 'Days', options: ['recent', 'all'], default: 'recent', help: 'recent = yesterday, today, tomorrow.' }, force] },

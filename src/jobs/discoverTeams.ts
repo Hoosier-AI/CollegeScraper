@@ -4,6 +4,7 @@ import { makeFetcher } from './fetcher.js';
 import { SCHOOLS_URL, parseSchoolsIndex, parseSchoolPage, schoolPageUrl, scoreboardDay } from '../sources/ncaa/index.js';
 import { makeTransport } from './fetchGamesNcaa.js';
 import { upsertSchools, upsertProgram, upsertProgramSeasons, upsertConference, listSchools, listPrograms } from '../db/repos.js';
+import { selectAll } from '../db/client.js';
 import { currentSeason, eachDate } from './seasons.js';
 import type { Division, Gender } from '../model.js';
 import { log } from '../log.js';
@@ -66,6 +67,12 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
   if (missing.length) await upsertSchools(db, [...new Map(missing.map((m) => [m.seo, m])).values()]);
 
   // 3. programs + program_seasons (+ conferences)
+  // A run over some divisions only (a per-division backfill) sees a team only on the scoreboards of those divisions:
+  // a D1 side that played one D3 opponent appears on the D3 scoreboard once and nowhere else in that run. Such a run
+  // never changes the division of a team the season already has (2026-10-14: per-division backfills had relabelled
+  // ~290 program-seasons, Indiana as D3 in 2025); it only adds teams that are new.
+  const partial = divisions.length < DIVISIONS.length;
+  const knownDiv = partial ? new Map((await selectAll<{ program_id: string; division: Division }>(db, 'college_program_seasons', 'program_id,division', (q) => q.eq('season', season).order('program_id'))).map((r) => [r.program_id, r.division])) : new Map<string, Division>();
   const confIds = new Map<string, string>();
   const seasonRows: { program_id: string; season: number; division: Division; conference_id: string | null }[] = [];
   for (const t of seen.values()) {
@@ -77,7 +84,7 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
       if (!confId) { confId = await upsertConference(db, t.conf.seo, t.conf.name, t.division); confIds.set(t.conf.seo, confId); }
     }
     const program = await upsertProgram(db, { school_seo: t.seo, gender: t.gender, name: t.name, short_name: t.short, name6: t.char6 });
-    seasonRows.push({ program_id: program.id, season, division: t.division, conference_id: confId });
+    seasonRows.push({ program_id: program.id, season, division: knownDiv.get(program.id) ?? t.division, conference_id: confId });
   }
   // A scoreboard that shows no conference for a team never clears the one we have (Cal women lost the ACC this way,
   // and the standings job then created a synthetic twin): rows without one are written without the column.
@@ -134,3 +141,31 @@ export async function imageServed(url: string, doFetch: typeof fetch = fetch): P
 }
 
 registerJob('discover-teams', discoverTeams);
+
+/** A team-season's division from its own games: the division of the scoreboards most of its games were on, where it
+ *  played 5+ games and 70%+ of them sit in one division. Repairs labels a partial discovery run got wrong (the backfill
+ *  runs it after every per-division pass). Non-members with a game or two keep whatever they have. */
+export async function fixDivisions(ctx: JobContext): Promise<void> {
+  const season = Number(ctx.params.season ?? currentSeason());
+  const games = await selectAll<{ home_program_id: string | null; away_program_id: string | null; division: Division | null }>(ctx.db, 'college_games', 'home_program_id,away_program_id,division', (q) => q.eq('season', season).not('division', 'is', null).order('id'));
+  const counts = new Map<string, Map<Division, number>>();
+  for (const g of games) for (const pid of [g.home_program_id, g.away_program_id]) {
+    if (!pid || !g.division) continue;
+    const c = counts.get(pid) ?? new Map<Division, number>(); c.set(g.division, (c.get(g.division) ?? 0) + 1); counts.set(pid, c);
+  }
+  const rows = await selectAll<{ program_id: string; division: Division }>(ctx.db, 'college_program_seasons', 'program_id,division', (q) => q.eq('season', season).order('program_id'));
+  let fixed = 0;
+  for (const r of rows) {
+    const c = counts.get(r.program_id); if (!c) continue;
+    const total = [...c.values()].reduce((a, b) => a + b, 0);
+    const [best, n] = [...c].sort((a, b) => b[1] - a[1])[0]!;
+    if (total < 5 || n / total < 0.7 || best === r.division) continue;
+    const { error } = await ctx.db.from('college_program_seasons').update({ division: best }).eq('program_id', r.program_id).eq('season', season);
+    if (error) throw new Error(`fix-divisions: ${error.message}`);
+    fixed += 1;
+    log.info({ program_id: r.program_id, season, from: r.division, to: best }, 'division fixed from games');
+  }
+  ctx.inc('checked', rows.length);
+  ctx.inc('fixed', fixed);
+}
+registerJob('fix-divisions', fixDivisions);

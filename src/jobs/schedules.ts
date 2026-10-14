@@ -101,6 +101,8 @@ registerJob('backfill', async (ctx) => {
   await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
   await step(ctx, 'fetch-games-ncaa', { season });
   await step(ctx, 'resolve-orphans', { season });
+  // Every division, whatever this pass covers: a team's division from its own games (see fixDivisions).
+  await step(ctx, 'fix-divisions', { season, division: undefined });
   await step(ctx, 'reconcile-games', { season, all: true });
   await step(ctx, 'compute-aggregates', { season, transfers: true });
   await step(ctx, 'refresh-rankings', { season });
