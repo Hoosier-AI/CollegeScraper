@@ -28,6 +28,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
     more: [
       { key: 'transfers', to: '/transfers', label: 'Transfers', icon: ArrowLeftRight, hint: 'Players at a new school this season' },
       { key: 'compare', to: '/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
+      { key: 'h2h', to: '/h2h', label: 'Head to head', icon: Swords, hint: 'Every meeting between two teams' },
     ],
   },
   pro: {
@@ -44,6 +45,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       { key: 'college', to: '/pro/college', label: 'College to Pro', icon: GraduationCap, hint: 'Pros by the college they played for' },
       { key: 'transfers', to: '/pro/transfers', label: 'Transfers', icon: ArrowLeftRight, hint: 'The latest moves in and out of US clubs' },
       { key: 'compare', to: '/pro/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
+      { key: 'h2h', to: '/pro/h2h', label: 'Head to head', icon: Swords, hint: 'Every meeting between two clubs' },
       { key: 'countries', to: '/pro/countries', label: 'Countries', icon: MapIcon, hint: 'Each country\'s leagues, clubs and players' },
     ],
   },

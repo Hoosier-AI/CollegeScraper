@@ -21,6 +21,10 @@ const Leaders = lazy(() => import('./pages/Leaders'));
 const Players = lazy(() => import('./pages/Players'));
 const Transfers = lazy(() => import('./pages/Transfers'));
 const Compare = lazy(() => import('./pages/Compare'));
+const H2H = lazy(() => import('./pages/H2H'));
+const Coach = lazy(() => import('./pages/Coach'));
+const ProH2H = lazy(() => import('./pages/pro/ProH2H'));
+const ProCoach = lazy(() => import('./pages/pro/ProCoach'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
@@ -91,6 +95,10 @@ const router = createBrowserRouter([
           { path: 'players/:id', element: <Player /> },
           { path: 'transfers', element: <Transfers /> },
           { path: 'compare', element: <Compare /> },
+          { path: 'h2h', element: <H2H /> },
+          { path: 'coaches/:id', element: <Coach /> },
+          { path: 'pro/h2h', element: <ProH2H /> },
+          { path: 'pro/coaches/:id', element: <ProCoach /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
           { path: 'news', element: <News /> },

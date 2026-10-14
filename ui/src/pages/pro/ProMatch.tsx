@@ -107,7 +107,7 @@ export default function ProMatch() {
           {hasShots && <Section title="Shot map" className={hasShotsWide ? 'lg:col-span-2' : ''}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
         </div>
       )}
-      {tab === 'h2h' && d.h2h.length > 0 && <Section title="Head to head"><div className="frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 xl:grid-cols-2">{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague />)}</div></Section>}
+      {tab === 'h2h' && d.h2h.length > 0 && <Section title="Head to head" right={!intl ? <Link to={`/pro/h2h?a=${m.home.slug}&b=${m.away.slug}`} className="text-xs text-pitch-300 hover:text-pitch-200">Every meeting</Link> : <Link to={`/intl/h2h?a=${m.home.slug}&b=${m.away.slug}`} className="text-xs text-pitch-300 hover:text-pitch-200">Every meeting</Link>}><div className="frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 xl:grid-cols-2">{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague />)}</div></Section>}
     </div>
   );
 }

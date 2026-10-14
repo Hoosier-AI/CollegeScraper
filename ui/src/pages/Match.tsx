@@ -193,6 +193,7 @@ export default function Match() {
       )}
 
       {tab === 'h2h' && <HeadToHead g={g} h2h={p.head_to_head} sides={sides} />}
+      {tab === 'h2h' && g.home?.program_id && g.away?.program_id && <p className="text-sm"><Link className="text-pitch-300 hover:text-pitch-200" to={href('/h2h', { a: g.home.program_id, b: g.away.program_id })}>Full head to head: {g.home.name} against {g.away.name}</Link></p>}
       {tab === 'players' && <KeyPlayers g={g} sides={sides} />}
       {tab === 'preview' && (played ? null : (
         // Before kickoff, one page: each side's team news, the season side by side, head to head, each side's last lineup and key players.

@@ -750,6 +750,47 @@ export async function teamLeaders(db: Db, f: TeamLeadersFilter) {
   };
 }
 
+/** One pro coach (/pro/coaches/:id): profile, every club and national team managed, and trophies won as coach. */
+export async function proCoach(db: Db, id: number) {
+  const { data: c, error } = await db.from('pro_coaches').select('id,display_name,first_name,last_name,birth_date,birth_country,nationality,photo,team_id').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!c) return null;
+  const [career, trophies] = await Promise.all([
+    selectAll<any>(db, 'pro_coach_career', 'team_id,start,end,team_name,team_logo', (q) => q.eq('coach_id', id).order('start', { ascending: false })),
+    selectAll<any>(db, 'pro_trophies', 'league,country,season,place', (q) => q.eq('subject', 'coach').eq('subject_id', id).order('season', { ascending: false })),
+  ]);
+  const teams = await teamsById(db, career.map((r) => r.team_id).filter((x) => x > 0));
+  const cc = c as any;
+  return {
+    coach: { id: cc.id, name: cc.display_name ?? cc.name, birth_date: cc.birth_date ?? null, birth_country: cc.birth_country ?? null, nationality: cc.nationality ?? null, photo: cc.photo ?? null },
+    career: career.map((r) => ({ team: teams.get(r.team_id) ?? { id: r.team_id, name: r.team_name, slug: null, logo: r.team_logo }, start: r.start === '1900-01-01' ? null : r.start, end: r.end ?? null, current: !r.end })),
+    trophies: trophies.filter((t) => /^winner$/i.test(t.place ?? '')).map((t) => ({ league: t.league, country: t.country, season: t.season })),
+    runners_up: trophies.filter((t) => !/^winner$/i.test(t.place ?? '')).length,
+  };
+}
+
+/** Head to head between two clubs (/pro/h2h): every finished meeting we hold, newest first, record from the first. */
+export async function teamH2H(db: Db, aSlug: string, bSlug: string) {
+  const { data: ts } = await db.from('pro_teams').select(TEAM_COLS).in('slug', [aSlug, bSlug]);
+  const ta = (ts ?? []).find((t: any) => t.slug === aSlug), tb = (ts ?? []).find((t: any) => t.slug === bSlug);
+  if (!ta || !tb) return null;
+  const { data, error } = await db.from('pro_fixtures').select(FIXTURE_SELECT).eq('status', 'final')
+    .or(`and(home_team_id.eq.${(ta as any).id},away_team_id.eq.${(tb as any).id}),and(home_team_id.eq.${(tb as any).id},away_team_id.eq.${(ta as any).id})`)
+    .order('kickoff', { ascending: false }).limit(200);
+  if (error) throw new Error(error.message);
+  const matches = ((data ?? []) as any[]).map(toMatchRow);
+  const rec = { played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 };
+  for (const m of matches) {
+    const home = m.home.id === (ta as any).id; const f = home ? m.home.score : m.away.score, g = home ? m.away.score : m.home.score;
+    if (f == null || g == null) continue;
+    rec.played += 1; rec.gf += f; rec.ga += g;
+    // A match settled on penalties counts as a draw, as records usually do.
+    const won = f === g ? null : f > g;
+    if (won === true) rec.w += 1; else if (won === false) rec.l += 1; else rec.d += 1;
+  }
+  return { a: teamRef(ta), b: teamRef(tb), record: rec, matches };
+}
+
 export async function compare(db: Db, a: string, b: string) {
   const [pa, pb] = await Promise.all([player(db, a), player(db, b)]);
   return pa && pb ? { a: pa, b: pb } : null;

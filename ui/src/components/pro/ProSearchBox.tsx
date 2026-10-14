@@ -15,7 +15,7 @@ export type Hit = { key: string; kind: 'league' | 'team' | 'player'; label: stri
 
 /** `onPick`: choose instead of navigating (the compare page picks players with it). */
 /** wideMenu: results open wider than the box, anchored right (the narrow phone header box). */
-export function ProSearchBox({ size = 'md', placeholder, examples, onNavigate, onPick, wideMenu }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void; wideMenu?: boolean }) {
+export function ProSearchBox({ size = 'md', placeholder, examples, onNavigate, onPick, wideMenu, pickTeams }: { size?: 'md' | 'lg'; placeholder?: string; examples?: string[]; onNavigate?: () => void; onPick?: (h: Hit) => void; wideMenu?: boolean; /** With onPick: pick teams instead of players. */ pickTeams?: boolean }) {
   const nav = useNavigate();
   const section = useSection();
   const intl = section === 'intl';
@@ -30,9 +30,9 @@ export function ProSearchBox({ size = 'md', placeholder, examples, onNavigate, o
   const hits = useQuery({ queryKey: ['pro-search', section, debounced], queryFn: () => api<{ leagues: HitRow[]; teams: HitRow[]; players: HitRow[] }>(`${listApi(section, 'search')}${qs({ q: debounced, limit: 6 })}`), enabled: debounced.length >= 2 });
   const items = useMemo<Hit[]>(() => [
     ...(onPick ? [] : (hits.data?.leagues ?? []).map((h) => ({ key: `l${h.id}`, kind: 'league' as const, label: h.name, sub: h.sub && h.sub !== 'World' ? h.sub : intl ? 'Tournament' : 'Competition', href: proPath.league(h.slug), logo: h.logo, slug: h.slug }))),
-    ...(onPick ? [] : (hits.data?.teams ?? []).map((h) => ({ key: `t${h.id}`, kind: 'team' as const, label: h.name, sub: intl ? (/-women(-|$)/.test(h.slug) ? "Women's national team" : 'National team') : h.sub ?? 'Club', href: proPath.team(h.slug), logo: h.logo, slug: h.slug }))),
-    ...(hits.data?.players ?? []).map((h) => ({ key: `p${h.id}`, kind: 'player' as const, label: h.name, sub: h.sub ?? 'Player', href: proPath.player(h.slug), logo: h.logo, slug: h.slug })),
-  ], [hits.data, onPick]);
+    ...(onPick && !pickTeams ? [] : (hits.data?.teams ?? []).map((h) => ({ key: `t${h.id}`, kind: 'team' as const, label: h.name, sub: intl ? (/-women(-|$)/.test(h.slug) ? "Women's national team" : 'National team') : h.sub ?? 'Club', href: proPath.team(h.slug), logo: h.logo, slug: h.slug }))),
+    ...(pickTeams ? [] : hits.data?.players ?? []).map((h) => ({ key: `p${h.id}`, kind: 'player' as const, label: h.name, sub: h.sub ?? 'Player', href: proPath.player(h.slug), logo: h.logo, slug: h.slug })),
+  ], [hits.data, onPick, pickTeams]);
   useEffect(() => { setCursor(0); }, [items]);
   // Site analytics: what was searched and whether anything matched (sent once typing stops).
   useEffect(() => { if (hits.data && debounced.length >= 2) trackSearch('pro', debounced, (hits.data.leagues?.length ?? 0) + (hits.data.teams?.length ?? 0) + (hits.data.players?.length ?? 0)); }, [hits.data, debounced]);

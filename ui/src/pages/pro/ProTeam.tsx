@@ -220,7 +220,7 @@ export default function ProTeam() {
       {tab === 'coaches' && (d.coaches.length
         ? <ul className="frame divide-y divide-field-700 text-sm">
             {d.coaches.map((c) => (
-              <li key={c.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.photo} name={c.name} size={36} /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-chalk-100">{c.name} <Flag country={c.nationality} size={10} /></span><span className="text-xs text-chalk-400">{c.start ? fmt.date(c.start) : '?'} – {c.end ? fmt.date(c.end) : 'now'}{c.trophies ? ` · ${c.trophies} ${c.trophies === 1 ? 'trophy' : 'trophies'}` : ''}</span></span>{c.current && <span className="rounded bg-pitch-400/15 px-1.5 text-2xs text-pitch-300">Current</span>}</li>
+              <li key={c.id}><Link to={`/pro/coaches/${c.id}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-field-800"><PlayerAvatar src={c.photo} name={c.name} size={36} /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-chalk-100">{c.name} <Flag country={c.nationality} size={10} /></span><span className="text-xs text-chalk-400">{c.start ? fmt.date(c.start) : '?'} – {c.end ? fmt.date(c.end) : 'now'}{c.trophies ? ` · ${c.trophies} ${c.trophies === 1 ? 'trophy' : 'trophies'}` : ''}</span></span>{c.current && <span className="rounded bg-pitch-400/15 px-1.5 text-2xs text-pitch-300">Current</span>}</Link></li>
             ))}
           </ul>
         : <EmptyState title="No coaches listed" />)}

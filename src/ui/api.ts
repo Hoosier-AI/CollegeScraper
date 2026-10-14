@@ -67,6 +67,17 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return q.programGames(getDb(), req.params.id, s);
   });
+  app.get<{ Params: { id: string } }>('/api/coaches/:id', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'id required' });
+    const r = await q.coach(getDb(), req.params.id);
+    return r ? reply.header('Cache-Control', 'public, max-age=600').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/h2h', async (req, reply) => {
+    const a = str(req.query.a), b = str(req.query.b);
+    if (!a || !b || !UUID.test(a) || !UUID.test(b) || a === b) return reply.code(400).send({ error: 'a and b must be two program ids' });
+    const r = await q.programH2H(getDb(), a, b);
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+  });
   app.get<{ Querystring: Record<string, string> }>('/api/transfers', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
     const conf = str(req.query.conference);

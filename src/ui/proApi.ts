@@ -114,6 +114,17 @@ export function registerProApi(app: FastifyInstance): void {
     const f = { gender: q.gender === 'w' ? 'w' as const : 'm' as const, scope: q.scope === 'world' ? 'world' as const : 'us' as const, league: int(q.league) };
     return reply.header('Cache-Control', 'public, max-age=600').send(await memo(memoKey('teams-list', f), () => pro.teamsList(getDb(), f)));
   });
+  app.get<{ Params: { id: string } }>('/api/pro/coaches/:id', async (req, reply) => {
+    const id = int(req.params.id); if (!id || id < 1) return reply.code(400).send({ error: 'id required' });
+    const r = await pro.proCoach(getDb(), id);
+    return r ? reply.header('Cache-Control', 'public, max-age=3600').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/h2h', async (req, reply) => {
+    const { a = '', b = '' } = req.query;
+    if (!SLUG.test(a) || !SLUG.test(b) || a === b) return reply.code(400).send({ error: 'a and b must be two club addresses' });
+    const r = await pro.teamH2H(getDb(), a, b);
+    return r ? reply.header('Cache-Control', 'public, max-age=600').send(r) : reply.code(404).send({ error: 'not found' });
+  });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/team-leaders', async (req, reply) => {
     const q = req.query;
     const f: pro.TeamLeadersFilter = { stat: q.stat, scope: 'club', gender: q.gender === 'w' ? 'w' : 'm', league: int(q.league), us: q.scope !== 'world', limit: int(q.limit) ?? 50, offset: int(q.offset) ?? 0 };

@@ -201,6 +201,43 @@ export async function transfersFeed(db: Db, o: { season: number; gender?: string
   };
 }
 
+/** Head to head between two college programs (/h2h): every finished meeting we hold, newest first, with the record
+ *  from the first team's side. */
+export async function programH2H(db: Db, a: string, b: string) {
+  const [pa, pb, x, y] = await Promise.all([
+    db.from('college_programs').select('id,name,gender,school_seo,college_schools(logo_svg_url)').eq('id', a).maybeSingle(),
+    db.from('college_programs').select('id,name,gender,school_seo,college_schools(logo_svg_url)').eq('id', b).maybeSingle(),
+    db.from('college_v_schedule').select('*').eq('home_program_id', a).eq('away_program_id', b).eq('status', 'final').order('game_date', { ascending: false }).limit(100),
+    db.from('college_v_schedule').select('*').eq('home_program_id', b).eq('away_program_id', a).eq('status', 'final').order('game_date', { ascending: false }).limit(100),
+  ]);
+  if (!pa.data || !pb.data) return null;
+  const rows = [...(x.data ?? []), ...(y.data ?? [])].sort((p, q) => String(q.game_date).localeCompare(String(p.game_date)));
+  const ranks = rows.length ? await latestUscRanks(db, Math.max(...rows.map((r) => r.season))) : new Map();
+  const ref = (p: any) => ({ id: p.id, name: p.name, gender: p.gender, seo: p.school_seo, logo: p.college_schools?.logo_svg_url ?? null });
+  return { a: ref(pa.data), b: ref(pb.data), summary: h2hSummary(rows.map((r) => toMatchRow(r, ranks)), a) };
+}
+
+/** One college coach (/coaches/:id): every staff season we hold, with the team's record in each and the career record
+ *  as head coach over those seasons. */
+export async function coach(db: Db, id: string) {
+  const { data: c, error } = await db.from('college_coaches').select('id,name,headshot_url').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!c) return null;
+  const rows = await selectAll<any>(db, 'college_coach_seasons', 'program_id,season,title,is_head,college_programs(id,name,gender,school_seo,college_schools(logo_svg_url))', (q) => q.eq('coach_id', id).order('season', { ascending: false }));
+  const keys = rows.map((r) => r.program_id);
+  const stats = keys.length ? await selectIn<any>(db, 'college_team_season_stats', 'program_id,season,w,l,t,conf_w,conf_l,conf_t', 'program_id', [...new Set(keys)]) : [];
+  const ps = keys.length ? await selectIn<any>(db, 'college_program_seasons', 'program_id,season,division,college_conferences(name,short_name)', 'program_id', [...new Set(keys)]) : [];
+  const st = new Map(stats.map((s) => [`${s.program_id}|${s.season}`, s])); const sea = new Map(ps.map((s) => [`${s.program_id}|${s.season}`, s]));
+  const seasons = rows.map((r) => {
+    const s = st.get(`${r.program_id}|${r.season}`); const p = sea.get(`${r.program_id}|${r.season}`); const pr = r.college_programs;
+    return { season: r.season, title: r.title, is_head: !!r.is_head, program: pr ? { id: pr.id, name: pr.name, gender: pr.gender, seo: pr.school_seo, logo: pr.college_schools?.logo_svg_url ?? null } : null,
+      division: p?.division ?? null, conference: p?.college_conferences?.short_name ?? p?.college_conferences?.name ?? null, record: s ? { w: s.w, l: s.l, t: s.t, conf_w: s.conf_w, conf_l: s.conf_l, conf_t: s.conf_t } : null };
+  });
+  const head = seasons.filter((s) => s.is_head && s.record);
+  const career = head.reduce((a, s) => ({ w: a.w + (s.record!.w ?? 0), l: a.l + (s.record!.l ?? 0), t: a.t + (s.record!.t ?? 0) }), { w: 0, l: 0, t: 0 });
+  return { coach: { id: c.id, name: c.name, headshot: c.headshot_url ? cleanHeadshotUrl(c.headshot_url) : null }, seasons, head_record: head.length ? { ...career, seasons: head.length } : null };
+}
+
 export const PERIODS = ['0-15', '16-30', '31-45', '46-60', '61-75', '76-90', 'ET'] as const;
 /** A program's goals for and against by 15-minute period over a season's finished games, from the play-by-play (one
  *  source per game: the box score's source of truth when it has goal times, else the other). `games`/`timed` say how
