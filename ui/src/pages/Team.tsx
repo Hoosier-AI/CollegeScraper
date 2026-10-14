@@ -100,12 +100,30 @@ export default function Team() {
   );
 }
 
+/** A team's RPI rank day by day this season (higher on the chart is better). */
+function RankTrend({ points }: { points: { day: string; rank: number | null }[] }) {
+  const pts = points.filter((p) => p.rank != null) as { day: string; rank: number }[];
+  if (pts.length < 2) return null;
+  const w = 280, h = 56, max = Math.max(...pts.map((p) => p.rank)), min = Math.min(...pts.map((p) => p.rank));
+  const x = (i: number) => (i / (pts.length - 1)) * (w - 8) + 4, y = (r: number) => (max === min ? h / 2 : 4 + ((r - min) / (max - min)) * (h - 8));
+  return (
+    <figure>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-14 w-full" role="img" aria-label={`RPI rank from ${pts[0]!.rank} on ${pts[0]!.day} to ${pts[pts.length - 1]!.rank} now`}>
+        <polyline fill="none" stroke="currentColor" strokeWidth="2" className="text-pitch-400" points={pts.map((p, i) => `${x(i)},${y(p.rank)}`).join(' ')} />
+      </svg>
+      <figcaption className="flex justify-between text-2xs text-chalk-500"><span>{pts[0]!.day.slice(5)}: No. {pts[0]!.rank}</span><span>best No. {min}</span><span>now No. {pts[pts.length - 1]!.rank}</span></figcaption>
+    </figure>
+  );
+}
+
 /** The long tail of team numbers, plus the conference table and poll history, in one calm place. */
 function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; season: number; href: (p: string, o?: Record<string, string | number | null | undefined>) => string; admin: boolean }) {
   const s = t.teamStats;
   // Goals by 15-minute period from the play-by-play, once it covers most of the season's finished games.
   const periods = useQuery({ queryKey: ['periods', id, season], queryFn: () => api<{ games: number; timed: number; rows: { period: string; for: number; against: number }[] }>(`/api/programs/${id}/periods${qs({ season })}`), staleTime: 300_000 });
   const pd = periods.data;
+  const rpi = useQuery({ queryKey: ['program-rpi', id, season], queryFn: () => api<{ rpi: { division: string; rank: number | null; rank_yesterday: number | null; official_rank: number | null; rpi: number; wp: number; owp: number; oowp: number; history: { day: string; rpi: number; rank: number | null }[] } | null }>(`/api/programs/${id}/rpi${qs({ season })}`), staleTime: 60_000 });
+  const rp = rpi.data?.rpi;
   const periodsShown = !!pd && pd.games > 0 && pd.timed >= 0.6 * pd.games;
   const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td !whitespace-normal text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td !whitespace-normal text-xs text-chalk-500">{note ?? ''}</td></tr>;
   return (
@@ -140,6 +158,20 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
         ) : <EmptyState title="No conference table yet" body={admin ? 'Run compute-standings.' : undefined} />}
       </Section>
       <div className="space-y-6">
+        {rp && (
+          <Section title="Live RPI" right={<Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href('/rankings', { tab: 'rpi', division: rp.division })}>Full table</Link>}>
+            <div className="frame space-y-2 p-3">
+              <div className="flex flex-wrap items-end gap-x-5 gap-y-1">
+                <span><span className="display text-3xl text-chalk-100 tnum">{rp.rank ?? '–'}</span><span className="ml-1 text-xs text-chalk-400">in {rp.division.toUpperCase()}</span></span>
+                <span className="text-sm text-chalk-300 tnum">RPI {rp.rpi.toFixed(4)}</span>
+                {rp.official_rank != null && <span className="text-xs text-chalk-400">NCAA's last official list: {rp.official_rank}</span>}
+                {rp.rank_yesterday != null && rp.rank != null && rp.rank_yesterday !== rp.rank && <span className={`text-xs ${rp.rank < rp.rank_yesterday ? 'text-win' : 'text-loss'}`}>{rp.rank < rp.rank_yesterday ? 'up' : 'down'} {Math.abs(rp.rank_yesterday - rp.rank)} since yesterday</span>}
+              </div>
+              <p className="text-xs text-chalk-500 tnum">Winning % {rp.wp.toFixed(3)}, opponents' {rp.owp.toFixed(3)}, opponents' opponents' {rp.oowp.toFixed(3)}</p>
+              {rp.history.length > 1 && <RankTrend points={rp.history} />}
+            </div>
+          </Section>
+        )}
         <Section title="Goals by period">
           {periodsShown ? <><GoalsByPeriod rows={pd!.rows} /><p className="mt-1 text-xs text-chalk-500">Scored and conceded by 15-minute period, from the play-by-play of {pd!.timed} of {pd!.games} matches.</p></>
             : <p className="text-sm text-chalk-500">{periods.isPending ? 'Loading…' : 'Shows once goal times are in for most of the season\'s matches.'}</p>}

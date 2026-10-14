@@ -10,6 +10,7 @@
 // matches, with caps by nation (Wikipedia careers) and World Cup squads.
 import { NewsFeed } from '../../components/news/News';
 import { Crumbs } from '../../components/shell';
+import { KeyFacts, type Salary } from '../../components/player/KeyFacts';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -42,6 +43,7 @@ interface SeasonRow {
   tackles: N; interceptions: N; duels_won: N; dribbles_won: N; yellow: number; red: number; saves: N; conceded: N; clean_sheets: N; rating: N;
   lineups?: N; sub_in?: N; sub_out?: N; bench?: N; captain?: N; blocks?: N; duels?: N; dribbles?: N; dribbled_past?: N; fouls_drawn?: N; fouls_committed?: N; yellowred?: N;
   pen_won?: N; pen_committed?: N; pen_scored?: N; pen_missed?: N; pen_saved?: N;
+  /** PPG and PPS: result points over appearances and over starts of 45+ minutes. */ res_apps?: N; res_pts?: N; res_starts45?: N; res_pts45?: N;
 }
 interface MatchLine {
   match: ProMatch; team_id: number; starter: boolean; minutes: N; goals: N; assists: N; yellow: N; red: N; rating: N; saves?: N; conceded?: N; pos?: string | null;
@@ -55,6 +57,7 @@ export interface PlayerData {
   injury: { type: string | null; reason: string | null; date: string | null } | null;
   injury_history?: { type: string; start: string; end: string | null; days: number; matches_missed: number | null }[];
   advanced?: { credit: SourceCredit; seasons: AdvPlayerSeason[] } | null;
+  salary?: { latest: Salary; history: (Salary & { team: ProTeamRef | null })[]; source: string } | null;
   matches: MatchLine[];
   college: { college_name: string; school_seo: string | null; first_season: number | null; last_season: number | null; college_player_slug: string | null; verified: boolean }[];
   career?: { rows: CareerRow[]; credit: CareerCredit } | null;
@@ -102,7 +105,7 @@ function CareerTable({ rows, credit }: { rows: CareerRow[]; credit: CareerCredit
 type Tab = 'overview' | 'stats' | 'matches' | 'career' | 'news';
 type Group = 'overview' | 'attacking' | 'passing' | 'defending' | 'discipline' | 'keeping';
 const WHEEL_LABELS: Record<string, string> = { goals: 'Goals', assists: 'Assists', shots: 'Shots', shots_on: 'On target', key_passes: 'Key passes', passes: 'Passes', pass_accuracy: 'Pass %', tackles: 'Tackles', interceptions: 'Interceptions', duels_won: 'Duels won', dribbles_won: 'Dribbles', saves: 'Saves', rating: 'Rating' };
-const SUM_KEYS = ['shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'saves', 'conceded', 'clean_sheets', 'blocks', 'duels', 'dribbles', 'dribbled_past', 'fouls_drawn', 'fouls_committed', 'pen_scored', 'pen_missed', 'pen_won', 'pen_committed', 'pen_saved', 'sub_in', 'sub_out', 'bench', 'yellowred'] as const;
+const SUM_KEYS = ['shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'saves', 'conceded', 'clean_sheets', 'blocks', 'duels', 'dribbles', 'dribbled_past', 'fouls_drawn', 'fouls_committed', 'pen_scored', 'pen_missed', 'pen_won', 'pen_committed', 'pen_saved', 'sub_in', 'sub_out', 'bench', 'yellowred', 'res_apps', 'res_pts', 'res_starts45', 'res_pts45'] as const;
 
 /** Sum a set of season rows into one (pass accuracy and rating weighted). */
 function sumRows(rows: SeasonRow[]): SeasonRow | null {
@@ -214,7 +217,7 @@ export default function ProPlayer() {
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats' }, { id: 'matches', label: 'Matches', count: lines.length || undefined }, ...(onIntl ? [] : [{ id: 'career' as Tab, label: 'Career' }]), { id: 'news', label: 'News' },
   ];
-  const chips = [p.position, p.number != null ? `No. ${p.number}` : null, age != null ? `${age} years old` : null, p.height_cm ? `${p.height_cm} cm` : null, p.weight_kg ? `${p.weight_kg} kg` : null].filter(Boolean) as string[];
+  const chips = [p.number != null ? `No. ${p.number}` : null, age != null ? `${age} years old` : null, p.height_cm ? `${p.height_cm} cm` : null, p.weight_kg ? `${p.weight_kg} kg` : null].filter(Boolean) as string[];
 
   return (
     <div className="space-y-4">
@@ -234,6 +237,7 @@ export default function ProPlayer() {
         chips={[...chips, p.birth_date ? `Born ${fmt.date(p.birth_date)}${p.birth_place ? `, ${p.birth_place}` : ''}` : null]}
         actions={<Link to={proPaths2.compare(p.slug)} className="btn-ghost btn-sm"><GitCompare size={14} /> Compare</Link>}
       >
+        <div className="mb-3"><KeyFacts position={p.position ?? now?.position} season={latest} apps={now?.res_apps} pts={now?.res_pts} starts={now?.res_starts45} startPts={now?.res_pts45} salary={!onIntl ? d.salary?.latest : null} /></div>
         {now && (
           <section aria-label={`${latest} at a glance`}>
             <h2 className="mb-1.5 text-2xs text-chalk-400">{latest}, {onIntl ? 'international matches' : 'club competitions'}</h2>

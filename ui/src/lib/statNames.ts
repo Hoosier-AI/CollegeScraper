@@ -9,6 +9,8 @@ export const PLAYER_STAT_DEFS: Record<string, StatDef> = {
   goals_1h: P('First-half goals', 'G 1H', 'Scoring'), goals_2h: P('Second-half goals', 'G 2H', 'Scoring'), goals_ot: P('Overtime goals', 'G OT', 'Scoring'),
   shots: P('Shots', 'SH', 'Shooting'), sog: P('Shots on goal', 'SOG', 'Shooting'), shot_accuracy: P('Shot accuracy', 'SOG%', 'Shooting', { pct: true }), conversion_pct: P('Conversion', 'Conv%', 'Shooting', { pct: true }),
   shots_per_goal: P('Shots per goal', 'SH/G', 'Shooting', { decimals: 1, lowerIsBetter: true }), minutes_per_goal: P('Minutes per goal', 'MIN/G', 'Shooting', { lowerIsBetter: true }),
+  ppg: P('Points per game', 'PPG', 'Results', { decimals: 2, help: 'His team\'s result in each game he played: 3 for a win, 1 for a tie (5+ games)' }),
+  pps: P('Points per start', 'PPS', 'Results', { decimals: 2, help: 'His team\'s result in each start of 45+ minutes: 3 for a win, 1 for a tie (5+ starts)' }),
   gp: P('Games played', 'GP', 'Playing time'), gs: P('Games started', 'GS', 'Playing time'), minutes: P('Minutes', 'MIN', 'Playing time'), minutes_share: P('Share of team minutes', 'MIN%', 'Playing time', { pct: true }),
   goals_p90: P('Goals per 90', 'G/90', 'Per 90', { decimals: 2 }), assists_p90: P('Assists per 90', 'A/90', 'Per 90', { decimals: 2 }), points_p90: P('Points per 90', 'PTS/90', 'Per 90', { decimals: 2 }), shots_p90: P('Shots per 90', 'SH/90', 'Per 90', { decimals: 2 }), sog_p90: P('Shots on goal per 90', 'SOG/90', 'Per 90', { decimals: 2 }),
   saves: P('Saves', 'SV', 'Goalkeeping'), save_pct: P('Save percentage', 'SV%', 'Goalkeeping', { pct: true }), gaa: P('Goals against average', 'GAA', 'Goalkeeping', { decimals: 2, lowerIsBetter: true }), ga: P('Goals against', 'GA', 'Goalkeeping', { lowerIsBetter: true }),
@@ -40,7 +42,7 @@ export function statDef(kind: 'player' | 'team', key: string): StatDef {
 
 /** Stats grouped in the order they should appear in a picker. */
 export function statGroups(kind: 'player' | 'team', keys: string[]): { group: string; stats: { key: string; label: string }[] }[] {
-  const order = kind === 'team' ? ['Record', 'Goals', 'Shooting', 'Set pieces & discipline', 'Defending', 'Home', 'Ranks', 'Percentiles', 'Other'] : ['Scoring', 'Shooting', 'Per 90', 'Playing time', 'Goalkeeping', 'Discipline', 'Ranks', 'Percentiles', 'Other'];
+  const order = kind === 'team' ? ['Record', 'Goals', 'Shooting', 'Set pieces & discipline', 'Defending', 'Home', 'Ranks', 'Percentiles', 'Other'] : ['Scoring', 'Results', 'Shooting', 'Per 90', 'Playing time', 'Goalkeeping', 'Discipline', 'Ranks', 'Percentiles', 'Other'];
   const by = new Map<string, { key: string; label: string }[]>();
   for (const k of keys) { const d = statDef(kind, k); by.set(d.group, [...(by.get(d.group) ?? []), { key: k, label: d.label }]); }
   return order.filter((g) => by.has(g)).map((g) => ({ group: g, stats: by.get(g)! }));

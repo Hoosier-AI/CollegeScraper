@@ -393,7 +393,9 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const hurtPlayers = people;
   const clubSlugs = await teamsById(db, ((moves.data ?? []) as any[]).flatMap((m) => [m.from_team_id, m.to_team_id]).filter((x) => x > 0));
   const coachSeen = new Set<number>();
+  const payroll = s != null && !tm.national ? await teamPayroll(db, tm.id, s).catch(() => null) : null;
   return {
+    payroll,
     team: { ...teamRef(tm), founded: tm.founded, national: !!(tm.intl ?? tm.national),
       venue: ground.data ? { name: (ground.data as any).name, city: (ground.data as any).city, capacity: (ground.data as any).capacity, address: (ground.data as any).address ?? null, surface: (ground.data as any).surface ?? null, image: (ground.data as any).image ?? null }
         : tm.venue_name ? { name: tm.venue_name, city: tm.venue_city, capacity: tm.venue_capacity, address: null, surface: null, image: null } : null },
@@ -425,6 +427,29 @@ export async function team(db: Db, slug: string, season?: number | null) {
 function chunkIds<T>(ids: T[], n: number): T[][] { const out: T[][] = []; for (let i = 0; i < ids.length; i += n) out.push(ids.slice(i, i + n)); return out; }
 
 // ---------- players ----------
+// ---------- MLS salaries (pro_salaries, the asa-salaries job) ----------
+const money = (v: unknown) => (v == null ? null : Math.round(Number(v)));
+/** A player's MLS salary: the latest release of each season, newest season first (null when he has none). */
+async function playerSalary(db: Db, playerId: number) {
+  const rows = await selectAll<any>(db, 'pro_salaries', 'season,release_date,team_id,position,base_salary,guaranteed_comp', (q) => q.eq('player_id', playerId).order('season', { ascending: false }).order('release_date', { ascending: false }));
+  if (!rows.length) return null;
+  const bySeason = new Map<number, any>(); for (const r of rows) if (!bySeason.has(r.season)) bySeason.set(r.season, r);
+  const teams = await teamsById(db, [...bySeason.values()].map((r) => r.team_id).filter(Boolean));
+  const history = [...bySeason.values()].map((r) => ({ season: r.season, release_date: String(r.release_date).slice(0, 10), team: teams.get(r.team_id) ?? null, base: money(r.base_salary), guaranteed: money(r.guaranteed_comp) }));
+  return { latest: history[0]!, history, source: 'MLS Players Association via American Soccer Analysis' };
+}
+/** An MLS club's payroll in a season: the latest release's guaranteed compensation, total and top earners. */
+async function teamPayroll(db: Db, teamId: number, season: number) {
+  const rows = await selectAll<any>(db, 'pro_salaries', 'player_id,player_ext,release_date,base_salary,guaranteed_comp', (q) => q.eq('team_id', teamId).eq('season', season));
+  if (!rows.length) return null;
+  const release = rows.map((r) => String(r.release_date).slice(0, 10)).sort().pop()!;
+  const now = rows.filter((r) => String(r.release_date).slice(0, 10) === release);
+  const people = new Map((await selectIn<any>(db, 'pro_players', 'id,display_name,slug,photo', 'id', now.map((r) => r.player_id).filter(Boolean))).map((p) => [p.id, p]));
+  const top = [...now].sort((a, b) => Number(b.guaranteed_comp ?? 0) - Number(a.guaranteed_comp ?? 0)).slice(0, 10)
+    .map((r) => { const p = people.get(r.player_id); return { player: p ? { name: p.display_name, slug: p.slug, photo: p.photo ?? null } : null, guaranteed: money(r.guaranteed_comp), base: money(r.base_salary) }; });
+  return { season, release_date: release, players: now.length, total: now.reduce((n, r) => n + Number(r.guaranteed_comp ?? 0), 0), top, source: 'MLS Players Association via American Soccer Analysis' };
+}
+
 export async function player(db: Db, slug: string) {
   const { data: p, error } = await db.from('pro_players').select('*').eq('slug', slug).maybeSingle();
   if (error) throw new Error(error.message);
@@ -464,8 +489,11 @@ export async function player(db: Db, slug: string) {
     .sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff)).slice(0, 40);
   // The club, never the national team: the squad he is listed in, else his latest club match, the club he last moved
   // to, his latest club season.
-  const clubOf = (t: ProTeamRef | null | undefined) => (t && !t.national ? t : null);
-  const lastClubMatch = matches.find((m) => !(m.team_id === m.match.home.id ? m.match.home : m.match.away).national);
+  // An All-Star or select side (the MLS All-Stars against a visiting club) is not his club either (2026-10-14: Messi
+  // showed as an MLS All-Stars player after the All-Star game).
+  const exhibition = (t: ProTeamRef) => /\ball[- ]?stars?\b|\bselect(ion)?\b|\bxi\b/i.test(t.name);
+  const clubOf = (t: ProTeamRef | null | undefined) => (t && !t.national && !exhibition(t) ? t : null);
+  const lastClubMatch = matches.find((m) => clubOf(m.team_id === m.match.home.id ? m.match.home : m.match.away));
   const lastPlayed = lastClubMatch ? (lastClubMatch.team_id === lastClubMatch.match.home.id ? lastClubMatch.match.home : lastClubMatch.match.away) : null;
   const latestClubSeason = [...seasons].sort((a, b) => b.season - a.season).map((s) => clubOf(teams.get(s.team_id))).find(Boolean) ?? null;
   const club = clubOf(pl.current_team_id ? teams.get(pl.current_team_id) : null) ?? clubOf(lastPlayed) ?? clubOf(latestMove ? teams.get(latestMove.to_team_id) : null) ?? latestClubSeason;
@@ -488,7 +516,9 @@ export async function player(db: Db, slug: string) {
       // Everything else the season rows hold.
       lineups: s.lineups ?? null, sub_in: s.sub_in ?? null, sub_out: s.sub_out ?? null, bench: s.bench ?? null, captain: s.captain ?? null, blocks: s.blocks ?? null, duels: s.duels ?? null,
       dribbles: s.dribbles ?? null, dribbled_past: s.dribbled_past ?? null, fouls_drawn: s.fouls_drawn ?? null, fouls_committed: s.fouls_committed ?? null, yellowred: s.yellowred ?? null,
-      pen_won: s.pen_won ?? null, pen_committed: s.pen_committed ?? null, pen_scored: s.pen_scored ?? null, pen_missed: s.pen_missed ?? null, pen_saved: s.pen_saved ?? null }))
+      pen_won: s.pen_won ?? null, pen_committed: s.pen_committed ?? null, pen_scored: s.pen_scored ?? null, pen_missed: s.pen_missed ?? null, pen_saved: s.pen_saved ?? null,
+      // PPG and PPS (176): result points over appearances and over starts of 45+ minutes.
+      res_apps: s.res_apps ?? null, res_pts: s.res_pts ?? null, res_starts45: s.res_starts45 ?? null, res_pts45: s.res_pts45 ?? null }))
       .sort((a, b) => b.season - a.season || (a.team?.national ? 1 : 0) - (b.team?.national ? 1 : 0) || (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     percentiles: ranked ? { league: lgs.get(ranked.league_id) ?? null, season: ranked.season, rows: percentiles } : null,
     // The provider sometimes lists a "club" named after the player himself: not a move.
@@ -498,6 +528,7 @@ export async function player(db: Db, slug: string) {
     injury: injury ? { type: injury.type, reason: injury.reason, date: injury.date } : null,
     injury_history: injuryHistory,
     advanced: await playerAdvanced(db, pl.id),
+    salary: await playerSalary(db, pl.id).catch(() => null),
     matches,
     college: shown.map((l) => ({ college_name: l.college_name, school_seo: l.school_seo, first_season: l.first_season, last_season: l.last_season, college_player_slug: l.college?.slug ?? null, verified: l.verified })),
     career: await playerCareer(db, pl.wikidata_qid ?? null),
@@ -645,7 +676,7 @@ export async function renamedSlug(db: Db, kind: ProKind, slug: string): Promise<
 }
 
 // ---------- v2: leaders, directory, countries, compare, transfers, College to Pro ----------
-export const LEADER_STATS = ['goals', 'assists', 'apps', 'minutes', 'starts', 'shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'blocks', 'fouls_drawn', 'saves', 'clean_sheets', 'yellow', 'red', 'rating', 'pen_scored'] as const;
+export const LEADER_STATS = ['goals', 'assists', 'apps', 'minutes', 'starts', 'shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'blocks', 'fouls_drawn', 'saves', 'clean_sheets', 'yellow', 'red', 'rating', 'pen_scored', 'ppg', 'pps'] as const;
 export const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'] as const;
 
 export interface LeadersFilter { stat?: string; league?: number | null; season?: number | null; position?: string | null; nationality?: string | null; min_age?: number | null; max_age?: number | null; min_minutes?: number | null; per90?: boolean; gender?: 'm' | 'w' | null; abroad?: string | null; /** Only competitions in this country (the US scope: 'USA'). */ country?: string | null; limit?: number; offset?: number;

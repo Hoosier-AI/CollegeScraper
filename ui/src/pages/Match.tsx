@@ -200,6 +200,7 @@ export default function Match() {
         // Before kickoff, one page: each side's team news, the season side by side, head to head, each side's last lineup and key players.
         <div className="space-y-6">
         {p.elo && <WinChances elo={p.elo} home={g.home.name} away={g.away.name} drawLabel="Tie" rankingsHref={href('/rankings', { tab: 'elo' })} />}
+        {(p.rpi?.home || p.rpi?.away) && <p className="text-sm text-chalk-300"><Link to={href('/rankings', { tab: 'rpi', division: p.rpi.home?.division ?? p.rpi.away?.division })} className="font-medium text-pitch-300 hover:text-pitch-200">Live RPI</Link>: {[[g.home.name, p.rpi.home], [g.away.name, p.rpi.away]].map(([n, r]: any) => `${n} ${r?.rank ? `No. ${r.rank} in ${r.division.toUpperCase()}` : 'unranked'}`).join(', ')}</p>}
         {(g.home.program_id || g.away.program_id) && <TeamNews sides={[g.home, g.away].filter((t) => t.program_id).map((t) => ({ label: t.name, q: { program: t.program_id! }, hide: `program:${t.program_id}`, href: `/teams/${t.program_id}` }))} />}
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <HeadToHead g={g} h2h={p.head_to_head} sides={sides} compact allHref={href(pathname, { tab: 'h2h' })} />

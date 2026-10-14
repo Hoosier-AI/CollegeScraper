@@ -24,6 +24,7 @@ registerJob('hourly', async (ctx) => {
   await step(ctx, 'sync-site', { season, only_pending_boxscores: 3, stages: ['boxscores'] });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: false });
+  await step(ctx, 'college-rpi', { season });
 });
 
 /**

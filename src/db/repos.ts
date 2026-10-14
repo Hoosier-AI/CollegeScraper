@@ -369,6 +369,9 @@ export async function setSourceOfTruth(db: Db, gameId: string, source: 'site' | 
 export async function refreshAggregates(db: Db, season: number, programId: string | null = null): Promise<unknown> {
   const { data, error } = await db.rpc('college_refresh_season_aggregates', { p_season: season, p_program: programId });
   if (error) throw new Error(`refresh aggregates: ${error.message}`);
+  // PPG and PPS (migration 176): each player's share of his team's results, from the same truth-source lines.
+  const rp = await db.rpc('college_refresh_result_points', { p_season: season, p_program: programId });
+  if (rp.error) throw new Error(`refresh result points: ${rp.error.message}`);
   return data;
 }
 

@@ -26,6 +26,7 @@ import { useSection } from '../../lib/section';
 import { Crumbs } from '../../components/shell';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const usd = (n: number) => (n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2)}M` : `$${Math.round(n / 1000)}K`);
 
 interface SquadRow { player: { id: number; name: string; slug: string; photo: string | null; position: string | null; nationality: string | null; birth_date: string | null }; number: number | null; listed: boolean; apps: number; starts: number; minutes: number; goals: number; assists: number; yellow: number; red: number; saves: number | null; conceded: number | null; clean_sheets: number | null; rating: number | null }
 interface Split { played: number; w: number; d: number; l: number; gf: number; ga: number }
@@ -44,6 +45,8 @@ interface TeamData {
   advanced?: { credit: SourceCredit; competitions: AdvTeamSeason[] } | null;
   splits: { home: Split; away: Split };
   results: ProMatch[]; fixtures: ProMatch[];
+  /** MLS clubs: the season's latest MLS Players Association release. */
+  payroll?: { season: number; release_date: string; players: number; total: number; top: { player: { name: string; slug: string; photo: string | null } | null; guaranteed: number | null; base: number | null }[]; source: string } | null;
 }
 // The team tab order every area uses: Squad, Matches, Stats, News, then History (national teams) or Transfers (clubs),
 // then Coaches.
@@ -205,6 +208,19 @@ export default function ProTeam() {
                 <tbody>{splitRow('Home', d.splits.home)}{splitRow('Away', d.splits.away)}</tbody></table></div>
             </Section>
           </div>
+          {d.payroll && (
+            <Section title={`${d.payroll.season} payroll`} right={<span className="text-2xs text-chalk-500">MLS Players Association, {fmt.date(d.payroll.release_date)}</span>}>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[14rem_minmax(0,1fr)]">
+                <div className="self-start"><StatTile label="Guaranteed compensation" value={usd(d.payroll.total)} sub={`${d.payroll.players} players`} accent /></div>
+                <ul className="frame divide-y divide-field-700 text-sm">
+                  {d.payroll.top.map((r, i) => (
+                    <li key={i}>{r.player ? <Link to={proPath.player(r.player.slug)} className="flex items-center gap-2 px-3 py-1.5 hover:bg-field-800"><PlayerAvatar src={r.player.photo} name={r.player.name} size={22} /><span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{r.player.name}</span><span className="tnum text-chalk-200">{r.guaranteed != null ? usd(r.guaranteed) : '–'}</span></Link>
+                      : <span className="flex px-3 py-1.5 text-chalk-400">Unmatched player<span className="ml-auto tnum">{r.guaranteed != null ? usd(r.guaranteed) : '–'}</span></span>}</li>
+                  ))}
+                </ul>
+              </div>
+            </Section>
+          )}
           <Section title="By competition">
             <ul className="frame divide-y divide-field-700 text-sm">
               {d.competitions.map((c) => c.league && (

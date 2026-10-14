@@ -142,6 +142,9 @@ export async function patchSeason(db: Db, leagueId: number, season: number, patc
 export async function refreshAggregates(db: Db, leagueId: number, season: number): Promise<void> {
   const { error } = await db.rpc('pro_refresh_season_aggregates', { p_league: leagueId, p_season: season });
   if (error) throw new Error(`aggregates ${leagueId}/${season}: ${error.message}`);
+  // PPG and PPS (migration 176) from the fixture lines, for provider and computed season rows alike.
+  const rp = await db.rpc('pro_refresh_result_points', { p_league: leagueId, p_season: season });
+  if (rp.error) throw new Error(`result points ${leagueId}/${season}: ${rp.error.message}`);
 }
 
 function dedupeById<T extends { id: number }>(rows: T[]): T[] {

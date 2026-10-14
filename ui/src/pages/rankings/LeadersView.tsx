@@ -19,6 +19,7 @@ const PER90: Record<string, string> = { goals: 'goals_p90', assists: 'assists_p9
 // Supporting columns shown next to the chosen stat, by the stat's group.
 const PLAYER_SUPPORT: Record<string, string[]> = {
   Goalkeeping: ['gk_minutes', 'saves', 'ga', 'gaa', 'save_pct', 'shutouts'],
+  Results: ['ppg', 'pps', 'gp', 'gs', 'minutes', 'goals', 'assists'],
   Discipline: ['gp', 'minutes', 'fouls', 'yc', 'rc'],
   default: ['gp', 'minutes', 'goals', 'assists', 'points', 'shots', 'sog'],
 };

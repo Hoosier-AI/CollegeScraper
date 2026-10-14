@@ -78,6 +78,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'college-elo', label: 'College: Plaibook Elo', cadence: 'daily 10:50 UTC', due: (c) => c.h === 10 && c.m === 50 },
   { job: 'pro-elo', label: 'Pro: Plaibook Elo', cadence: 'daily 11:50 UTC', due: (c) => c.h === 11 && c.m === 50 },
   { job: 'intl-elo', label: 'International: Plaibook Elo', cadence: 'daily 11:40 UTC (when results changed)', due: (c) => c.h === 11 && c.m === 40 },
+  { job: 'asa-salaries', label: 'Sources: MLS salaries', cadence: 'Mondays 08:55 UTC', due: (c) => c.dow === 1 && c.h === 8 && c.m === 55 },
   { job: 'asa-shots', label: 'Sources: shot maps', cadence: 'every 30 minutes at :15 and :45, until every final has its shots', due: (c) => c.m === 15 || c.m === 45 },
 ];
 

@@ -70,3 +70,29 @@ export function parseUscPoll(html: string): UscPoll {
   }
   return { weekOf, title, rows, othersReceivingVotes: others };
 }
+
+// ---------- the NCAA's D1 RPI (https://www.ncaa.com/rankings/soccer-women/d1/ncaa-womens-soccer-rpi) ----------
+// Columns (2026-10): RANK, SCHOOL, RECORD, CONF, ROAD, NEUTRAL, HOME, NON-DIV I, PREV. The order only: no RPI values.
+export function rpiUrl(gender: Gender): string {
+  return `https://www.ncaa.com/rankings/${sportPath(gender)}/d1/ncaa-${gender === 'w' ? 'womens' : 'mens'}-soccer-rpi`;
+}
+
+export interface RpiRow { rank: number; school: string; record: string | null; conference: string | null; previous: number | null }
+
+export function parseRpi(html: string): { asOf: string | null; rows: RpiRow[] } {
+  const $ = cheerio.load(html);
+  const table = $('table').filter((_, t) => $(t).find('thead th').length > 0).first();
+  const columns = table.find('thead th').map((_, th) => $(th).text().replace(/\s+/g, ' ').trim().toUpperCase()).get();
+  const iRank = findCol(columns, 'RANK'), iSchool = findCol(columns, 'SCHOOL', 'TEAM'), iRecord = findCol(columns, 'RECORD');
+  const iConf = findCol(columns, 'CONF'), iPrev = findCol(columns, 'PREV');
+  const rows: RpiRow[] = [];
+  table.find('tbody tr').each((_, tr) => {
+    const cells = $(tr).find('td').map((_, td) => $(td).text().replace(/\s+/g, ' ').trim()).get();
+    const rank = int(String(cells[iRank >= 0 ? iRank : 0] ?? '').replace(/^t-?/i, ''));
+    const school = cells[iSchool >= 0 ? iSchool : 1] ?? '';
+    if (rank == null || !school) return;
+    rows.push({ rank, school, record: iRecord >= 0 ? cells[iRecord] || null : null, conference: iConf >= 0 ? cells[iConf] || null : null, previous: iPrev >= 0 ? int(cells[iPrev]) : null });
+  });
+  const asOf = $('.rankings-last-updated').first().text().replace(/\s+/g, ' ').trim() || null;
+  return { asOf, rows };
+}

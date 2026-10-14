@@ -5,7 +5,8 @@
 // is inserted or re-oriented here; a game that just ended gets fetch-games-ncaa queued for its final box score.
 // Games the site sync created without an NCAA contest id are not followed live until the sweep links them.
 import type { Db } from '../db/client.js';
-import { selectAll } from '../db/client.js';
+import { kvGet, selectAll } from '../db/client.js';
+import { RPI_LAST_KEY } from './rpi.js';
 import { registerJob, enqueue, type JobContext } from './runner.js';
 import { makeFetcher, withPriority } from './fetcher.js';
 import { makeTransport } from './fetchGamesNcaa.js';
@@ -106,6 +107,7 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
   const { transport, store } = makeTransport(db, fetcher);
   await store.init();
   const wentFinal: string[] = [];
+  let anyFinal = false;
   const byContest = new Map(pending.filter((g) => g.ncaa_contest_id != null).map((g) => [String(g.ncaa_contest_id), g]));
   const byFixture = new Map<string, PendingGame>();
   for (const g of pending) if (g.home_seo && g.away_seo) byFixture.set(`${g.game_date}|${g.home_seo}|${g.away_seo}`, g);
@@ -129,6 +131,7 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
       if (!patch) { ctx.inc('unchanged'); continue; }
       await updateGame(db, g.id, patch as Record<string, unknown>);
       if (patch.status) g.status = patch.status;
+      if (patch.status === 'final') anyFinal = true;
       if (patch.status === 'final' && g.ncaa_contest_id != null) wentFinal.push(String(g.ncaa_contest_id));
       ctx.inc(patch.status === 'final' ? 'went_final' : patch.status === 'scheduled' ? 'reverted' : g.status === 'live' ? 'ticked' : 'went_live');
     }
@@ -139,6 +142,12 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
   // The final box score should land minutes after full time, not at the next half-hourly sweep: final-detail runs on
   // the aux lane (never behind the crawl), recomputes the two programs and tells Plaibook.
   if (wentFinal.length) await enqueue(db, 'final-detail', { season, contest_ids: wentFinal });
+  // Live RPI: a final changes every team that shares an opponent, so the whole table is recomputed (seconds), at most
+  // every 5 minutes on a busy evening.
+  if (anyFinal) {
+    const last = await kvGet<string>(db, RPI_LAST_KEY);
+    if (!last || Date.now() - Date.parse(last) > 5 * 60_000) { await enqueue(db, 'college-rpi', { season }); ctx.inc('rpi_queued'); }
+  }
   // NCAA.com often marks the box score final a few minutes after the scoreboard: every 5 minutes, ask again for
   // today's and yesterday's finals that still have none.
   if (new Date().getUTCMinutes() % 5 === 0) {

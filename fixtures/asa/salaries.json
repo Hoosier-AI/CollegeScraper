@@ -1,0 +1,56 @@
+[
+ {
+  "player_id": "0Oq624oPq6",
+  "team_id": "jYQJ19EqGR",
+  "season_name": 2025,
+  "position": "D",
+  "base_salary": 80622,
+  "guaranteed_compensation": 80622,
+  "mlspa_release": "2025-05-23"
+ },
+ {
+  "player_id": "0Oq624oPq6",
+  "team_id": "jYQJ19EqGR",
+  "season_name": 2025,
+  "position": "D",
+  "base_salary": 80622,
+  "guaranteed_compensation": 80622,
+  "mlspa_release": "2025-10-01"
+ },
+ {
+  "player_id": "0Oq630dXQ6",
+  "team_id": "pzeQZ6xQKw",
+  "season_name": 2025,
+  "position": "F",
+  "base_salary": 2100000,
+  "guaranteed_compensation": 2100000,
+  "mlspa_release": "2025-05-23"
+ },
+ {
+  "player_id": "0Oq632k7Q6",
+  "team_id": "jYQJ19EqGR",
+  "season_name": 2025,
+  "position": "M",
+  "base_salary": 325000,
+  "guaranteed_compensation": 349900,
+  "mlspa_release": "2025-05-23"
+ },
+ {
+  "player_id": "0Oq632k7Q6",
+  "team_id": "jYQJ19EqGR",
+  "season_name": 2025,
+  "position": "M",
+  "base_salary": 325000,
+  "guaranteed_compensation": 349900,
+  "mlspa_release": "2025-10-01"
+ },
+ {
+  "player_id": "0Oq639wzQ6",
+  "team_id": "NPqxKXZ59d",
+  "season_name": 2025,
+  "position": "GK",
+  "base_salary": 80622,
+  "guaranteed_compensation": 80622,
+  "mlspa_release": "2025-05-23"
+ }
+]

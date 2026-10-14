@@ -82,6 +82,7 @@ export const proPaths2 = {
 /** Stat keys the leaders and directory sort by (pro_leaders), with how people say them. */
 export const PRO_STATS: { key: string; label: string; short: string; rate?: boolean; decimals?: number }[] = [
   { key: 'goals', label: 'Goals', short: 'G', rate: true }, { key: 'assists', label: 'Assists', short: 'A', rate: true },
+  { key: 'ppg', label: 'Points per game', short: 'PPG', decimals: 2 }, { key: 'pps', label: 'Points per start (45+ min)', short: 'PPS', decimals: 2 },
   { key: 'rating', label: 'Average rating', short: 'Rtg', decimals: 2 }, { key: 'minutes', label: 'Minutes', short: 'Min' },
   { key: 'apps', label: 'Appearances', short: 'Apps' }, { key: 'starts', label: 'Starts', short: 'GS' },
   { key: 'shots', label: 'Shots', short: 'Sh', rate: true }, { key: 'shots_on', label: 'Shots on target', short: 'SoT', rate: true },

@@ -24,7 +24,7 @@ export interface CrawlSite {
 
 export const CRAWL_SITES: CrawlSite[] = [
   { id: 'asa', name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', license: 'free API, credited', scraped: true,
-    feeds: ['results', 'players', 'club stats', 'xG and shots'], jobs: ['asa-sync', 'asa-shots', 'asa-fill'], cadence: 'daily 08:40 UTC; shots every 30 min' },
+    feeds: ['results', 'players', 'club stats', 'xG and shots'], jobs: ['asa-sync', 'asa-shots', 'asa-fill', 'asa-salaries'], cadence: 'daily 08:40 UTC; shots every 30 min' },
   { id: 'wikipedia', name: 'Wikipedia', url: 'https://en.wikipedia.org', license: 'CC BY-SA 4.0', scraped: true,
     feeds: ['tables'], jobs: ['wikipedia-sync'], cadence: 'daily 08:35 UTC (seasons in play; finished seasons once)' },
   { id: 'openfootball', name: 'openfootball', url: 'https://github.com/openfootball', license: 'public domain (CC0)', scraped: true,

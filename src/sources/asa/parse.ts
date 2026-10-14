@@ -185,3 +185,20 @@ export function parseShots(items: AsaShot[]): ShotRow[] {
     xg: round(s.shot_xg), psxg: round(s.shot_psxg) || null, goal: !!s.goal, own_goal: !!s.own_goal, blocked: !!s.blocked, head: !!s.head, pattern: str(s.pattern_of_play),
   }));
 }
+
+// ---------- MLS salaries (MLS Players Association releases, via ASA /mls/players/salaries) ----------
+export interface AsaSalary { player_id?: string; team_id?: string | null; season_name?: number | string; position?: string | null; base_salary?: number | null; guaranteed_compensation?: number | null; mlspa_release?: string | null }
+export interface SalaryRow { source: string; player_ext: string; team_ext: string; season: number; release_date: string; league_id: number; position: string | null; base_salary: number | null; guaranteed_comp: number | null; updated_at: string }
+
+/** One row per player, club, season and release; rows without a player, season or release date are dropped. */
+export function parseSalaries(items: AsaSalary[], leagueId: number, at = new Date().toISOString()): SalaryRow[] {
+  const out = new Map<string, SalaryRow>();
+  for (const s of items) {
+    const player = str(s.player_id), season = Number(String(s.season_name ?? '').slice(0, 4)), release = str(s.mlspa_release);
+    if (!player || !Number.isInteger(season) || !release || !/^\d{4}-\d{2}-\d{2}$/.test(release)) continue;
+    const row: SalaryRow = { source: SOURCE, player_ext: player, team_ext: str(s.team_id) ?? '', season, release_date: release, league_id: leagueId, position: str(s.position),
+      base_salary: num(s.base_salary), guaranteed_comp: num(s.guaranteed_compensation), updated_at: at };
+    out.set(`${row.player_ext}|${row.team_ext}|${row.season}|${row.release_date}`, row);
+  }
+  return [...out.values()];
+}

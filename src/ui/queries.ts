@@ -6,7 +6,7 @@ import { teamCategories } from '../normalize/logos.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
 import { eloChances } from './elo.js';
 
-export const PLAYER_STATS = ['goals', 'assists', 'points', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
+export const PLAYER_STATS = ['goals', 'assists', 'points', 'ppg', 'pps', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
 export const TEAM_STATS = ['w', 'l', 't', 'gp', 'ppg', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'gf_home', 'gf_away', 'ga_home', 'ga_away', 'gf_1h', 'gf_2h', 'ga_1h', 'ga_2h', 'shots', 'sog', 'shots_pg', 'sog_pg', 'sog_pct', 'shots_per_goal', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'pk_goals', 'pk_att', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t', 'vs_ranked_w', 'vs_ranked_l', 'vs_ranked_t', 'last5_gf', 'last5_ga', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'div_pct_gf_pg', 'div_pct_ga_pg', 'div_pct_shots_pg'];
 const ASC = new Set(['gaa', 'ga', 'ga_pg', 'l', 'minutes_per_goal', 'shots_per_goal', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'ga_home', 'ga_away', 'ga_1h', 'ga_2h', 'last5_ga', 'vs_ranked_l']);
 
@@ -286,6 +286,9 @@ export async function leaders(db: Db, o: LeadersFilter) {
     if (!team) {
       q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm);
       if (o.position && ['GK', 'D', 'M', 'F'].includes(o.position)) q = q.eq('position', o.position);
+      // PPG and PPS need a sample: 5+ games, 5+ starts of 45+ minutes.
+      if (stat === 'ppg') q = q.gte('res_apps', 5);
+      if (stat === 'pps') q = q.gte('pps_starts', 5);
       const cy = clamp(o.class_year, 0, 5, 0); if (cy) q = cy === 5 ? q.gte('class_year', 5) : q.eq('class_year', cy);
     }
     // Name search: PostgREST's `or` syntax reserves commas and parentheses, so they are dropped from the term.
@@ -296,7 +299,10 @@ export async function leaders(db: Db, o: LeadersFilter) {
   // 6 goals) came back in a different order on each request: paging 60 rows by 5 returned 46 distinct players, 14
   // twice and 14 never.
   const tiebreak = team ? 'program_id' : 'player_season_id';
-  const { data, error, count } = await filtered(db.from(view).select('*', { count: 'exact' })).order(stat, { ascending: ASC.has(stat) }).order(tiebreak, { ascending: true }).range(offset, offset + limit - 1);
+  // PPG and PPS: a tie broken by the bigger sample (more games or starts).
+  const sample = stat === 'ppg' ? 'res_apps' : stat === 'pps' ? 'pps_starts' : null;
+  const ordered = (q: any) => (sample ? q.order(sample, { ascending: false }) : q).order(tiebreak, { ascending: true });
+  const { data, error, count } = await ordered(filtered(db.from(view).select('*', { count: 'exact' })).order(stat, { ascending: ASC.has(stat) })).range(offset, offset + limit - 1);
   if (error) {
     // An offset past the end is an empty page, not an error (PostgREST answers 416).
     if (/range not satisfiable/i.test(error.message)) {
@@ -629,7 +635,10 @@ export async function matchPreview(db: Db, id: string, opts: { queue?: boolean }
   const h2h = { ...h2hSummary(h2hGames.map((m) => ({ ...m, scorers: scorersByGame.get(m.id) ?? [] })), A), scorers_pending: scorersPending };
   // Before kickoff: Plaibook Elo's chances (current ratings say nothing fair about a match already played).
   const elo = g.status === 'scheduled' && A && B ? await eloChances(db, 'college', A, B, g.gender, !!g.neutral_site).catch(() => null) : null;
-  return { game, head_to_head: h2h, sides: { home, away }, elo };
+  // Each side's live RPI rank (college-rpi), within its division.
+  const rpiRows = ids.length ? await selectAll<any>(db, 'college_rpi', 'program_id,division,rank,official_rank,rpi', (q) => q.in('program_id', ids)).catch(() => []) : [];
+  const rpiOf = (pid: string | null) => { const r = rpiRows.find((x) => x.program_id === pid); return r ? { division: r.division, rank: r.rank, official_rank: r.official_rank, rpi: Math.round(Number(r.rpi) * 10000) / 10000 } : null; };
+  return { game, head_to_head: h2h, sides: { home, away }, elo, rpi: { home: rpiOf(A), away: rpiOf(B) } };
 }
 
 const requestedDetail = new Set<string>();

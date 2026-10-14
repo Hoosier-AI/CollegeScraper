@@ -100,7 +100,7 @@ export interface LeaderRow { rank: number; player: { id: number; name: string; s
 
 /** The leaders / directory table: rank, player (flag, age, position), club, competition, the sorted stat. */
 export function LeadersTable({ rows, stat, per90, caption, loading, showLeague = true, empty }: { rows: LeaderRow[]; stat: string; per90?: boolean; caption: string; loading?: boolean; showLeague?: boolean; empty?: React.ReactNode }) {
-  const valueLabel = `${statLabel(stat)}${per90 && !['rating', 'minutes', 'apps', 'starts'].includes(stat) ? ' per 90' : ''}`;
+  const valueLabel = `${statLabel(stat)}${per90 && !['rating', 'minutes', 'apps', 'starts', 'ppg', 'pps'].includes(stat) ? ' per 90' : ''}`;
   const cols: Column<LeaderRow>[] = [
     { key: 'rank', label: '#', num: true, sortable: false, value: (r) => r.rank },
     { key: 'player', label: 'Player', primary: true, sortable: false, render: (r) => <span className="flex items-center gap-2"><PlayerAvatar src={r.player.photo} name={r.player.name} size={24} /><span className="truncate">{r.player.name}</span><Flag country={r.player.nationality} size={11} /></span> },
@@ -111,7 +111,7 @@ export function LeadersTable({ rows, stat, per90, caption, loading, showLeague =
     ...(showLeague ? [{ key: 'league', label: 'Competition', sortable: false, priority: 2 as const, render: (r: LeaderRow) => r.league?.name ?? '–' }] : []),
     { key: 'apps', label: 'Apps', num: true, sortable: false, priority: 2, value: (r) => r.apps },
     { key: 'minutes', label: 'Min', num: true, sortable: false, priority: 3, value: (r) => r.minutes },
-    { key: 'value', label: valueLabel, num: true, sortable: false, decimals: per90 || stat === 'rating' ? 2 : 0, value: (r) => r.value, className: 'font-semibold text-chalk-100' },
+    { key: 'value', label: valueLabel, num: true, sortable: false, decimals: per90 || stat === 'rating' || stat === 'ppg' || stat === 'pps' ? 2 : 0, value: (r) => r.value, className: 'font-semibold text-chalk-100' },
     // Expected goals and assists where American Soccer Analysis covers the competition (shown only when a row has them).
     ...(rows.some((r) => r.xg != null) ? [
       { key: 'xg', label: 'xG', title: 'Expected goals (American Soccer Analysis)', num: true, sortable: false, priority: 2 as const, decimals: 1, value: (r: LeaderRow) => r.xg ?? null },

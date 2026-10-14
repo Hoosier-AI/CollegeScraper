@@ -3,6 +3,7 @@
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { NewsFeed } from '../components/news/News';
 import { Crumbs } from '../components/shell';
+import { KeyFacts } from '../components/player/KeyFacts';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ExternalLink, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
@@ -15,7 +16,7 @@ import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBa
 type Tab = 'overview' | 'stats' | 'matches' | 'career' | 'news';
 
 const PRESETS: Preset[] = [
-  { id: 'overview', label: 'Overview', columns: ['program', 'jersey', 'position', 'class_raw', 'gp', 'gs', 'minutes', 'goals', 'assists', 'points', 'shots', 'sog', 'shot_accuracy'] },
+  { id: 'overview', label: 'Overview', columns: ['program', 'jersey', 'position', 'class_raw', 'gp', 'gs', 'minutes', 'goals', 'assists', 'points', 'ppg', 'pps', 'shots', 'sog'] },
   { id: 'rates', label: 'Per 90 & ranks', columns: ['program', 'minutes', 'goals_p90', 'assists_p90', 'conversion_pct', 'shots_per_goal', 'minutes_per_goal', 'minutes_share', 'div_rank_points', 'conf_rank_points', 'pct_points_p90', 'pct_goals_p90'] },
   { id: 'gk', label: 'Goalkeeping', columns: ['program', 'gp', 'gs', 'ga', 'gaa', 'saves', 'save_pct', 'shutouts', 'clean_sheets', 'pct_save_pct'] },
   { id: 'discipline', label: 'Discipline & extras', columns: ['program', 'gp', 'fouls', 'yc', 'rc', 'gwg', 'halves'] },
@@ -50,7 +51,7 @@ export default function Player() {
     { key: 'season', label: 'Season', primary: true, render: (s) => String(s.season) },
     { key: 'program', label: 'Team', priority: 3, value: (s) => s.program?.name, render: (s) => <Link className="flex items-center gap-2 hover:text-pitch-300" to={href(`/teams/${s.program?.id}`, { season: s.season, gender: s.program?.gender })}><TeamLogo src={s.program?.college_schools?.logo_svg_url} name={s.program?.name} size={20} />{s.program?.name}</Link> },
     { key: 'jersey', label: '#', title: 'Jersey', num: true, priority: 3 }, { key: 'position', label: 'Pos', title: 'Position', priority: 3 }, { key: 'class_raw', label: 'Class', priority: 3 },
-    sc('gp', 'GP', 'Games played'), sc('gs', 'GS', 'Games started'), sc('minutes', 'Min', 'Minutes'), sc('goals', 'G', 'Goals'), sc('assists', 'A', 'Assists'), sc('points', 'Pts', 'Points'), sc('shots', 'Sh', 'Shots'), sc('sog', 'SOG', 'Shots on goal'),
+    sc('gp', 'GP', 'Games played'), sc('gs', 'GS', 'Games started'), sc('ppg', 'PPG', 'Points per game: his team\'s result in each game he played, 3 for a win, 1 for a tie', { d: 2 }), sc('pps', 'PPS', 'Points per start: the same over starts of 45+ minutes', { d: 2 }), sc('minutes', 'Min', 'Minutes'), sc('goals', 'G', 'Goals'), sc('assists', 'A', 'Assists'), sc('points', 'Pts', 'Points'), sc('shots', 'Sh', 'Shots'), sc('sog', 'SOG', 'Shots on goal'),
     sc('shot_accuracy', 'SOG%', 'Shot accuracy', { pct: true }), sc('conversion_pct', 'Conv%', 'Goals per shot', { pct: true }), sc('goals_p90', 'G/90', 'Goals per 90', { d: 2 }), sc('assists_p90', 'A/90', 'Assists per 90', { d: 2 }),
     sc('shots_per_goal', 'Sh/G', 'Shots per goal', { d: 1 }), sc('minutes_per_goal', 'Min/G', 'Minutes per goal'), sc('minutes_share', 'Min share', 'Share of team minutes', { pct: true }),
     sc('div_rank_points', 'Div rank', 'Division rank by points'), sc('conf_rank_points', 'Conf rank', 'Conference rank by points'), sc('pct_points_p90', 'Pts/90 pctl', 'Points per 90 percentile', { pct: true }), sc('pct_goals_p90', 'G/90 pctl', 'Goals per 90 percentile', { pct: true }),
@@ -68,7 +69,7 @@ export default function Player() {
     { key: 'fouls', label: 'Fouls', num: true, priority: 2 }, { key: 'yellow_cards', label: 'YC', num: true, priority: 2 }, { key: 'red_cards', label: 'RC', num: true, priority: 2 },
     ...(isGk ? [{ key: 'goals_allowed', label: 'GA', num: true, render: (r: any) => r.is_goalie ? n(r.goals_allowed) : '' }, { key: 'saves', label: 'Saves', num: true, render: (r: any) => r.is_goalie ? n(r.saves) : '' }] as Column<any>[] : []),
   ];
-  const bioLine = latest ? [latest.position ?? latest.position_raw, latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null, latest.weight_lb ? `${latest.weight_lb} lb` : null].filter(Boolean).join(', ') : '';
+  const bioLine = latest ? [latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null, latest.weight_lb ? `${latest.weight_lb} lb` : null].filter(Boolean).join(', ') : '';
   const bioUrl = latest?.bio_url ?? p.bio_url;
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats', count: seasons.length || undefined }, { id: 'matches', label: 'Matches', count: gameLog.length || undefined },
@@ -101,6 +102,8 @@ export default function Player() {
           </div>
         )}
       </header>
+      <KeyFacts position={latest?.position ?? latest?.position_raw} season={latest?.season} apps={st?.res_apps} pts={st?.res_pts} starts={st?.pps_starts} startPts={st?.pps_pts}
+        other={{ label: 'Class', value: latest?.class_raw ?? '–', sub: latest?.season ? `${latest.season} roster` : undefined }} />
       <TabsNav label="Player sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'overview' ? null : x })} />
       {tab === 'overview' && <div className="space-y-6">
       {career && seasons.length > 1 && (
