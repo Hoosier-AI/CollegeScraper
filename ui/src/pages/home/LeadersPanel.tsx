@@ -18,7 +18,7 @@ export function LeadersPanel({ scope, className }: { scope: Scope; className?: s
   return (
     <Panel className={className} title="Scoring leaders" meta="Season totals from box scores"
       action={<SegmentedControl label="Leaders by" size="sm" value={stat} onChange={setStat} options={[{ value: 'points', label: 'Points' }, { value: 'goals', label: 'Goals' }, { value: 'assists', label: 'Assists' }]} />}
-      footer={{ to: href('/rankings', { view: 'leaders', gender: scope.gender, division: scope.division, stat }), label: 'All leaders' }}>
+      footer={{ to: href('/leaders', { division: scope.division, stat }), label: 'All leaders' }}>
       {q.isPending && <div className="space-y-2" aria-busy="true">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10" />)}</div>}
       {q.data && !rows.length && <p className="text-sm text-chalk-500">No stats recorded yet.</p>}
       <ol className="-mx-2">

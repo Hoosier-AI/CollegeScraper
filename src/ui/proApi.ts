@@ -104,6 +104,11 @@ export function registerProApi(app: FastifyInstance): void {
     };
     return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('leaders', f), () => pro.leaders(getDb(), f)));
   });
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/teams', async (req, reply) => {
+    const q = req.query;
+    const f = { gender: q.gender === 'w' ? 'w' as const : 'm' as const, scope: q.scope === 'world' ? 'world' as const : 'us' as const, league: int(q.league) };
+    return reply.header('Cache-Control', 'public, max-age=600').send(await memo(memoKey('teams-list', f), () => pro.teamsList(getDb(), f)));
+  });
   app.get('/api/pro/countries', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=3600').send(await pro.countries(getDb())));
   app.get<{ Params: { slug: string }; Querystring: { gender?: string } }>('/api/pro/countries/:slug', async (req, reply) => {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });

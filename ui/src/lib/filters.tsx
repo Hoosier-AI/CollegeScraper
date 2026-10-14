@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
+import { useProGender } from './proGender';
 
 export interface Filters { season: number; gender: 'm' | 'w'; seasons: number[]; currentSeason: number | null }
 const Ctx = createContext<Filters>({ season: new Date().getFullYear(), gender: 'm', seasons: [], currentSeason: null });
@@ -10,7 +11,8 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
   const [sp] = useSearchParams();
   const meta = useQuery({ queryKey: ['meta'], queryFn: () => api<{ currentSeason: number; seasons: number[] }>('/api/meta') });
   const season = Number(sp.get('season') ?? meta.data?.currentSeason ?? new Date().getFullYear());
-  const gender = (sp.get('gender') === 'w' ? 'w' : 'm') as 'm' | 'w';
+  // The one Men/Women setting, shared with Pro and International (?gender wins, then the stored choice).
+  const [gender] = useProGender();
   return <Ctx.Provider value={{ season, gender, seasons: meta.data?.seasons ?? [], currentSeason: meta.data?.currentSeason ?? null }}>{children}</Ctx.Provider>;
 }
 

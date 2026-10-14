@@ -16,6 +16,9 @@ const Matches = lazy(() => import('./pages/Matches'));
 const Player = lazy(() => import('./pages/Player'));
 const Conference = lazy(() => import('./pages/Conference'));
 const Rankings = lazy(() => import('./pages/Rankings'));
+const Conferences = lazy(() => import('./pages/Conferences'));
+const Leaders = lazy(() => import('./pages/Leaders'));
+const Players = lazy(() => import('./pages/Players'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
@@ -24,6 +27,7 @@ const ProMatches = lazy(() => import('./pages/pro/ProMatches'));
 const ProLeagues = lazy(() => import('./pages/pro/ProLeagues'));
 const ProLeague = lazy(() => import('./pages/pro/ProLeague'));
 const ProTeam = lazy(() => import('./pages/pro/ProTeam'));
+const ProTeams = lazy(() => import('./pages/pro/ProTeams'));
 const ProPlayer = lazy(() => import('./pages/pro/ProPlayer'));
 const ProMatch = lazy(() => import('./pages/pro/ProMatch'));
 const ProDirectory = lazy(() => import('./pages/pro/ProDirectory'));
@@ -75,12 +79,13 @@ const router = createBrowserRouter([
           { path: 'teams/:school/:gender', element: <Team /> },
           { path: 'matches', element: <Matches /> },
           { path: 'matches/:id', element: <Match /> },
-          { path: 'conferences', element: <Redirect to={() => '/rankings'} extra="view=standings" /> },
+          { path: 'conferences', element: <Conferences /> },
           { path: 'conferences/:id', element: <Conference /> },
           // Old addresses keep working.
           { path: 'games/:id', element: <Redirect to={(p) => `/matches/${p.id}`} /> },
-          { path: 'standings', element: <Redirect to={() => '/rankings'} /> },
-          { path: 'leaders', element: <Redirect to={() => '/rankings'} extra="view=leaders" /> },
+          { path: 'standings', element: <Redirect to={() => '/conferences'} /> },
+          { path: 'leaders', element: <Leaders /> },
+          { path: 'players', element: <Players /> },
           { path: 'players/:id', element: <Player /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
@@ -96,6 +101,7 @@ const router = createBrowserRouter([
           { path: 'pro/matches/:slug', element: <ProMatch /> },
           { path: 'pro/leagues', element: <ProLeagues /> },
           { path: 'pro/leagues/:slug', element: <ProLeague /> },
+          { path: 'pro/teams', element: <ProTeams /> },
           { path: 'pro/teams/:slug', element: <ProTeam /> },
           { path: 'pro/players/:slug', element: <ProPlayer /> },
           { path: 'pro/players', element: <ProDirectory key="players" mode="players" /> },
@@ -114,6 +120,7 @@ const router = createBrowserRouter([
           { path: 'intl/teams', element: <IntlTeams /> },
           { path: 'intl/teams/:slug', element: <ProTeam /> },
           { path: 'intl/players', element: <ProDirectory key="intl-players" mode="players" /> },
+          { path: 'intl/leaders', element: <ProDirectory key="intl-leaders" mode="leaders" /> },
           { path: 'intl/players/:slug', element: <ProPlayer /> },
           { path: 'intl/rankings', element: <IntlRankings /> },
           { path: 'intl/h2h', element: <IntlH2H /> },

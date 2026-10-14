@@ -19,11 +19,13 @@ export const tr = (cells: string[]) => `<tr>${cells.map((c) => `<td>${c}</td>`).
 
 /** Site navigation, breadcrumbs, the page content and the Tekki footer link. */
 export function wrapBody(page: PageType, crumbs: { name: string; path: string }[], inner: string): string {
+  // The same menu as the app (ui/src/lib/nav.ts): one slot order for every area, then the other two areas.
+  const menu = (items: [string, string][]) => items.map(([to, label]) => a(to, label)).join(' · ');
   const nav = page === 'pro'
-    ? `<nav aria-label="Site">${a('/pro', `${SITE_NAME} Pro`)} · ${a('/pro/matches', 'Matches')} · ${a('/pro/leagues', 'Leagues')} · ${a('/intl', 'International')} · ${a('/', 'College soccer')}</nav>`
+    ? `<nav aria-label="Site">${a('/', SITE_NAME)} · Pro: ${menu([['/pro/matches', 'Matches'], ['/pro/leagues', 'Leagues'], ['/pro/teams', 'Teams'], ['/pro/players', 'Players'], ['/pro/leaders', 'Leaders'], ['/pro/news', 'News']])} · ${a('/matches', 'College')} · ${a('/intl/matches', 'International')}</nav>`
     : page === 'intl'
-      ? `<nav aria-label="Site">${a('/intl', `${SITE_NAME} International`)} · ${a('/intl/matches', 'Matches')} · ${a('/intl/tournaments', 'Tournaments')} · ${a('/intl/teams', 'Teams')} · ${a('/intl/rankings', 'Rankings')} · ${a('/pro', 'Pro soccer')} · ${a('/', 'College soccer')}</nav>`
-      : `<nav aria-label="Site">${a('/', SITE_NAME)} · ${a('/teams', 'Teams')} · ${a('/rankings', 'Rankings')} · ${a('/matches', 'Matches')} · ${a('/pro', 'Pro soccer')} · ${a('/intl', 'International')}</nav>`;
+      ? `<nav aria-label="Site">${a('/', SITE_NAME)} · International: ${menu([['/intl/matches', 'Matches'], ['/intl/tournaments', 'Tournaments'], ['/intl/teams', 'Teams'], ['/intl/players', 'Players'], ['/intl/leaders', 'Leaders'], ['/intl/rankings', 'Rankings'], ['/intl/news', 'News']])} · ${a('/matches', 'College')} · ${a('/pro/matches', 'Pro')}</nav>`
+      : `<nav aria-label="Site">${a('/', SITE_NAME)} · College: ${menu([['/matches', 'Matches'], ['/conferences', 'Conferences'], ['/teams', 'Teams'], ['/players', 'Players'], ['/leaders', 'Leaders'], ['/rankings', 'Rankings'], ['/news', 'News']])} · ${a('/pro/matches', 'Pro')} · ${a('/intl/matches', 'International')}</nav>`;
   const bc = crumbs.length > 1
     ? `<nav aria-label="Breadcrumb"><ol>${crumbs.map((c, i) => `<li>${i === crumbs.length - 1 ? esc(c.name) : a(c.path, c.name)}</li>`).join('')}</ol></nav>`
     : '';
@@ -149,7 +151,7 @@ export function conferenceBody(c: ConferencePage, ctx: HeadContext): string {
   }).join('');
   const inner = `<h1>${esc(c.name)} Soccer Standings ${esc(c.season)}</h1>
 <p>${esc(c.division ? divisionLabel(c.division) : 'NCAA')} conference. Official conference tables where the conference publishes one, checked against the records computed from every result.</p>${tables}`;
-  return wrapBody('conference', [{ name: SITE_NAME, path: '/' }, { name: 'Rankings', path: '/rankings' }, { name: c.name, path: conferencePath(c.seo) }], inner);
+  return wrapBody('conference', [{ name: SITE_NAME, path: '/' }, { name: 'Conferences', path: '/conferences' }, { name: c.name, path: conferencePath(c.seo) }], inner);
 }
 
 // ---------- rankings / teams / home ----------

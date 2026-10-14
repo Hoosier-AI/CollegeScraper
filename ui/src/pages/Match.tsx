@@ -11,12 +11,15 @@ import { scorersFrom } from '../lib/match';
 import { useUrlState } from '../lib/urlState';
 import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
+import { Crumbs } from '../components/shell';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
 import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
 import { Pitch } from '../components/match/Pitch';
 
 type Src = 'site' | 'ncaa';
-type Tab = 'summary' | 'lineups' | 'stats' | 'h2h' | 'preview' | 'raw';
+// The match tab order every area uses. Before kickoff: Preview, Head to head, Lineups. Played: Summary, Lineups, Stats,
+// Head to head, Players.
+type Tab = 'summary' | 'lineups' | 'stats' | 'h2h' | 'preview' | 'players' | 'raw';
 const PLAYER_PRESETS: Preset[] = [
   { id: 'overview', label: 'Overview', columns: ['jersey', 'position', 'starter', 'minutes', 'goals', 'assists', 'shots', 'shots_on_goal', 'fouls', 'yellow_cards', 'red_cards', 'goals_allowed', 'saves'] },
   { id: 'shooting', label: 'Shooting', columns: ['jersey', 'minutes', 'goals', 'assists', 'points', 'shots', 'shots_on_goal', 'shots_off_target', 'pk', 'gwg', 'unassisted_goals', 'first_goals', 'ot_goals', 'tying_goals', 'hat_trick'] },
@@ -29,7 +32,7 @@ export default function Match() {
   const { pathname } = useLocation();
   const admin = useAdmin();
   const href = useHref();
-  const [tabParam] = useUrlState('tab', '', { allow: ['summary', 'lineups', 'stats', 'h2h', 'preview', 'raw'] });
+  const [tabParam] = useUrlState('tab', '', { allow: ['summary', 'lineups', 'stats', 'h2h', 'preview', 'players', 'raw'] });
   const [src, setSrc] = useUrlState('src', 'diff', { replace: true, resetPage: false, allow: ['diff', 'site', 'ncaa'] });
   const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PLAYER_PRESETS.map((p) => p.id) });
   const [view, setView] = useUrlState('view', 'pitch', { replace: true, resetPage: false, allow: ['pitch', 'list'] });
@@ -51,7 +54,9 @@ export default function Match() {
   const provisional: boolean = !!box.data?.stats?.provisional;
   // A final opens on the summary; a live match too once its live snapshot has arrived, else on head-to-head.
   const defaultTab: Tab = g.status === 'final' ? 'summary' : g.status === 'live' ? (box.isPending || players.length ? 'summary' : 'h2h') : 'preview';
-  const tab: Tab = (tabParam as Tab) || defaultTab;
+  // Key players were the preview tab of a played match until 2026-10-14; either id opens the right one.
+  const asked = tabParam as Tab;
+  const tab: Tab = !asked ? defaultTab : played && asked === 'preview' ? 'players' : !played && asked === 'players' ? 'preview' : asked;
   const truth: Src | null = box.data?.game?.source_of_truth ?? g.source_of_truth ?? null;
   const sources: Src[] = (['site', 'ncaa'] as Src[]).filter((s) => team.some((t) => t.source === s));
   const statSrc: Src | null = src === 'site' || src === 'ncaa' ? (src as Src) : truth ?? sources[0] ?? null;
@@ -71,7 +76,7 @@ export default function Match() {
   const tabs = [
     ...(played ? [{ id: 'summary' as Tab, label: 'Summary' }, { id: 'lineups' as Tab, label: bothPast ? 'Past lineups' : 'Lineups' }, { id: 'stats' as Tab, label: 'Stats' }] : []),
     // Before kickoff the preview leads; after it, head-to-head comes before key players.
-    ...(played ? [{ id: 'h2h' as Tab, label: 'Head-to-head' }, { id: 'preview' as Tab, label: 'Key players' }] : [{ id: 'preview' as Tab, label: 'Preview' }, { id: 'h2h' as Tab, label: 'Head-to-head' }]),
+    ...(played ? [{ id: 'h2h' as Tab, label: 'Head to head' }, { id: 'players' as Tab, label: 'Players' }] : [{ id: 'preview' as Tab, label: 'Preview' }, { id: 'h2h' as Tab, label: 'Head to head' }]),
     ...(played ? [] : [{ id: 'lineups' as Tab, label: 'Past lineups' }]),
     ...(admin ? [{ id: 'raw' as Tab, label: 'Raw' }] : []),
   ];
@@ -87,6 +92,7 @@ export default function Match() {
   const periodLines = (['site', 'ncaa'] as Src[]).map((s) => ({ s, rows: team.filter((t) => t.source === s && t.period_lines) })).find((x) => x.rows.length);
   return (
     <div className="space-y-5">
+      <Crumbs items={[{ label: `${g.away?.name ?? '?'} at ${g.home?.name ?? '?'}` }]} />
       <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
         {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
@@ -179,7 +185,8 @@ export default function Match() {
       )}
 
       {tab === 'h2h' && <HeadToHead g={g} h2h={p.head_to_head} sides={sides} />}
-      {tab === 'preview' && (played ? <KeyPlayers g={g} sides={sides} /> : (
+      {tab === 'players' && <KeyPlayers g={g} sides={sides} />}
+      {tab === 'preview' && (played ? null : (
         // Before kickoff, one page: each side's team news, the season side by side, head to head, each side's last lineup and key players.
         <div className="space-y-6">
         {(g.home.program_id || g.away.program_id) && <TeamNews sides={[g.home, g.away].filter((t) => t.program_id).map((t) => ({ label: t.name, q: { program: t.program_id! }, hide: `program:${t.program_id}`, href: `/teams/${t.program_id}` }))} />}

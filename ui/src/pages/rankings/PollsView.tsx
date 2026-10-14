@@ -57,7 +57,7 @@ export function PollsView(props: { conference?: string; embedded?: boolean } = {
   const weekLabel = weeks[wi]?.label ?? '';
   return (
     <div className="space-y-4">
-      <PageHeader as="h2" title="Polls" meta={usc ? `United Soccer Coaches poll, ${scope}` : scope}>
+      <PageHeader title="Rankings" meta={usc ? `United Soccer Coaches poll, ${scope}` : `NCAA.com statistical rankings, ${scope}`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v === 'd1' ? null : v, week: null })} options={DIV_OPTIONS} />}</Field>
         <Field label="Poll">{(id) => <Select id={id} value={q.data?.poll ?? poll} onChange={(v) => patch({ poll: v === 'usc' ? null : v, week: null })} options={pollOptions.length ? pollOptions : [{ value: poll || 'usc', label: 'United Soccer Coaches' }]} className="max-w-[240px]" />}</Field>
       </PageHeader>

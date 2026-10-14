@@ -23,6 +23,7 @@ import { MoveSection } from '../../components/pro/MoveSection';
 import { NationHistoryTab } from '../../components/intl/NationHistory';
 import { IntlNation } from '../intl/IntlNation';
 import { useSection } from '../../lib/section';
+import { Crumbs } from '../../components/shell';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -44,7 +45,9 @@ interface TeamData {
   splits: { home: Split; away: Split };
   results: ProMatch[]; fixtures: ProMatch[];
 }
-type Tab = 'squad' | 'history' | 'matches' | 'stats' | 'transfers' | 'news';
+// The team tab order every area uses: Squad, Matches, Stats, News, then History (national teams) or Transfers (clubs),
+// then Coaches.
+type Tab = 'squad' | 'matches' | 'stats' | 'news' | 'history' | 'transfers' | 'coaches';
 const GROUPS = [['Goalkeeper', 'Goalkeepers'], ['Defender', 'Defenders'], ['Midfielder', 'Midfielders'], ['Attacker', 'Forwards'], ['', 'Other players']] as const;
 
 export default function ProTeam() {
@@ -52,7 +55,7 @@ export default function ProTeam() {
   const intl = useSection() === 'intl';
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
-  const [tab] = useUrlState('tab', 'squad', { allow: ['squad', 'history', 'matches', 'stats', 'transfers', 'news'] });
+  const [tab] = useUrlState('tab', 'squad', { allow: ['squad', 'matches', 'stats', 'news', 'history', 'transfers', 'coaches'] });
   const q = useQuery({ queryKey: ['pro-team', slug, seasonParam], queryFn: () => api<TeamData>(`/api/pro/teams/${slug}${qs({ season: seasonParam })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   // International: a nation the provider never had a side for is its history alone.
   if (q.error instanceof ApiError && q.error.status === 404) return intl ? <IntlNation slug={slug} /> : <ProMoved kind="team" slug={slug} />;
@@ -77,9 +80,11 @@ export default function ProTeam() {
     { key: 'clean_sheets', label: 'CS', title: 'Clean sheets (keepers)', num: true, priority: 3, value: (r) => r.clean_sheets },
     { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 3, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
   ];
-  const tabs: { id: Tab; label: string; count?: number }[] = t.national
-    ? [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'history', label: 'History' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'news', label: 'News' }]
-    : [{ id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'transfers', label: 'Transfers', count: d.transfers.length }, { id: 'news', label: 'News' }];
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'news', label: 'News' },
+    t.national ? { id: 'history', label: 'History' } : { id: 'transfers', label: 'Transfers', count: d.transfers.length },
+    ...(d.coaches.length ? [{ id: 'coaches' as Tab, label: 'Coaches', count: d.coaches.length }] : []),
+  ];
   // The season across competitions: averages over the matches that have each number (shots and the rest need detail).
   const sum = total.p > 0 ? (() => {
     const withStats = d.competitions.filter((c) => c.shots != null);
@@ -110,6 +115,7 @@ export default function ProTeam() {
   const splitRow = (label: string, s: Split) => <tr className="border-t border-field-700"><th scope="row" className="td text-left font-normal text-chalk-300">{label}</th><td className="td text-right tnum">{s.played}</td><td className="td text-right tnum">{s.w}-{s.d}-{s.l}</td><td className="td text-right tnum">{s.gf}:{s.ga}</td><td className="td text-right tnum">{s.played ? ((s.w * 3 + s.d) / s.played).toFixed(2) : '–'}</td></tr>;
   return (
     <div className="space-y-5">
+      <Crumbs items={[{ label: t.name }]} />
       <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-[4.5rem] sm:w-[4.5rem]"><TeamLogo src={t.logo} name={t.name} size={60} chip={false} /></span>} title={t.name}
         line={<>{t.country && <span className="inline-flex items-center gap-1.5"><Flag country={t.country} />{t.country}</span>}{coach && <span>Coach {coach.name}</span>}</>}
         chips={[t.founded ? `Founded ${t.founded}` : null, t.venue ? `${t.venue.name}${t.venue.capacity ? ` · ${fmt.num(t.venue.capacity)}` : ''}` : null, t.venue?.surface ? cap(t.venue.surface) : null]}
@@ -128,7 +134,7 @@ export default function ProTeam() {
           {d.injuries.map((i, k) => <span key={k} className="text-chalk-200">{i.player ? <Link to={proPath.player(i.player.slug)} className="hover:text-pitch-300">{i.player.name}</Link> : 'Unknown'}{i.reason ? ` (${i.reason.toLowerCase()})` : ''}{k < d.injuries.length - 1 ? ',' : ''}</span>)}
         </div>
       )}
-      <TabsNav label="Club sections" tabs={tabs} value={tab as Tab} hrefFor={hrefFor} />
+      <TabsNav label="Team sections" tabs={tabs} value={tab as Tab} hrefFor={hrefFor} />
       {tab === 'squad' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           {/* Positions two by two on wide screens: the whole squad in about one screen. */}
@@ -142,15 +148,6 @@ export default function ProTeam() {
           <aside className="space-y-4">
             <NewsSection title="Latest news" q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} max={4} dense right={<Link to={hrefFor('news')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>} />
             {t.venue && <Section title="Ground"><GroundCard ground={t.venue} /></Section>}
-            {d.coaches.length > 0 && (
-              <Section title="Coaches">
-                <ul className="frame divide-y divide-field-700 text-sm">
-                  {d.coaches.map((c) => (
-                    <li key={c.id} className="flex items-center gap-2 px-3 py-2"><PlayerAvatar src={c.photo} name={c.name} size={28} /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-chalk-100">{c.name} <Flag country={c.nationality} size={10} /></span><span className="text-2xs text-chalk-500">{c.start ? fmt.date(c.start) : '?'} – {c.end ? fmt.date(c.end) : 'now'}{c.trophies ? ` · ${c.trophies} ${c.trophies === 1 ? 'trophy' : 'trophies'}` : ''}</span></span>{c.current && <span className="rounded bg-pitch-400/15 px-1.5 text-2xs text-pitch-300">current</span>}</li>
-                  ))}
-                </ul>
-              </Section>
-            )}
             {d.fixtures.length > 0 && <Section title="Next matches"><div className="frame divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></Section>}
           </aside>
         </div>
@@ -220,6 +217,13 @@ export default function ProTeam() {
         </div>
       )}
       {tab === 'history' && <NationHistoryTab slug={slug} />}
+      {tab === 'coaches' && (d.coaches.length
+        ? <ul className="frame divide-y divide-field-700 text-sm">
+            {d.coaches.map((c) => (
+              <li key={c.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.photo} name={c.name} size={36} /><span className="min-w-0 flex-1"><span className="block truncate font-medium text-chalk-100">{c.name} <Flag country={c.nationality} size={10} /></span><span className="text-xs text-chalk-400">{c.start ? fmt.date(c.start) : '?'} – {c.end ? fmt.date(c.end) : 'now'}{c.trophies ? ` · ${c.trophies} ${c.trophies === 1 ? 'trophy' : 'trophies'}` : ''}</span></span>{c.current && <span className="rounded bg-pitch-400/15 px-1.5 text-2xs text-pitch-300">Current</span>}</li>
+            ))}
+          </ul>
+        : <EmptyState title="No coaches listed" />)}
       {tab === 'news' && <NewsFeed q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} empty={`No news for ${t.name} yet`} />}
       {tab === 'transfers' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

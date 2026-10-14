@@ -40,7 +40,7 @@ export function StandingsGrid(props: { conference?: string; embedded?: boolean }
   const scope = props.conference ? `${genderLabel(f.gender)}, ${f.season}` : `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
   return (
     <div className="space-y-4">
-      {!props.embedded && <PageHeader as="h2" title="Standings" meta={q.data ? `${scope}: ${q.data.official} rows from official conference tables, ${q.data.computed} computed from results` : scope}>
+      {!props.embedded && <PageHeader title="Conference tables" meta={q.data ? `${scope}: ${q.data.official} rows from official conference tables, ${q.data.computed} computed from results` : scope}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v === 'd1' ? null : v, conference: null })} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[240px]" />}</Field>
       </PageHeader>}

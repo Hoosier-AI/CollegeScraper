@@ -158,7 +158,7 @@ export function conferenceHead(c: ConferencePage, ctx: HeadContext): HeadMeta {
   return {
     title: `${c.name} Soccer Standings ${c.season}${SUFFIX}`,
     description, canonical: abs(ctx, path), robots: null, ogType: 'website', image: ogImage(ctx),
-    jsonLd: [org, breadcrumbs(ctx, [{ name: SITE_NAME, path: '/' }, { name: 'Rankings', path: '/rankings' }, { name: c.name, path }])],
+    jsonLd: [org, breadcrumbs(ctx, [{ name: SITE_NAME, path: '/' }, { name: 'Conferences', path: '/conferences' }, { name: c.name, path }])],
   };
 }
 

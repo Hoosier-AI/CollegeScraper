@@ -16,7 +16,7 @@ type Area = 'college' | 'pro' | 'intl';
 interface Hit { key: string; area: Area; person: boolean; label: string; sub: string; href: string; logo: string | null }
 const AREA_LABEL: Record<Area, string> = { college: 'College', pro: 'Pro', intl: 'International' };
 
-export function UniversalSearch({ examples, size = 'lg' }: { examples?: string[]; size?: 'md' | 'lg' }) {
+export function UniversalSearch({ examples, size = 'lg', autoFocus }: { examples?: string[]; size?: 'md' | 'lg'; autoFocus?: boolean }) {
   const nav = useNavigate();
   const listId = useId();
   const [q, setQ] = useState('');
@@ -67,7 +67,7 @@ export function UniversalSearch({ examples, size = 'lg' }: { examples?: string[]
     <div ref={root} className="relative w-full">
       <div className="relative">
         <Search size={big ? 20 : 16} aria-hidden className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-chalk-500 ${big ? 'left-4' : 'left-2.5'}`} />
-        <input ref={input} type="search" value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
+        <input ref={input} type="search" autoFocus={autoFocus} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
             if (!listOpen || !items.length) { if (e.key === 'Escape') { setOpen(false); input.current?.blur(); } return; }
             if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => (c + 1) % items.length); }

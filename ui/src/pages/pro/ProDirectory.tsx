@@ -1,8 +1,9 @@
 // The player directory (/pro/players) and the leaders (/pro/leaders): the same filters over every competition's
 // current season (nationality, position, age, competition, men's/women's, minimum minutes); the directory lists by
-// minutes played, the leaders page by any stat, totals or per 90. On International (/intl/players) the same over
-// national-team competitions, senior or youth.
+// minutes played, the leaders page by any stat, totals or per 90. On International (/intl/players, /intl/leaders) the
+// same over national-team competitions, senior or youth.
 import { useMemo, useState } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { SlidersHorizontal } from 'lucide-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
@@ -19,8 +20,8 @@ const PAGE = 50;
 export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) {
   const section = useSection();
   const intl = section === 'intl';
-  // International players lead with goals; their minutes say little across a handful of matches a year.
-  const leaders = mode === 'leaders' || intl;
+  const leaders = mode === 'leaders';
+  const { search } = useLocation();
   const [level, setLevel] = useUrlState('level', 'senior', { allow: ['senior', 'youth'] });
   const [stat, setStat] = useUrlState('stat', leaders ? 'goals' : 'minutes', { allow: PRO_STATS.map((s) => s.key) });
   const [position, setPosition] = useUrlState('position', '', { allow: ['Goalkeeper', 'Defender', 'Midfielder', 'Attacker'] });
@@ -50,7 +51,9 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
   const natOptions = useMemo(() => [{ value: '', label: 'Any nationality' }, ...countries.list.map((c) => ({ value: c.name, label: c.name }))], [countries.list]);
   const [showFilters, setShowFilters] = useState(false);
   const active = [leagueOn, nationality, position, age].filter(Boolean).length;
-  const title = intl ? `International ${statLabel(stat).toLowerCase()} leaders` : leaders ? `${statLabel(stat)} leaders` : 'Players';
+  const title = !leaders ? 'Players' : intl ? `International ${statLabel(stat).toLowerCase()} leaders` : `${statLabel(stat)} leaders`;
+  // /intl/players was the leaders list until 2026-10-14: a link choosing a stat goes to /intl/leaders.
+  if (intl && !leaders && new URLSearchParams(search).has('stat')) return <Navigate to={`/intl/leaders${search}`} replace />;
   return (
     <div className="space-y-4">
       <PageHeader title={title} meta={q.data ? `${fmt.num(q.data.total)} player seasons, ${intl ? 'the current edition of each national-team competition' : !leagueOn && scope === 'us' ? (gender === 'w' ? 'NWSL, USL Super League and other US competitions' : 'MLS, USL, MLS NEXT Pro and other US competitions') : 'current season of each competition'}${q.data.min_minutes ? `, ${q.data.min_minutes}+ minutes` : ''}` : intl ? 'National teams' : 'US competitions first'}>

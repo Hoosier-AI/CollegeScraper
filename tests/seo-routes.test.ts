@@ -101,9 +101,13 @@ describe('seo routes', () => {
   });
 
   it('turns the old client-side redirects into 301s', async () => {
-    expect((await app.inject({ url: '/standings?gender=w' })).headers.location).toBe('/rankings?gender=w');
-    expect((await app.inject({ url: '/leaders' })).headers.location).toBe('/rankings?view=leaders');
-    expect((await app.inject({ url: '/conferences' })).headers.location).toBe('/rankings?view=standings');
+    expect((await app.inject({ url: '/standings?gender=w' })).headers.location).toBe('/conferences?gender=w');
+    // Conferences, Leaders and Players are pages of their own since 2026-10-14 (they were Rankings tabs).
+    for (const url of ['/leaders', '/conferences', '/players']) {
+      const r = await app.inject({ url });
+      expect(r.statusCode).toBe(200);
+      expect(r.headers['content-type']).toMatch(/text\/html/);
+    }
     const g = await app.inject({ url: `/games/${GAME_ID}` });
     expect(g.statusCode).toBe(301);
     expect(g.headers.location).toBe('/matches/2026-09-12-wake-forest-at-duke-men');

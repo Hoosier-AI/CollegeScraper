@@ -1,12 +1,17 @@
-// One pro match: the score (live minute, half-time, extra time, penalties), events, both elevens on the pitch,
-// team stats, lineups with ratings, and earlier meetings.
-import { Link, useParams } from 'react-router-dom';
+// One pro match: the score (live minute, half-time, extra time, penalties), then tabs in the order every area uses.
+// Played: Summary (events), Lineups (both elevens on the pitch, lineups with ratings), Stats (team stats, shot map),
+// Head to head. Before kickoff: Preview, Head to head, Lineups (once announced).
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
 import { kickoffLong, proMinute, proPath, type ProMatch as Match } from '../../lib/pro';
 import { EventTimeline, LineupList, ProPitch, TeamStatsCompare, type ProEvent, type ProSideDetail } from '../../components/pro/MatchParts';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
-import { ErrorBox, Section, Skeleton, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, Section, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
+import { Crumbs } from '../../components/shell';
+import { useUrlState } from '../../lib/urlState';
+
+type Tab = 'summary' | 'preview' | 'lineups' | 'stats' | 'h2h';
 import { ProMoved } from './ProMoved';
 import { MoveSection } from '../../components/pro/MoveSection';
 import { EloMatchCard } from '../../components/intl/EloMatchCard';
@@ -44,6 +49,8 @@ function Scoreline({ m }: { m: MatchData['match'] }) {
 export default function ProMatch() {
   const { slug = '' } = useParams();
   const intl = useSection() === 'intl';
+  const { pathname } = useLocation();
+  const [tabParam] = useUrlState('tab', '', { allow: ['summary', 'preview', 'lineups', 'stats', 'h2h'] });
   const q = useQuery({
     queryKey: ['pro-match', slug], queryFn: () => api<MatchData>(`/api/pro/matches/${slug}`),
     retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1,
@@ -59,12 +66,16 @@ export default function ProMatch() {
   const hasLineups = d.home.starters.length > 0 || d.away.starters.length > 0;
   const hasStats = !!(d.home.stats || d.away.stats);
   const hasShots = !!d.advanced && d.advanced.shots.length > 0;
+  const played = m.status === 'live' || m.status === 'final';
+  const tabs: { id: Tab; label: string; count?: number }[] = played
+    ? [{ id: 'summary', label: 'Summary' }, ...(hasLineups ? [{ id: 'lineups' as Tab, label: 'Lineups' }] : []), ...(hasStats || hasShots ? [{ id: 'stats' as Tab, label: 'Stats' }] : []), ...(d.h2h.length ? [{ id: 'h2h' as Tab, label: 'Head to head', count: d.h2h.length }] : [])]
+    : [...(d.preview ? [{ id: 'preview' as Tab, label: 'Preview' }] : []), ...(d.h2h.length ? [{ id: 'h2h' as Tab, label: 'Head to head', count: d.h2h.length }] : []), ...(hasLineups ? [{ id: 'lineups' as Tab, label: 'Lineups' }] : [])];
+  const defaultTab: Tab = tabs[0]?.id ?? 'summary';
+  const tab: Tab = tabs.some((t) => t.id === tabParam) ? (tabParam as Tab) : defaultTab;
+  const hasShotsWide = hasShots && !hasStats;
   return (
     <div className="space-y-4">
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-chalk-400">
-        <Link to={proPath.home} className="hover:text-chalk-100">{intl ? 'International' : 'Pro'}</Link><span aria-hidden>/</span>
-        <Link to={proPath.league(m.league.slug)} className="flex items-center gap-1 hover:text-chalk-100"><TeamLogo src={m.league.logo} name={m.league.name} size={14} chip={false} fallback="blank" />{m.league.name}</Link>
-      </nav>
+      <Crumbs items={[{ label: m.league.name, to: proPath.league(m.league.slug) }, { label: `${m.home.name} vs ${m.away.name}` }]} />
       <h1 className="sr-only">{m.home.name} vs {m.away.name}, {m.league.name}</h1>
       <Scoreline m={m} />
       <p className="text-center text-xs text-chalk-400">
@@ -74,26 +85,29 @@ export default function ProMatch() {
       {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
       {/* International: Plaibook Elo's chances before kickoff, each side's rating move once played. */}
       {intl && <EloMatchCard slug={slug} />}
-      {m.status === 'final' && !m.detail && !d.events.length && <p className="text-center text-sm text-chalk-400">Lineups and match stats arrive shortly after full time.</p>}
-      {/* Before kickoff (and until announced lineups arrive): the preview in place of events and stats. */}
-      {d.preview && !hasLineups && <MatchPreview m={m} p={d.preview} h2h={d.h2h} />}
-      {/* Two columns on desktop, read in pairs: what happened beside the numbers, who played where beside the lineups,
-          where the shots came from beside earlier meetings. A pair missing one half gives the other the full width. */}
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-        {d.events.length > 0 && <Section title="Match events" className={hasStats ? '' : 'lg:col-span-2'}><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>}
-        {hasStats && <Section title="Team stats" className={d.events.length ? '' : 'lg:col-span-2'}><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
-        {hasLineups && <Section title="Formations"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}
-        {hasLineups && (
+      {tabs.length > 1 && <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => `${pathname}${x === defaultTab ? '' : `?tab=${x}`}`} />}
+      {tab === 'summary' && (d.events.length
+        ? <Section title="Events" className="mx-auto w-full max-w-4xl"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>
+        : <EmptyState title={m.status === 'live' ? 'No events yet' : 'No events recorded'} body={m.status === 'final' && !m.detail ? 'Lineups and match stats arrive shortly after full time.' : undefined} />)}
+      {tab === 'preview' && d.preview && <MatchPreview m={m} p={d.preview} h2h={d.h2h} />}
+      {tab === 'lineups' && hasLineups && (
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <Section title="Formations"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>
           <Section title="Lineups">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <LineupList side={d.home} title={m.home.name} />
               <LineupList side={d.away} title={m.away.name} />
             </div>
           </Section>
-        )}
-        {hasShots && <Section title="Shot map" className={d.h2h.length ? '' : 'lg:col-span-2'}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
-        {d.h2h.length > 0 && !(d.preview && !hasLineups) && <Section title="Earlier meetings" className={hasShots ? '' : 'lg:col-span-2'}><div className={`frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 ${hasShots ? '' : 'xl:grid-cols-2'}`}>{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague={!hasShots} compact={hasShots} />)}</div></Section>}
-      </div>
+        </div>
+      )}
+      {tab === 'stats' && (
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          {hasStats && <Section title="Team stats" className={hasShots ? '' : 'lg:col-span-2'}><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
+          {hasShots && <Section title="Shot map" className={hasShotsWide ? 'lg:col-span-2' : ''}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
+        </div>
+      )}
+      {tab === 'h2h' && d.h2h.length > 0 && <Section title="Head to head"><div className="frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 xl:grid-cols-2">{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague />)}</div></Section>}
     </div>
   );
 }

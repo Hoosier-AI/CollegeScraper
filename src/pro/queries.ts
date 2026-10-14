@@ -702,6 +702,24 @@ export async function country(db: Db, slug: string, gender?: 'm' | 'w') {
   };
 }
 
+/** The club list (/pro/teams): each league's clubs in its current season, grouped by league. US leagues unless
+ *  scope is 'world' (then the leagues we rank highest), or one league when asked. Cups are left out: their clubs
+ *  belong to a league already. */
+export async function teamsList(db: Db, o: { gender: 'm' | 'w'; scope: 'us' | 'world'; league?: number | null }) {
+  const all = await leagues(db);
+  const pick = all.filter((l) => l.gender === o.gender && (o.league ? l.id === o.league : l.type === 'league' && l.current_season != null && (o.scope === 'us' ? l.country === 'USA' : l.priority < 100))).slice(0, 40);
+  const rows = pick.length ? await selectAll<{ league_id: number; team_id: number; season: number }>(db, 'pro_league_teams', 'league_id,team_id,season', (q) => q.in('league_id', pick.map((l) => l.id))) : [];
+  const current = rows.filter((r) => r.season === pick.find((l) => l.id === r.league_id)?.current_season);
+  const teams = await teamsById(db, current.map((r) => r.team_id));
+  return {
+    groups: pick.map((l) => ({
+      league: l,
+      // The provider can hold one club twice (two ids, one name): one row per name.
+      teams: [...new Map(current.filter((r) => r.league_id === l.id).map((r) => teams.get(r.team_id)).filter((t): t is ProTeamRef => !!t).map((t) => [t.name.toLowerCase(), t])).values()].sort((a, b) => a.name.localeCompare(b.name)),
+    })).filter((g) => g.teams.length),
+  };
+}
+
 export async function compare(db: Db, a: string, b: string) {
   const [pa, pb] = await Promise.all([player(db, a), player(db, b)]);
   return pa && pb ? { a: pa, b: pb } : null;

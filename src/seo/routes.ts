@@ -55,7 +55,7 @@ export type CachedPage = { status: 200; html: string } | { status: 301; path: st
 type Outcome = { head: HeadMeta; body: string } | { redirect: string } | { shell: true } | null;
 
 /** Single-page-app routes that the server does not render but must still answer with 200 and the shell. */
-const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders|pro\/matches|pro\/leagues|pro\/teams|pro\/players|pro\/compare)?\/?$/;
+const SPA_ROUTE = /^\/(?:matches|search|admin|console|jobs|quality|teams|rankings|conferences|standings|leaders|players|pro\/matches|pro\/leagues|pro\/teams|pro\/players|pro\/compare)?\/?$/;
 const API_PATH = /^\/(?:api|v1)(?:\/|$)|^\/health(?:\/|$)/;
 
 const pathOf = (url: string) => url.split('?')[0] ?? url;
@@ -250,6 +250,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       app.get('/intl/teams', (req, reply) => serve(req, reply, keyOf(req), async () => { const ns = await intl.nations(); return { head: intlTeamsHead(ns, ctx()), body: intlTeamsBody(ns) }; }));
       app.get('/intl/rankings', (req, reply) => serve(req, reply, keyOf(req), async () => { const r = await intl.rankings('m'); return { head: intlRankingsHead(r, ctx()), body: intlRankingsBody(r) }; }));
       app.get('/intl/players', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await intl.leaders(); return { head: intlLeadersHead(p, ctx()), body: intlLeadersBody(p) }; }));
+      app.get('/intl/leaders', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await intl.leaders(); return { head: intlLeadersHead(p, ctx(), 'leaders'), body: intlLeadersBody(p, 'leaders') }; }));
       // Head-to-head is the app's own view (two teams picked on the page).
       app.get('/intl/h2h', (_req, reply) => shell(reply));
       app.get('/intl/tournaments/:slug', leaguePage);
@@ -288,9 +289,11 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     const qs = [q, extra].filter(Boolean).join('&');
     return reply.header('Cache-Control', REDIRECT_CACHE_CONTROL).redirect(`${to}${qs ? `?${qs}` : ''}`, 301);
   };
-  app.get('/standings', moved('/rankings'));
-  app.get('/leaders', moved('/rankings', 'view=leaders'));
-  app.get('/conferences', moved('/rankings', 'view=standings'));
+  app.get('/standings', moved('/conferences'));
+  // Conferences, Leaders and the college player list are the app's own pages (2026-10-14; they were Rankings tabs).
+  app.get('/conferences', (_req, reply) => shell(reply));
+  app.get('/leaders', (_req, reply) => shell(reply));
+  app.get('/players', (_req, reply) => shell(reply));
   app.get('/games/:id', async (req: P<{ id: string }>, reply) => {
     const id = req.params.id;
     // Straight to the slug when we know it, so crawlers do not follow two hops.

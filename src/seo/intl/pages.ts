@@ -82,12 +82,12 @@ export function intlRankingsBody(r: IntlRankingsPage): string {
   const rows = r.rows.slice(0, 100).map((x) => tr([esc(x.rank), x.nation.slug ? a(`/intl/teams/${x.nation.slug}`, x.nation.name) : esc(x.nation.name), n(x.rating), x.change_1y == null ? '' : esc(`${x.change_1y > 0 ? '+' : ''}${x.change_1y}`), n(x.matches)]));
   return wrapBody('intl', [...home, { name: 'Rankings', path: '/intl/rankings' }], `<h1>National Team Rankings</h1><p>Plaibook Elo: our own rating, worked out from every result with the World Football Elo method (not FIFA's ranking).</p>${table('Plaibook Elo rankings', ['#', 'Nation', 'Rating', '1 year', 'Matches'], rows)}`);
 }
-export function intlLeadersHead(p: IntlLeadersPage, ctx: HeadContext): HeadMeta {
-  return page(ctx, '/intl/players', `International Top Scorers and Player Stats${SUFFIX}`, 'Goals, assists and minutes for national-team players in the current international competitions, men\'s and women\'s.', [...home, { name: 'Players', path: '/intl/players' }], p.rows.length ? null : NOINDEX);
+export function intlLeadersHead(p: IntlLeadersPage, ctx: HeadContext, as: 'players' | 'leaders' = 'players'): HeadMeta {
+  return page(ctx, `/intl/${as}`, `International Top Scorers and Player Stats${SUFFIX}`, 'Goals, assists and minutes for national-team players in the current international competitions, men\'s and women\'s.', [...home, { name: as === 'leaders' ? 'Leaders' : 'Players', path: `/intl/${as}` }], p.rows.length ? null : NOINDEX);
 }
-export function intlLeadersBody(p: IntlLeadersPage): string {
+export function intlLeadersBody(p: IntlLeadersPage, as: 'players' | 'leaders' = 'players'): string {
   const rows = p.rows.map((r) => tr([esc(r.rank), a(`/intl/players/${r.player.slug}`, r.player.name), r.team ? a(proPaths.team(r.team.slug), r.team.name) : '', r.league ? esc(r.league.name) : '', n(r.goals), n(r.assists), n(r.apps)]));
-  return wrapBody('intl', [...home, { name: 'Players', path: '/intl/players' }], `<h1>International Top Scorers</h1>${table('International top scorers', ['#', 'Player', 'Nation', 'Competition', 'Goals', 'Assists', 'Apps'], rows)}`);
+  return wrapBody('intl', [...home, { name: as === 'leaders' ? 'Leaders' : 'Players', path: `/intl/${as}` }], `<h1>International Top Scorers</h1>${table('International top scorers', ['#', 'Player', 'Nation', 'Competition', 'Goals', 'Assists', 'Apps'], rows)}`);
 }
 
 // ---------- a nation's history (the team page's second half, or the whole page of a nation the provider lacks) ----------

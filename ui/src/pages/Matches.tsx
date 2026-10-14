@@ -32,6 +32,8 @@ export default function Matches() {
   const [division, setDivision] = useUrlState('division', '', { allow: ['d1', 'd2', 'd3'] });
   const [conference, setConference] = useUrlState('conference');
   const [only, setOnly] = useUrlState('only', '', { allow: ['conf', 'ranked'] });
+  // Live only, as on Pro and International (?show=live).
+  const [show, setShow] = useUrlState('show', '', { allow: ['live'] });
   const meta = useQuery({ queryKey: ['meta'], queryFn: () => api<{ conferences: { id: string; name: string; division: string | null }[] }>('/api/meta') });
   const q = useQuery({
     queryKey: ['matches', date, f.gender, division, conference, only],
@@ -43,7 +45,7 @@ export default function Matches() {
   const week = useQuery({ queryKey: ['matches-week', date, f.gender, division, conference], queryFn: () => api<MatchesResponse>(`/api/matches${qs({ date: shiftIso(date, -3), days: 7, gender: f.gender, division, conference })}`), staleTime: 120_000 });
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const g of week.data?.games ?? []) c[g.game_date] = (c[g.game_date] ?? 0) + 1; return c; }, [week.data]);
   const now = useNow();
-  const games = q.data?.games ?? [];
+  const games = (q.data?.games ?? []).filter((g) => show !== 'live' || g.status === 'live');
   const confOptions = useMemo(() => [{ value: '', label: 'All conferences' }, ...(meta.data?.conferences ?? []).filter((c) => !division || c.division === division).map((c) => ({ value: c.id, label: c.name }))], [meta.data, division]);
   const setDate = (iso: string) => patch({ date: iso === today ? null : iso }, { replace: false });
   const nextWithGames = (week.data?.games ?? []).map((g) => g.game_date).filter((d) => d > date).sort()[0];
@@ -58,13 +60,15 @@ export default function Matches() {
       {/* The day stays in reach while scrolling a long matchday. */}
       <div className="sticky top-14 z-20 -mx-4 bg-field-950/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"><DateStrip date={date} today={today} onChange={setDate} counts={counts} /></div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Show only">
+        <Chip on={show === 'live'} onClick={() => setShow(show === 'live' ? '' : 'live')}>Live{q.data?.live ? ` (${q.data.live})` : ''}</Chip>
         <Chip on={only === 'conf'} onClick={() => setOnly(only === 'conf' ? '' : 'conf')}>Conference games</Chip>
         <Chip on={only === 'ranked'} onClick={() => setOnly(only === 'ranked' ? '' : 'ranked')}>Ranked teams</Chip>
         {q.data && <span className="ml-auto text-chalk-500">{q.data.games.length} matches{q.data.live ? `, ${q.data.live} live` : ''}{updated != null && q.data.live ? ` · updated ${updated} s ago` : ''}</span>}
       </div>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <div className="space-y-2" aria-busy="true">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>}
-      {q.data && !games.length && (
+      {q.data && !games.length && show === 'live' && <EmptyState title="Nothing live right now" body={`${q.data.games.length} matches on ${longDay(date)}.`} action={<button className="btn-ghost btn-sm" onClick={() => setShow('')}>Show every match</button>} />}
+      {q.data && !q.data.games.length && (
         <EmptyState title={`No matches on ${longDay(date)}`} body={nextWithGames ? `The next matchday is ${longDay(nextWithGames)}.` : 'Try another day or widen the filters.'}
           action={nextWithGames ? <button className="btn-ghost btn-sm" onClick={() => setDate(nextWithGames)}>Go to {longDay(nextWithGames)}</button> : undefined} />
       )}

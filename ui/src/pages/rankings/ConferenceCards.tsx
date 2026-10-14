@@ -8,23 +8,25 @@ import { useFilters, useHref, genderLabel, divisionLabel } from '../../lib/filte
 import { useUrlState, useUrlText } from '../../lib/urlState';
 import { Badge, Chip, EmptyState, ErrorBox, Field, PageHeader, SegmentedControl, Skeleton, TeamLogo } from '../../components/primitives';
 
-const DIV_OPTIONS = [{ value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
+const DIV_OPTIONS = [{ value: '', label: 'All' }, { value: 'd1', label: 'D1' }, { value: 'd2', label: 'D2' }, { value: 'd3', label: 'D3' }];
 
 export function ConferenceCards() {
   const f = useFilters();
   const href = useHref();
-  const [division, setDivision] = useUrlState('division', 'd1', { allow: ['d1', 'd2', 'd3'] });
+  // D1 first; All lists every conference (?division=all).
+  const [divisionParam, setDivision] = useUrlState('division', 'd1', { allow: ['d1', 'd2', 'd3', 'all'] });
+  const division = divisionParam === 'all' ? '' : divisionParam;
   const search = useUrlText('q');
   const q = useQuery({ queryKey: ['conferences', f.season, f.gender, division], queryFn: () => api<any[]>(`/api/conferences${qs({ season: f.season, gender: f.gender, division })}`) });
   const term = search.value.toLowerCase();
   const rows = useMemo(() => (q.data ?? []).filter((c) => !term || c.name.toLowerCase().includes(term) || (c.short_name ?? '').toLowerCase().includes(term)), [q.data, term]);
-  const scope = `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
+  const scope = `${division ? divisionLabel(division) : 'Every division,'} ${genderLabel(f.gender)}, ${f.season}`;
   return (
     <div className="space-y-4">
-      <PageHeader as="h2" title="Standings" meta={q.data ? `${rows.length} conferences, ${scope}. Pick a conference for its table, matches, teams and leaders.` : scope}>
-        <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={setDivision} options={DIV_OPTIONS} />}</Field>
+      <PageHeader title="Conferences" meta={q.data ? `${rows.length} conferences, ${scope}. Pick one for its table, matches, players and teams.` : scope}>
+        <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => setDivision(v || 'all')} options={DIV_OPTIONS} />}</Field>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-44" placeholder="Conference name" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
-        <Chip to={href('/rankings', { view: 'standings', all: 1 })}>Compare all tables</Chip>
+        {division && <Chip to={href('/conferences', { all: 1, division })}>Compare all tables</Chip>}
       </PageHeader>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40" />)}</div>}
@@ -34,7 +36,7 @@ export function ConferenceCards() {
           const t = c.table?.[f.gender] ?? { top: [], source: 'none' };
           return (
             <li key={c.id}>
-              <Link to={href('/rankings', { view: 'standings', conference: c.id })} className="group card flex h-full flex-col p-4 transition-colors duration-150 hover:border-field-600 hover:bg-field-800/60">
+              <Link to={href(`/conferences/${c.ncaa_seo ?? c.id}`)} className="group card flex h-full flex-col p-4 transition-colors duration-150 hover:border-field-600 hover:bg-field-800/60">
                 <div className="flex items-start justify-between gap-2">
                   <div><div className="display text-lg">{c.name}</div><div className="text-xs text-chalk-500">{c.members[f.gender]} {genderLabel(f.gender)} teams{c.short_name && c.short_name !== c.name ? `, ${c.short_name}` : ''}</div></div>
                   {t.source === 'conference' ? <Badge tone="teal">Official table</Badge> : t.source === 'computed' ? <Badge>Computed</Badge> : null}

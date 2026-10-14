@@ -8,7 +8,8 @@
 //   Career    college, transfers, honours, injury history
 // Pro (/pro/players) shows his club football; International (/intl/players) the same page over his national-team
 // matches, with caps by nation (Wikipedia careers) and World Cup squads.
-import { NewsSection } from '../../components/news/News';
+import { NewsFeed } from '../../components/news/News';
+import { Crumbs } from '../../components/shell';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -97,7 +98,8 @@ function CareerTable({ rows, credit }: { rows: CareerRow[]; credit: CareerCredit
   );
 }
 
-type Tab = 'overview' | 'stats' | 'matches' | 'career';
+// The player tab order every area uses: Overview, Stats, Matches, Career, News.
+type Tab = 'overview' | 'stats' | 'matches' | 'career' | 'news';
 type Group = 'overview' | 'attacking' | 'passing' | 'defending' | 'discipline' | 'keeping';
 const WHEEL_LABELS: Record<string, string> = { goals: 'Goals', assists: 'Assists', shots: 'Shots', shots_on: 'On target', key_passes: 'Key passes', passes: 'Passes', pass_accuracy: 'Pass %', tackles: 'Tackles', interceptions: 'Interceptions', duels_won: 'Duels won', dribbles_won: 'Dribbles', saves: 'Saves', rating: 'Rating' };
 const SUM_KEYS = ['shots', 'shots_on', 'key_passes', 'passes', 'tackles', 'interceptions', 'duels_won', 'dribbles_won', 'saves', 'conceded', 'clean_sheets', 'blocks', 'duels', 'dribbles', 'dribbled_past', 'fouls_drawn', 'fouls_committed', 'pen_scored', 'pen_missed', 'pen_won', 'pen_committed', 'pen_saved', 'sub_in', 'sub_out', 'bench', 'yellowred'] as const;
@@ -125,7 +127,7 @@ export default function ProPlayer() {
   const { slug = '' } = useParams();
   const [view, setView] = useState<'totals' | 'per90'>('totals');
   const [group, setGroup] = useState<Group>('overview');
-  const [tab] = useUrlState('tab', 'overview', { allow: ['overview', 'stats', 'matches', 'career'] });
+  const [tab] = useUrlState('tab', 'overview', { allow: ['overview', 'stats', 'matches', 'career', 'news'] });
   const onIntl = useSection() === 'intl';
   const q = useQuery({ queryKey: ['pro-player', slug], queryFn: () => api<PlayerData>(`/api/pro/players/${slug}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   const career = useQuery({ queryKey: ['intl-player', slug], queryFn: () => api<IntlCareer>(`/api/intl/players/${slug}`), enabled: onIntl, staleTime: 300_000 });
@@ -210,12 +212,13 @@ export default function ProPlayer() {
   ];
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats' }, { id: 'matches', label: 'Matches', count: lines.length || undefined }, ...(onIntl ? [] : [{ id: 'career' as Tab, label: 'Career' }]),
+    { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats' }, { id: 'matches', label: 'Matches', count: lines.length || undefined }, ...(onIntl ? [] : [{ id: 'career' as Tab, label: 'Career' }]), { id: 'news', label: 'News' },
   ];
   const chips = [p.position, p.number != null ? `No. ${p.number}` : null, age != null ? `${age} years old` : null, p.height_cm ? `${p.height_cm} cm` : null, p.weight_kg ? `${p.weight_kg} kg` : null].filter(Boolean) as string[];
 
   return (
     <div className="space-y-4">
+      <Crumbs items={[{ label: p.name }]} />
       <ProHero
         image={
           <div className="relative h-16 w-16 sm:h-24 sm:w-24 [&>*:first-child]:!h-full [&>*:first-child]:!w-full">
@@ -263,7 +266,6 @@ export default function ProPlayer() {
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_23rem]">
           <div className="space-y-5">
-            <NewsSection title="In the news" q={{ pro_player: String(p.id) }} hide={`pro_player:${p.id}`} max={4} />
             {!shown.length && <EmptyState title={onIntl ? 'No international numbers here yet' : 'No season stats yet'} body={onIntl ? 'Caps from his career are beside this; match lines arrive with his national team\'s matches.' : "Season totals arrive as the crawl reaches this player's competitions."} />}
             {(bySeason.some((r) => r.a || r.b) || form.length >= 3) && (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -326,6 +328,7 @@ export default function ProPlayer() {
         </div>
       )}
 
+      {tab === 'news' && <NewsFeed q={{ pro_player: String(p.id) }} hide={`pro_player:${p.id}`} empty={`No news for ${p.name} yet`} />}
       {tab === 'stats' && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2">

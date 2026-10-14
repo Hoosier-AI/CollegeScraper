@@ -1,5 +1,8 @@
-import { Link, useParams } from 'react-router-dom';
-import { NewsSection } from '../components/news/News';
+// One college player. Tabs in the order every area uses: Overview (career figures, splits, national ranks, honors),
+// Stats (season by season), Matches (game log), Career (transfers, the pro career), News.
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { NewsFeed } from '../components/news/News';
+import { Crumbs } from '../components/shell';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
@@ -7,7 +10,9 @@ import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
 import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
-import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TeamLogo } from '../components/primitives';
+import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TabsNav, TeamLogo } from '../components/primitives';
+
+type Tab = 'overview' | 'stats' | 'matches' | 'career' | 'news';
 
 const PRESETS: Preset[] = [
   { id: 'overview', label: 'Overview', columns: ['program', 'jersey', 'position', 'class_raw', 'gp', 'gs', 'minutes', 'goals', 'assists', 'points', 'shots', 'sog', 'shot_accuracy'] },
@@ -24,15 +29,17 @@ export default function Player() {
   const admin = useAdmin();
   const href = useHref();
   const [preset, setPreset] = useUrlState('cols', 'overview', { replace: true, resetPage: false, allow: PRESETS.map((p) => p.id) });
+  const [tab] = useUrlState('tab', 'overview', { allow: ['overview', 'stats', 'matches', 'career', 'news'] });
+  const { pathname } = useLocation();
   const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`), enabled: !!id });
   // Plaibook Stats Pro: a confident link to this player's professional career.
   const pro = useQuery({ queryKey: ['pro-from-college', id], queryFn: () => api<{ pro: { name: string; slug: string } | null }>(`/api/pro/from-college/${id}`), enabled: !!id, staleTime: 300_000 });
-  if (entity.missing) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/rankings?view=leaders">Browse leaders</Link>} />;
+  if (entity.missing) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/players">Browse players</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const p = q.data?.player;
-  if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/rankings?view=leaders">Browse leaders</Link>} />;
+  if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/players">Browse players</Link>} />;
   const seasons: any[] = q.data.seasons ?? [], honors: any[] = q.data.honors ?? [], career = q.data.career, transfers: any[] = q.data.transfers ?? [], gameLog: any[] = q.data.gameLog ?? [];
   const latest = seasons[0];
   const st = latest?.stats;
@@ -63,8 +70,14 @@ export default function Player() {
   ];
   const bioLine = latest ? [latest.position ?? latest.position_raw, latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null, latest.weight_lb ? `${latest.weight_lb} lb` : null].filter(Boolean).join(', ') : '';
   const bioUrl = latest?.bio_url ?? p.bio_url;
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats', count: seasons.length || undefined }, { id: 'matches', label: 'Matches', count: gameLog.length || undefined },
+    { id: 'career', label: 'Career' }, { id: 'news', label: 'News' },
+  ];
+  const hasOverview = (career && seasons.length > 1) || latest?.splits?.length > 0 || latest?.ranks?.length > 0 || honors.length > 0;
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <Crumbs items={[{ label: p.display_name }]} />
       <header className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-start sm:p-6">
         <PlayerAvatar src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} />
         <div className="min-w-0 flex-1">
@@ -88,6 +101,8 @@ export default function Player() {
           </div>
         )}
       </header>
+      <TabsNav label="Player sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'overview' ? null : x })} />
+      {tab === 'overview' && <div className="space-y-6">
       {career && seasons.length > 1 && (
         <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6">
           <Figure label="Seasons" value={career.seasons} sub={`${career.programs} program${career.programs === 1 ? '' : 's'}`} />
@@ -96,9 +111,11 @@ export default function Player() {
           <Figure label="Goals" value={career.goals ?? 0} /><Figure label="Assists" value={career.assists ?? 0} /><Figure label="Shots" value={career.shots ?? 0} sub={`${career.sog ?? 0} on goal`} />
         </div>
       )}
-      <Section title="Seasons">
+      </div>}
+      {tab === 'stats' && <Section title="Seasons">
         <DataTable rows={seasons} columns={seasonCols} rowKey={(s) => s.id} caption="Season by season" presets={PRESETS} preset={preset} onPreset={setPreset} dense empty={<EmptyState title="No seasons recorded" />} />
-      </Section>
+      </Section>}
+      {tab === 'overview' && <div className="space-y-6">
       {latest?.splits?.length > 0 && (
         <Section title={`Splits, ${latest.season}`}>
           <div className="frame overflow-x-auto"><table className="w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Season splits</caption>
@@ -108,12 +125,20 @@ export default function Player() {
         </Section>
       )}
       {latest?.ranks?.length > 0 && <Section title={`National ranks, ${latest.season}`}><ul className="flex flex-wrap gap-1.5">{latest.ranks.map((r: any) => <li key={r.category} className="chip"><span className="text-chalk-100 tnum">{fmt.ordinal(r.rank)}</span>{r.category}<span className="text-chalk-500 tnum">{n(r.value, Number(r.value) % 1 ? 2 : 0)}</span></li>)}</ul></Section>}
-      {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => <li key={t.id} className="px-3 py-2">{t.from_season} to {t.to_season}{admin && <span className="text-chalk-500"> (confidence {t.confidence}, {t.evidence?.rule})</span>}</li>)}</ul></Section>}
       {honors.length > 0 && <Section title="Honors"><ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any) => <li key={h.id} className="flex items-center gap-2 px-3 py-2"><span>{h.text}</span>{h.source_url && <a className="ml-auto inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={h.source_url} target="_blank" rel="noreferrer">source <ExternalLink size={11} aria-hidden /></a>}</li>)}</ul></Section>}
-      {id && <NewsSection title="In the news" q={{ player: id }} hide={`college_player:${id}`} max={5} />}
-      <Section title="Game log">
+      {!hasOverview && <EmptyState title="Nothing more to show yet" body="Splits, national ranks and honors appear as the season's box scores and bios are collected." />}
+      </div>}
+      {tab === 'career' && <div className="space-y-6">
+        {pro.data?.pro && <Section title="Pro career"><Link to={`/pro/players/${pro.data.pro.slug}`} className="frame flex items-center gap-3 px-3 py-3 text-sm hover:bg-field-800"><Trophy size={18} aria-hidden className="text-pitch-300" /><span className="font-medium text-chalk-100">{pro.data.pro.name} plays professionally</span><span className="ml-auto text-xs text-pitch-300">Pro career and stats</span></Link></Section>}
+        <Section title="Colleges">
+          <ul className="frame divide-y divide-field-700 text-sm">{[...new Map(seasons.filter((s) => s.program).map((s) => [s.program.id, s])).values()].map((s: any) => { const yrs = seasons.filter((x) => x.program?.id === s.program.id).map((x) => x.season).sort(); return <li key={s.program.id}><Link to={href(`/teams/${s.program.id}`, { season: s.season, gender: s.program.gender })} className="flex items-center gap-2 px-3 py-2 hover:bg-field-800"><TeamLogo src={s.program.college_schools?.logo_svg_url} name={s.program.name} size={20} /><span className="font-medium text-chalk-100">{s.program.name}</span><span className="ml-auto text-xs text-chalk-400 tnum">{yrs[0] === yrs[yrs.length - 1] ? yrs[0] : `${yrs[0]}–${yrs[yrs.length - 1]}`}</span></Link></li>; })}</ul>
+        </Section>
+        {transfers.length > 0 && <Section title="Transfers"><ul className="frame divide-y divide-field-700 text-sm">{transfers.map((t: any) => <li key={t.id} className="px-3 py-2">{t.from_season} to {t.to_season}{admin && <span className="text-chalk-500"> (confidence {t.confidence}, {t.evidence?.rule})</span>}</li>)}</ul></Section>}
+      </div>}
+      {tab === 'news' && id && <NewsFeed q={{ player: id }} hide={`college_player:${id}`} empty="No news for this player yet" />}
+      {tab === 'matches' && <Section title="Game log">
         <DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} caption="Game by game" rowHref={(r) => href(`/matches/${r.game.id}`)} dense defaultSort={{ key: 'date', dir: 'desc' }} empty={<EmptyState title="No box scores yet" body="Game-by-game lines appear once box scores are collected." />} />
-      </Section>
+      </Section>}
       {admin && <JsonViewer title="Identity row" value={p} />}
     </div>
   );

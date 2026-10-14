@@ -11,9 +11,14 @@ import { TeamMasthead } from './team/Masthead';
 import { RosterTable } from './team/RosterTable';
 import { GamesList } from './team/GamesList';
 import { NewsFeed } from '../components/news/News';
+import { Crumbs } from '../components/shell';
+import { genderLabel } from '../lib/filters';
 
-type Tab = 'roster' | 'games' | 'season' | 'news' | 'coaches' | 'honors' | 'pros';
-const TABS: Tab[] = ['roster', 'games', 'season', 'news', 'coaches', 'honors', 'pros'];
+// The team tab order every area uses: Roster, Matches, Stats, News, then the college-only tabs.
+type Tab = 'roster' | 'matches' | 'stats' | 'news' | 'coaches' | 'honors' | 'pros';
+const TABS: Tab[] = ['roster', 'matches', 'stats', 'news', 'coaches', 'honors', 'pros'];
+// Old tab ids (before 2026-10-14) still open the right tab.
+const OLD_TAB: Record<string, Tab> = { games: 'matches', season: 'stats' };
 
 export default function Team() {
   // /teams/<uuid> (links inside the app) or /teams/<school>/<men|women> (the address search engines see).
@@ -25,7 +30,8 @@ export default function Team() {
   const admin = useAdmin();
   const href = useHref();
   const qc = useQueryClient();
-  const [tab] = useUrlState('tab', 'roster', { allow: TABS });
+  const [rawTab] = useUrlState('tab', 'roster', { allow: [...TABS, ...Object.keys(OLD_TAB)] });
+  const tab = OLD_TAB[rawTab] ?? (rawTab as Tab);
   const [runId, setRunId] = useState<string | null>(null);
   const team = useQuery({ queryKey: ['program', id, f.season], queryFn: () => api<any>(`/api/programs/${id}${qs({ season: f.season })}`), enabled: !!id });
   const roster = useQuery({ queryKey: ['roster', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/roster${qs({ season: f.season })}`), enabled: !!id });
@@ -45,15 +51,16 @@ export default function Team() {
   const tabHref = (x: Tab) => href(pathname, { tab: x === 'roster' ? null : x });
   const tabs = [
     { id: 'roster' as Tab, label: 'Roster', count: roster.data?.length },
-    { id: 'games' as Tab, label: 'Matches', count: games.data?.length },
-    { id: 'season' as Tab, label: 'Season profile' },
+    { id: 'matches' as Tab, label: 'Matches', count: games.data?.length },
+    { id: 'stats' as Tab, label: 'Stats' },
     { id: 'news' as Tab, label: 'News' },
     { id: 'coaches' as Tab, label: 'Coaches', count: t.coaches?.length },
-    ...(alumni.data?.players.length ? [{ id: 'pros' as Tab, label: 'Pro alumni', count: alumni.data.players.length }] : []),
     { id: 'honors' as Tab, label: 'Honors', count: honors.length || undefined },
+    ...(alumni.data?.players.length ? [{ id: 'pros' as Tab, label: 'Pro alumni', count: alumni.data.players.length }] : []),
   ];
   return (
     <div className="space-y-5">
+      <Crumbs items={[{ label: `${p.name} (${genderLabel(p.gender)})` }]} />
       <TeamMasthead t={t} id={id} season={f.season} games={games.data} />
       {s && (
         <div className="grid grid-cols-3 gap-x-6 gap-y-4 sm:grid-cols-6">
@@ -76,8 +83,8 @@ export default function Team() {
       )}
       <TabsNav label="Team sections" tabs={tabs} value={tab as Tab} hrefFor={tabHref} />
       {tab === 'roster' && <RosterTable rows={roster.data ?? []} loading={roster.isPending} playerHref={(r) => `/players/${r.player?.id}`} />}
-      {tab === 'games' && <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />}
-      {tab === 'season' && <SeasonProfile t={t} id={id} href={href} admin={admin} />}
+      {tab === 'matches' && <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />}
+      {tab === 'stats' && <SeasonProfile t={t} id={id} href={href} admin={admin} />}
       {tab === 'news' && <NewsFeed q={{ program: id }} hide={`program:${id}`} empty="No news for this team yet" />}
       {tab === 'coaches' && (t.coaches?.length
         ? <ul className="frame divide-y divide-field-700">{t.coaches.map((c: any) => <li key={c.college_coaches?.id} className="flex items-center gap-3 px-3 py-2.5"><PlayerAvatar src={c.college_coaches?.headshot_url} name={c.college_coaches?.name} size={36} /><div><div className="font-medium text-chalk-100">{c.college_coaches?.name}</div><div className="text-xs text-chalk-400">{c.title}{c.is_head && <Badge tone="teal" className="ml-2">Head coach</Badge>}</div></div></li>)}</ul>
@@ -97,7 +104,7 @@ function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: s
   const s = t.teamStats;
   const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td !whitespace-normal text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td !whitespace-normal text-xs text-chalk-500">{note ?? ''}</td></tr>;
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_1fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
       <Section title="Season in numbers">
         {s ? (
           <table className="frame w-full table-fixed border-separate border-spacing-0 text-sm"><caption className="sr-only">Season totals</caption><colgroup><col className="w-[38%]" /><col className="w-[22%]" /><col /></colgroup><tbody>
@@ -119,7 +126,7 @@ function SeasonProfile({ t, id, href, admin }: { t: any; id: string; href: (p: s
           </tbody></table>
         ) : <EmptyState title="No season totals yet" />}
       </Section>
-      <Section title={`Conference table${t.standing?.source === 'conference' ? '' : t.standing ? ' (computed)' : ''}`} right={t.season?.conference_id ? <Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href('/rankings', { view: 'standings', conference: t.season.conference_id })}>Full conference</Link> : undefined}>
+      <Section title={`Conference table${t.standing?.source === 'conference' ? '' : t.standing ? ' (computed)' : ''}`} right={t.season?.conference_id ? <Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href(`/conferences/${t.season.conference_id}`)}>Full conference</Link> : undefined}>
         {t.conferenceTable?.length ? (
           <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Conference table</caption>
             <thead><tr><th scope="col" className="th text-right">#</th><th scope="col" className="th">Team</th><th scope="col" className="th text-right">Conf</th><th scope="col" className="th text-right">Pts</th></tr></thead>
