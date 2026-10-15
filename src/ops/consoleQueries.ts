@@ -20,16 +20,22 @@ const count = async (db: Db, table: string, apply: (x: any) => any): Promise<num
 };
 
 /** Every lane heartbeat in the database, keyed "lane@host" (other hosts are dev machines running the service). */
+/** Heartbeats from the last day (every deploy is a new host and leaves its rows behind until ops-retention deletes
+ *  them; past 1,000 rows the API cut the list and /health lost the live host's lanes, 2026-10-15). */
 export async function allHeartbeats(db: Db): Promise<Record<string, WorkerHeartbeat>> {
-  const { data, error } = await db.from('college_kv').select('key,value').like('key', `${KV.heartbeatPrefix}%`);
+  const since = new Date(Date.now() - 86400_000).toISOString();
+  const { data, error } = await db.from('college_kv').select('key,value').like('key', `${KV.heartbeatPrefix}%`).gte('updated_at', since).limit(1000);
   if (error) throw new Error(error.message);
   return Object.fromEntries((data ?? []).map((r: any) => [String(r.key).slice(KV.heartbeatPrefix.length), r.value as WorkerHeartbeat]));
 }
 
 /** This host's lanes only, as /health judges them. */
 export async function heartbeats(db: Db, host = hostname()): Promise<Record<string, WorkerHeartbeat | null>> {
-  const all = await allHeartbeats(db).catch(() => ({} as Record<string, WorkerHeartbeat>));
-  return Object.fromEntries(LANES.map((lane) => [lane, all[`${lane}@${host}`] ?? null]));
+  // Only this host's keys, so the answer never depends on how many old hosts' rows are left.
+  const { data } = await db.from('college_kv').select('key,value').in('key', LANES.map((lane) => `${KV.heartbeatPrefix}${lane}@${host}`))
+    .then((r) => r, () => ({ data: null }));
+  const mine = Object.fromEntries((data ?? []).map((r: any) => [String(r.key).slice(KV.heartbeatPrefix.length), r.value as WorkerHeartbeat]));
+  return Object.fromEntries(LANES.map((lane) => [lane, mine[`${lane}@${host}`] ?? null]));
 }
 
 export async function health(db: Db, startedAt: number): Promise<Health> {
