@@ -123,6 +123,36 @@ describe('attention rules', () => {
     expect(out.map((a) => a.id)).toEqual(['audit:ncaa:Total Assists']);
     expect(out[0]!.detail).toContain('82.0% agree of 1,500');
   });
+  it('warns when the heap is near its limit', () => {
+    const i = base(); i.memory = { heap_mb: 600, heap_limit_mb: 1100 };
+    expect(attentionFrom(i)).toEqual([]);
+    i.memory = { heap_mb: 1000, heap_limit_mb: 1100 };
+    expect(attentionFrom(i)).toEqual([expect.objectContaining({ id: 'health:memory', level: 'warn', href: '/stats/service#health' })]);
+  });
+  it('flags computed data left behind its cadence, in season, unless switched off or never run', () => {
+    const i = base(); // 2026-10-13: in season
+    i.rollup['college-sims'] = { last_done: { finished_at: iso(7 * 3600_000) }, last_failed: null, queued: 0, running: 0 };
+    i.rollup['college-elo'] = { last_done: { finished_at: iso(20 * 3600_000) }, last_failed: null, queued: 0, running: 0 };
+    i.rollup['pro-leaders'] = { last_done: { finished_at: iso(5 * 3600_000) }, last_failed: null, queued: 0, running: 0 };
+    i.scheduler.entries.push({ job: 'pro-leaders', label: 'Pro leaders', enabled: false, next: null });
+    const out = attentionFrom(i);
+    expect(out.map((a) => a.id)).toEqual(['computed:stale:college-sims']);
+    expect(out[0]!.detail).toBe('Last worked 7 h ago; it runs every 3 h.');
+    // Out of season the in-season-only jobs rest; the sims run daily.
+    const off = base(); off.now = Date.parse('2026-03-01T12:00:00Z');
+    off.rollup['college-ratings'] = { last_done: { finished_at: new Date(off.now - 30 * 86400_000).toISOString() }, last_failed: null, queued: 0, running: 0 };
+    off.scheduler.tick_at = new Date(off.now - 30_000).toISOString(); off.scheduler.entries[0]!.next = new Date(off.now + 3600_000).toISOString();
+    off.rollup.nightly!.last_done = { finished_at: new Date(off.now - 3600_000).toISOString() };
+    off.deploy!.at = new Date(off.now).toISOString();
+    expect(attentionFrom(off).map((a) => a.id)).toEqual([]);
+  });
+  it('sends open requests and stale live stats to the right hub tab', () => {
+    const i = base(); i.requests = { open: 2, oldest: iso(3600_000), removal: 1 };
+    i.live = { games_live: 4, with_fresh_stats: 0 };
+    const out = attentionFrom(i);
+    expect(out.find((a) => a.id === 'requests:open')).toMatchObject({ level: 'warn', href: '/stats/requests' });
+    expect(out.find((a) => a.id === 'live:stale')!.href).toBe('/stats/crawling?part=college');
+  });
   it('flags a failed job, an overdue job and a stalled scheduler, worst first', () => {
     const i = base();
     i.rollup.nightly = { last_done: { finished_at: iso(2 * 86400_000) }, last_failed: { finished_at: iso(3600_000), error: 'boom' }, queued: 0, running: 0 };

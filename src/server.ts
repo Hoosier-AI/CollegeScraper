@@ -20,7 +20,7 @@ import { isBot } from './pro/onView.js';
 import { registerConsoleApi } from './ui/consoleApi.js';
 import { evaluateHealth } from './ops/health.js';
 import { heartbeats, LANES } from './ops/consoleQueries.js';
-import { PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
+import { AUX_JOBS, PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
 import { runningJobs, type WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -254,10 +254,11 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   process.on('SIGINT', stop);
   // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
   if (cfg.WORKERS_ENABLED !== '0') {
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', 'backfill', 'weekly', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'h2h-detail', 'backfill', 'weekly', ...AUX_JOBS, ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
-  // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
+  // A third lane for short side jobs (finals' box scores, weather, ratings, sims, RPI, Elo, the stat audit) so they
+  // never wait hours behind the nightly crawl. They also keep running while the college crawl is paused.
+  workerLoop(getDb(), { signal: controller.signal, jobs: AUX_JOBS, idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
   // A second worker for finished college matches' box scores (since the 2 GB instance, 2026-10-15): a busy night's
   // finals no longer queue for hours behind one worker. Each run claims its own games.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail'], idleMs: 15_000, lane: 'aux-b' }).catch((err) => { log.error({ err: String(err) }, 'aux-b worker crashed'); process.exit(1); });

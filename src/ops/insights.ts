@@ -1,6 +1,7 @@
 // The hub's Stats Overview and Traffic tabs in one read (/api/console/insights): service health, what needs attention,
 // site traffic (migration 163), API use per caller, content growth per day (stats_daily_counts) and crawl coverage.
 // The answer is kept for a minute per range and refreshed in the background, so the hub never waits on a slow count.
+import { getHeapStatistics } from 'node:v8';
 import { kvGet, selectAll, type Db } from '../db/client.js';
 import { loadConfig } from '../config.js';
 import { SCHEDULE } from '../jobs/scheduler.js';
@@ -42,7 +43,26 @@ export interface AttentionInput {
   audits?: { check_key: string; label: string; rate: number; target: number | null; compared: number }[];
   /** Open corrections / removal requests from the public form (stats_requests), with the oldest one's time. */
   requests?: { open: number; oldest: string | null; removal: number };
+  /** This process's heap against its limit (the 2026-10-15 outages were out-of-memory restarts). */
+  memory?: { heap_mb: number; heap_limit_mb: number };
 }
+
+/**
+ * The computed jobs that build what the site shows from crawled data, with hours between runs in season (Aug to Dec)
+ * and outside it (null: only in season). One whose last success is older than twice that is stale: the site shows old
+ * ratings, odds, Elo, RPI, leaders or referees. A job never run (none in the 14-day rollup) is left to job:failed.
+ */
+export const COMPUTED_CADENCE: Record<string, { label: string; season: number; off: number | null }> = {
+  'college-ratings': { label: 'College match ratings', season: 0.5, off: null },
+  'college-sims': { label: 'NCAA tournament odds', season: 3, off: 24 },
+  'college-rpi': { label: 'Live RPI', season: 1, off: null },
+  'college-elo': { label: 'College Elo', season: 24, off: 24 },
+  'pro-elo': { label: 'Pro club Elo', season: 24, off: 24 },
+  'intl-elo': { label: 'National team Elo', season: 24, off: 24 },
+  'pro-leaders': { label: 'Pro leaders', season: 1, off: 1 },
+  referees: { label: 'Referee stats', season: 24, off: 24 },
+  'stat-audit': { label: 'Stat audit', season: 24, off: 24 },
+};
 
 const FAILED_DEPLOY = new Set(['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']);
 const ago = (now: number, iso: string | null | undefined) => (iso ? now - Date.parse(iso) : Infinity);
@@ -65,7 +85,7 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   if (i.requests && i.requests.open > 0) {
     const old = ago(i.now, i.requests.oldest);
     add(i.requests.removal > 0 || old > 5 * 86400_000 ? 'warn' : 'info', 'requests:open', `${i.requests.open} open correction or removal request${i.requests.open > 1 ? 's' : ''}`,
-      `${i.requests.removal ? `${i.requests.removal} about removal or privacy. ` : ''}Oldest ${mins(old)} ago. Answer in the Stats console under Requests.`, 'https://www.plaibook.live/console?tab=requests');
+      `${i.requests.removal ? `${i.requests.removal} about removal or privacy. ` : ''}Oldest ${mins(old)} ago. Answer them in Stats > Requests.`, '/stats/requests');
   }
   if (i.scheduler.paused) add('info', 'scheduler:paused', 'Scheduler paused', 'No scheduled job starts until it is resumed in Settings.', '/stats/settings');
   if (i.crawl_paused) add('info', 'crawl:paused', 'College crawl paused', 'School-site crawling is off until it is resumed in Settings.', '/stats/settings');
@@ -102,7 +122,7 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   if (i.live.games_live > 0) {
     const liveDone = i.rollup.live?.last_done?.finished_at;
     if (ago(i.now, liveDone) > 10 * 60_000) add('error', 'live:stopped', 'Live scores stopped updating', `${i.live.games_live} college ${i.live.games_live === 1 ? 'game is' : 'games are'} live; the live job last finished ${liveDone ? `${mins(ago(i.now, liveDone))} ago` : 'never'}.`, '/stats/jobs?job=live');
-    else if (i.live.games_live >= 3 && i.live.with_fresh_stats === 0) add('warn', 'live:stale', 'No live game stats coming in', `${i.live.games_live} college games are live and none has stats from the last 5 minutes.`, '/stats/crawling');
+    else if (i.live.games_live >= 3 && i.live.with_fresh_stats === 0) add('warn', 'live:stale', 'No live game stats coming in', `${i.live.games_live} college games are live and none has stats from the last 5 minutes.`, '/stats/crawling?part=college');
   }
 
   for (const c of i.quality) {
@@ -120,6 +140,21 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   // Stat accuracy: an agreement rate under its target (enough rows compared to mean something).
   const low = (i.audits ?? []).filter((a) => a.target != null && a.compared >= 20 && a.rate < a.target);
   for (const a of low) add('warn', `audit:${a.check_key}`, `${a.label} below target`, `${(a.rate * 100).toFixed(1)}% agree of ${a.compared.toLocaleString('en-US')} compared; the target is ${Math.round(a.target! * 100)}%.`, '/stats/quality');
+
+  // Memory: the heap near its limit means an out-of-memory restart is close (the site goes down for a minute or two).
+  const m = i.memory;
+  if (m && m.heap_limit_mb > 0 && m.heap_mb / m.heap_limit_mb > 0.85) add('warn', 'health:memory', 'Stats service memory nearly full', `Heap ${m.heap_mb.toLocaleString('en-US')} of ${m.heap_limit_mb.toLocaleString('en-US')} MB (${Math.round((m.heap_mb / m.heap_limit_mb) * 100)}%). Past the limit the service restarts.`, '/stats/service#health');
+
+  // Computed data: the site's ratings, odds, Elo, RPI, leaders and referees left behind their cadence.
+  const inSeason = new Date(i.now).getUTCMonth() >= 7;
+  for (const [job, c] of Object.entries(COMPUTED_CADENCE)) {
+    const every = inSeason ? c.season : c.off;
+    const e = i.scheduler.entries.find((x) => x.job === job);
+    const doneAt = i.rollup[job]?.last_done?.finished_at;
+    if (every == null || (e && !e.enabled) || i.scheduler.paused || !doneAt) continue;
+    const age = ago(i.now, doneAt);
+    if (age > every * 2 * 3600_000) add('warn', `computed:stale:${job}`, `${c.label} out of date`, `Last worked ${mins(age)} ago; it runs every ${every < 1 ? `${Math.round(every * 60)} min` : `${every} h`}.`, '/stats/coverage');
+  }
 
   const t = i.traffic;
   if (t.views_prev_7d >= 50 && t.views_7d < t.views_prev_7d * 0.6) add('warn', 'traffic:drop', 'Site traffic down', `${t.views_7d.toLocaleString('en-US')} page views in the last 7 days, ${Math.round((1 - t.views_7d / t.views_prev_7d) * 100)}% fewer than the 7 days before.`, '/stats/traffic');
@@ -242,7 +277,7 @@ type Traffic = {
   days: { day: string; uniques: number; views: number }[]; pages: { path: string; page_group: string; views: number; title?: string }[];
   groups: { page_group: string; views: number }[]; referrers: { host: string; views: number }[]; devices: { device: string; views: number }[];
   searches: { scope: string; query: string; searches: number; zero_results: number }[]; zero: { scope: string; query: string; searches: number; last_day: string }[];
-  search_days: { day: string; searches: number; zero_results: number }[]; section_days: { day: string; college: number | null; pro: number | null }[];
+  search_days: { day: string; searches: number; zero_results: number }[]; section_days: { day: string; college: number | null; pro: number | null; intl?: number | null }[];
 };
 
 const sumSince = (rows: { day: string; views: number }[], from: number, to: number) => rows.filter((r) => { const t = Date.parse(r.day); return t >= from && t < to; }).reduce((n, r) => n + r.views, 0);
@@ -330,6 +365,7 @@ async function build(db: Db, days: number, startedAt: number) {
     audits,
     pro_live_stale: proStale,
     requests: await openRequests(db),
+    memory: heapNow(),
   });
 
   const lanes = Object.values(h.lanes);
@@ -376,6 +412,12 @@ export async function insights(db: Db, days: number, startedAt: number): Promise
   if (hit && Date.now() - hit.at < 60_000) return hit.data;
   if (hit) { void refresh().catch(() => {}); return hit.data; }
   return refresh();
+}
+
+/** This process's heap in MB (the web server and every worker lane share it). */
+function heapNow(): NonNullable<AttentionInput['memory']> {
+  const h = getHeapStatistics();
+  return { heap_mb: Math.round(h.used_heap_size / 1e6), heap_limit_mb: Math.round(h.heap_size_limit / 1e6) };
 }
 
 /** Open requests from the public corrections / removal form (migration 192). */

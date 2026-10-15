@@ -68,5 +68,28 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 172_pro_leader_rows.sql | `pro_leader_rows` (materialized: one row per player, competition and current season, every leader stat summed, with the filters' fields), `pro_refresh_leader_rows()` (the hourly pro-leaders job, CONCURRENTLY); `pro_leaders` reads it for current seasons (p_season NULL), 171's path for a season asked for. 171 still ran past 20 s while the disk was busy | yes (2026-10-13) |
 | 173_college_event_player_indexes.sql | Indexes on `college_game_events.player_season_id`, `assist_player_season_id` and `college_rankings.player_season_id` (foreign keys to college_player_seasons with no index: each player-season delete or merge scanned ~7.9M events twice, 57 s a delete). CONCURRENTLY, outside a transaction | yes (2026-10-13) |
 | 171_pro_more_player_stats.sql | Player totals where the provider has no lineups: `pro_lines_from_events_only()` adds a line per player the events name (`pro_fixture_players.from_events`, an appearance with unknown minutes), run by `pro_refresh_season_aggregates`; `pro_fill_squads_from_play()` lists who played this season as the squad of a club the provider has none for (`pro_squads.source = 'played'`, replaced by the provider's squad), daily in pro-rank | yes (2026-10-13) |
+| 174_elo_college_pro.sql | Plaibook Elo for college programs and pro clubs: `college_elo`, `pro_elo`, `pro_elo_fixtures()` (the college-elo and pro-elo jobs) | yes (checked in the database 2026-10-15) |
+| 175_pro_salaries.sql | `pro_salaries`: MLS salaries from American Soccer Analysis (asa-salaries, Mondays) | yes (checked in the database 2026-10-15) |
+| 176_points_per_game_start.sql | Points per game and per start: `college_refresh_result_points`, `pro_refresh_result_points(_all)` | yes (checked in the database 2026-10-15) |
+| 177_pro_leaders_ppg.sql | `pro_leader_rows` rebuilt with PPG/PPS (built as `_next` and swapped in); `pro_leaders` returns them | yes (checked in the database 2026-10-15) |
+| 178_college_leaders_ppg.sql | `college_v_player_leaders` gains PPG/PPS | yes (checked in the database 2026-10-15) |
+| 179_college_rpi.sql | Live RPI: `college_rpi`, `college_rpi_history` (the college-rpi job) | yes (checked in the database 2026-10-15) |
+| 180_college_aggregates_match_ncaa.sql | `college_refresh_season_aggregates` matches NCAA.com: the higher of two sources, GWG, shutouts | yes (checked in the database 2026-10-15) |
+| 181_pro_shootout_not_goals.sql | Shootout kicks are not goals: `pro_fill_lines_from_events`, `pro_lines_from_events_only` | yes (checked in the database 2026-10-15) |
+| 182_pro_per90_percentiles_audit.sql | `stat_audit_runs` (the daily stat-audit job), `college_elo_history`, `pro_player_percentiles`, leader rows rebuilt | yes (checked in the database 2026-10-15) |
+| 183_college_aggregates_fill_from_other_source.sql | `college_refresh_season_aggregates` second pass: a total missing from one source is filled from the other | yes (checked in the database 2026-10-15) |
+| 184_pro_leaders_evp_join.sql | `pro_fixture_players_from_events_idx` (built CONCURRENTLY by hand), leader rows and percentiles join on it | yes (checked in the database 2026-10-15) |
+| 185_college_broadcast.sql | College TV: `college_games.broadcast/watch_url/broadcast_source`, `college_v_schedule` carries them | yes (checked in the database 2026-10-15) |
+| 186_news_images.sql | News pictures: `news_articles.image_url`, `news_sources.show_images`, `news_feed` hides switched-off pictures | yes (checked in the database 2026-10-15) |
+| 187_referees.sql | Referees: matviews `pro_referee_fixtures`, `pro_referees`, `college_referee_games`, `college_referees` and their RPCs (the daily referees job) | yes (checked in the database 2026-10-15) |
+| 188_team_of_week.sql | `pro_team_of_week()` from the provider's ratings | yes (checked in the database 2026-10-15) |
+| 189_college_ratings.sql | College 0-10 match ratings: `college_player_ratings`, `college_rate_games/recent/season`, `college_team_of_week()`, `college_rating_curve` | yes (checked in the database 2026-10-15) |
+| 190_college_sims.sql | `college_sim_odds`: NCAA tournament and conference title odds (the college-sims job) | yes (checked in the database 2026-10-15) |
+| 191_college_records.sql | `college_records()`: records and streaks | yes (checked in the database 2026-10-15) |
+| 192_stats_requests.sql | Corrections and removal requests (`stats_requests`, the /corrections form); GDELT pictures off | yes (checked in the database 2026-10-15) |
+| 193_pro_minors_not_indexed.sql | No indexable pro player pages for anyone under 18 (`pro_refresh_player_rank`) | yes (checked in the database 2026-10-15) |
+| 194_stats_traffic_intl.sql | `stats_traffic` section_days splits International from Pro (an `intl` column) for the hub's Traffic tab | yes (2026-10-15) |
+
+Two files share the number 171 (`171_pro_leaders_fast.sql` and `171_pro_more_player_stats.sql`); both are applied, fast first.
 
 After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).

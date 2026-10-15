@@ -89,6 +89,10 @@ export const JOB_META: Record<string, JobMeta> = {
 
 /** The jobs the 'pro' worker lane claims (and the crawl lane leaves alone). */
 export const PRO_LANE_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'pro').map(([n]) => n);
+/** The jobs the side lane ('aux') claims: finals' box scores, weather, and the short computed jobs (ratings, sims, RPI,
+ *  Elo, the stat audit). Until 2026-10-15 only final-detail and weather were claimed there, so the computed jobs fell to
+ *  the crawl lane and waited behind hourly and nightly (live RPI up to 4.7 h, the audit 2 h). */
+export const AUX_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'aux').map(([n]) => n);
 /** The jobs the 'sources' lane claims: other data sources and the checks against API-Football. */
 export const SOURCE_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'sources').map(([n]) => n);
 /** The jobs the 'pro-bulk' lane claims: the long crawl work, kept off both the college crawl and the pro scoreboard. */
