@@ -2,7 +2,7 @@
 // grid), the side-by-side team stats and a lineup list.
 import { Link } from 'react-router-dom';
 import { ArrowLeftRight, Square } from 'lucide-react';
-import { PlayerAvatar } from '../primitives';
+import { PlayerAvatar, RailCard } from '../primitives';
 import { Goals } from '../icons';
 import { proPath } from '../../lib/pro';
 
@@ -73,13 +73,13 @@ function place(lines: ProLine[]): { line: ProLine; x: number; y: number }[] {
   return parsed.map((p) => ({ line: p!.line, x: 1 - p!.col / ((perRow.get(p!.row) ?? 1) + 1), y: rows === 1 ? 0.5 : 0.15 + (0.71 * (p!.row - 1)) / (rows - 1) }));
 }
 
-function Token({ line, x, y, top }: { line: ProLine; x: number; y: number; top: boolean }) {
+function Token({ line, x, y, top, full, crest }: { line: ProLine; x: number; y: number; top: boolean; full?: boolean; crest?: string | null }) {
   const last = line.display.split(/\s+/).slice(-1)[0] ?? line.display;
-  const style = { left: `${(top ? 1 - x : x) * 100}%`, top: `${(top ? y / 2 : 1 - y / 2) * 100}%` };
+  const style = { left: `${(top ? 1 - x : x) * 100}%`, top: `${(full ? 1 - (0.06 + y * 0.88) : top ? y / 2 : 1 - y / 2) * 100}%` };
   const body = (
     <>
       <span className="relative block">
-        <PlayerAvatar src={line.photo} name={line.display} size={36} />
+        <PlayerAvatar src={line.photo} name={line.display} size={36} crest={crest} />
         <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-[10px] font-semibold text-chalk-100 tnum shadow" aria-hidden>{line.number ?? ''}</span>
         {(line.goals ?? 0) > 0 && <span className="absolute -right-2 -top-1 flex items-center rounded-full bg-white px-0.5 text-field-950 shadow" aria-hidden><Goals n={line.goals!} size={11} /></span>}
         {(line.red ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-loss" /> : (line.yellow ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-note" /> : null}
@@ -110,6 +110,24 @@ export function ProPitch({ home, away, homeName, awayName }: { home: ProSideDeta
         <span className="absolute bottom-2 left-2 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{homeName}{home.formation ? ` · ${home.formation}` : ''}</span>
         {as.map((p) => <Token key={`a-${p.line.slot}`} line={p.line} x={p.x} y={p.y} top />)}
         {hs.map((p) => <Token key={`h-${p.line.slot}`} line={p.line} x={p.x} y={p.y} top={false} />)}
+      </div>
+    </figure>
+  );
+}
+
+/** One XI on a whole pitch (Team of the week): the keeper at the bottom, each player with their club's crest. */
+export function XIPitch({ lines, label, crests }: { lines: ProLine[]; label: string; crests?: Map<number, string | null> }) {
+  const ps = place(lines);
+  if (!ps.length) return null;
+  return (
+    <figure className="mx-auto w-full max-w-md">
+      <div className="relative w-full overflow-hidden rounded-xl border border-field-700" style={{ aspectRatio: '68 / 90', background: '#123b26' }} role="img" aria-label={label}>
+        <svg viewBox="0 0 68 90" className="absolute inset-0 h-full w-full" aria-hidden>
+          <g fill="none" stroke="#2c6b46" strokeWidth="0.6">
+            <rect x="1" y="1" width="66" height="88" /><circle cx="34" cy="1" r="9.15" /><rect x="13.84" y="72.5" width="40.32" height="16.5" /><rect x="24.84" y="83.5" width="18.32" height="5.5" />
+          </g>
+        </svg>
+        {ps.map((p) => <Token key={p.line.slot} line={p.line} x={p.x} y={p.y} top={false} full crest={crests?.get(p.line.slot) ?? null} />)}
       </div>
     </figure>
   );
@@ -182,5 +200,41 @@ export function LineupList({ side, title }: { side: ProSideDetail; title: string
       <ul className="divide-y divide-field-700 border-t border-field-700">{side.starters.map(row)}</ul>
       {side.bench.length > 0 && <><div className="border-t border-field-700 px-3 py-1.5 text-2xs font-medium text-chalk-500">Bench</div><ul className="divide-y divide-field-700">{side.bench.map(row)}</ul></>}
     </div>
+  );
+}
+
+/** Player of the match: the best rating among those who played 45 minutes or more (else anyone rated), with the next
+ *  two; while the match is played, "top rated so far". Nothing when the match has no ratings. */
+export function PlayerOfMatch({ home, away, homeName, awayName, homeLogo, awayLogo, live }: { home: ProSideDetail; away: ProSideDetail; homeName: string; awayName: string; homeLogo?: string | null; awayLogo?: string | null; live: boolean }) {
+  const all = [...home.starters, ...home.bench].map((l) => ({ l, team: homeName, logo: homeLogo })).concat([...away.starters, ...away.bench].map((l) => ({ l, team: awayName, logo: awayLogo })))
+    .filter((x) => x.l.rating != null && x.l.rating > 0);
+  if (!all.length) return null;
+  const long = all.filter((x) => (x.l.minutes ?? 0) >= 45);
+  const pool = (long.length ? long : all).sort((a, b) => b.l.rating! - a.l.rating! || (b.l.goals ?? 0) + (b.l.assists ?? 0) - (a.l.goals ?? 0) - (a.l.assists ?? 0));
+  const [best, ...next] = pool;
+  const line = (x: (typeof all)[number]) => [x.team, x.l.goals ? `${x.l.goals} goal${x.l.goals > 1 ? 's' : ''}` : null, x.l.assists ? `${x.l.assists} assist${x.l.assists > 1 ? 's' : ''}` : null, x.l.minutes != null ? `${x.l.minutes} min` : null].filter(Boolean).join(', ');
+  const name = (x: (typeof all)[number]) => (x.l.slug ? <Link to={proPath.player(x.l.slug)} className="hover:text-pitch-300">{x.l.display}</Link> : x.l.display);
+  return (
+    <RailCard title={live ? 'Top rated so far' : 'Player of the match'}>
+      <div className="flex items-center gap-3">
+        <PlayerAvatar src={best!.l.photo} name={best!.l.display} size={48} crest={best!.logo ?? null} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-chalk-100">{name(best!)}</p>
+          <p className="truncate text-xs text-chalk-400">{line(best!)}</p>
+        </div>
+        <span className="display text-2xl text-chalk-100 tnum" aria-label={`rating ${best!.l.rating!.toFixed(1)}`}>{best!.l.rating!.toFixed(1)}</span>
+      </div>
+      {next.length > 0 && (
+        <ol className="mt-2 space-y-1 border-t border-field-700 pt-2 text-sm">
+          {next.slice(0, 2).map((x) => (
+            <li key={`${x.team}-${x.l.slot}`} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-chalk-200">{name(x)} <span className="text-xs text-chalk-500">{x.team}</span></span>
+              <span className="tnum text-chalk-100">{x.l.rating!.toFixed(1)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="mt-2 text-2xs text-chalk-500">From the match data's player ratings{long.length ? ', 45 minutes or more' : ''}.</p>
+    </RailCard>
   );
 }

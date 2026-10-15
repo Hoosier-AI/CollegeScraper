@@ -6,7 +6,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
 import { kickoffLong, proMinute, proPath, type ProMatch as Match } from '../../lib/pro';
-import { EventTimeline, LineupList, ProPitch, TeamStatsCompare, type ProEvent, type ProSideDetail } from '../../components/pro/MatchParts';
+import { EventTimeline, LineupList, PlayerOfMatch, ProPitch, TeamStatsCompare, type ProEvent, type ProSideDetail } from '../../components/pro/MatchParts';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { EmptyState, ErrorBox, Section, Skeleton, TabsNav, TeamLogo, PageWithRail, RailCard, Note } from '../../components/primitives';
 import { Crumbs } from '../../components/shell';
@@ -82,6 +82,7 @@ export default function ProMatch() {
     <>
       {intl && <EloMatchCard slug={slug} />}
       {!intl && d.elo && <WinChances elo={d.elo} home={m.home.name} away={m.away.name} rankingsHref="/pro/rankings?scope=world" />}
+      {played && <PlayerOfMatch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} homeLogo={m.home.logo} awayLogo={m.away.logo} live={m.status === 'live'} />}
       {played && hasStats && (
         <RailCard title="Match stats" to={`${pathname}?tab=stats`} toLabel="All stats" flush>
           <TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} />

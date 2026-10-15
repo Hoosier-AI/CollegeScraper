@@ -19,6 +19,7 @@ import { refreshTeamOnView } from '../pro/teamRefresh.js';
 import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
 import { BROKEN_AT, advForLeaders, sourcesOff } from '../pro/sources.js';
 import { swr } from '../ops/swr.js';
+import { teamOfWeek } from '../pro/teamOfWeek.js';
 import { PRO_REF_SORTS, proMatchReferee, proReferee, proRefereeLeagues, proRefereeList } from '../referees.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,6 +90,12 @@ export function registerProApi(app: FastifyInstance): void {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const r = await pro.match(getDb(), req.params.slug);
     return r ? reply.header('Cache-Control', CACHE).send(r) : notFound(reply, 'match', req.params.slug);
+  });
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/pro/leagues/:id/team-of-week', async (req, reply) => {
+    const id = Number(req.params.id), s = season(req.query.season);
+    if (!Number.isInteger(id) || id <= 0 || !s) return reply.code(400).send({ error: 'league id and season required' });
+    const round = req.query.round ? String(req.query.round).slice(0, 80) : null;
+    return reply.header('Cache-Control', 'public, max-age=300').send(await teamOfWeek(getDb(), id, s, round));
   });
   // Referees (migration 187): the list, one referee's page and the card on a match page.
   app.get<{ Querystring: Record<string, string> }>('/api/pro/referees', async (req, reply) => {

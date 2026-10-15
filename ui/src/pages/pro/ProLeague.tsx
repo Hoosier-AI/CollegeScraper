@@ -4,6 +4,7 @@ import { NewsFeed, NewsSection } from '../../components/news/News';
 import { Link, useParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, ApiError, fmt, qs } from '../../lib/api';
+import { TeamOfWeek, totwUrl, type Totw } from '../../components/pro/TeamOfWeek';
 import { useUrlPatch, useUrlState } from '../../lib/urlState';
 import { proPath, genderWord, PRO_STATS, POSITIONS, type ProLeader, type ProLeagueRef, type ProMatch, type ProStandingRow, type ProTeamRef } from '../../lib/pro';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -24,7 +25,7 @@ interface LeagueData { league: ProLeagueRef & { current_season: number | null };
   advanced_leaders?: { credit: SourceCredit; table?: ExpectedLine[]; xg: AdvLeaderLine[]; xa: AdvLeaderLine[]; g_plus: AdvLeaderLine[] } | null;
   history_sources?: { what: string; name: string; url: string | null; license: string | null }[] | null }
 // The competition tab order every area uses: Table, Matches, Players, Teams, News, then History.
-type Tab = 'table' | 'matches' | 'players' | 'teams' | 'news' | 'history';
+type Tab = 'table' | 'matches' | 'players' | 'week' | 'teams' | 'news' | 'history';
 // Old tab ids (before 2026-10-14) still open the right tab.
 const OLD_TAB: Record<string, Tab> = { results: 'matches', fixtures: 'matches', stats: 'teams' };
 
@@ -141,9 +142,13 @@ export default function ProLeague() {
   const intl = useSection() === 'intl';
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
-  const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'players', 'teams', 'news', 'history', ...Object.keys(OLD_TAB)] });
+  const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'players', 'week', 'teams', 'news', 'history', ...Object.keys(OLD_TAB)] });
   const tab = OLD_TAB[rawTab] ?? (rawTab as Tab);
+  const [round, setRound] = useUrlState('round');
   const q = useQuery({ queryKey: ['pro-league', slug, seasonParam], queryFn: () => api<LeagueData>(`/api/pro/leagues/${slug}${qs({ season: seasonParam })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
+  // Team of the week: a tab only where the matches have player ratings (the latest round, shared with the tab).
+  const lid = q.data?.league.id, lseason = q.data?.season;
+  const totw = useQuery({ queryKey: ['totw', lid, lseason, ''], queryFn: () => api<Totw>(totwUrl(lid!, lseason!)), enabled: !!lid && !!lseason, staleTime: 300_000 });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="league" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
@@ -152,7 +157,7 @@ export default function ProLeague() {
   // A national-team competition is International's page, a club one Pro's.
   if ((l.scope === 'intl') !== intl) return <MoveSection to={proPath.league(slug, null, null, l.scope ?? 'club')} />;
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'table', label: 'Table' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'players', label: 'Players' }, { id: 'teams', label: 'Teams' }, { id: 'news', label: 'News' },
+    { id: 'table', label: 'Table' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'players', label: 'Players' }, ...((totw.data?.rounds.length ?? 0) > 0 ? [{ id: 'week' as Tab, label: 'Team of the week' }] : []), { id: 'teams', label: 'Teams' }, { id: 'news', label: 'News' },
     ...(d.champions.length ? [{ id: 'history' as Tab, label: 'History', count: d.champions.length }] : []),
   ];
   const where = intl ? (l.confederation && l.confederation !== 'FIFA' && l.confederation !== 'Other' ? l.confederation : 'Worldwide') : l.country && l.country !== 'World' ? l.country : 'Continental';
@@ -207,6 +212,7 @@ export default function ProLeague() {
           {d.advanced_leaders && <div className="md:col-span-2"><Section title="Advanced leaders"><AdvancedLeaders data={d.advanced_leaders} season={d.season} /><Credit credit={d.advanced_leaders.credit} /></Section></div>}
         </div>
       )}
+      {tab === 'week' && d.season && <TeamOfWeek league={l.id} season={d.season} round={round} onRound={setRound} />}
       {tab === 'news' && <NewsFeed q={{ league: String(l.id) }} hide={`pro_league:${l.id}`} empty={`No news for ${l.name} yet`} />}
       {tab === 'teams' && <StatsTab league={l.id} season={d.season} current={l.current_season} teams={d.team_table} scorers={d.scorers} assists={d.assists} standings={d.standings} />}
       {tab === 'history' && (
