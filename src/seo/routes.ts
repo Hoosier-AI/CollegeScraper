@@ -4,6 +4,8 @@
 // real 301s, unknown slugs and unknown paths are real 404s. Registered before @fastify/static, whose wildcard route
 // loses to these specific ones. /api and /v1 are untouched apart from the small /api/resolve lookup the app uses
 // to open slug addresses.
+import { LEGAL, LEGAL_SLUGS } from '../legal/content.js';
+import { legalBody, legalHead } from './legal.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { EntityKind, Gender, SeoData } from './types.js';
 import type { Template } from './template.js';
@@ -358,6 +360,8 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   } else {
     for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings', '/pro/referees', '/pro/referees/:slug', '/referees', '/referees/:slug', '/team-of-the-week']) app.get(path, (_req, reply) => shell(reply));
   }
+  // Policy and information pages (src/legal): static text, rendered for crawlers and no-JavaScript readers.
+  for (const slug of LEGAL_SLUGS) app.get(LEGAL[slug].path, (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: legalHead(slug, ctx()), body: legalBody(slug) })));
   app.get('/tv', (_req, reply) => shell(reply));
   app.get('/tournament', (_req, reply) => shell(reply));
   app.get('/records', (_req, reply) => shell(reply));

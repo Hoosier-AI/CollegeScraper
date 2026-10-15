@@ -42,6 +42,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (!req.url.startsWith('/api/')) return;
     // The analytics beacon (src/server.ts) keeps its own limit and is not an API read.
     if (req.url === '/api/t') return;
+    // The public corrections form (src/legal/routes.ts) keeps its own per-visitor limit.
+    if (req.method === 'POST' && req.url === '/api/requests') return;
     if (adminOnly(req)) {
       if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
       return;

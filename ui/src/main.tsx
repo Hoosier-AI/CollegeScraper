@@ -24,6 +24,8 @@ const Referees = lazy(() => import('./pages/Referees'));
 const TeamOfWeek = lazy(() => import('./pages/TeamOfWeek'));
 const Tournament = lazy(() => import('./pages/Tournament'));
 const Records = lazy(() => import('./pages/Records'));
+const Legal = lazy(() => import('./pages/Legal'));
+const LEGAL_PAGES = ['about', 'contact', 'terms', 'privacy', 'sources', 'data-use', 'copyright', 'corrections', 'accessibility'];
 const Referee = lazy(() => import('./pages/Referee'));
 const ProReferees = lazy(() => import('./pages/pro/ProReferees'));
 const ProReferee = lazy(() => import('./pages/pro/ProReferee'));
@@ -108,6 +110,7 @@ const router = createBrowserRouter([
           { path: 'team-of-the-week', element: <TeamOfWeek /> },
           { path: 'tournament', element: <Tournament /> },
           { path: 'records', element: <Records /> },
+          ...LEGAL_PAGES.map((slug) => ({ path: slug, element: <Legal key={slug} slug={slug} /> })),
           { path: 'referees/:slug', element: <Referee /> },
           { path: 'compare', element: <Compare /> },
           { path: 'h2h', element: <H2H /> },

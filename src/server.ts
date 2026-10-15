@@ -1,4 +1,5 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
+import { registerLegalApi } from './legal/routes.js';
 import { makeExtraSeo } from './seo/extra.js';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
@@ -87,6 +88,8 @@ const limitSite = async (req: FastifyRequest, reply: FastifyReply): Promise<bool
 const usage = new UsageMeter(cfg.SUPABASE_URL ? getDb() : null);
 usage.start();
 registerUiApi(app, { authorized, limitAnonymous: limitSite });
+// Policy pages and the corrections / removal form (src/legal).
+registerLegalApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 'plaibook-stats' });
 
 // Cookie-free site analytics (src/api/analytics.ts): the viewer's beacon on every page change and settled search.
 // Bots are not counted; the viewer itself skips the owner (an admin token in the browser).

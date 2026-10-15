@@ -42,7 +42,7 @@ const SRC_COLS = 'id,kind,name,url,scope,gender,program_id,pro_team_id,link_labe
 async function seedSources(db: Db): Promise<void> {
   const rows = [
     ...PUBLISHER_FEEDS.map((f) => ({ id: f.id, kind: 'publisher', name: f.name, url: f.url, scope: f.scope, gender: f.gender ?? null, enabled: f.on, terms_url: f.termsUrl })),
-    ...GDELT_QUERIES.map((q) => ({ id: q.id, kind: 'gdelt', name: `GDELT: ${q.name}`, url: gdeltUrl(q.query), scope: q.scope, gender: q.gender ?? null, enabled: true, terms_url: 'https://www.gdeltproject.org/about.html#termsofuse' })),
+    ...GDELT_QUERIES.map((q) => ({ id: q.id, kind: 'gdelt', name: `GDELT: ${q.name}`, url: gdeltUrl(q.query), scope: q.scope, gender: q.gender ?? null, enabled: true, show_images: false, terms_url: 'https://www.gdeltproject.org/about.html#termsofuse' })),
     { id: 'guardian:football', kind: 'guardian', name: 'The Guardian', url: 'https://content.guardianapis.com/search?section=football', scope: 'pro', gender: null, enabled: false, terms_url: 'https://www.theguardian.com/open-platform/terms-and-conditions' },
   ];
   const { error } = await db.from('news_sources').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });

@@ -7,7 +7,7 @@ import { PageHeader, Skeleton, TabsNav } from '../components/primitives';
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, { id: 'jobs', label: 'Jobs' }, { id: 'quality', label: 'Quality' }, { id: 'crawl', label: 'Crawl' },
-  { id: 'api', label: 'API' }, { id: 'deploy', label: 'Deploy' }, { id: 'settings', label: 'Settings' },
+  { id: 'api', label: 'API' }, { id: 'requests', label: 'Requests' }, { id: 'deploy', label: 'Deploy' }, { id: 'settings', label: 'Settings' },
 ] as const;
 type Tab = typeof TABS[number]['id'];
 
@@ -18,6 +18,7 @@ const CrawlTab = lazy(() => import('./console/CrawlTab'));
 const ApiTab = lazy(() => import('./console/ApiTab'));
 const DeployTab = lazy(() => import('./console/DeployTab'));
 const SettingsTab = lazy(() => import('./console/SettingsTab'));
+const RequestsTab = lazy(() => import('./console/RequestsTab'));
 
 export default function Console() {
   const [tabParam] = useUrlState('tab', 'overview', { allow: TABS.map((t) => t.id) as unknown as string[] });
@@ -37,6 +38,7 @@ export default function Console() {
         {tab === 'api' && <ApiTab />}
         {tab === 'deploy' && <DeployTab />}
         {tab === 'settings' && <SettingsTab />}
+        {tab === 'requests' && <RequestsTab />}
       </Suspense>
     </div>
   );

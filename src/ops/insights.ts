@@ -40,6 +40,8 @@ export interface AttentionInput {
   pro_live_stale?: { count: number; live: number; names: string[] };
   /** The latest stat-audit result per check (stat_audit_runs): our numbers against NCAA.com, ASA and the provider. */
   audits?: { check_key: string; label: string; rate: number; target: number | null; compared: number }[];
+  /** Open corrections / removal requests from the public form (stats_requests), with the oldest one's time. */
+  requests?: { open: number; oldest: string | null; removal: number };
 }
 
 const FAILED_DEPLOY = new Set(['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']);
@@ -59,6 +61,12 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   else if (i.quota?.key_set && i.quota.remaining != null && i.quota.remaining < i.quota.floor) add('warn', 'quota:floor', 'API-Football quota at its floor', `${i.quota.remaining.toLocaleString('en-US')} requests left today (floor ${i.quota.floor.toLocaleString('en-US')}). Only everyday jobs run until it resets.`, '/stats/crawling');
 
   if (i.scheduler.enabled && !i.scheduler.paused && ago(i.now, i.scheduler.tick_at) > 10 * 60_000) add('error', 'scheduler:stalled', 'Scheduler stopped', `Last tick ${i.scheduler.tick_at ? `${mins(ago(i.now, i.scheduler.tick_at))} ago` : 'never'}. No scheduled job is starting.`, '/stats/jobs');
+  // Visitors waiting on us: removal and privacy requests first (the privacy policy promises an answer).
+  if (i.requests && i.requests.open > 0) {
+    const old = ago(i.now, i.requests.oldest);
+    add(i.requests.removal > 0 || old > 5 * 86400_000 ? 'warn' : 'info', 'requests:open', `${i.requests.open} open correction or removal request${i.requests.open > 1 ? 's' : ''}`,
+      `${i.requests.removal ? `${i.requests.removal} about removal or privacy. ` : ''}Oldest ${mins(old)} ago. Answer in the Stats console under Requests.`, 'https://www.plaibook.live/console?tab=requests');
+  }
   if (i.scheduler.paused) add('info', 'scheduler:paused', 'Scheduler paused', 'No scheduled job starts until it is resumed in Settings.', '/stats/settings');
   if (i.crawl_paused) add('info', 'crawl:paused', 'College crawl paused', 'School-site crawling is off until it is resumed in Settings.', '/stats/settings');
 
@@ -321,6 +329,7 @@ async function build(db: Db, days: number, startedAt: number) {
     news: newsGroups(newsSources, now),
     audits,
     pro_live_stale: proStale,
+    requests: await openRequests(db),
   });
 
   const lanes = Object.values(h.lanes);
@@ -367,4 +376,11 @@ export async function insights(db: Db, days: number, startedAt: number): Promise
   if (hit && Date.now() - hit.at < 60_000) return hit.data;
   if (hit) { void refresh().catch(() => {}); return hit.data; }
   return refresh();
+}
+
+/** Open requests from the public corrections / removal form (migration 192). */
+async function openRequests(db: Db): Promise<AttentionInput['requests']> {
+  const { data } = await db.from('stats_requests').select('kind,created_at').eq('status', 'open').order('created_at').limit(200);
+  const rows = (data ?? []) as { kind: string; created_at: string }[];
+  return { open: rows.length, oldest: rows[0]?.created_at ?? null, removal: rows.filter((r) => r.kind === 'removal' || r.kind === 'privacy').length };
 }

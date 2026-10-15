@@ -256,24 +256,54 @@ export function Crumbs({ items }: { items: { label: ReactNode; to?: string }[] }
   );
 }
 
+const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
+  { title: 'College', links: [['/matches', 'Matches'], ['/conferences', 'Conferences'], ['/rankings', 'Rankings'], ['/team-of-the-week', 'Team of the week'], ['/tournament', 'NCAA tournament odds'], ['/tv', 'On TV']] },
+  { title: 'Pro and International', links: [['/pro/matches', 'Pro matches'], ['/pro/leagues', 'Leagues'], ['/pro/abroad', 'Americans abroad'], ['/intl/matches', 'International matches'], ['/intl/tournaments', 'Tournaments'], ['/intl/rankings', 'World rankings']] },
+  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Data sources and credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API']] },
+  { title: 'Legal', links: [['/terms', 'Terms of use'], ['/privacy', 'Privacy'], ['/privacy#browser', 'Cookies and storage'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility']] },
+];
+
+/** The area's data credit in one line (the full list is on /sources). */
+function areaCredit(pathname: string): string {
+  if (isIntlPath(pathname)) return 'International results from international_results (CC0), the Fjelstul World Cup Database (CC BY-SA 4.0), openfootball (CC0) and Wikipedia (CC BY-SA 4.0); live data from API-Football.';
+  if (isProPath(pathname)) return 'Pro data from API-Football (api-sports.io) and American Soccer Analysis; some tables from Wikipedia (CC BY-SA 4.0).';
+  return 'College stats from official school athletics sites, conference sites, NCAA.com and United Soccer Coaches, checked against each other.';
+}
+
 export function Footer() {
   const { pathname } = useLocation();
-  const pro = isProPath(pathname);
-  const home = pathname === '/';
+  const year = new Date().getFullYear();
+  const link = (to: string, label: string) => (to.startsWith('/v1/') || to.includes('#')
+    ? <a href={to} className="inline-block py-1 text-chalk-300 hover:text-pitch-300">{label}</a>
+    : <Link to={to} className="inline-block py-1 text-chalk-300 hover:text-pitch-300">{label}</Link>);
   return (
-    <footer className="mx-auto mt-12 w-full max-w-page border-t border-field-700 px-4 py-6 text-xs text-chalk-500 sm:px-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {home
-          ? <span>College: each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, checked against each other. Pro: API-Football (api-sports.io) with scraped and open sources first. International: international_results (CC0), the Fjelstul World Cup Database (CC BY-SA 4.0), openfootball (CC0) and Wikipedia caps; Plaibook Elo is our own.</span>
-          : isIntlPath(pathname)
-          ? <span>Plaibook Stats International: results since 1872 from international_results (Mart Jürisoo, CC0), World Cups from the Fjelstul World Cup Database (CC BY-SA 4.0) and openfootball (CC0), caps from Wikipedia (CC BY-SA 4.0); live scores, lineups and player stats from API-Football (api-sports.io). Rankings are Plaibook Elo, our own.</span>
-          : pro
-          ? <span>Plaibook Stats Pro: professional match data from API-Football (api-sports.io); college links from Wikidata and Plaibook Stats.</span>
-          : <span>Plaibook Stats collects NCAA soccer data from each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, and shows where they agree.</span>}
-        <Link to="/admin" className="ml-auto hover:text-chalk-300">Admin</Link>
+    <footer className="mt-16 border-t border-field-700 bg-field-900/40">
+      <div className="mx-auto w-full max-w-page px-4 pb-28 pt-10 sm:px-6 md:pb-10">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,3fr)]">
+          <div className="space-y-3">
+            <Link to="/" aria-label="Plaibook Stats home" className="inline-block"><Logo size={26} /></Link>
+            <p className="max-w-xs text-sm leading-relaxed text-chalk-300">Free soccer stats for NCAA college soccer, professional leagues and international football.</p>
+            <p className="text-sm text-chalk-400">Coaching a team? <a href="https://www.plaibook.soccer/?utm_source=stats&amp;utm_medium=referral&amp;utm_campaign=footer" className="text-pitch-300 hover:text-pitch-200">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
+          </div>
+          <nav aria-label="Footer" className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
+            {FOOTER_COLUMNS.map((c) => (
+              <div key={c.title}>
+                <h2 className="mb-2 text-xs font-semibold text-chalk-100">{c.title}</h2>
+                <ul className="space-y-0.5 text-sm">{c.links.map(([to, label]) => <li key={to}>{link(to, label)}</li>)}</ul>
+              </div>
+            ))}
+          </nav>
+        </div>
+        <div className="mt-8 space-y-2 border-t border-field-700 pt-5 text-xs leading-relaxed text-chalk-500">
+          <p>{areaCredit(pathname)} News headlines link to the publishers that wrote them. Full credits on <Link to="/sources" className="text-chalk-300 hover:text-pitch-300">Data sources</Link>.</p>
+          <p>Team names, logos and competition names are trademarks of their owners. Plaibook Stats is independent and is not affiliated with or endorsed by the NCAA, any conference, school, league or federation.</p>
+          <p className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-chalk-400">
+            <span>© {year} Plaibook Technologies, Inc.</span>
+            <span>Stats are provided as-is. <Link to="/corrections" className="text-chalk-300 hover:text-pitch-300">See an error? Report it.</Link></span>
+            <span>No cookies, no ad tracking, and we never sell your data.</span>
+          </p>
+        </div>
       </div>
-      <p className="mt-2">News: headlines link to the schools and outlets that published them (school athletics sites, BBC Sport, ESPN, and outlets found through GDELT); tags and links to our pages are ours.</p>
-      <p className="mt-3"><a href="https://www.plaibook.soccer/?utm_source=stats&utm_medium=referral&utm_campaign=footer" className="text-pitch-400 hover:text-pitch-300">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
     </footer>
   );
 }

@@ -10,6 +10,7 @@
 //   /sitemaps/intl-core.xml             International: its pages, every tournament, every senior national team
 //   /sitemaps/coaches.xml               college coaches of the last two seasons, pro coaches with a club, referees
 // Every document is built on demand and kept in memory for an hour.
+import { LEGAL, LEGAL_SLUGS } from '../legal/content.js';
 import type { SeoData, SitemapEntry } from './types.js';
 import type { ProSeoData } from './pro/data.js';
 import type { IntlSeoData } from './intl/data.js';
@@ -61,7 +62,7 @@ export class Sitemaps {
     const file = m[1]!;
     if (file === 'core.xml') {
       const confs = await this.data.sitemapConferences();
-      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/conferences' }, { path: '/leaders' }, { path: '/players' }, { path: '/transfers' }, { path: '/team-of-the-week' }, { path: '/tournament' }, { path: '/records' }, { path: '/referees' }, { path: '/tv' }, { path: '/news' }, ...confs]);
+      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/conferences' }, { path: '/leaders' }, { path: '/players' }, { path: '/transfers' }, { path: '/team-of-the-week' }, { path: '/tournament' }, { path: '/records' }, ...LEGAL_SLUGS.map((s) => ({ path: LEGAL[s].path })), { path: '/referees' }, { path: '/tv' }, { path: '/news' }, ...confs]);
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
     if (this.coaches && file === 'coaches.xml') return urlsetXml(this.baseUrl, await this.coaches());
