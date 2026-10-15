@@ -20,6 +20,7 @@ import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
 import { BROKEN_AT, advForLeaders, sourcesOff } from '../pro/sources.js';
 import { swr } from '../ops/swr.js';
 import { teamOfWeek } from '../pro/teamOfWeek.js';
+import { proFlow } from '../match/flowQueries.js';
 import { PRO_REF_SORTS, proMatchReferee, proReferee, proRefereeLeagues, proRefereeList } from '../referees.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -118,6 +119,12 @@ export function registerProApi(app: FastifyInstance): void {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const r = await proReferee(getDb(), req.params.slug);
     return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Params: { id: string } }>('/api/pro/fixtures/:id/flow', async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: 'bad id' });
+    const f = await proFlow(getDb(), id);
+    return reply.header('Cache-Control', f?.live ? 'public, max-age=20' : 'public, max-age=600').send({ flow: f });
   });
   app.get<{ Params: { id: string } }>('/api/pro/fixtures/:id/referee', async (req, reply) => {
     const id = Number(req.params.id);

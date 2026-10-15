@@ -13,6 +13,7 @@ import { registerIntlApi } from './intlApi.js';
 import { registerNewsApi } from '../news/queries.js';
 import { follows, parseFollows } from './follows.js';
 import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
+import { collegeFlow } from '../match/flowQueries.js';
 import { COLLEGE_REF_SORTS, collegeGameReferee, collegeReferee, collegeRefereeList } from '../referees.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -127,6 +128,12 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const r = await q.game(getDb(), req.params.id);
     return r ?? reply.code(404).send({ error: 'not found' });
+  });
+  // Win probability, attack momentum (src/match/flow.ts).
+  app.get<{ Params: { id: string } }>('/api/games/:id/flow', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const f = await collegeFlow(getDb(), req.params.id);
+    return reply.header('Cache-Control', f?.live ? 'public, max-age=20' : 'public, max-age=600').send({ flow: f });
   });
   app.get<{ Params: { id: string } }>('/api/games/:id/referee', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });

@@ -21,6 +21,8 @@ import { useSection } from '../../lib/section';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
 import { ProRefereeCard } from '../../components/Referee';
+import { MatchFlow } from '../../components/match/Flow';
+import { PlayerMatchStats } from '../../components/pro/PlayerMatchStats';
 
 interface MatchData { live?: { coverage: { events: boolean; lineups: boolean; stats: boolean }; updated_at: string | null } | null; match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null; elo?: EloChances | null }
 
@@ -71,7 +73,7 @@ export default function ProMatch() {
   const hasShots = !!d.advanced && d.advanced.shots.length > 0;
   const played = m.status === 'live' || m.status === 'final';
   const tabs: { id: Tab; label: string; count?: number }[] = played
-    ? [{ id: 'summary', label: 'Summary' }, ...(hasLineups ? [{ id: 'lineups' as Tab, label: 'Lineups' }] : []), ...(hasStats || hasShots ? [{ id: 'stats' as Tab, label: 'Stats' }] : []), ...(d.h2h.length ? [{ id: 'h2h' as Tab, label: 'Head to head', count: d.h2h.length }] : [])]
+    ? [{ id: 'summary', label: 'Summary' }, ...(hasLineups ? [{ id: 'lineups' as Tab, label: 'Lineups' }] : []), ...(hasStats || hasShots || hasLineups ? [{ id: 'stats' as Tab, label: 'Stats' }] : []), ...(d.h2h.length ? [{ id: 'h2h' as Tab, label: 'Head to head', count: d.h2h.length }] : [])]
     : [...(d.preview ? [{ id: 'preview' as Tab, label: 'Preview' }] : []), ...(d.h2h.length ? [{ id: 'h2h' as Tab, label: 'Head to head', count: d.h2h.length }] : []), ...(hasLineups ? [{ id: 'lineups' as Tab, label: 'Lineups' }] : [])];
   const defaultTab: Tab = tabs[0]?.id ?? 'summary';
   const tab: Tab = tabs.some((t) => t.id === tabParam) ? (tabParam as Tab) : defaultTab;
@@ -108,6 +110,7 @@ export default function ProMatch() {
       {tab === 'summary' && (
         <PageWithRail label="Match in numbers" rail={rail}>
           {m.status === 'live' && <LiveNote live={d.live ?? null} hasDetail={d.events.length > 0 || hasLineups || hasStats} />}
+          {played && <MatchFlow url={`/api/pro/fixtures/${m.id}/flow`} live={m.status === 'live'} home={m.home.name} away={m.away.name} />}
           {d.events.length
             ? <Section title="Events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>
             : m.status === 'live'
@@ -132,6 +135,7 @@ export default function ProMatch() {
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
           {hasStats && <Section title="Team stats" className={hasShots ? '' : 'lg:col-span-2'}><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
           {hasShots && <Section title="Shot map" className={hasShotsWide ? 'lg:col-span-2' : ''}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
+          {hasLineups && <Section title="Player stats" className="lg:col-span-2"><PlayerMatchStats home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}
         </div>
       )}
       {tab === 'h2h' && d.h2h.length > 0 && <Section title="Head to head" right={!intl ? <Link to={`/pro/h2h?a=${m.home.slug}&b=${m.away.slug}`} className="text-xs text-pitch-300 hover:text-pitch-200">Every meeting</Link> : <Link to={`/intl/h2h?a=${m.home.slug}&b=${m.away.slug}`} className="text-xs text-pitch-300 hover:text-pitch-200">Every meeting</Link>}><div className="frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 xl:grid-cols-2">{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague />)}</div></Section>}

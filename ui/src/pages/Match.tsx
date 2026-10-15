@@ -19,6 +19,7 @@ import { CollegePlayerOfMatch, HeadToHead, KeyPlayers, LineupColumn, MatchMasthe
 import { RatingBadge } from '../components/Rating';
 import { Pitch } from '../components/match/Pitch';
 import { CollegeRefereeCard } from '../components/Referee';
+import { MatchFlow } from '../components/match/Flow';
 
 type Src = 'site' | 'ncaa';
 // The match tab order every area uses. Before kickoff: Preview, Head to head, Lineups. Played: Summary, Lineups, Stats,
@@ -143,6 +144,7 @@ export default function Match() {
         </>}>
           {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of NCAA.com's in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
           {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}
+          {(g.status === 'final' || g.status === 'live') && <MatchFlow url={`/api/games/${g.id}/flow`} live={g.status === 'live'} home={g.home.short_name ?? g.home.name ?? 'Home'} away={g.away.short_name ?? g.away.name ?? 'Away'} />}
           <Section title="Events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
           {g.status === 'live' && players.length > 0 && (
             <Section title="On the pitch" right={<Link to={href(pathname, { tab: 'lineups' })} className="text-xs text-pitch-400 hover:text-pitch-300">Lineups and bench</Link>}>

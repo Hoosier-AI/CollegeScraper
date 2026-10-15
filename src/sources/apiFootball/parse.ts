@@ -90,6 +90,9 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? 
 const realId = (v: unknown): number | null => (Number.isInteger(v) && (v as number) > 0 ? (v as number) : null);
 
 /** The provider's status codes. SUSP/INT (suspended, interrupted) are still in progress as far as a scoreboard goes. */
+/** A season pass accuracy is a percentage; now and then the provider sends a count there instead (over 100): dropped. */
+const pctOrNull = (v: number | null) => (v == null || v > 100 ? null : v);
+
 export function statusOf(short: string): FixtureStatus {
   switch (short) {
     case 'FT': case 'AET': case 'PEN': case 'AWD': case 'WO': return 'final';
@@ -402,7 +405,7 @@ export function parseLeaguePlayers(items: AfLeaguePlayer[], league: number | nul
         apps, starts: int(s.games?.lineups) ?? 0, lineups: int(s.games?.lineups), minutes, goals: int(s.goals?.total) ?? 0, assists: int(s.goals?.assists) ?? 0,
         sub_in: int(s.substitutes?.in), sub_out: int(s.substitutes?.out), bench: int(s.substitutes?.bench), captain: s.games?.captain ?? null,
         number: int(s.games?.number), position: str(s.games?.position), rating: num(s.games?.rating) ? Math.round(num(s.games?.rating)! * 100) / 100 : null,
-        shots: int(s.shots?.total), shots_on: int(s.shots?.on), passes: int(s.passes?.total), key_passes: int(s.passes?.key), pass_accuracy: int(s.passes?.accuracy),
+        shots: int(s.shots?.total), shots_on: int(s.shots?.on), passes: int(s.passes?.total), key_passes: int(s.passes?.key), pass_accuracy: pctOrNull(int(s.passes?.accuracy)),
         tackles: int(s.tackles?.total), blocks: int(s.tackles?.blocks), interceptions: int(s.tackles?.interceptions), duels: int(s.duels?.total), duels_won: int(s.duels?.won),
         dribbles: int(s.dribbles?.attempts), dribbles_won: int(s.dribbles?.success), dribbled_past: int(s.dribbles?.past), fouls_drawn: int(s.fouls?.drawn), fouls_committed: int(s.fouls?.committed),
         yellow: int(s.cards?.yellow) ?? 0, yellowred: int(s.cards?.yellowred), red: int(s.cards?.red) ?? 0,

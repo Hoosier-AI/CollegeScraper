@@ -211,7 +211,7 @@ export default function ProPlayer() {
     { key: 'a', label: 'A', num: true, value: (m) => m.assists || null },
     { key: 'sh', label: 'Sh', title: 'Shots (on target)', num: true, priority: 2, value: (m) => m.shots ?? null, render: (m) => (m.shots == null ? '–' : `${m.shots} (${m.shots_on ?? 0})`) },
     { key: 'kp', label: 'KP', title: 'Key passes', num: true, priority: 2, value: (m) => m.key_passes ?? null },
-    { key: 'pass', label: 'Passes', num: true, priority: 3, value: (m) => m.passes ?? null, render: (m) => (m.passes == null ? '–' : `${m.passes}${m.pass_accuracy != null ? ` (${m.pass_accuracy})` : ''}`) },
+    { key: 'pass', label: 'Passes', num: true, priority: 3, value: (m) => m.passes ?? null, render: (m) => (m.passes == null ? '–' : `${m.passes}${m.pass_accuracy != null && m.passes ? ` (${Math.round((m.pass_accuracy / m.passes) * 100)}%)` : ''}`), title: 'Passes (accuracy: completed of attempted, from the match data)' },
     { key: 'tkl', label: 'Tkl', title: 'Tackles', num: true, priority: 3, value: (m) => m.tackles ?? null },
     { key: 'rating', label: 'Rating', num: true, decimals: 1, value: (m) => m.rating, render: (m) => (m.rating == null ? '–' : <span className={`rounded px-1.5 py-0.5 text-xs tnum font-semibold ${ratingChip(m.rating)}`}>{m.rating.toFixed(1)}</span>) },
   ];
