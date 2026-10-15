@@ -1,5 +1,6 @@
 // One conference: its table, this week's matches, its leading players, members, news and ranked teams. Tabs follow the
 // competition order every area uses: Table, Matches, Players, Teams, News, then Rankings.
+import { TitleRace } from '../../components/SimOdds';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
@@ -98,7 +99,7 @@ export function ConferenceDetail({ id }: { id: string }) {
         )}
         {tab !== 'news' && <RailNews q={{ conference: id }} hide={`conference:${id}`} to={href(pathname, { tab: 'news' })} />}
       </>}>
-        {tab === 'table' && <StandingsGrid conference={id} embedded />}
+        {tab === 'table' && <><StandingsGrid conference={id} embedded />{f.season === f.currentSeason && <TitleRace conference={id} season={f.season} gender={f.gender} />}</>}
         {tab === 'matches' && (byDate.size ? [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, games]) => (
         <section key={date} className="space-y-2"><h2 className="text-sm font-semibold text-chalk-100">{longDay(date)}</h2><div className="frame divide-y divide-field-700">{games.map((g: any) => <MatchRow key={g.id} g={g} />)}</div></section>
       )) : <EmptyState title="No matches this week" body="Conference members have nothing scheduled Monday to Sunday." action={<Chip to={href('/matches', { conference: id })}>Browse matches</Chip>} />)}

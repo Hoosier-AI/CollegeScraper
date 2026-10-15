@@ -1,6 +1,7 @@
 // The college team page's rail: where the team stands (live RPI, Plaibook Elo, its conference), who scores for it, and
 // its news. Beside the tabs on wide screens, under them on narrow ones.
 
+import { PostseasonCard } from '../../components/SimOdds';
 import { useQuery } from '@tanstack/react-query';
 import { api, fmt, qs } from '../../lib/api';
 import { useFilters } from '../../lib/filters';
@@ -23,6 +24,7 @@ export function TeamRail({ t, id, season, roster, href, news = true }: { t: any;
   const around = at < 0 ? [] : table.slice(Math.max(0, Math.min(at - 1, table.length - 3)), Math.max(0, Math.min(at - 1, table.length - 3)) + 3);
   return (
     <>
+      {season === currentSeason && <PostseasonCard program={id} season={season} />}
       {rp && (
         <RailCard title="Live RPI" to={href('/rankings', { tab: 'rpi', division: rp.division })} toLabel="Full table">
           <div className="flex items-end gap-3">

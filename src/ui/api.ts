@@ -14,6 +14,7 @@ import { registerNewsApi } from '../news/queries.js';
 import { follows, parseFollows } from './follows.js';
 import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { collegeFlow } from '../match/flowQueries.js';
+import { simOdds, tournamentOdds } from '../college/simOdds.js';
 import { COLLEGE_REF_SORTS, collegeGameReferee, collegeReferee, collegeRefereeList } from '../referees.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -150,6 +151,19 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
       conference: UUID.test(r.conference ?? '') ? r.conference! : null,
     };
     return reply.header('Cache-Control', 'public, max-age=300').send({ ...(await collegeTeamOfWeek(getDb(), f)), season: f.season, division: f.division });
+  });
+  // Season simulations (migration 190): the NCAA tournament page, a conference's title race, a team's chances.
+  app.get<{ Querystring: Record<string, string> }>('/api/tournament', async (req, reply) => {
+    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const r = await tournamentOdds(getDb(), s, req.query.gender === 'w' ? 'w' : 'm');
+    return reply.header('Cache-Control', 'public, max-age=300').send(r ?? { season: s, field: [], teams: [] });
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/sim-odds', async (req, reply) => {
+    const r = req.query;
+    const conference = UUID.test(r.conference ?? '') ? r.conference! : null, program = UUID.test(r.program ?? '') ? r.program! : null;
+    if (!conference && !program) return reply.code(400).send({ error: 'conference or program required' });
+    const s = season(r.season) ?? (await q.meta(getDb())).currentSeason;
+    return reply.header('Cache-Control', 'public, max-age=300').send(await simOdds(getDb(), { season: s, conference, program, gender: r.gender === 'w' || r.gender === 'm' ? r.gender : null }));
   });
   // College referees (migration 187): the list and one referee's page.
   app.get<{ Querystring: Record<string, string> }>('/api/referees', async (req, reply) => {

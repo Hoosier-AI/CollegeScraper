@@ -359,6 +359,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings', '/pro/referees', '/pro/referees/:slug', '/referees', '/referees/:slug', '/team-of-the-week']) app.get(path, (_req, reply) => shell(reply));
   }
   app.get('/tv', (_req, reply) => shell(reply));
+  app.get('/tournament', (_req, reply) => shell(reply));
   app.get('/compare', (_req, reply) => shell(reply));
   app.get('/h2h', (_req, reply) => shell(reply));
   app.get('/pro/h2h', (_req, reply) => shell(reply));

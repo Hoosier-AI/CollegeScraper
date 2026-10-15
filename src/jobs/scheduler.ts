@@ -79,6 +79,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'intl-match', label: 'International: match to teams, fixtures and players', cadence: 'daily 11:30 UTC', due: (c) => c.h === 11 && c.m === 30 },
   { job: 'stat-audit', label: 'Data quality: stat audit', cadence: 'daily 12:10 UTC', due: (c) => c.h === 12 && c.m === 10 },
   { job: 'college-elo', label: 'College: Plaibook Elo', cadence: 'daily 10:50 UTC', due: (c) => c.h === 10 && c.m === 50 },
+  { job: 'college-sims', label: 'College: season simulations (tournament odds)', cadence: 'every 3 hours at :55 in season (after Elo at 10:50 UTC), daily otherwise', due: (c) => c.m === 55 && (inSeason(c) ? c.h % 3 === 2 : c.h === 11) },
   { job: 'pro-elo', label: 'Pro: Plaibook Elo', cadence: 'daily 11:50 UTC', due: (c) => c.h === 11 && c.m === 50 },
   { job: 'intl-elo', label: 'International: Plaibook Elo', cadence: 'daily 11:40 UTC (when results changed)', due: (c) => c.h === 11 && c.m === 40 },
   { job: 'asa-salaries', label: 'Sources: MLS salaries', cadence: 'Mondays 08:55 UTC', due: (c) => c.dow === 1 && c.h === 8 && c.m === 55 },
