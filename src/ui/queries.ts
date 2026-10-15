@@ -1,4 +1,5 @@
 // Read helpers for the stats-viewer API. Service-role reads (internal tool).
+import { publicHonor } from '../college/bioText.js';
 import type { Db } from '../db/client.js';
 import { selectAll, selectIn, kvGet } from '../db/client.js';
 import { eastern } from '../jobs/seasons.js';
@@ -109,7 +110,7 @@ export async function roster(db: Db, id: string, season: number) {
     selectAll<any>(db, 'college_player_season_splits', '*', (q) => q.in('player_season_id', ids)),
   ]);
   const a = new Map(agg.map((x) => [x.player_season_id, x])); const s = new Map(site.map((x) => [x.player_season_id, x]));
-  const h = new Map<string, string[]>(); for (const x of honors) h.set(x.player_season_id, [...(h.get(x.player_season_id) ?? []), x.text]);
+  const h = new Map<string, string[]>(); for (const x of honors) { const t = publicHonor(x.text); if (t) h.set(x.player_season_id, [...(h.get(x.player_season_id) ?? []), t]); }
   const sp = new Map<string, Record<string, any>>(); for (const x of splits) { const m = sp.get(x.player_season_id) ?? {}; m[x.split] = x; sp.set(x.player_season_id, m); }
   return rows.map((r) => publicBio({ ...r, player: r.college_players, college_players: undefined, stats: a.get(r.id) ?? null, site: s.get(r.id) ?? null, honors: h.get(r.id) ?? [], splits: sp.get(r.id) ?? {} }))
     .sort((x, y) => (x.jersey ?? 999) - (y.jersey ?? 999));
@@ -177,7 +178,7 @@ export async function player(db: Db, id: string) {
   const transfersNamed = transfers.sort((a, b) => b.to_season - a.to_season).map((t) => ({ ...t, from: prog(t.from_program_id), to: prog(t.to_program_id) }));
   // The same honor is re-extracted from the bio every season: keep one row per text (latest season first).
   const seen = new Set<string>();
-  const honorsDedup = honors.sort((a, b) => (seasons.findIndex((s) => s.id === a.player_season_id)) - (seasons.findIndex((s) => s.id === b.player_season_id))).filter((h) => { const k = h.text.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  const honorsDedup = honors.map((h) => ({ ...h, text: publicHonor(h.text) })).filter((h): h is typeof h & { text: string } => !!h.text).sort((a, b) => (seasons.findIndex((s) => s.id === a.player_season_id)) - (seasons.findIndex((s) => s.id === b.player_season_id))).filter((h) => { const k = h.text.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   return { player: publicBio(p), seasons: seasons.map((s) => publicBio({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers: transfersNamed, gameLog: truthLog };
 }
 

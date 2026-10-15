@@ -1,6 +1,7 @@
 // SeoData over the Supabase database: small, purpose-built reads (lighter than the viewer's /api queries, which
 // carry admin fields and raw payloads). Suppressed players never reach a page model: rosters drop them, box
 // scores and events withhold their names, their profiles are 404. Needs migration 129 (slugs, noindex).
+import { publicHonor } from '../college/bioText.js';
 import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { firstLast, goalMinute, kickoffTbd } from '../ui/queries.js';
@@ -113,7 +114,7 @@ export class DbSeoData implements SeoData {
     const order = new Map(ids.map((id, i) => [id, i]));
     const seen = new Set<string>();
     const honorList = honors.sort((a, b) => (order.get(a.player_season_id) ?? 0) - (order.get(b.player_season_id) ?? 0))
-      .map((h) => String(h.text)).filter((t) => { const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+      .map((h) => publicHonor(h.text)).filter((t): t is string => { if (!t) return false; const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
     const latest = seasons[0];
     const hometown = latest?.hometown_raw || [p.hometown_city, p.hometown_region, p.hometown_country].filter(Boolean).join(', ') || null;
     return {

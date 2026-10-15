@@ -24,3 +24,20 @@ describe('publicBio', () => {
   });
   it('passes null through', () => expect(publicBio(null)).toBeNull());
 });
+
+describe('publicHonor', async () => {
+  const { publicHonor } = await import('../src/college/bioText.js');
+  it('keeps college achievements', () => expect(publicHonor('Named to the All-ACC First Team in 2024')).toBe('Named to the All-ACC First Team in 2024'));
+  it('cuts personal and high school sections', () => {
+    expect(publicHonor('2025: Started 18 games, scored 4 goals HIGH SCHOOL Played at Collins Hill')).toBe('2025: Started 18 games, scored 4 goals');
+    expect(publicHonor('CCS Academic All-Conference honoree High School: Was homeschooled Personal: Parents are A and B')).toBe('CCS Academic All-Conference honoree');
+    expect(publicHonor('2024: Saw action in seven games Before Temple: All-State at Eugene Ashley High School')).toBe('2024: Saw action in seven games');
+  });
+  it('drops lines about family, majors, birthplaces or a high school', () => {
+    expect(publicHonor('PERSONAL: Born in Charlotte, NC')).toBeNull();
+    expect(publicHonor('Biography Mountain View High School: MVP, Coaches Award')).toBeNull();
+    expect(publicHonor('Graduated with a degree in finance')).toBeNull();
+    expect(publicHonor('Daughter of Ken and Mary')).toBeNull();
+    expect(publicHonor('Biography')).toBeNull();
+  });
+});
