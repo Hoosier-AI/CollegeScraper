@@ -12,6 +12,7 @@ import { registerProApi } from './proApi.js';
 import { registerIntlApi } from './intlApi.js';
 import { registerNewsApi } from '../news/queries.js';
 import { follows, parseFollows } from './follows.js';
+import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { COLLEGE_REF_SORTS, collegeGameReferee, collegeReferee, collegeRefereeList } from '../referees.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -130,6 +131,18 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Params: { id: string } }>('/api/games/:id/referee', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     return reply.header('Cache-Control', 'public, max-age=600').send({ referee: await collegeGameReferee(getDb(), req.params.id) });
+  });
+  // College Team of the Week (migration 189).
+  app.get<{ Querystring: Record<string, string> }>('/api/team-of-the-week', async (req, reply) => {
+    const r = req.query;
+    const f = {
+      season: season(r.season) ?? (await q.meta(getDb())).currentSeason,
+      gender: (r.gender === 'w' ? 'w' : 'm') as 'm' | 'w',
+      division: ['d1', 'd2', 'd3'].includes(r.division ?? '') ? r.division! : r.division === 'all' ? null : 'd1',
+      week: /^\d{4}-\d{2}-\d{2}$/.test(r.week ?? '') ? r.week! : null,
+      conference: UUID.test(r.conference ?? '') ? r.conference! : null,
+    };
+    return reply.header('Cache-Control', 'public, max-age=300').send({ ...(await collegeTeamOfWeek(getDb(), f)), season: f.season, division: f.division });
   });
   // College referees (migration 187): the list and one referee's page.
   app.get<{ Querystring: Record<string, string> }>('/api/referees', async (req, reply) => {

@@ -13,6 +13,7 @@ import { abs, breadcrumbs, ogImage, SUFFIX, type HeadContext, type HeadMeta } fr
 import { a, n, table, tr, wrapBody } from './body.js';
 import { clip, conferencePath, esc, playerPath, SITE_NAME, teamPath } from './util.js';
 import { proPaths } from './pro/pages.js';
+import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { collegeReferee, collegeRefereeList, proReferee, proRefereeList } from '../referees.js';
 
 const G = { m: "Men's", w: "Women's" } as const;
@@ -79,6 +80,11 @@ export function makeExtraSeo(db: Db) {
       return { season, m: await collegeRefereeList(db, { ...base, gender: 'm' }), w: await collegeRefereeList(db, { ...base, gender: 'w' }) };
     },
     collegeReferee: (slug: string) => collegeReferee(db, slug),
+    /** The last finished week's Team of the Week, Division I men's and women's. */
+    async collegeTotw(season: number) {
+      const [m, w] = await Promise.all((['m', 'w'] as const).map((gender) => collegeTeamOfWeek(db, { season, gender, division: 'd1', week: null, conference: null })));
+      return { season, m: m!, w: w! };
+    },
     /** College coaches of the last two seasons, pro coaches who have a club, and referees with enough matches to mean
      *  something (pro 10, college 5). */
     async sitemapCoaches(): Promise<SitemapEntry[]> {
@@ -222,6 +228,17 @@ export function collegeRefereeBody(d: P<'collegeReferee'>, slug: string) {
   const c = d.career;
   const recent = d.recent.slice(0, 15).map((x: any) => `<li>${a(`/matches/${x.match.id}`, `${x.match.away.name} ${x.match.away.score ?? ''} at ${x.match.home.name} ${x.match.home.score ?? ''}`)}, ${esc(x.match.game_date)}</li>`).join('');
   return wrapBody('rankings', [...college, { name: 'Referees', path: '/referees' }, { name: d.referee.name, path: `/referees/${slug}` }], `<h1>${esc(d.referee.name)}</h1><p>${esc(c.games)} games in our records: ${esc(dec(c.cards_pg))} cards (average ${esc(dec(d.peer?.cards_pg))}) and ${esc(dec(c.fouls_pg, 1))} fouls a game; the home side won ${esc(pct(c.home_pct))}.</p>${recent ? `<h2>Latest games</h2><ul>${recent}</ul>` : ''}`);
+}
+
+// ---------- team of the week ----------
+const POSW: Record<string, string> = { G: 'Goalkeeper', D: 'Defender', M: 'Midfielder', F: 'Forward' };
+export function collegeTotwHead(d: P<'collegeTotw'>, ctx: HeadContext) {
+  const best = d.m.xi.find((x: any) => x.best);
+  return page(ctx, '/team-of-the-week', `College Soccer Team of the Week${d.m.week ? `, week of ${d.m.week}` : ''}${SUFFIX}`, `The best-rated XI of the week in NCAA Division I soccer, men's and women's, from Plaibook's box-score ratings${best ? `. Player of the week: ${best.name} (${best.team?.name ?? ''}), ${Number(best.rating).toFixed(1)}` : ''}.`, [...college, { name: 'Team of the week', path: '/team-of-the-week' }]);
+}
+export function collegeTotwBody(d: P<'collegeTotw'>) {
+  const t = (label: string, x: { week: string | null; xi: any[] }) => (x.xi.length ? `<h2>${label}${x.week ? `, week of ${esc(x.week)}` : ''}</h2>${table(`${label} team of the week`, ['Position', 'Player', 'School', 'Rating'], x.xi.map((p: any) => tr([esc(POSW[p.pos] ?? p.pos), p.player_id ? a(`/players/${p.player_id}`, p.name) : esc(p.name), esc(p.team?.name ?? ''), esc(Number(p.rating).toFixed(1))])))}` : '');
+  return wrapBody('rankings', [...college, { name: 'Team of the week', path: '/team-of-the-week' }], `<h1>College Soccer Team of the Week</h1><p>Each week's best-rated XI in a 4-3-3, from Plaibook ratings of every box score: goals, assists, shots on goal, saves, clean sheets, cards and the result.</p>${t("Division I men's", d.m)}${t("Division I women's", d.w)}`);
 }
 
 /** Appended to the /rankings page: live RPI and Plaibook Elo, Division I. */

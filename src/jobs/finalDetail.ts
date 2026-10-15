@@ -55,6 +55,11 @@ export async function finalDetail(ctx: JobContext): Promise<void> {
     }
     await ctx.heartbeat();
   }
+  // Match ratings for the games whose box score just landed (Player of the match, Team of the week).
+  if (landed.length) {
+    const { data: rated, error: re } = await ctx.db.rpc('college_rate_games', { p_ids: landed.map((g) => g.id) });
+    if (re) log.warn({ err: re.message }, 'final-detail ratings failed'); else ctx.inc('lines_rated', Number(rated) || 0);
+  }
   const told = await notifyPlaibook(games);
   ctx.inc(`plaibook_${told}`);
 }

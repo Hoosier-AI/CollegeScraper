@@ -117,16 +117,20 @@ export async function game(db: Db, id: string) {
   const { data: g, error } = await db.from('college_v_schedule').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!g) return null;
-  const [header, team, players, events, raw] = await Promise.all([
+  const [header, team, players, events, raw, ratings] = await Promise.all([
     db.from('college_games').select('officials,duration_min,site_game_refs,site_fetched_at,ncaa_fetched_at,live_stats_at,detail_attempts,start_epoch').eq('id', id).maybeSingle(),
     selectAll<any>(db, 'college_game_team_stats', '*', (q) => q.eq('game_id', id)),
-    selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id,college_players(suppress))', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
+    selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id,headshot_url,college_players(suppress))', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
     selectAll<any>(db, 'college_game_events', '*', (q) => q.eq('game_id', id).order('period').order('seq')),
     selectAll<any>(db, 'college_game_raw', 'source,payload,fetched_at', (q) => q.eq('game_id', id)),
+    // Match ratings (migration 189), on the lines of the box score we trust for the game.
+    selectAll<{ program_id: string; line_key: string; rating: number }>(db, 'college_player_ratings', 'program_id,line_key,rating', (q) => q.eq('game_id', id)).catch(() => []),
   ]);
+  const rated = new Map(ratings.map((r) => [`${r.program_id}|${r.line_key}`, Number(r.rating)]));
   // Box-score lines link to the player page through their roster identity.
   // `suppress` rides along so the public API can withhold the name; the admin viewer shows it as is.
-  const lines = players.map((p) => ({ ...p, player_id: p.college_player_seasons?.player_id ?? null, suppress: !!p.college_player_seasons?.college_players?.suppress, college_player_seasons: undefined }));
+  const lines = players.map((p) => ({ ...p, player_id: p.college_player_seasons?.player_id ?? null, headshot_url: cleanHeadshotUrl(p.college_player_seasons?.headshot_url), suppress: !!p.college_player_seasons?.college_players?.suppress, college_player_seasons: undefined,
+    rating: p.source === g.source_of_truth ? rated.get(`${p.program_id}|${p.source_key}`) ?? null : null }));
   const h = header.data ?? {};
   // While a match is live its ncaa rows are a snapshot of NCAA.com's in-game feed, replaced by the final box score.
   const provisional = g.status === 'live' && !!(h as any).live_stats_at;
@@ -149,7 +153,9 @@ export async function player(db: Db, id: string) {
     ids.length ? selectAll<any>(db, 'college_player_season_splits', '*', (q) => q.in('player_season_id', ids)) : [],
     ids.length ? selectAll<any>(db, 'college_rankings', 'player_season_id,season,poll,label,rank,value,week_of', (q) => q.in('player_season_id', ids).order('rank')) : [],
   ]);
-  const truthLog = log.filter((r) => r.college_games?.source_of_truth === r.source).map((r) => ({ ...r, game: r.college_games, college_games: undefined })).sort((a, b) => String(b.game.game_date).localeCompare(String(a.game.game_date)));
+  const ratedLog = ids.length ? await selectAll<{ game_id: string; program_id: string; line_key: string; rating: number }>(db, 'college_player_ratings', 'game_id,program_id,line_key,rating', (q) => q.in('player_season_id', ids)).catch(() => []) : [];
+  const rating = new Map(ratedLog.map((r) => [`${r.game_id}|${r.program_id}|${r.line_key}`, Number(r.rating)]));
+  const truthLog = log.filter((r) => r.college_games?.source_of_truth === r.source).map((r) => ({ ...r, game: r.college_games, college_games: undefined, rating: rating.get(`${r.game_id}|${r.program_id}|${r.source_key}`) ?? null })).sort((a, b) => String(b.game.game_date).localeCompare(String(a.game.game_date)));
   // Own-side names are null on site-created games; fill both sides from the programs table.
   const pids = [...new Set(truthLog.flatMap((r) => [r.game.home_program_id, r.game.away_program_id]).filter(Boolean))] as string[];
   const names = new Map<string, string>();
@@ -542,14 +548,14 @@ export async function gamesByDate(db: Db, f: MatchesFilter) {
   return { from, to, season, live: games.filter((g) => g.status === 'live').length, games, generated_at: new Date().toISOString() };
 }
 
-export interface LineupLine { player_id: string | null; player_season_id: string | null; headshot_url: string | null; name: string; jersey: number | null; position: string | null; minutes: number | null; goals: number | null; assists: number | null; shots: number | null; yc: number | null; rc: number | null; is_goalie: boolean; saves: number | null; goals_allowed: number | null; starter: boolean; participated: boolean; suppress: boolean }
+export interface LineupLine { player_id: string | null; player_season_id: string | null; headshot_url: string | null; name: string; jersey: number | null; position: string | null; minutes: number | null; goals: number | null; assists: number | null; shots: number | null; yc: number | null; rc: number | null; is_goalie: boolean; saves: number | null; goals_allowed: number | null; starter: boolean; participated: boolean; suppress: boolean; /** Match rating (migration 189), this match's trusted box score only. */ rating?: number | null }
 export interface Lineup { source: 'site' | 'ncaa'; starters: LineupLine[]; subs: LineupLine[]; dnp: LineupLine[]; keeper: LineupLine | null }
 /** match: this game's box score names starters · no_starters: its box score only lists who played · past: no box score yet, `last_lineup` is the side's latest · none: nothing to show */
 export type LineupStatus = 'match' | 'no_starters' | 'past' | 'none';
 
 const POS_ORDER: Record<string, number> = { GK: 0, G: 0, D: 1, DEF: 1, M: 2, MF: 2, MID: 2, F: 3, FW: 3, FWD: 3 };
-function buildLineup(lines: any[], source: 'site' | 'ncaa'): Lineup {
-  const map = (r: any): LineupLine => ({ player_id: r.college_player_seasons?.player_id ?? null, player_season_id: r.player_season_id ?? null, headshot_url: cleanHeadshotUrl(r.college_player_seasons?.headshot_url), name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(), jersey: r.jersey ?? null, position: r.position ?? null, minutes: r.minutes ?? null, goals: r.goals ?? null, assists: r.assists ?? null, shots: r.shots ?? null, yc: r.yellow_cards ?? null, rc: r.red_cards ?? null, is_goalie: !!r.is_goalie, saves: r.saves ?? null, goals_allowed: r.goals_allowed ?? null, starter: !!r.starter, participated: r.participated !== false, suppress: !!r.college_player_seasons?.college_players?.suppress });
+function buildLineup(lines: any[], source: 'site' | 'ncaa', ratings?: Map<string, number>): Lineup {
+  const map = (r: any): LineupLine => ({ rating: ratings?.get(`${r.program_id}|${r.source_key}`) ?? null, player_id: r.college_player_seasons?.player_id ?? null, player_season_id: r.player_season_id ?? null, headshot_url: cleanHeadshotUrl(r.college_player_seasons?.headshot_url), name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(), jersey: r.jersey ?? null, position: r.position ?? null, minutes: r.minutes ?? null, goals: r.goals ?? null, assists: r.assists ?? null, shots: r.shots ?? null, yc: r.yellow_cards ?? null, rc: r.red_cards ?? null, is_goalie: !!r.is_goalie, saves: r.saves ?? null, goals_allowed: r.goals_allowed ?? null, starter: !!r.starter, participated: r.participated !== false, suppress: !!r.college_player_seasons?.college_players?.suppress });
   const all = lines.map(map);
   const byPos = (a: LineupLine, b: LineupLine) => (POS_ORDER[(a.is_goalie ? 'GK' : a.position ?? '').toUpperCase()] ?? 4) - (POS_ORDER[(b.is_goalie ? 'GK' : b.position ?? '').toUpperCase()] ?? 4) || (a.jersey ?? 999) - (b.jersey ?? 999);
   const starters = all.filter((l) => l.starter).sort(byPos);
@@ -559,7 +565,7 @@ function buildLineup(lines: any[], source: 'site' | 'ncaa'): Lineup {
   return { source, starters, subs, dnp, keeper };
 }
 
-const LINE_COLS = 'program_id,source,player_season_id,first_name,last_name,jersey,position,starter,participated,minutes,goals,assists,shots,yellow_cards,red_cards,is_goalie,saves,goals_allowed,college_player_seasons(player_id,headshot_url,college_players(suppress))';
+const LINE_COLS = 'program_id,source,source_key,player_season_id,first_name,last_name,jersey,position,starter,participated,minutes,goals,assists,shots,yellow_cards,red_cards,is_goalie,saves,goals_allowed,college_player_seasons(player_id,headshot_url,college_players(suppress))';
 
 /** Everything a coach wants around one match: head-to-head, form, standing, poll rank, key players, lineups. */
 /** queue: false for bots and crawlers, which must not queue box-score fetches for every page they walk. */
@@ -585,6 +591,7 @@ export async function matchPreview(db: Db, id: string, opts: { queue?: boolean }
     ids.length ? selectAll<any>(db, 'college_v_player_leaders', 'player_id,display_name,suppress,program_id,jersey,position,headshot_url,gp,goals,assists,points,minutes,saves,save_pct,gaa,gk_minutes,shutouts', (q) => q.eq('season', season).in('program_id', ids)) : [],
     selectAll<any>(db, 'college_game_player_stats', LINE_COLS, (q) => q.eq('game_id', id)),
   ]);
+  const rated = new Map((await selectAll<{ program_id: string; line_key: string; rating: number }>(db, 'college_player_ratings', 'program_id,line_key,rating', (q) => q.eq('game_id', id)).catch(() => [])).map((r) => [`${r.program_id}|${r.line_key}`, Number(r.rating)]));
   // Table sizes for "3rd of 12".
   const sizes = new Map<string, number>();
   for (const st of standingRows) {
@@ -609,7 +616,7 @@ export async function matchPreview(db: Db, id: string, opts: { queue?: boolean }
     // This match's lineup comes from its own box score. When the box score names no starters (some stat crews
     // only list who played) the lineup is still this match's; when there is no box score at all, the side's most
     // recent lineup with starters is offered separately as `last_lineup`, never in `lineup`'s place.
-    let lineup: Lineup | null = src ? buildLineup(lines.filter((l) => l.program_id === pid && l.source === src), src) : null;
+    let lineup: Lineup | null = src ? buildLineup(lines.filter((l) => l.program_id === pid && l.source === src), src, rated) : null;
     if (lineup && !lineup.starters.length && !lineup.subs.length) lineup = null;
     let last_lineup: (Lineup & { game_id: string; game_date: string; opponent: string | null }) | null = null;
     if (!lineup) {

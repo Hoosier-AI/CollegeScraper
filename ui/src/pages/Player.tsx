@@ -2,6 +2,8 @@
 // Stats (season by season), Matches (game log), Career (transfers, the pro career), News.
 import { PlayerRail } from '../components/player/PlayerRail';
 import { GameForm, type FormGame } from '../components/player/GameForm';
+import { FormLine } from '../components/pro/Charts';
+import { RatingBadge } from '../components/Rating';
 import { SeasonBars } from '../components/pro/Charts';
 import { PageActions } from '../components/PageActions';
 import { Link, useLocation, useParams } from 'react-router-dom';
@@ -69,7 +71,7 @@ export default function Player() {
     { key: 'date', label: 'Date', primary: true, value: (r) => r.game.game_date, render: (r) => fmt.day(r.game.game_date) },
     { key: 'opp', label: 'Game', value: (r) => r.game.game_date, sortable: false, render: (r) => { const g = r.game; const home = g.home_program_id === own(r); const us = home ? g.home_score : g.away_score, them = home ? g.away_score : g.home_score; const opp = home ? g.away_name : g.home_name; return <span className="flex items-center gap-2"><span className="text-chalk-500">{home ? 'vs' : 'at'}</span><span>{opp ?? '?'}</span><ResultBadge result={resultOf(us, them)} us={us} them={them} /></span>; } },
     { key: 'starter', label: 'Start', render: (r) => r.starter ? 'Started' : r.participated ? 'Sub' : '' },
-    { key: 'minutes', label: 'Min', num: true }, { key: 'goals', label: 'G', num: true }, { key: 'assists', label: 'A', num: true }, { key: 'shots', label: 'Sh', num: true, priority: 2 }, { key: 'shots_on_goal', label: 'SOG', num: true, priority: 2 },
+    { key: 'minutes', label: 'Min', num: true }, { key: 'rating', label: 'Rating', title: 'Plaibook match rating (0 to 10, from the box score)', num: true, render: (r) => <RatingBadge v={r.rating} /> }, { key: 'goals', label: 'G', num: true }, { key: 'assists', label: 'A', num: true }, { key: 'shots', label: 'Sh', num: true, priority: 2 }, { key: 'shots_on_goal', label: 'SOG', num: true, priority: 2 },
     { key: 'fouls', label: 'Fouls', num: true, priority: 2 }, { key: 'yellow_cards', label: 'YC', num: true, priority: 2 }, { key: 'red_cards', label: 'RC', num: true, priority: 2 },
     ...(isGk ? [{ key: 'goals_allowed', label: 'GA', num: true, render: (r: any) => r.is_goalie ? n(r.goals_allowed) : '' }, { key: 'saves', label: 'Saves', num: true, render: (r: any) => r.is_goalie ? n(r.saves) : '' }] as Column<any>[] : []),
   ];
@@ -85,7 +87,10 @@ export default function Player() {
     .sort((a, b) => String(a.game.game_date).localeCompare(String(b.game.game_date))).slice(-12)
     .map((r) => { const g = r.game, home = g.home_program_id === own(r); const us = home ? g.home_score : g.away_score, them = home ? g.away_score : g.home_score;
       return { href: href(`/matches/${g.id}`), date: fmt.day(g.game_date), opponent: `${home ? 'vs' : 'at'} ${(home ? g.away_name : g.home_name) ?? '?'}`, result: resultOf(us, them) as FormGame['result'], minutes: r.minutes ?? null, goals: r.goals ?? 0, assists: r.assists ?? 0, started: !!r.starter }; });
-  const hasCharts = bySeason.length > 1 || form.length >= 3;
+  // Match ratings, the latest season's last 15 rated games (oldest first).
+  const ratings = gameLog.filter((r) => r.rating != null && r.game?.season === latest?.season).sort((a, b) => String(a.game.game_date).localeCompare(String(b.game.game_date))).slice(-15)
+    .map((r) => { const g = r.game, home = g.home_program_id === own(r); return { label: fmt.day(g.game_date), value: Number(r.rating), href: href(`/matches/${g.id}`), title: `${fmt.day(g.game_date)} ${home ? 'vs' : 'at'} ${(home ? g.away_name : g.home_name) ?? '?'}: ${Number(r.rating).toFixed(1)}` }; });
+  const hasCharts = bySeason.length > 1 || form.length >= 3 || ratings.length >= 5;
   const hasOverview = hasCharts || (career && seasons.length > 1) || latest?.splits?.length > 0 || latest?.ranks?.length > 0 || honors.length > 0;
   return (
     <div className="space-y-5">
@@ -130,6 +135,7 @@ export default function Player() {
       {hasCharts && (
         <div className={`grid grid-cols-1 items-start gap-3 ${bySeason.length > 1 ? 'xl:grid-cols-2' : ''}`}>
           <GameForm games={form} caption={`Last ${form.length} games, ${latest?.season}`} />
+          <FormLine points={ratings} caption={`Match ratings, ${latest?.season}`} />
           {bySeason.length > 1 && <SeasonBars rows={bySeason} a="Goals" b="Assists" caption="Goals and assists by season" />}
         </div>
       )}

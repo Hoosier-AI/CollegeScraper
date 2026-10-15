@@ -15,7 +15,8 @@ import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Crumbs } from '../components/shell';
 import { WinChances } from '../components/elo/WinChances';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav, PageWithRail, RailCard } from '../components/primitives';
-import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
+import { CollegePlayerOfMatch, HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
+import { RatingBadge } from '../components/Rating';
 import { Pitch } from '../components/match/Pitch';
 import { CollegeRefereeCard } from '../components/Referee';
 
@@ -24,7 +25,7 @@ type Src = 'site' | 'ncaa';
 // Head to head, Players.
 type Tab = 'summary' | 'lineups' | 'stats' | 'h2h' | 'preview' | 'players' | 'raw';
 const PLAYER_PRESETS: Preset[] = [
-  { id: 'overview', label: 'Overview', columns: ['jersey', 'position', 'starter', 'minutes', 'goals', 'assists', 'shots', 'shots_on_goal', 'fouls', 'yellow_cards', 'red_cards', 'goals_allowed', 'saves'] },
+  { id: 'overview', label: 'Overview', columns: ['jersey', 'position', 'starter', 'minutes', 'rating', 'goals', 'assists', 'shots', 'shots_on_goal', 'fouls', 'yellow_cards', 'red_cards', 'goals_allowed', 'saves'] },
   { id: 'shooting', label: 'Shooting', columns: ['jersey', 'minutes', 'goals', 'assists', 'points', 'shots', 'shots_on_goal', 'shots_off_target', 'pk', 'gwg', 'unassisted_goals', 'first_goals', 'ot_goals', 'tying_goals', 'hat_trick'] },
 ];
 
@@ -86,6 +87,7 @@ export default function Match() {
   const pcols: Column<any>[] = [
     { key: 'jersey', label: '#', num: true, priority: 3 },
     { key: 'name', label: 'Player', primary: true, value: (r) => `${r.first_name} ${r.last_name}`, render: (r) => r.player_id ? <a className="hover:text-pitch-300" href={href(`/players/${r.player_id}`)}>{r.first_name} {r.last_name}</a> : <span>{r.first_name} {r.last_name}</span> },
+    { key: 'rating', label: 'Rating', title: 'Plaibook match rating (0 to 10, from the box score)', num: true, priority: 3, render: (r) => <RatingBadge v={r.rating} /> },
     { key: 'position', label: 'Pos', priority: 3 }, { key: 'starter', label: 'Start', priority: 3, render: (r) => r.starter ? 'Started' : r.participated ? 'Sub' : '' },
     { key: 'minutes', label: 'Min', num: true, priority: 3 }, { key: 'goals', label: 'G', num: true, priority: 3 }, { key: 'assists', label: 'A', num: true, priority: 3 }, { key: 'points', label: 'Pts', num: true, priority: 3 }, { key: 'shots', label: 'Sh', num: true, priority: 3 }, { key: 'shots_on_goal', label: 'SOG', num: true, priority: 3 }, { key: 'shots_off_target', label: 'Off target', num: true, priority: 3 },
     { key: 'pk', label: 'PK', priority: 3, render: (r) => r.pk_attempts ? `${r.pk_goals ?? 0}–${r.pk_attempts}` : '' }, { key: 'fouls', label: 'Fouls', num: true, priority: 3 }, { key: 'yellow_cards', label: 'YC', num: true, priority: 3 }, { key: 'red_cards', label: 'RC', num: true, priority: 3 },
@@ -123,6 +125,7 @@ export default function Match() {
 
       {tab === 'summary' && (
         <PageWithRail label="Match in numbers" rail={<>
+          {g.status === 'final' && <CollegePlayerOfMatch lines={players} home={{ program_id: g.home.program_id, name: g.home.short_name ?? g.home.name, logo: g.home.logo, seo: g.home.seo }} away={{ program_id: g.away.program_id, name: g.away.short_name ?? g.away.name, logo: g.away.logo, seo: g.away.seo }} />}
           {played && (teamRow(g.home.program_id, statSrc) || teamRow(g.away.program_id, statSrc)) && (
             <RailCard title={g.status === 'live' ? 'Match stats so far' : 'Match stats'} to={href(pathname, { tab: 'stats' })} toLabel="All stats" flush>
               <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.short_name ?? g.home.name} awayName={g.away.short_name ?? g.away.name} />

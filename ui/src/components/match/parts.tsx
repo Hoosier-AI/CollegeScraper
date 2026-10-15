@@ -1,10 +1,11 @@
 // Pieces of the match page: masthead, timeline, lineups, stat bars, head-to-head and the pre-match preview.
+import { RatingBadge } from '../Rating';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDownCircle, ArrowUpCircle, CalendarClock, ExternalLink, Hand, MapPin, Square } from 'lucide-react';
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
-import { PlayerAvatar, Badge, EmptyState, FormPips, Note, ResultBadge, TeamLogo } from '../primitives';
+import { PlayerAvatar, Badge, EmptyState, FormPips, Note, RailCard, ResultBadge, TeamLogo } from '../primitives';
 import { MatchRow, type MatchLike } from './MatchRow';
 import { liveClock } from '../../lib/liveClock';
 import { WeatherLine } from './Weather';
@@ -192,6 +193,7 @@ function Line({ l, crest, crestSeo, past }: { l: any; crest?: string | null; cre
       {l.goals > 0 && <Goals n={l.goals} size={13} className="text-chalk-100" />}
       {glyphs && <span className="text-xs text-chalk-300 tnum">{glyphs}</span>}
       <span className="w-10 text-right text-xs text-chalk-500 tnum">{l.minutes != null ? `${l.minutes}′` : ''}</span>
+      {l.rating != null && <RatingBadge v={l.rating} />}
     </li>
   );
 }
@@ -472,4 +474,42 @@ export function KeyPlayers({ g, sides, narrow }: { g: any; sides: any; narrow?: 
 export function ResultLine({ g }: { g: any }) {
   const r = g.home.score == null || g.away.score == null ? null : g.home.score > g.away.score ? 'W' : g.home.score < g.away.score ? 'L' : 'T';
   return <ResultBadge result={r} us={g.home.score} them={g.away.score} ot={g.overtime} pk={g.shootout} forfeit={g.forfeit} />;
+}
+
+/** Player of the match on a college match page: the best box-score rating (45+ minutes, else anyone rated) with the
+ *  next two. Ratings come from the box score we trust for the game; nothing shows until it has one. */
+export function CollegePlayerOfMatch({ lines, home, away }: { lines: any[]; home: { program_id: string | null; name: string | null; logo?: string | null; seo?: string | null }; away: { program_id: string | null; name: string | null; logo?: string | null; seo?: string | null } }) {
+  const href = useHref();
+  const rated = lines.filter((l) => l.rating != null && !l.suppress && `${l.first_name ?? ''} ${l.last_name ?? ''}`.trim());
+  if (!rated.length) return null;
+  const long = rated.filter((l) => (l.minutes ?? 0) >= 45);
+  const pool = [...(long.length ? long : rated)].sort((a, b) => b.rating - a.rating || (b.goals ?? 0) + (b.assists ?? 0) - (a.goals ?? 0) - (a.assists ?? 0));
+  const side = (l: any) => (l.program_id === home.program_id ? home : away);
+  const name = (l: any) => `${l.first_name ?? ''} ${l.last_name ?? ''}`.trim();
+  const link = (l: any, text: React.ReactNode) => (l.player_id ? <Link to={href(`/players/${l.player_id}`)} className="hover:text-pitch-300">{text}</Link> : text);
+  const best = pool[0];
+  const facts = [side(best).name, best.goals ? `${best.goals} goal${best.goals > 1 ? 's' : ''}` : null, best.assists ? `${best.assists} assist${best.assists > 1 ? 's' : ''}` : null, best.is_goalie && best.saves ? `${best.saves} saves` : null].filter(Boolean).join(', ');
+  return (
+    <RailCard title="Player of the match">
+      <div className="flex items-center gap-3">
+        <PlayerAvatar src={best.headshot_url} name={name(best)} size={48} crest={side(best).logo} crestSeo={side(best).seo} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-chalk-100">{link(best, name(best))}</p>
+          <p className="truncate text-xs text-chalk-400">{facts}</p>
+        </div>
+        <RatingBadge v={best.rating} size="lg" />
+      </div>
+      {pool.length > 1 && (
+        <ol className="mt-2 space-y-1 border-t border-field-700 pt-2 text-sm">
+          {pool.slice(1, 3).map((l) => (
+            <li key={`${l.program_id}-${l.source_key}`} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-chalk-200">{link(l, name(l))} <span className="text-xs text-chalk-500">{side(l).name}</span></span>
+              <RatingBadge v={l.rating} />
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="mt-2 text-2xs text-chalk-500">Plaibook rating from the box score: goals, assists, shots on goal, saves, clean sheets, cards and the result.</p>
+    </RailCard>
+  );
 }

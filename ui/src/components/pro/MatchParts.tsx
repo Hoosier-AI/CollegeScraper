@@ -73,7 +73,7 @@ function place(lines: ProLine[]): { line: ProLine; x: number; y: number }[] {
   return parsed.map((p) => ({ line: p!.line, x: 1 - p!.col / ((perRow.get(p!.row) ?? 1) + 1), y: rows === 1 ? 0.5 : 0.15 + (0.71 * (p!.row - 1)) / (rows - 1) }));
 }
 
-function Token({ line, x, y, top, full, crest }: { line: ProLine; x: number; y: number; top: boolean; full?: boolean; crest?: string | null }) {
+function Token({ line, x, y, top, full, crest, to }: { line: ProLine; x: number; y: number; top: boolean; full?: boolean; crest?: string | null; to?: string | null }) {
   const last = line.display.split(/\s+/).slice(-1)[0] ?? line.display;
   const style = { left: `${(top ? 1 - x : x) * 100}%`, top: `${(full ? 1 - (0.06 + y * 0.88) : top ? y / 2 : 1 - y / 2) * 100}%` };
   const body = (
@@ -90,7 +90,8 @@ function Token({ line, x, y, top, full, crest }: { line: ProLine; x: number; y: 
   );
   const cls = 'absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2';
   const label = `${line.number ?? ''} ${line.display}${line.goals ? `, ${line.goals} goal${line.goals > 1 ? 's' : ''}` : ''}${line.rating != null ? `, rating ${line.rating}` : ''}`;
-  return line.slug ? <Link to={proPath.player(line.slug)} className={cls} style={style} aria-label={label}>{body}</Link> : <span className={cls} style={style} aria-label={label}>{body}</span>;
+  const href = to !== undefined ? to : line.slug ? proPath.player(line.slug) : null;
+  return href ? <Link to={href} className={cls} style={style} aria-label={label}>{body}</Link> : <span className={cls} style={style} aria-label={label}>{body}</span>;
 }
 
 export function ProPitch({ home, away, homeName, awayName }: { home: ProSideDetail; away: ProSideDetail; homeName: string; awayName: string }) {
@@ -116,7 +117,7 @@ export function ProPitch({ home, away, homeName, awayName }: { home: ProSideDeta
 }
 
 /** One XI on a whole pitch (Team of the week): the keeper at the bottom, each player with their club's crest. */
-export function XIPitch({ lines, label, crests }: { lines: ProLine[]; label: string; crests?: Map<number, string | null> }) {
+export function XIPitch({ lines, label, crests, linkOf }: { lines: ProLine[]; label: string; crests?: Map<number, string | null>; linkOf?: (l: ProLine) => string | null }) {
   const ps = place(lines);
   if (!ps.length) return null;
   return (
@@ -127,7 +128,7 @@ export function XIPitch({ lines, label, crests }: { lines: ProLine[]; label: str
             <rect x="1" y="1" width="66" height="88" /><circle cx="34" cy="1" r="9.15" /><rect x="13.84" y="72.5" width="40.32" height="16.5" /><rect x="24.84" y="83.5" width="18.32" height="5.5" />
           </g>
         </svg>
-        {ps.map((p) => <Token key={p.line.slot} line={p.line} x={p.x} y={p.y} top={false} full crest={crests?.get(p.line.slot) ?? null} />)}
+        {ps.map((p) => <Token key={p.line.slot} line={p.line} x={p.x} y={p.y} top={false} full crest={crests?.get(p.line.slot) ?? null} to={linkOf ? linkOf(p.line) : undefined} />)}
       </div>
     </figure>
   );

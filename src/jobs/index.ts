@@ -41,5 +41,6 @@ import './rpi.js';
 import './statAudit.js';
 import './news.js';
 import './referees.js';
+import './collegeRatings.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

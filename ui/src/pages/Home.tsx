@@ -15,6 +15,7 @@ import { EloTop } from '../components/intl/EloTop';
 import { SegmentedControl, Skeleton, TeamLogo } from '../components/primitives';
 import { Panel, type Scope } from './home/Panel';
 import { PollPanel } from './home/PollPanel';
+import { TotwPanel } from './home/TotwPanel';
 import { LeadersPanel } from './home/LeadersPanel';
 import { Board, collegeLane, intlLane, proLane } from './home/Board';
 import { Explore } from './home/Explore';
@@ -81,6 +82,7 @@ export default function Home() {
         </div>
         <aside className="space-y-4 lg:col-span-4">
           <PollPanel scope={scope} />
+          <TotwPanel scope={scope} />
           <Panel title="Plaibook Elo" meta="National teams, our own ranking" footer={{ to: '/intl/rankings', label: 'Full rankings' }}>
             <EloTop gender={gender} />
           </Panel>

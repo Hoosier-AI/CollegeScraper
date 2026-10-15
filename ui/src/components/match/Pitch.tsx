@@ -1,6 +1,7 @@
 // Both starting elevens on one pitch: home in the bottom half attacking upwards, away mirrored above. Rows follow the
 // box score's position groups (keeper, defenders, midfielders, forwards); players in a row are spread evenly, so
 // 4 defenders, 3 midfielders and 3 forwards read as a 4-3-3 without inventing exact roles.
+import { RatingBadge } from '../Rating';
 import { Link } from 'react-router-dom';
 import { useHref } from '../../lib/filters';
 import { PlayerAvatar } from '../primitives';
@@ -66,11 +67,12 @@ function Token({ line, x, y, top, crest, crestSeo, past }: { line: any; x: numbe
         {marks.length > 0 && <span className="absolute -left-1 -top-1 flex flex-col gap-0.5" aria-hidden>{marks.map((m) => <span key={m.t} className={`rounded px-1 text-[9px] font-semibold leading-3 ${m.c}`}>{m.t}</span>)}</span>}
       </span>
       <span className="mt-1 block max-w-[72px] truncate text-center text-[11px] font-medium text-white drop-shadow">{last}</span>
+      {line.rating != null && <RatingBadge v={line.rating} size="xs" className="mt-0.5" />}
     </>
   );
   const style = { left: `${x * 100}%`, top: `${(top ? y / 2 : 1 - y / 2) * 100}%` };
   const cls = `absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2 ${past ? 'opacity-75' : ''}`;
-  const label = `${line.jersey ?? ''} ${line.name}${line.goals ? `, ${line.goals} goal${line.goals > 1 ? 's' : ''}` : ''}${marks.length ? `, ${marks.map((m) => m.t).join(', ')}` : ''}`;
+  const label = `${line.jersey ?? ''} ${line.name}${line.goals ? `, ${line.goals} goal${line.goals > 1 ? 's' : ''}` : ''}${marks.length ? `, ${marks.map((m) => m.t).join(', ')}` : ''}${line.rating != null ? `, rating ${line.rating.toFixed(1)}` : ''}`;
   return line.player_id ? <Link to={href(`/players/${line.player_id}`)} className={cls} style={style} aria-label={label}>{body}</Link> : <span className={cls} style={style} aria-label={label}>{body}</span>;
 }
 

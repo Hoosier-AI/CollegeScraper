@@ -61,7 +61,7 @@ export class Sitemaps {
     const file = m[1]!;
     if (file === 'core.xml') {
       const confs = await this.data.sitemapConferences();
-      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/conferences' }, { path: '/leaders' }, { path: '/players' }, { path: '/transfers' }, { path: '/news' }, ...confs]);
+      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/conferences' }, { path: '/leaders' }, { path: '/players' }, { path: '/transfers' }, { path: '/team-of-the-week' }, { path: '/referees' }, { path: '/tv' }, { path: '/news' }, ...confs]);
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
     if (this.coaches && file === 'coaches.xml') return urlsetXml(this.baseUrl, await this.coaches());

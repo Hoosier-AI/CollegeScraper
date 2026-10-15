@@ -21,6 +21,7 @@ const Leaders = lazy(() => import('./pages/Leaders'));
 const Players = lazy(() => import('./pages/Players'));
 const Tv = lazy(() => import('./pages/Tv'));
 const Referees = lazy(() => import('./pages/Referees'));
+const TeamOfWeek = lazy(() => import('./pages/TeamOfWeek'));
 const Referee = lazy(() => import('./pages/Referee'));
 const ProReferees = lazy(() => import('./pages/pro/ProReferees'));
 const ProReferee = lazy(() => import('./pages/pro/ProReferee'));
@@ -102,6 +103,7 @@ const router = createBrowserRouter([
           { path: 'transfers', element: <Transfers /> },
           { path: 'tv', element: <Tv /> },
           { path: 'referees', element: <Referees /> },
+          { path: 'team-of-the-week', element: <TeamOfWeek /> },
           { path: 'referees/:slug', element: <Referee /> },
           { path: 'compare', element: <Compare /> },
           { path: 'h2h', element: <H2H /> },
