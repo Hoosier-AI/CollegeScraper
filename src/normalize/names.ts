@@ -4,8 +4,16 @@ export function stripDiacritics(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+/** UTF-8 read as Latin-1 somewhere upstream ("LizÃ¡rraga", "MuÃ±oz", 1,281 NCAA.com lines by 2026-10-15): decoded
+ *  again when every character fits in Latin-1 and the bytes are valid UTF-8; anything else is left as it is. */
+export function fixMojibake(s: string): string {
+  if (!/[ÃÂÅÄ][\u0080-\u00BF]/.test(s) || /[^\u0000-\u00FF]/.test(s)) return s;
+  const fixed = Buffer.from(s, 'latin1').toString('utf8');
+  return fixed.includes('\uFFFD') || fixed.length >= s.length ? s : fixed;
+}
+
 export function cleanName(s: string | null | undefined): string {
-  return (s ?? '').replace(/\s+/g, ' ').replace(/[‘’]/g, "'").trim();
+  return fixMojibake(s ?? '').replace(/\s+/g, ' ').replace(/[‘’]/g, "'").trim();
 }
 
 /** Split a display name into first/last. Handles "Last, First", "First Last", suffixes, and hyphenated/multi-word last names. */
@@ -31,7 +39,7 @@ export function splitName(raw: string): { firstName: string; lastName: string; s
 
 /** Normalised identity token: lowercase ASCII letters only, "last|first". */
 export function nameKey(firstName: string, lastName: string): string {
-  const n = (x: string) => stripDiacritics(x).toLowerCase().replace(/[^a-z]/g, '');
+  const n = (x: string) => stripDiacritics(fixMojibake(x)).toLowerCase().replace(/[^a-z]/g, '');
   return `${n(lastName)}|${n(firstName)}`;
 }
 
@@ -46,7 +54,7 @@ export function displayName(firstName: string, lastName: string): string {
 
 /** Loose match helper: last name equal and first name equal or initial match. */
 export function looseNameMatch(a: { firstName: string; lastName: string }, b: { firstName: string; lastName: string }): boolean {
-  const n = (x: string) => stripDiacritics(x).toLowerCase().replace(/[^a-z]/g, '');
+  const n = (x: string) => stripDiacritics(fixMojibake(x)).toLowerCase().replace(/[^a-z]/g, '');
   if (n(a.lastName) !== n(b.lastName)) return false;
   const fa = n(a.firstName), fb = n(b.firstName);
   if (!fa || !fb) return true;

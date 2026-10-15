@@ -8,7 +8,7 @@ import { api, ApiError } from '../../lib/api';
 import { kickoffLong, proMinute, proPath, type ProMatch as Match } from '../../lib/pro';
 import { EventTimeline, LineupList, ProPitch, TeamStatsCompare, type ProEvent, type ProSideDetail } from '../../components/pro/MatchParts';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
-import { EmptyState, ErrorBox, Section, Skeleton, TabsNav, TeamLogo, PageWithRail, RailCard } from '../../components/primitives';
+import { EmptyState, ErrorBox, Section, Skeleton, TabsNav, TeamLogo, PageWithRail, RailCard, Note } from '../../components/primitives';
 import { Crumbs } from '../../components/shell';
 import { useUrlState } from '../../lib/urlState';
 
@@ -21,7 +21,7 @@ import { useSection } from '../../lib/section';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
 
-interface MatchData { match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null; elo?: EloChances | null }
+interface MatchData { live?: { coverage: { events: boolean; lineups: boolean; stats: boolean }; updated_at: string | null } | null; match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null; elo?: EloChances | null }
 
 function Scoreline({ m }: { m: MatchData['match'] }) {
   const played = m.status === 'live' || m.status === 'final';
@@ -56,7 +56,7 @@ export default function ProMatch() {
   const q = useQuery({
     queryKey: ['pro-match', slug], queryFn: () => api<MatchData>(`/api/pro/matches/${slug}`),
     retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1,
-    refetchInterval: (query) => (query.state.data?.match.status === 'live' ? 60_000 : false),
+    refetchInterval: (query) => (query.state.data?.match.status === 'live' ? 45_000 : false),
   });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="match" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
@@ -104,9 +104,13 @@ export default function ProMatch() {
       {tabs.length > 1 && <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => `${pathname}${x === defaultTab ? '' : `?tab=${x}`}`} />}
       {tab === 'summary' && (
         <PageWithRail label="Match in numbers" rail={rail}>
+          {m.status === 'live' && <LiveNote live={d.live ?? null} hasDetail={d.events.length > 0 || hasLineups || hasStats} />}
           {d.events.length
             ? <Section title="Events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>
-            : <EmptyState title={m.status === 'live' ? 'No events yet' : 'No events recorded'} body={m.status === 'final' && !m.detail ? 'Lineups and match stats arrive shortly after full time.' : undefined} />}
+            : m.status === 'live'
+              ? (d.live?.coverage.events === false ? null : <EmptyState title="No goals, cards or substitutions yet" body="Events appear here within a couple of minutes of happening." />)
+              : <EmptyState title="No events recorded" body={m.status === 'final' && !m.detail ? 'Lineups and match stats arrive shortly after full time.' : undefined} />}
+          {m.status === 'live' && hasLineups && <Section title="On the pitch"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}
         </PageWithRail>
       )}
       {tab === 'preview' && d.preview && <PageWithRail label="Match in numbers" rail={rail}><MatchPreview m={m} p={d.preview} h2h={d.h2h} /></PageWithRail>}
@@ -130,4 +134,18 @@ export default function ProMatch() {
       {tab === 'h2h' && d.h2h.length > 0 && <Section title="Head to head" right={!intl ? <Link to={`/pro/h2h?a=${m.home.slug}&b=${m.away.slug}`} className="text-xs text-pitch-300 hover:text-pitch-200">Every meeting</Link> : <Link to={`/intl/h2h?a=${m.home.slug}&b=${m.away.slug}`} className="text-xs text-pitch-300 hover:text-pitch-200">Every meeting</Link>}><div className="frame grid grid-cols-1 overflow-hidden [&>*]:-mb-px [&>*]:border-b [&>*]:border-field-700 xl:grid-cols-2">{d.h2h.map((x) => <ProMatchRow key={x.id} m={x} showDate showLeague />)}</div></Section>}
     </div>
   );
+}
+
+/** While a match is played: what this page can show live, and how fresh it is. Says plainly when the provider has no
+ *  live events or stats for the competition, so an empty page is never a mystery. */
+function LiveNote({ live, hasDetail }: { live: MatchData['live']; hasDetail: boolean }) {
+  const c = live?.coverage;
+  const none = c && !c.events && !c.lineups && !c.stats;
+  const updated = live?.updated_at ? new Date(live.updated_at) : null;
+  const ago = updated ? Math.max(0, Math.round((Date.now() - updated.getTime()) / 60_000)) : null;
+  const fresh = ago == null ? '' : ago < 1 ? ' Updated less than a minute ago.' : ` Updated ${ago} min ago.`;
+  if (none) return <Note tone="warn">Live events and stats are not available for this competition: only the score and the minute, refreshed every couple of minutes.{fresh}</Note>;
+  const missing = c ? [!c.events && 'events', !c.lineups && 'lineups', !c.stats && 'match stats'].filter(Boolean) as string[] : [];
+  if (!hasDetail) return <Note>Live: events, lineups and match stats arrive within a few minutes of kickoff and refresh every couple of minutes.{missing.length ? ` This competition has no ${missing.join(' or ')}.` : ''}{fresh}</Note>;
+  return <Note>Live: events, lineups and match stats refresh every couple of minutes; player ratings settle after full time.{missing.length ? ` This competition has no ${missing.join(' or ')}.` : ''}{fresh}</Note>;
 }

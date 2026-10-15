@@ -1,5 +1,6 @@
 // Reads for Plaibook Stats Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
+import { coverageOf } from '../jobs/pro/coverage.js';
 import { sourcesOff } from './sources.js';
 import type { Db } from '../db/client.js';
 import { kvGet, kvSet, selectAll, selectIn } from '../db/client.js';
@@ -592,8 +593,14 @@ export async function proCareerOfCollegePlayer(db: Db, collegePlayerId: string) 
 }
 
 // ---------- matches ----------
+/** The provider's coverage flags for a competition season (a season it says nothing about counts as covered). */
+async function seasonCoverage(db: Db, leagueId: number, season: number) {
+  const { data } = await db.from('pro_seasons').select('coverage').eq('league_id', leagueId).eq('season', season).maybeSingle();
+  return coverageOf((data as any)?.coverage ?? null);
+}
+
 export async function match(db: Db, slug: string) {
-  const { data: f, error } = await db.from('pro_fixtures').select(FIXTURE_SELECT + ',referee,home_team_id,away_team_id,league_id').eq('slug', slug).maybeSingle();
+  const { data: f, error } = await db.from('pro_fixtures').select(FIXTURE_SELECT + ',referee,home_team_id,away_team_id,league_id,updated_at').eq('slug', slug).maybeSingle();
   if (error) throw new Error(error.message);
   if (!f) return null;
   const fx = f as any;
@@ -623,6 +630,9 @@ export async function match(db: Db, slug: string) {
     advanced: await matchAdvanced(db, fx.id, fx.home_team_id),
     // Before kickoff: form, the table, each side's last starting XI, top scorers and who is out.
     preview: m.status === 'live' || m.status === 'final' ? null : await matchPreview(db, fx).catch(() => null),
+    // While it is played: whether the provider has live events, lineups and stats for this competition at all (the
+    // page says so when it does not), and when the score last changed hands with us.
+    live: m.status === 'live' ? { coverage: await seasonCoverage(db, fx.league_id, m.season), updated_at: fx.updated_at ?? null } : null,
     // Club matches before kickoff: Plaibook Elo's chances (national teams have their own on International).
     elo: m.status === 'scheduled' && m.league.scope !== 'intl' ? await eloChances(db, 'pro', fx.home_team_id, fx.away_team_id, m.league.gender).catch(() => null) : null,
   };

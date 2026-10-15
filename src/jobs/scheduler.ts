@@ -38,7 +38,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'nightly', label: 'Nightly crawl', cadence: 'daily 08:15 UTC', due: (c) => c.h === 8 && c.m === 15 },
   { job: 'weekly', label: 'Weekly full re-sync', cadence: 'Tuesdays 15:00 UTC', due: (c) => c.dow === 2 && c.h === 15 && c.m === 0 },
   // Plaibook Stats Pro: all year (pro seasons never stop somewhere), only with an API-Football key.
-  { job: 'pro-live', label: 'Pro: live scores', cadence: 'every 3 minutes while a pro match is in play', due: (c) => c.m % 3 === 1, gate: async (db) => proEnabled() && proLiveDue(db) },
+  { job: 'pro-live', label: 'Pro: live scores', cadence: 'every 2 minutes while a pro match is in play (scores, then events, lineups and stats for the matches in play)', due: (c) => c.m % 2 === 1, gate: async (db) => proEnabled() && proLiveDue(db) },
   { job: 'pro-scoreboard', label: 'Pro: today\'s matches', cadence: 'every 10 minutes (yesterday and tomorrow too at :00)', due: (c) => c.m % 10 === 0, gate: async () => proEnabled() },
   { job: 'pro-final-detail', label: 'Pro: match detail', cadence: 'every 15 minutes at :07', due: (c) => c.m % 15 === 7, gate: async () => proEnabled() },
   { job: 'pro-predictions', label: 'Pro: match predictions', cadence: 'every 3 hours at :35 (matches in the next three days)', due: (c) => c.m === 35 && c.h % 3 === 0, gate: async () => proEnabled() },

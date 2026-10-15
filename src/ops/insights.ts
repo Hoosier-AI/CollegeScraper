@@ -8,6 +8,7 @@ import { currentSeason } from '../jobs/seasons.js';
 import { PRO_QUOTA_KEY } from '../jobs/pro/shared.js';
 import type { QuotaState } from '../sources/apiFootball/client.js';
 import { BROKEN_AT } from '../pro/sources.js';
+import { isUsScene } from '../sources/apiFootball/leagues.js';
 import { byKind, callsPerDay, etaDays, type ProgressRow, type RunCounters } from './proProgress.js';
 import { worldCoverage } from './proCrawlConsole.js';
 import { health as serviceHealth, jobRollup, schedule as scheduleState, usageStored } from './consoleQueries.js';
@@ -35,6 +36,8 @@ export interface AttentionInput {
   traffic: { views_7d: number; views_prev_7d: number; zero_searches_7d: number };
   /** News sources switched on, by kind, with how many keep failing (3+ in a row and nothing read for a day). */
   news?: { kind: string; name: string; on: number; failing: number }[];
+  /** US-scene pro matches live for 15+ minutes with no events stored (live detail not coming in). */
+  pro_live_stale?: { count: number; live: number; names: string[] };
   /** The latest stat-audit result per check (stat_audit_runs): our numbers against NCAA.com, ASA and the provider. */
   audits?: { check_key: string; label: string; rate: number; target: number | null; compared: number }[];
 }
@@ -102,6 +105,10 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   const hidden = i.sources.filter((s) => s.compared >= 20 && s.rate < BROKEN_AT);
   if (hidden.length) add('info', 'sources:disagree', `${hidden.length} source ${hidden.length === 1 ? 'season disagrees' : 'seasons disagree'} with API-Football`, `${hidden.slice(0, 3).map((s) => `${s.league} ${s.season} (${Math.round(s.rate * 100)}%)`).join(', ')}${hidden.length > 3 ? ' ...' : ''}. Hidden from the site until they agree ${Math.round(BROKEN_AT * 100)}%.`, '/stats/quality');
 
+  // Pro live detail: matches in play for a while with nothing but the score.
+  const pl = i.pro_live_stale;
+  if (pl && pl.count > 0) add('warn', 'pro:live-detail', `${pl.count} live US ${pl.count === 1 ? 'match has' : 'matches have'} no events`, `${pl.names.slice(0, 3).join(', ')}${pl.count > 3 ? ' ...' : ''}: in play 15+ minutes with only the score. pro-live reads events, lineups and stats every 2 minutes.`, '/stats/jobs?job=pro-live');
+
   // Stat accuracy: an agreement rate under its target (enough rows compared to mean something).
   const low = (i.audits ?? []).filter((a) => a.target != null && a.compared >= 20 && a.rate < a.target);
   for (const a of low) add('warn', `audit:${a.check_key}`, `${a.label} below target`, `${(a.rate * 100).toFixed(1)}% agree of ${a.compared.toLocaleString('en-US')} compared; the target is ${Math.round(a.target! * 100)}%.`, '/stats/quality');
@@ -119,6 +126,20 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
 
   const rank: Record<Level, number> = { error: 0, warn: 1, info: 2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
+}
+
+/** US-scene pro matches in play for 15+ minutes that have no events stored. */
+export async function proLiveStale(db: Db, now = Date.now()): Promise<NonNullable<AttentionInput['pro_live_stale']>> {
+  const { data } = await db.from('pro_fixtures').select('id,kickoff,league_id,slug').eq('status', 'live').lte('kickoff', new Date(now - 15 * 60_000).toISOString());
+  const rows = (data ?? []) as any[];
+  const { data: lg } = rows.length ? await db.from('pro_leagues').select('id,country').in('id', [...new Set(rows.map((f) => f.league_id))]) : { data: [] };
+  const country = new Map(((lg ?? []) as any[]).map((l) => [l.id, l.country]));
+  const live = rows.filter((f) => isUsScene(f.league_id, country.get(f.league_id)));
+  if (!live.length) return { count: 0, live: 0, names: [] };
+  const { data: ev } = await db.from('pro_fixture_events').select('fixture_id').in('fixture_id', live.map((f) => f.id));
+  const has = new Set(((ev ?? []) as any[]).map((e) => e.fixture_id));
+  const stale = live.filter((f) => !has.has(f.id));
+  return { count: stale.length, live: live.length, names: stale.map((f) => String(f.slug).replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/-/g, ' ')) };
 }
 
 /** The newest stat-audit row per check (the last week's runs; none before migration 182). */
@@ -226,7 +247,7 @@ async function build(db: Db, days: number, startedAt: number) {
   const render = cfg.RENDER_API_KEY && cfg.RENDER_SERVICE_ID ? new RenderClient(cfg.RENDER_API_KEY, cfg.RENDER_SERVICE_ID) : null;
   const n = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);
 
-  const [h, sched, rollup, paused, traffic, traffic14, usage, growth, quota, progress, proRuns, live, liveFresh, running, queued, quality, agreement, deploys, world, stages, newsSources, audits] = await Promise.all([
+  const [h, sched, rollup, paused, traffic, traffic14, usage, growth, quota, progress, proRuns, live, liveFresh, running, queued, quality, agreement, deploys, world, stages, newsSources, audits, proStale] = await Promise.all([
     serviceHealth(db, startedAt),
     scheduleState(db),
     jobRollup(db),
@@ -249,6 +270,7 @@ async function build(db: Db, days: number, startedAt: number) {
     db.rpc('college_sync_progress', { p_season: season }).then((r) => (r.data ?? []) as any[]),
     selectAll<{ kind: string; name: string; enabled: boolean; fails: number; last_ok_at: string | null }>(db, 'news_sources', 'kind,name,enabled,fails,last_ok_at', (q) => q.eq('enabled', true)).catch(() => []),
     latestAudits(db),
+    proLiveStale(db, now),
   ]);
 
   // Traffic: names for the top pages, and this week against last week.
@@ -298,6 +320,7 @@ async function build(db: Db, days: number, startedAt: number) {
     sources, deploy, traffic: { views_7d: views7, views_prev_7d: viewsPrev7, zero_searches_7d: zero7 },
     news: newsGroups(newsSources, now),
     audits,
+    pro_live_stale: proStale,
   });
 
   const lanes = Object.values(h.lanes);

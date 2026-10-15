@@ -159,7 +159,13 @@ function Fact({ icon, label, children }: { icon?: React.ReactNode; label: string
 
 /* ---------- lineups ---------- */
 
-const POS_GROUPS: [string, RegExp][] = [['Goalkeeper', /^(GK|G)$/i], ['Defenders', /^(D|DEF|CB|LB|RB)$/i], ['Midfielders', /^(M|MF|MID|CM|DM|AM)$/i], ['Forwards', /^(F|FW|FWD|ST|W)$/i]];
+// Box-score codes and the live feed's full words (the same list as the pitch's rows, Pitch.tsx).
+const POS_GROUPS: [string, RegExp][] = [
+  ['Goalkeeper', /^(GK|G|K|GOALKEEPER|GOALIE|KEEPER)$/i],
+  ['Defenders', /^(D|DEF|CB|LB|RB|WB|FB|B|DEFENDER|DEFENSE|DEFENCE|BACK)$/i],
+  ['Midfielders', /^(M|MF|MID|CM|DM|AM|LM|RM|WM|MIDFIELD|MIDFIELDER)$/i],
+  ['Forwards', /^(F|FW|FWD|ST|W|CF|A|ATT|FORWARD|STRIKER|ATTACKER|WINGER)$/i],
+];
 
 /** What a side's lineup on this page is: this match's XI, this match's players with no starters marked, a past
  * match's XI carried over, or nothing. `past` carries the earlier match it came from. */

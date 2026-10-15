@@ -136,8 +136,15 @@ export default function Match() {
           {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}
           <Section title="Events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
           {g.status === 'live' && players.length > 0 && (
-            <Section title="On the pitch">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
+            <Section title="On the pitch" right={<Link to={href(pathname, { tab: 'lineups' })} className="text-xs text-pitch-400 hover:text-pitch-300">Lineups and bench</Link>}>
+              {/* The formation as it stands, the same pitch as the Lineups tab (it was two flat lists). */}
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,26rem)_1fr]">
+                <Pitch home={homeLu} away={awayLu} homeName={g.home.name} awayName={g.away.name} />
+                <div className="grid grid-cols-1 content-start gap-6 sm:grid-cols-2 xl:grid-cols-1">
+                  <LineupColumn title={g.home.name ?? 'Home'} side={homeLu} benchOnly />
+                  <LineupColumn title={g.away.name ?? 'Away'} side={awayLu} benchOnly />
+                </div>
+              </div>
             </Section>
           )}
           {!played && null}

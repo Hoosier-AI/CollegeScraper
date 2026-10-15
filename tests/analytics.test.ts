@@ -107,6 +107,12 @@ describe('attention rules', () => {
     traffic: { views_7d: 100, views_prev_7d: 100, zero_searches_7d: 0 },
   });
   it('is quiet when all is well', () => { expect(attentionFrom(base())).toEqual([]); });
+  it('warns when live US matches have no events after 15 minutes', () => {
+    const i = base(); i.pro_live_stale = { count: 2, live: 5, names: ['real salt lake vs san jose earthquakes', 'la galaxy vs portland timbers'] };
+    expect(attentionFrom(i).map((a) => a.id)).toEqual(['pro:live-detail']);
+    i.pro_live_stale = { count: 0, live: 5, names: [] };
+    expect(attentionFrom(i)).toEqual([]);
+  });
   it('warns when a stat check falls below its target, with enough compared', () => {
     const i = base(); i.audits = [
       { check_key: 'ncaa:Total Assists', label: 'Players: Total Assists vs NCAA.com', rate: 0.82, target: 0.88, compared: 1500 },

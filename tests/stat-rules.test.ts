@@ -111,3 +111,15 @@ describe('new search-engine pages', () => {
     expect(h.description).not.toMatch(/0 trophies/);
   });
 });
+
+describe('names read with the wrong encoding', () => {
+  it('repairs UTF-8 read as Latin-1, and leaves good names alone', async () => {
+    const { cleanName, fixMojibake } = await import('../src/normalize/names.js');
+    expect(cleanName('Trujillo LizÃ¡rraga')).toBe('Trujillo Lizárraga');
+    expect(cleanName('MuÃ±oz')).toBe('Muñoz');
+    expect(cleanName('GonzÃ¡lez Sevilla')).toBe('González Sevilla');
+    expect(fixMojibake('Muñoz')).toBe('Muñoz');
+    expect(fixMojibake('Ãlvaro')).toBe('Ãlvaro');
+    expect(cleanName('O’Brien')).toBe("O'Brien");
+  });
+});

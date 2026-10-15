@@ -9,6 +9,7 @@ import { leagueIndex, upsertFixtures, upsertTeamStubs, type LeagueInfo } from '.
 import { addDays, utcDate, withApi } from './shared.js';
 import { fetchDetails, refreshTouched } from './detail.js';
 import type { Db } from '../../db/client.js';
+import { coverageOf } from './coverage.js';
 
 /** Store the fixtures of enabled competitions; returns how many finals still need detail. */
 export async function storeFixtures(db: Db, items: AfFixtureItem[], leagues: Map<number, LeagueInfo>): Promise<{ stored: number; finals: number; skipped: number }> {
@@ -57,6 +58,19 @@ export async function proLiveDue(db: Db, now = Date.now()): Promise<boolean> {
   return (soon ?? 0) > 0;
 }
 
+/** The live matches to read detail for, most important competitions first, at most `max`. */
+export async function liveDetailIds(db: Db, items: AfFixtureItem[], leagues: Map<number, LeagueInfo>, max = 100): Promise<{ ids: number[]; skipped: number }> {
+  const live = items.filter((it) => leagues.get(it.league.id)?.enabled && parseFixture(it).status === 'live');
+  if (!live.length) return { ids: [], skipped: 0 };
+  const pairs = [...new Set(live.map((it) => it.league.id))];
+  const seasons = await selectAll<{ league_id: number; season: number; coverage: any }>(db, 'pro_seasons', 'league_id,season,coverage', (q) => q.in('league_id', pairs));
+  const cov = new Map(seasons.map((s) => [`${s.league_id}|${s.season}`, coverageOf(s.coverage)]));
+  const has = (it: AfFixtureItem) => { const c = cov.get(`${it.league.id}|${it.league.season}`) ?? coverageOf(null); return c.events || c.lineups || c.stats; };
+  const kept = live.filter(has);
+  kept.sort((a, b) => (leagues.get(a.league.id)?.priority ?? 999) - (leagues.get(b.league.id)?.priority ?? 999));
+  return { ids: kept.slice(0, max).map((it) => it.fixture.id), skipped: live.length - kept.length };
+}
+
 export async function proLive(ctx: JobContext): Promise<void> {
   await withApi(ctx, async (api) => {
     const leagues = await leagueIndex(ctx.db);
@@ -67,6 +81,15 @@ export async function proLive(ctx: JobContext): Promise<void> {
     // Live a minute ago, not on the list now: finished (or suspended). Ask by id: the final score and a first copy of
     // the detail together, so the match page is complete at full time. Provisional: player ratings settle later, and
     // pro-final-detail reads it again once they have.
+    // Detail while the match is played: events, lineups, team stats and player lines, one request per twenty matches
+    // (fixtures?ids=), the US scene first. Competitions whose coverage has none of it are left to the score alone (the
+    // match page says so). Written provisionally: the final pass at full time reads it again.
+    const liveIds = await liveDetailIds(ctx.db, res.response, leagues, Number(ctx.params.live_max ?? 100));
+    ctx.inc('live_no_coverage', liveIds.skipped);
+    if (liveIds.ids.length) {
+      await fetchDetails(ctx, api, liveIds.ids, leagues, 'everyday', { live: true });
+      ctx.inc('live_detailed', liveIds.ids.length);
+    }
     const nowLive = new Set(res.response.map((it) => it.fixture.id));
     const ended = before.map((b) => b.id).filter((id) => !nowLive.has(id));
     if (ended.length) {

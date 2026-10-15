@@ -15,7 +15,9 @@ export const IDS_PER_CALL = 20;
  * Fetch and store detail for these fixtures. Returns the (league, season) pairs that changed so the caller can
  * refresh their totals. Fixtures whose answer has no detail count an attempt instead (the provider fills some late).
  */
-export async function fetchDetails(ctx: JobContext, api: ApiFootball, ids: number[], leagues: Map<number, LeagueInfo>, lane: Lane = 'everyday', opts: { provisional?: boolean } = {}): Promise<Set<string>> {
+/** live: matches in play too (pro-live's minute-by-minute pass): written provisionally, never counted as empty, and
+ *  their seasons are not returned for a totals refresh (totals only count finals). */
+export async function fetchDetails(ctx: JobContext, api: ApiFootball, ids: number[], leagues: Map<number, LeagueInfo>, lane: Lane = 'everyday', opts: { provisional?: boolean; live?: boolean } = {}): Promise<Set<string>> {
   const touched = new Set<string>();
   for (const batch of chunk(ids, IDS_PER_CALL)) {
     if (await ctx.cancelled()) break;
@@ -27,16 +29,17 @@ export async function fetchDetails(ctx: JobContext, api: ApiFootball, ids: numbe
     const empty: number[] = [];
     for (const it of items) {
       const header = parseFixture(it);
-      if (header.status !== 'final') continue; // still live or moved: the scoreboard will bring it back
+      const inPlay = opts.live && header.status === 'live';
+      if (header.status !== 'final' && !inPlay) continue; // moved, or live outside a live pass: the scoreboard brings it back
       const detail = parseFixtureDetail(it, leagues.get(it.league.id)?.gender ?? null);
       if (hasDetail(detail)) withDetail.push({ fixtureId: it.fixture.id, detail });
-      else empty.push(it.fixture.id);
-      touched.add(`${it.league.id}|${it.league.season}`);
+      else if (!inPlay) empty.push(it.fixture.id);
+      if (!inPlay) touched.add(`${it.league.id}|${it.league.season}`);
     }
-    await writeFixtureDetails(ctx.db, withDetail, opts.provisional ? null : new Date().toISOString());
+    await writeFixtureDetails(ctx.db, withDetail, opts.provisional || opts.live ? null : new Date().toISOString());
     // Answers that never came back (an id the provider dropped) count as empty too, so they cannot loop forever.
     const returned = new Set(items.map((it) => it.fixture.id));
-    if (!opts.provisional) await noteEmptyDetail(ctx.db, [...empty, ...batch.filter((id) => !returned.has(id))]);
+    if (!opts.provisional && !opts.live) await noteEmptyDetail(ctx.db, [...empty, ...batch.filter((id) => !returned.has(id))]);
     ctx.inc('fixtures_detailed', withDetail.length);
     ctx.inc('fixtures_empty', empty.length);
     ctx.inc('players_lines', withDetail.reduce((n, d) => n + d.detail.players.length, 0));

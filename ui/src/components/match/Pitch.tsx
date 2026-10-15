@@ -8,7 +8,14 @@ import { Goals } from '../icons';
 import { LineupChip, type SideLineup } from './parts';
 
 type Band = 'gk' | 'd' | 'x' | 'm' | 'f';
-const BAND: [Band, RegExp][] = [['gk', /^(GK|G|K)$/i], ['d', /^(D|DEF|CB|LB|RB|WB|FB|B)$/i], ['m', /^(M|MF|MID|CM|DM|AM|CDM|CAM|LM|RM|W|WM)$/i], ['f', /^(F|FW|FWD|ST|CF|A|ATT)$/i]];
+// Codes from box scores (D, MF, FW…) and the full words NCAA.com's live feed uses (DEFENDER, MIDFIELDER, FORWARD):
+// without the words, every live outfielder fell into one row and a 4-4-2 drew as two rows of five (2026-10-15).
+const BAND: [Band, RegExp][] = [
+  ['gk', /^(GK|G|K|GOAL\s*KEEPER|GOALKEEPER|GOALIE|KEEPER)$/i],
+  ['d', /^(D|DEF|CB|LB|RB|WB|FB|B|DEFEN[CS]E|DEFENDER|DEFENSE|BACK|FULLBACK|CENTER\s*BACK|CENTRE\s*BACK)$/i],
+  ['m', /^(M|MF|MID|CM|DM|AM|CDM|CAM|LM|RM|W|WM|MIDFIELD|MIDFIELDER)$/i],
+  ['f', /^(F|FW|FWD|ST|CF|A|ATT|FORWARD|STRIKER|ATTACKER|WINGER)$/i],
+];
 const ORDER: Band[] = ['gk', 'd', 'x', 'm', 'f'];
 // The keeper stands near the goal line; the outfield rows present are spread evenly up to the halfway line, so a
 // side with an extra row of unrecognised positions still has room between rows.
@@ -28,6 +35,7 @@ function bandOf(l: any): Band {
 }
 
 /** Positions for one side's starters within its half, y from that side's goal line (0) to the halfway line (1). */
+export { bandOf };
 export function placeStarters(starters: any[]): { line: any; x: number; y: number }[] {
   const rows = new Map<Band, any[]>();
   for (const l of starters) { const b = bandOf(l); rows.set(b, [...(rows.get(b) ?? []), l]); }
