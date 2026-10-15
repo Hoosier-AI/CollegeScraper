@@ -5,8 +5,9 @@ services:
   - type: web
     name: plaibook-college-scraper
     runtime: docker
-    plan: starter
-    healthCheckPath: /health
+    plan: standard
+    # Liveness only (src/server.ts): a late worker lane shows on /health and in the console, never restarts the site.
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: SUPABASE_URL

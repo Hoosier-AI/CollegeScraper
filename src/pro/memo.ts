@@ -4,7 +4,7 @@
 // past that, or never read, the caller waits. Failures are never cached.
 type Entry = { at: number; value: unknown; refresh: Promise<unknown> | null };
 
-const MAX = 600;
+const MAX = 1500;
 const entries = new Map<string, Entry>();
 
 export async function memo<T>(key: string, load: () => Promise<T>, o: { fresh?: number; stale?: number } = {}): Promise<T> {

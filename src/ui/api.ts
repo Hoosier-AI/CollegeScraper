@@ -7,6 +7,7 @@ import * as q from './queries.js';
 import { collegeElo, programElo } from './elo.js';
 import { programRpi, rpiTable } from './rpi.js';
 import { isBot } from '../pro/onView.js';
+import { memo, memoKey } from '../pro/memo.js';
 import { eastern } from '../jobs/seasons.js';
 import { registerProApi } from './proApi.js';
 import { registerIntlApi } from './intlApi.js';
@@ -53,8 +54,16 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   });
   const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1990 && n < 2100 ? n : null; };
   const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+  // The busiest college reads are the same for every visitor: cached in the process for `fresh` ms (src/pro/memo.ts:
+  // a slightly older answer is served while one refresh runs, and visitors arriving together share one load). The
+  // admin viewer reads fresh. Pages for one team or player are left to the browser cache (a long tail would push
+  // the shared entries out).
+  const shared = <T>(req: FastifyRequest, name: string, args: unknown, fresh: number, load: () => Promise<T>): Promise<T> =>
+    authorized(req.headers.authorization) ? load() : memo(memoKey(`college:${name}`, args), load, { fresh, stale: fresh * 4 });
+  const meta = () => memo('college:meta', () => q.meta(getDb()), { fresh: 5 * 60_000, stale: 30 * 60_000 });
+  const cache = (reply: FastifyReply, seconds: number) => reply.header('Cache-Control', `public, max-age=${seconds}`);
 
-  app.get('/api/meta', async () => ({ ...(await q.meta(getDb())), jobs: jobNames() }));
+  app.get('/api/meta', async (_req, reply) => { cache(reply, 300); return { ...(await meta()), jobs: jobNames() }; });
 
   // Plaibook Stats Pro (/pro pages) and International (/intl pages).
   registerProApi(app);
@@ -64,21 +73,23 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
 
   app.get<{ Querystring: Record<string, string> }>('/api/programs', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    return q.programs(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), q: str(req.query.q), members: req.query.members !== 'all' });
+    const f = { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), q: str(req.query.q), members: req.query.members !== 'all' };
+    cache(reply, 120);
+    return shared(req, 'programs', f, 120_000, () => q.programs(getDb(), f));
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
     const r = await q.program(getDb(), req.params.id, s);
-    return r ?? reply.code(404).send({ error: 'not found' });
+    return r ? cache(reply, 60).send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/roster', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
-    return q.roster(getDb(), req.params.id, s);
+    return cache(reply, 300).send(await q.roster(getDb(), req.params.id, s));
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/games', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
-    return q.programGames(getDb(), req.params.id, s);
+    return cache(reply, 60).send(await q.programGames(getDb(), req.params.id, s));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/elo', async (req, reply) => {
     const div = str(req.query.division), conf = str(req.query.conference);
@@ -127,7 +138,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const db = getDb();
     const { data: p } = await db.from('college_programs').select('school_seo,gender').eq('id', req.params.id).maybeSingle();
     if (!p) return reply.code(404).send({ error: 'not found' });
-    const s = season(req.body?.season) ?? (await q.meta(db)).currentSeason;
+    const s = season(req.body?.season) ?? (await meta()).currentSeason;
     return reply.code(202).send(await enqueue(db, 'sync-program', { season: s, program: p.school_seo, gender: p.gender, force: !!req.body?.force }));
   });
 
@@ -150,7 +161,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Querystring: Record<string, string> }>('/api/team-of-the-week', async (req, reply) => {
     const r = req.query;
     const f = {
-      season: season(r.season) ?? (await q.meta(getDb())).currentSeason,
+      season: season(r.season) ?? (await meta()).currentSeason,
       gender: (r.gender === 'w' ? 'w' : 'm') as 'm' | 'w',
       division: ['d1', 'd2', 'd3'].includes(r.division ?? '') ? r.division! : r.division === 'all' ? null : 'd1',
       week: /^\d{4}-\d{2}-\d{2}$/.test(r.week ?? '') ? r.week! : null,
@@ -160,7 +171,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/conferences/:id/table', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
     const view = (['all', 'home', 'away', 'form'] as const).find((v) => v === req.query.view) ?? 'home';
     return reply.header('Cache-Control', 'public, max-age=300').send(await collegeTableView(getDb(), req.params.id, s, req.query.gender === 'w' ? 'w' : 'm', view));
   });
@@ -170,7 +181,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const db = getDb();
     const { data: p } = await db.from('college_programs').select('id,name,gender').eq('id', req.params.id).maybeSingle();
     if (!p) return reply.code(404).send({ error: 'not found' });
-    const s = (await q.meta(db)).currentSeason;
+    const s = (await meta()).currentSeason;
     const games = await q.programGames(db, req.params.id, s);
     const base = `https://${req.headers.host ?? 'www.plaibook.live'}`;
     const ics = icsCalendar(`${(p as any).name} ${(p as any).gender === 'w' ? "women's" : "men's"} soccer`, games.filter((g: any) => g.status !== 'cancelled').map((g: any) => ({
@@ -184,7 +195,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Querystring: Record<string, string> }>('/api/compare/teams', async (req, reply) => {
     const { a, b } = req.query;
     if (!UUID.test(a ?? '') || !UUID.test(b ?? '')) return reply.code(400).send({ error: 'a and b program ids required' });
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
     const r = await collegeTeamCompare(getDb(), a!, b!, s);
     return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
   });
@@ -196,7 +207,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   });
   // Records and streaks.
   app.get<{ Querystring: Record<string, string> }>('/api/records', async (req, reply) => {
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
     const division = ['d1', 'd2', 'd3'].includes(req.query.division ?? '') ? req.query.division! : 'd1';
     const { runs, ...r } = await collegeRecords(getDb(), { season: s, gender: req.query.gender === 'w' ? 'w' : 'm', division });
     return reply.header('Cache-Control', 'public, max-age=300').send(r);
@@ -204,7 +215,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/streaks', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const db = getDb();
-    const s = season(req.query.season) ?? (await q.meta(db)).currentSeason;
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
     const [{ data: ps }, { data: p }] = await Promise.all([
       db.from('college_program_seasons').select('division').eq('program_id', req.params.id).eq('season', s).maybeSingle(),
       db.from('college_programs').select('gender').eq('id', req.params.id).maybeSingle(),
@@ -215,7 +226,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   });
   // Season simulations (migration 190): the NCAA tournament page, a conference's title race, a team's chances.
   app.get<{ Querystring: Record<string, string> }>('/api/tournament', async (req, reply) => {
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
     const r = await tournamentOdds(getDb(), s, req.query.gender === 'w' ? 'w' : 'm');
     return reply.header('Cache-Control', 'public, max-age=300').send(r ?? { season: s, field: [], teams: [] });
   });
@@ -223,7 +234,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const r = req.query;
     const conference = UUID.test(r.conference ?? '') ? r.conference! : null, program = UUID.test(r.program ?? '') ? r.program! : null;
     if (!conference && !program) return reply.code(400).send({ error: 'conference or program required' });
-    const s = season(r.season) ?? (await q.meta(getDb())).currentSeason;
+    const s = season(r.season) ?? (await meta()).currentSeason;
     return reply.header('Cache-Control', 'public, max-age=300').send(await simOdds(getDb(), { season: s, conference, program, gender: r.gender === 'w' || r.gender === 'm' ? r.gender : null }));
   });
   // College referees (migration 187): the list and one referee's page.
@@ -231,7 +242,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const r = req.query;
     const n = (v: unknown) => { const x = Number(v); return v != null && v !== '' && Number.isInteger(x) ? x : null; };
     const f = {
-      season: r.season === 'all' ? null : season(r.season) ?? (await q.meta(getDb())).currentSeason,
+      season: r.season === 'all' ? null : season(r.season) ?? (await meta()).currentSeason,
       gender: (r.gender === 'w' || r.gender === 'm' ? r.gender : null) as 'm' | 'w' | null, division: ['d1', 'd2', 'd3'].includes(r.division ?? '') ? r.division! : null,
       q: r.q ? String(r.q).trim().slice(0, 60) || null : null, min: Math.min(100, Math.max(1, n(r.min) ?? 5)),
       sort: (COLLEGE_REF_SORTS as readonly string[]).includes(r.sort ?? '') ? r.sort! : 'games',
@@ -260,12 +271,13 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Params: { id: string } }>('/api/players/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const r = await q.player(getDb(), req.params.id);
-    return r ?? reply.code(404).send({ error: 'not found' });
+    return r ? cache(reply, 300).send(r) : reply.code(404).send({ error: 'not found' });
   });
 
   app.get<{ Querystring: Record<string, string> }>('/api/leaders', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    const page = await q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all', position: str(req.query.position), class_year: req.query.class_year });
+    cache(reply, 300);
+    const page = await shared(req, 'leaders', req.query, 300_000, () => q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all', position: str(req.query.position), class_year: req.query.class_year }));
     return { stats: req.query.kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS, ...page };
   });
   app.get<{ Querystring: Record<string, string> }>('/api/matches', async (req, reply) => {
@@ -273,7 +285,11 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.code(400).send({ error: 'date must be YYYY-MM-DD' });
     if (req.query.conference && !UUID.test(req.query.conference)) return reply.code(400).send({ error: 'conference must be a uuid' });
     if (req.query.status && !['scheduled', 'live', 'final', 'postponed', 'cancelled'].includes(req.query.status)) return reply.code(400).send({ error: 'bad status' });
-    return q.gamesByDate(getDb(), { date, days: req.query.days, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), status: str(req.query.status), only: str(req.query.only), on_tv: req.query.on_tv === '1', network: str(req.query.network) });
+    const f = { date, days: req.query.days, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), status: str(req.query.status), only: str(req.query.only), on_tv: req.query.on_tv === '1', network: str(req.query.network) };
+    // Live scores change by the minute: today's (and yesterday's late games) short, other days longer.
+    const today = eastern().date, recent = Math.abs(Date.parse(date) - Date.parse(today)) <= 86400_000;
+    cache(reply, recent ? 15 : 120);
+    return shared(req, 'matches', f, recent ? 15_000 : 120_000, () => q.gamesByDate(getDb(), f));
   });
   app.get<{ Params: { id: string } }>('/api/matches/:id/preview', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
@@ -281,22 +297,29 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     return r ?? reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/conferences', async (req, reply) => {
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
-    return q.conferences(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division) });
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
+    const f = { season: s, gender: str(req.query.gender), division: str(req.query.division) };
+    cache(reply, 300);
+    return shared(req, 'conferences', f, 300_000, () => q.conferences(getDb(), f));
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/conferences/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
-    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
-    const r = await q.conference(getDb(), req.params.id, { season: s, gender: req.query.gender === 'w' ? 'w' : 'm' });
-    return r ?? reply.code(404).send({ error: 'not found' });
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
+    const f = { season: s, gender: req.query.gender === 'w' ? 'w' as const : 'm' as const };
+    const r = await shared(req, 'conference', [req.params.id, f], 120_000, () => q.conference(getDb(), req.params.id, f));
+    return r ? cache(reply, 120).send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/standings', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    return q.standings(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference) });
+    const f = { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference) };
+    cache(reply, 120);
+    return shared(req, 'standings', f, 120_000, () => q.standings(getDb(), f));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/rankings', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
-    return q.rankings(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), poll: str(req.query.poll), week_of: str(req.query.week_of) });
+    const f = { season: s, gender: str(req.query.gender), division: str(req.query.division), poll: str(req.query.poll), week_of: str(req.query.week_of) };
+    cache(reply, 300);
+    return shared(req, 'rankings', f, 300_000, () => q.rankings(getDb(), f));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/quality', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

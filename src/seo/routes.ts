@@ -77,7 +77,9 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   const { data, template } = opts;
   const baseUrl = trimBase(opts.baseUrl);
   // 1,500 rendered pages (about 60 MB) since the 2 GB instance; was 500 on 512 MB.
-  const cache = opts.cache ?? new LruCache<CachedPage>(1500, 5 * 60_000);
+  const cache = opts.cache ?? new LruCache<CachedPage>(2500, 5 * 60_000);
+  // Visitors who miss the cache for the same page at the same moment share one build.
+  const building = new Map<string, Promise<Outcome>>();
   const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null, opts.intl ?? null, opts.extra?.sitemapCoaches ?? null);
   const warn = (obj: unknown, msg: string) => opts.log?.warn(obj, msg);
   const ctx = (): HeadContext => ({ baseUrl, currentSeason: data.currentSeason() });
@@ -101,7 +103,9 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     if (opts.limit && !(await opts.limit(req, reply))) return reply;
     let out: Outcome;
     try {
-      out = await build();
+      let p = building.get(key);
+      if (!p) { p = build(); building.set(key, p); void p.catch(() => {}).finally(() => building.delete(key)); }
+      out = await p;
     } catch (err) {
       warn({ err: String(err), url: req.url }, 'ssr render failed');
       reply.header('Retry-After', '120');

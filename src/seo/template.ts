@@ -35,8 +35,9 @@ const REPLACED = [
 export function injectPage(shell: string, head: string, body: string): string {
   let html = shell;
   for (const re of REPLACED) html = html.replace(re, '');
-  html = html.includes(HEAD_MARKER) ? html.replace(HEAD_MARKER, head) : html.replace(/<\/head>/i, `${head}\n</head>`);
-  html = html.includes(BODY_MARKER) ? html.replace(BODY_MARKER, body) : html.replace(/(<div id="root"><\/div>)/i, `$1\n${body}`);
+  // Replacer functions, not strings: a "$&" or "$1" in a name or headline must come out as typed.
+  html = html.includes(HEAD_MARKER) ? html.replace(HEAD_MARKER, () => head) : html.replace(/<\/head>/i, () => `${head}\n</head>`);
+  html = html.includes(BODY_MARKER) ? html.replace(BODY_MARKER, () => body) : html.replace(/(<div id="root"><\/div>)/i, (m) => `${m}\n${body}`);
   return html;
 }
 

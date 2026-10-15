@@ -12,6 +12,17 @@ import App from './App';
 import { NotFound, RouteError } from './components/shell';
 import { RequireAdmin } from './pages/Admin';
 
+// After a deploy the old page's chunks are gone: a tab opened before it fails to load the next page's code. Reload once
+// to pick up the new build (the flag stops a loop if the reload fails too).
+window.addEventListener('vite:preloadError', (e) => {
+  let tried = false;
+  try { tried = sessionStorage.getItem('reloaded-for-deploy') === '1'; sessionStorage.setItem('reloaded-for-deploy', '1'); } catch { /* storage blocked */ }
+  if (tried) return;
+  e.preventDefault();
+  window.location.reload();
+});
+window.addEventListener('load', () => { setTimeout(() => { try { sessionStorage.removeItem('reloaded-for-deploy'); } catch { /* storage blocked */ } }, 10_000); });
+
 // Each page is its own chunk so the first paint only loads what the visitor asked for.
 const Home = lazy(() => import('./pages/Home'));
 const Teams = lazy(() => import('./pages/Teams'));

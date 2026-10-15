@@ -42,8 +42,41 @@ import { AiBotCounter, canonicalRedirect } from './seo/aiBots.js';
 const cfg = loadConfig();
 registerAllJobs();
 // trustProxy: Render terminates TLS in front of us, so without it req.ip is the proxy for every caller and
-// the whole free tier would share one rate-limit bucket.
-const app = Fastify({ logger: false, trustProxy: true });
+// the whole free tier would share one rate-limit bucket. A request gets 60 s (the slowest console reads take 25).
+const app = Fastify({ logger: false, trustProxy: true, requestTimeout: 60_000, bodyLimit: 256 * 1024 });
+
+// The visitor's real address. Every request reaches us through Render's Cloudflare edge, which sets
+// CF-Connecting-IP and refuses a request that brings its own (403, checked 2026-10-15). X-Forwarded-For alone is not
+// safe: its first entry is whatever the caller sent, and a forged one gave a fresh rate-limit bucket. req.ip reads
+// X-Forwarded-For, so the edge's value goes there, before any limiter runs.
+app.addHook('onRequest', async (req) => {
+  const cf = req.headers['cf-connecting-ip'];
+  if (typeof cf === 'string' && cf) req.headers['x-forwarded-for'] = cf;
+});
+
+// Security headers on every response. The page loads only its own scripts, styles and fonts; pictures come from
+// school, league and provider sites (https). No page may be framed.
+const SECURITY_HEADERS: Record<string, string> = {
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+};
+app.addHook('onSend', async (_req, reply, payload) => {
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) if (!reply.hasHeader(k)) reply.header(k, v);
+  return payload;
+});
+
+// Errors: logged with the route; a visitor sees a plain message, never a database error or a stack.
+app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {
+  const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
+  if (status >= 500) log.error({ err: String(err), url: req.url, method: req.method }, 'request failed');
+  reply.code(status).send(status >= 500 ? { error: 'Something went wrong on our side. Please try again.' } : { error: err.message });
+});
+process.on('unhandledRejection', (err) => log.error({ err: String(err) }, 'unhandled rejection'));
+process.on('uncaughtException', (err) => { log.error({ err: String(err), stack: err.stack }, 'uncaught exception'); process.exit(1); });
 
 // Old onrender.com page URLs move to the Stats domain (301) once PUBLIC_URL is set to it.
 // AI crawler visits are counted for the hub's SEO dashboard.
@@ -189,7 +222,15 @@ const loopStats = () => {
     heap_mb: Math.round(heap.used_heap_size / 1e6), heap_limit_mb: Math.round(heap.heap_size_limit / 1e6), rss_mb: Math.round(mem.rss / 1e6) };
 };
 
-// Liveness for Render: the database answers and both worker lanes have beaten recently (see src/ops/health.ts).
+// Liveness for Render's health check: the process answers and its event loop is not stuck. Kept apart from /health,
+// so a late worker lane or a slow database never gets the site restarted.
+app.get('/healthz', async (_req, reply) => {
+  const lag = Date.now() - lastTick;
+  reply.header('Cache-Control', 'no-store');
+  return lag < 10_000 ? { ok: true } : reply.code(503).send({ ok: false, lag_ms: lag });
+});
+
+// The full picture for the console: the database answers and both worker lanes have beaten recently (src/ops/health.ts).
 let dbLastOkAt: number | null = null;
 app.get('/health', async (_req, reply) => {
   const db = getDb();
@@ -206,8 +247,11 @@ const port = cfg.PORT;
 app.listen({ port, host: '0.0.0.0' }).then(() => {
   log.info({ port }, 'http listening');
   const controller = new AbortController();
-  process.on('SIGTERM', () => controller.abort());
-  process.on('SIGINT', () => controller.abort());
+  // A deploy or restart: workers stop taking jobs and the server stops taking connections while open requests
+  // finish (Render waits 30 s before it ends the process).
+  const stop = () => { controller.abort(); void app.close().catch(() => {}); };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
   // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
   if (cfg.WORKERS_ENABLED !== '0') {
   workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'weather', 'h2h-detail', 'final-detail', 'backfill', 'weekly', ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
