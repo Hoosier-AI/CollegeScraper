@@ -48,6 +48,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'pro-crawl', label: 'Pro: crawl', cadence: 'every 10 minutes at :05, until the backfill quota floor', due: (c) => c.m % 10 === 5, gate: async () => proEnabled() },
   { job: 'pro-leaders', label: 'Pro: leader lists', cadence: 'every hour at :32', due: (c) => c.m === 32, gate: async () => proEnabled() },
   { job: 'pro-rank', label: 'Pro: player ranks', cadence: 'daily 07:10 UTC', due: (c) => c.h === 7 && c.m === 10 },
+  { job: 'referees', label: 'Referee stats (pro and college)', cadence: 'daily 11:10 UTC', due: (c) => c.h === 11 && c.m === 10 },
   { job: 'pro-catalog', label: 'Pro: competition list', cadence: 'Mondays 06:00 UTC', due: (c) => c.dow === 1 && c.h === 6 && c.m === 0, gate: async () => proEnabled() },
   { job: 'pro-college-link', label: 'Pro: college links', cadence: 'Wednesdays 07:30 UTC', due: (c) => c.dow === 3 && c.h === 7 && c.m === 30 },
   // Other sources, on their own lane: synced daily, then mapped onto API-Football and checked against it.

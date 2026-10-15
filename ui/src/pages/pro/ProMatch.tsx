@@ -20,6 +20,7 @@ import { WinChances, type EloChances } from '../../components/elo/WinChances';
 import { useSection } from '../../lib/section';
 import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
+import { ProRefereeCard } from '../../components/Referee';
 
 interface MatchData { live?: { coverage: { events: boolean; lineups: boolean; stats: boolean }; updated_at: string | null } | null; match: Match & { referee: string | null }; events: ProEvent[]; home: ProSideDetail; away: ProSideDetail; h2h: Match[]; advanced?: AdvMatch | null; preview?: ProPreview | null; elo?: EloChances | null }
 
@@ -87,6 +88,7 @@ export default function ProMatch() {
         </RailCard>
       )}
       {d.advanced && <RailCard title="From American Soccer Analysis"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></RailCard>}
+      {m.referee && <ProRefereeCard fixtureId={m.id} competition={m.league.name} />}
     </>
   );
   return (

@@ -17,6 +17,7 @@ import { WinChances } from '../components/elo/WinChances';
 import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav, PageWithRail, RailCard } from '../components/primitives';
 import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
 import { Pitch } from '../components/match/Pitch';
+import { CollegeRefereeCard } from '../components/Referee';
 
 type Src = 'site' | 'ncaa';
 // The match tab order every area uses. Before kickoff: Preview, Head to head, Lineups. Played: Summary, Lineups, Stats,
@@ -135,6 +136,7 @@ export default function Match() {
               </table>
             </RailCard>
           )}
+          {referee && <CollegeRefereeCard gameId={g.id} division={g.division ?? null} gender={g.gender} />}
         </>}>
           {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of NCAA.com's in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
           {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}

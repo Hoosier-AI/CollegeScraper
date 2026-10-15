@@ -12,6 +12,7 @@ import { registerProApi } from './proApi.js';
 import { registerIntlApi } from './intlApi.js';
 import { registerNewsApi } from '../news/queries.js';
 import { follows, parseFollows } from './follows.js';
+import { COLLEGE_REF_SORTS, collegeGameReferee, collegeReferee, collegeRefereeList } from '../referees.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -125,6 +126,28 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const r = await q.game(getDb(), req.params.id);
     return r ?? reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Params: { id: string } }>('/api/games/:id/referee', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    return reply.header('Cache-Control', 'public, max-age=600').send({ referee: await collegeGameReferee(getDb(), req.params.id) });
+  });
+  // College referees (migration 187): the list and one referee's page.
+  app.get<{ Querystring: Record<string, string> }>('/api/referees', async (req, reply) => {
+    const r = req.query;
+    const n = (v: unknown) => { const x = Number(v); return v != null && v !== '' && Number.isInteger(x) ? x : null; };
+    const f = {
+      season: r.season === 'all' ? null : season(r.season) ?? (await q.meta(getDb())).currentSeason,
+      gender: (r.gender === 'w' || r.gender === 'm' ? r.gender : null) as 'm' | 'w' | null, division: ['d1', 'd2', 'd3'].includes(r.division ?? '') ? r.division! : null,
+      q: r.q ? String(r.q).trim().slice(0, 60) || null : null, min: Math.min(100, Math.max(1, n(r.min) ?? 5)),
+      sort: (COLLEGE_REF_SORTS as readonly string[]).includes(r.sort ?? '') ? r.sort! : 'games',
+      limit: Math.min(100, Math.max(1, n(r.limit) ?? 50)), offset: Math.max(0, n(r.offset) ?? 0),
+    };
+    return reply.header('Cache-Control', 'public, max-age=300').send(await collegeRefereeList(getDb(), f));
+  });
+  app.get<{ Params: { slug: string } }>('/api/referees/:slug', async (req, reply) => {
+    if (!/^[a-z0-9-]{2,120}$/.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const r = await collegeReferee(getDb(), req.params.slug);
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.post<{ Params: { id: string } }>('/api/games/:id/refetch', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });

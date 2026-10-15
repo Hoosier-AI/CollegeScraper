@@ -20,6 +20,10 @@ const Conferences = lazy(() => import('./pages/Conferences'));
 const Leaders = lazy(() => import('./pages/Leaders'));
 const Players = lazy(() => import('./pages/Players'));
 const Tv = lazy(() => import('./pages/Tv'));
+const Referees = lazy(() => import('./pages/Referees'));
+const Referee = lazy(() => import('./pages/Referee'));
+const ProReferees = lazy(() => import('./pages/pro/ProReferees'));
+const ProReferee = lazy(() => import('./pages/pro/ProReferee'));
 const Transfers = lazy(() => import('./pages/Transfers'));
 const Compare = lazy(() => import('./pages/Compare'));
 const H2H = lazy(() => import('./pages/H2H'));
@@ -97,11 +101,15 @@ const router = createBrowserRouter([
           { path: 'players/:id', element: <Player /> },
           { path: 'transfers', element: <Transfers /> },
           { path: 'tv', element: <Tv /> },
+          { path: 'referees', element: <Referees /> },
+          { path: 'referees/:slug', element: <Referee /> },
           { path: 'compare', element: <Compare /> },
           { path: 'h2h', element: <H2H /> },
           { path: 'coaches/:id', element: <Coach /> },
           { path: 'pro/h2h', element: <ProH2H /> },
           { path: 'pro/coaches/:id', element: <ProCoach /> },
+          { path: 'pro/referees', element: <ProReferees /> },
+          { path: 'pro/referees/:slug', element: <ProReferee /> },
           { path: 'pro/rankings', element: <ProRankings /> },
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },

@@ -344,8 +344,18 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       const id = Number(req.params.id); if (!Number.isInteger(id) || id <= 0) return null;
       const d = await x.proCoach(id); return d ? { head: ex.proCoachHead(d, id, ctx()), body: ex.proCoachBody(d, id) } : null;
     }));
+    app.get('/pro/referees', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.proReferees(); return { head: ex.proRefereesHead(d, ctx()), body: ex.proRefereesBody(d) }; }));
+    app.get('/pro/referees/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+      if (!SLUG.test(req.params.slug)) return null;
+      const d = await x.proReferee(req.params.slug); return d ? { head: ex.proRefereeHead(d, req.params.slug, ctx()), body: ex.proRefereeBody(d, req.params.slug) } : null;
+    }));
+    app.get('/referees', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.collegeReferees(season(req)); return { head: ex.collegeRefereesHead(d, ctx()), body: ex.collegeRefereesBody(d) }; }));
+    app.get('/referees/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+      if (!SLUG.test(req.params.slug)) return null;
+      const d = await x.collegeReferee(req.params.slug); return d ? { head: ex.collegeRefereeHead(d, req.params.slug, ctx()), body: ex.collegeRefereeBody(d, req.params.slug) } : null;
+    }));
   } else {
-    for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings']) app.get(path, (_req, reply) => shell(reply));
+    for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings', '/pro/referees', '/pro/referees/:slug', '/referees', '/referees/:slug']) app.get(path, (_req, reply) => shell(reply));
   }
   app.get('/tv', (_req, reply) => shell(reply));
   app.get('/compare', (_req, reply) => shell(reply));

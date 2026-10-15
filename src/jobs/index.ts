@@ -40,5 +40,6 @@ import './elo.js';
 import './rpi.js';
 import './statAudit.js';
 import './news.js';
+import './referees.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

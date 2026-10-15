@@ -19,6 +19,7 @@ import { refreshTeamOnView } from '../pro/teamRefresh.js';
 import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
 import { BROKEN_AT, advForLeaders, sourcesOff } from '../pro/sources.js';
 import { swr } from '../ops/swr.js';
+import { PRO_REF_SORTS, proMatchReferee, proReferee, proRefereeLeagues, proRefereeList } from '../referees.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1900 && n < 2100 ? n : null; };
@@ -88,6 +89,33 @@ export function registerProApi(app: FastifyInstance): void {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const r = await pro.match(getDb(), req.params.slug);
     return r ? reply.header('Cache-Control', CACHE).send(r) : notFound(reply, 'match', req.params.slug);
+  });
+  // Referees (migration 187): the list, one referee's page and the card on a match page.
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/referees', async (req, reply) => {
+    const q = req.query;
+    const n = (v: unknown) => { const x = Number(v); return v != null && v !== '' && Number.isInteger(x) ? x : null; };
+    const gender: 'm' | 'w' | null = q.gender === 'w' || q.gender === 'm' ? q.gender : null;
+    const all = q.period === 'all';
+    // US first: 'default' (or nothing) is the gender's top competition with referee data this season; 'all' every one.
+    const leagues = await proRefereeLeagues(getDb(), gender);
+    const pick = q.league === 'all' ? null : n(q.league) ?? (all ? null : leagues[0]?.league?.id ?? null);
+    const f = {
+      gender, league: pick, season: season(q.season), current: !all, q: q.q ? String(q.q).trim().slice(0, 60) || null : null,
+      min: Math.min(200, Math.max(1, n(q.min) ?? 5)), sort: (PRO_REF_SORTS as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'matches',
+      limit: Math.min(100, Math.max(1, n(q.limit) ?? 50)), offset: Math.max(0, n(q.offset) ?? 0),
+    };
+    const list = await proRefereeList(getDb(), f);
+    return reply.header('Cache-Control', 'public, max-age=300').send({ ...list, leagues, league_id: pick });
+  });
+  app.get<{ Params: { slug: string } }>('/api/pro/referees/:slug', async (req, reply) => {
+    if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const r = await proReferee(getDb(), req.params.slug);
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Params: { id: string } }>('/api/pro/fixtures/:id/referee', async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: 'bad id' });
+    return reply.header('Cache-Control', 'public, max-age=600').send({ referee: await proMatchReferee(getDb(), id) });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/search', async (req, reply) => {
     const q = String(req.query.q ?? '');

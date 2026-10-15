@@ -8,7 +8,7 @@
 //   /sitemaps/pro-matches-<year>-<n>.xml finals with detail (score-only finals and unplayed matches are noindex)
 //   /sitemaps/pro-players-<n>.xml        players who have played
 //   /sitemaps/intl-core.xml             International: its pages, every tournament, every senior national team
-//   /sitemaps/coaches.xml               college coaches of the last two seasons and pro coaches with a club
+//   /sitemaps/coaches.xml               college coaches of the last two seasons, pro coaches with a club, referees
 // Every document is built on demand and kept in memory for an hour.
 import type { SeoData, SitemapEntry } from './types.js';
 import type { ProSeoData } from './pro/data.js';

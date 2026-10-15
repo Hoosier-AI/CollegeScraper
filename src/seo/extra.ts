@@ -13,6 +13,7 @@ import { abs, breadcrumbs, ogImage, SUFFIX, type HeadContext, type HeadMeta } fr
 import { a, n, table, tr, wrapBody } from './body.js';
 import { clip, conferencePath, esc, playerPath, SITE_NAME, teamPath } from './util.js';
 import { proPaths } from './pro/pages.js';
+import { collegeReferee, collegeRefereeList, proReferee, proRefereeList } from '../referees.js';
 
 const G = { m: "Men's", w: "Women's" } as const;
 const month = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : null);
@@ -67,14 +68,31 @@ export function makeExtraSeo(db: Db) {
       }
       return out;
     },
-    /** College coaches of the last two seasons, pro coaches who have a club. */
+    /** Referees (migration 187): the busiest this season, and one referee's page. */
+    async proReferees() {
+      const base = { league: null, season: null, current: true, q: null, min: 5, sort: 'matches', limit: 100, offset: 0 };
+      return { m: await proRefereeList(db, { ...base, gender: 'm' }), w: await proRefereeList(db, { ...base, gender: 'w', limit: 40 }) };
+    },
+    proReferee: (slug: string) => proReferee(db, slug),
+    async collegeReferees(season: number) {
+      const base = { season, division: null, q: null, min: 5, sort: 'games', limit: 100, offset: 0 };
+      return { season, m: await collegeRefereeList(db, { ...base, gender: 'm' }), w: await collegeRefereeList(db, { ...base, gender: 'w' }) };
+    },
+    collegeReferee: (slug: string) => collegeReferee(db, slug),
+    /** College coaches of the last two seasons, pro coaches who have a club, and referees with enough matches to mean
+     *  something (pro 10, college 5). */
     async sitemapCoaches(): Promise<SitemapEntry[]> {
       const season = Math.max(...(await selectAll<any>(db, 'college_coach_seasons', 'season', (qq) => qq.order('season', { ascending: false }).limit(1))).map((r) => r.season), 0);
       const [c, p] = await Promise.all([
         selectAll<any>(db, 'college_coach_seasons', 'coach_id', (qq) => qq.gte('season', season - 1).order('coach_id')),
         selectAll<any>(db, 'pro_coaches', 'id', (qq) => qq.not('team_id', 'is', null).order('id')),
       ]);
-      return [...[...new Set(c.map((r) => r.coach_id))].map((id) => ({ path: `/coaches/${id}` })), ...p.map((r) => ({ path: `/pro/coaches/${r.id}` }))];
+      const [pr, cr] = await Promise.all([
+        selectAll<any>(db, 'pro_referees', 'slug', (qq) => qq.gte('matches', 10).order('slug')).catch(() => []),
+        selectAll<any>(db, 'college_referees', 'slug', (qq) => qq.gte('games', 5).order('slug')).catch(() => []),
+      ]);
+      return [...[...new Set(c.map((r) => r.coach_id))].map((id) => ({ path: `/coaches/${id}` })), ...p.map((r) => ({ path: `/pro/coaches/${r.id}` })),
+        ...pr.map((r) => ({ path: `/pro/referees/${r.slug}` })), ...cr.map((r) => ({ path: `/referees/${r.slug}` }))];
     },
   };
 }
@@ -164,6 +182,46 @@ export function proCoachBody(d: P<'proCoach'>, id: number) {
   const career = d.career.map((c) => `<li>${c.team.slug ? a(proPaths.team(c.team.slug), c.team.name) : esc(c.team.name)}: ${esc(month(c.start) ?? 'unknown')} to ${esc(month(c.end) ?? 'now')}</li>`).join('');
   const trophies = d.trophies.map((t) => `<li>${esc(t.league)}${t.country ? `, ${esc(t.country)}` : ''} ${esc(t.season)}</li>`).join('');
   return wrapBody('pro', [...proHome, { name: d.coach.name, path: `/pro/coaches/${id}` }], `<h1>${esc(d.coach.name)}</h1>${career ? `<h2>Career</h2><ul>${career}</ul>` : ''}${trophies ? `<h2>Trophies as coach</h2><ul>${trophies}</ul>` : ''}`);
+}
+
+// ---------- referees ----------
+const pct = (v: number | null | undefined) => (v == null ? '' : `${Math.round(Number(v) * 100)}%`);
+const dec = (v: number | null | undefined, d = 2) => (v == null ? '' : Number(v).toFixed(d));
+
+export function proRefereesHead(d: P<'proReferees'>, ctx: HeadContext) {
+  const top = d.m.rows[0];
+  return page(ctx, '/pro/referees', `Soccer Referee Stats: Cards, Penalties, VAR${SUFFIX}`, `Referees in every competition we follow this season: cards, penalties, fouls and VAR checks a match, and how often the home side wins${top ? `. ${top.name} has refereed ${top.matches} matches` : ''}.`, [...proHome, { name: 'Referees', path: '/pro/referees' }]);
+}
+export function proRefereesBody(d: P<'proReferees'>) {
+  const t = (title: string, rows: any[]) => table(title, ['Referee', 'Country', 'Matches', 'Cards a match', 'Penalties a match', 'Home wins'], rows.map((r) => tr([a(`/pro/referees/${r.slug}`, r.name), esc(r.country ?? ''), n(r.matches), esc(dec(r.cards_pg)), esc(dec(r.pens_pg)), esc(pct(r.home_pct))])));
+  return wrapBody('pro', [...proHome, { name: 'Referees', path: '/pro/referees' }], `<h1>Referee Stats</h1><p>Every referee with five or more matches this season, from the referee named on each match and its card, penalty and VAR events.</p><h2>Men's</h2>${t("Men's referees", d.m.rows)}${d.w.rows.length ? `<h2>Women's</h2>${t("Women's referees", d.w.rows)}` : ''}`);
+}
+export function proRefereeHead(d: P<'proReferee'>, slug: string, ctx: HeadContext) {
+  const c = d.career, main = d.seasons[0]?.league?.name;
+  return page(ctx, `/pro/referees/${slug}`, `${d.referee.name}, Referee Stats${SUFFIX}`, `${d.referee.name}${d.referee.country ? ` (${d.referee.country})` : ''}${main ? `, mostly ${main}` : ''}: ${c.matches} matches, ${dec(c.cards_pg)} cards and ${dec(c.pens_pg)} penalties a match, home side wins ${pct(c.home_pct)}.`, [...proHome, { name: 'Referees', path: '/pro/referees' }, { name: d.referee.name, path: `/pro/referees/${slug}` }]);
+}
+export function proRefereeBody(d: P<'proReferee'>, slug: string) {
+  const c = d.career;
+  const seasons = table('By competition and season', ['Competition', 'Season', 'Matches', 'Cards a match', 'Average'], d.seasons.slice(0, 30).map((s: any) => tr([s.league ? a(proPaths.league(s.league.slug), s.league.name) : '', n(s.season), n(s.matches), esc(dec(s.cards_pg)), esc(dec(s.average?.cards_pg))])));
+  const recent = d.recent.slice(0, 15).map((x: any) => `<li>${a(proPaths.match(x.match.slug), `${x.match.home.name} ${x.match.home.score ?? ''}-${x.match.away.score ?? ''} ${x.match.away.name}`)}, ${esc(x.match.league?.name ?? '')}${x.yellow != null ? `: ${many(x.yellow, 'yellow card')}` : ''}</li>`).join('');
+  return wrapBody('pro', [...proHome, { name: 'Referees', path: '/pro/referees' }, { name: d.referee.name, path: `/pro/referees/${slug}` }], `<h1>${esc(d.referee.name)}</h1><p>${esc(c.matches)} matches in our records: ${esc(dec(c.cards_pg))} cards (average ${esc(dec(d.peer?.cards_pg))}), ${esc(dec(c.pens_pg))} penalties and ${esc(dec(c.fouls_pg, 1))} fouls a match; the home side won ${esc(pct(c.home_pct))}.</p>${seasons}${recent ? `<h2>Latest matches</h2><ul>${recent}</ul>` : ''}`);
+}
+
+export function collegeRefereesHead(d: P<'collegeReferees'>, ctx: HeadContext) {
+  return page(ctx, '/referees', `College Soccer Referee Stats ${d.season}${SUFFIX}`, `NCAA soccer referees in ${d.season}, men's and women's: cards, fouls and penalty kicks a game and how often the home side wins, from the box scores that name them.`, [...college, { name: 'Referees', path: '/referees' }]);
+}
+export function collegeRefereesBody(d: P<'collegeReferees'>) {
+  const t = (title: string, rows: any[]) => table(title, ['Referee', 'Games', 'Cards a game', 'Fouls a game', 'Home wins'], rows.map((r) => tr([a(`/referees/${r.slug}`, r.name), n(r.games), esc(dec(r.cards_pg)), esc(dec(r.fouls_pg, 1)), esc(pct(r.home_pct))])));
+  return wrapBody('rankings', [...college, { name: 'Referees', path: '/referees' }], `<h1>College Soccer Referees ${esc(d.season)}</h1><p>Referees with five or more games this season whose box scores name them.</p>${d.m.rows.length ? `<h2>Men's</h2>${t("Men's referees", d.m.rows)}` : ''}${d.w.rows.length ? `<h2>Women's</h2>${t("Women's referees", d.w.rows)}` : ''}`);
+}
+export function collegeRefereeHead(d: P<'collegeReferee'>, slug: string, ctx: HeadContext) {
+  const c = d.career;
+  return page(ctx, `/referees/${slug}`, `${d.referee.name}, College Soccer Referee${SUFFIX}`, `${d.referee.name}: ${c.games} college games, ${dec(c.cards_pg)} cards and ${dec(c.fouls_pg, 1)} fouls a game, home side wins ${pct(c.home_pct)}.`, [...college, { name: 'Referees', path: '/referees' }, { name: d.referee.name, path: `/referees/${slug}` }]);
+}
+export function collegeRefereeBody(d: P<'collegeReferee'>, slug: string) {
+  const c = d.career;
+  const recent = d.recent.slice(0, 15).map((x: any) => `<li>${a(`/matches/${x.match.id}`, `${x.match.away.name} ${x.match.away.score ?? ''} at ${x.match.home.name} ${x.match.home.score ?? ''}`)}, ${esc(x.match.game_date)}</li>`).join('');
+  return wrapBody('rankings', [...college, { name: 'Referees', path: '/referees' }, { name: d.referee.name, path: `/referees/${slug}` }], `<h1>${esc(d.referee.name)}</h1><p>${esc(c.games)} games in our records: ${esc(dec(c.cards_pg))} cards (average ${esc(dec(d.peer?.cards_pg))}) and ${esc(dec(c.fouls_pg, 1))} fouls a game; the home side won ${esc(pct(c.home_pct))}.</p>${recent ? `<h2>Latest games</h2><ul>${recent}</ul>` : ''}`);
 }
 
 /** Appended to the /rankings page: live RPI and Plaibook Elo, Division I. */

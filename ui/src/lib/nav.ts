@@ -3,7 +3,7 @@
 // (Conferences, Leagues, Tournaments); pages only one area has sit under More. The header, the phone bar and its
 // More sheet all read this table.
 import type { LucideIcon } from 'lucide-react';
-import { ArrowLeftRight, BarChart3, CalendarDays, Globe, GraduationCap, Medal, Newspaper, Shield, Swords, Trophy, Users, Map as MapIcon, Tv } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, CalendarDays, Flag, Globe, GraduationCap, Medal, Newspaper, Shield, Swords, Trophy, Users, Map as MapIcon, Tv } from 'lucide-react';
 import type { Section } from './section';
 
 export type SlotKey = 'matches' | 'competitions' | 'teams' | 'players' | 'leaders' | 'rankings' | 'news';
@@ -30,6 +30,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       { key: 'compare', to: '/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
       { key: 'h2h', to: '/h2h', label: 'Head to head', icon: Swords, hint: 'Every meeting between two teams' },
       { key: 'tv', to: '/tv', label: 'On TV', icon: Tv, hint: 'Games on TV and streaming this week' },
+      { key: 'referees', to: '/referees', label: 'Referees', icon: Flag, hint: 'Cards, fouls and penalty kicks a game by referee' },
     ],
   },
   pro: {
@@ -49,6 +50,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       { key: 'compare', to: '/pro/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
       { key: 'h2h', to: '/pro/h2h', label: 'Head to head', icon: Swords, hint: 'Every meeting between two clubs' },
       { key: 'countries', to: '/pro/countries', label: 'Countries', icon: MapIcon, hint: 'Each country\'s leagues, clubs and players' },
+      { key: 'referees', to: '/pro/referees', label: 'Referees', icon: Flag, hint: 'Cards, penalties and VAR checks by referee' },
     ],
   },
   intl: {
