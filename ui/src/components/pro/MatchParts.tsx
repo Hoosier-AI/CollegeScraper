@@ -175,9 +175,6 @@ export function TeamStatsCompare({ home, away, homeName, awayName }: { home: Pro
           </div>
         );
       })}
-      {[home, away].some((s) => (s as { extra?: { source?: string } } | null)?.extra?.source === 'football-data') && (
-        <p className="px-3 py-1.5 text-2xs text-chalk-500">Match stats: <a href="https://www.football-data.co.uk" target="_blank" rel="noopener" className="underline hover:text-pitch-300">football-data.co.uk</a>.</p>
-      )}
     </div>
   );
 }

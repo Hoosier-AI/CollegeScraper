@@ -150,7 +150,7 @@ function Chances({ m, p }: { m: ProMatch; p: ProPrediction }) {
           })}
         </div>
       )}
-      <p className="text-2xs text-chalk-500">API-Football's prediction, updated {new Date(p.fetched_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.</p>
+      <p className="text-2xs text-chalk-500">Prediction, updated {new Date(p.fetched_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.</p>
     </div>
   );
 }

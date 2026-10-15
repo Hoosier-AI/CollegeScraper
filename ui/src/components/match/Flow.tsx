@@ -126,7 +126,7 @@ export function MatchFlow({ url, live, home, away, homeLogo, awayLogo, homeSeo, 
   const explain: Record<View, string> = {
     momentum: `Who was on top, minute by minute: above the line ${home} were pressing, below it ${away}. From shots, shots on target, corners and goals${f.xg ? ', weighted by chance quality' : ''}.`,
     winprob: `Each result's chance as the match went, starting from ${f.basis === 'prediction' ? 'the pre-match prediction' : 'Plaibook Elo before kickoff'} and updated for the score, the time left and red cards.`,
-    xg: 'Expected goals as they built up: the quality of each side’s chances, from American Soccer Analysis.',
+    xg: 'Expected goals as they built up: the quality of each side’s chances.',
   };
 
   return (

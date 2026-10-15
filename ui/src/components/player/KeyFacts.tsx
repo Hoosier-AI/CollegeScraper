@@ -30,7 +30,7 @@ export function KeyFacts({ position, salary, salaryNote, apps, pts, starts, star
       <Fact label="Position" value={positionWord(position) ?? '–'} />
       <Fact label="Points per game" value={ppg ?? '–'} sub={apps ? `${season ? `${season}, ` : ''}${apps} ${apps === 1 ? 'game' : 'games'}${ppg ? '' : ' (5+ to show)'}` : 'no games yet'} accent />
       <Fact label="Points per start" value={pps ?? '–'} sub={starts ? `${starts} ${starts === 1 ? 'start' : 'starts'} of 45+ min${pps ? '' : ' (5+ to show)'}` : 'no starts of 45+ min'} accent />
-      {other ? <Fact label={other.label} value={other.value} sub={other.sub} /> : salary ? <Fact label={`${salary.season} guaranteed pay`} value={salary.guaranteed != null ? usd(salary.guaranteed) : '–'} sub={salary.base != null ? `Base ${usd(salary.base)}, MLSPA ${salary.release_date.slice(0, 7)}` : 'MLSPA'} />
+      {other ? <Fact label={other.label} value={other.value} sub={other.sub} /> : salary ? <Fact label={`${salary.season} guaranteed pay`} value={salary.guaranteed != null ? usd(salary.guaranteed) : '–'} sub={salary.base != null ? `Base ${usd(salary.base)}, as of ${salary.release_date.slice(0, 7)}` : `As of ${salary.release_date.slice(0, 7)}`} />
         : <Fact label="Salary" value="Not published" sub={<span title={salaryNote ?? undefined}>{salaryNote ?? 'Only MLS publishes player salaries'}</span>} />}
     </section>
   );

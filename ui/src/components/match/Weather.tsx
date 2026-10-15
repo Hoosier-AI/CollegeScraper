@@ -33,7 +33,7 @@ export function WeatherLine({ w, past }: { w: MatchWeather; past?: boolean }) {
       <div className="min-w-0">
         <div className="text-sm text-chalk-100"><span className="display text-xl tnum">{w.temp_f != null ? `${w.temp_f}°F` : '–'}</span> <span className="text-chalk-300">{bits.join(', ')}</span></div>
         <div className="text-xs text-chalk-500">
-          {past ? 'Forecast at kickoff' : w.time_assumed ? 'Forecast for 7 pm ET (kickoff time not announced)' : 'Forecast for kickoff'}{w.place ? ` near ${w.place}` : ''}, National Weather Service{w.read_at ? `, ${past ? 'read' : 'updated'} ${fmt.agoWords(w.read_at)}` : ''}.
+          {past ? 'Forecast at kickoff' : w.time_assumed ? 'Forecast for 7 pm ET (kickoff time not announced)' : 'Forecast for kickoff'}{w.place ? ` near ${w.place}` : ''}{w.read_at ? `, ${past ? 'read' : 'updated'} ${fmt.agoWords(w.read_at)}` : ''}.
         </div>
       </div>
     </div>

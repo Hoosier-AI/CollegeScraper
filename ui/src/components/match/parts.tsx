@@ -345,7 +345,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
               })}
             </ol>
             {compact && allHref && h2h.games.length > 3 && <Link to={allHref} className="text-sm text-pitch-300 hover:text-pitch-200">All {h2h.games.length} meetings</Link>}
-            {h2h.scorers_pending && <Note>Scorers for older meetings are being fetched from NCAA.com; they appear here within a few minutes.</Note>}
+            {h2h.scorers_pending && <Note>Scorers for older meetings are being fetched; they appear here within a few minutes.</Note>}
             <p className="text-xs text-chalk-500">Results shown for {hn}. Our records start in {h2h.first_season}; earlier meetings are not counted.</p>
           </>
         ) : <EmptyState title="First meeting in our records" body="Results go back to the 2024 season." />}
@@ -403,7 +403,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
               })}
             </ol>
             {compact && allHref && h2h.games.length > 3 && <Link to={allHref} className="text-sm text-pitch-300 hover:text-pitch-200">All {h2h.games.length} meetings</Link>}
-            {h2h.scorers_pending && <Note>Scorers for older meetings are being fetched from NCAA.com; they appear here within a few minutes.</Note>}
+            {h2h.scorers_pending && <Note>Scorers for older meetings are being fetched; they appear here within a few minutes.</Note>}
             <p className="text-xs text-chalk-500">Results shown for {hn}. Our records start in {h2h.first_season}; earlier meetings are not counted.</p>
           </>
         ) : <EmptyState title="First meeting in our records" body="Results go back to the 2024 season." />}

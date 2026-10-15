@@ -49,7 +49,7 @@ export function RpiView() {
               <th scope="col" className="th text-right">#</th><th scope="col" className="th text-right" title="Change since yesterday">Day</th><th scope="col" className="th">Team</th>
               <th scope="col" className="th hidden md:table-cell">Conference</th><th scope="col" className="th text-right">W-L-T</th><th scope="col" className="th text-right">RPI</th>
               <th scope="col" className="th hidden text-right lg:table-cell" title="Winning percentage, a tie a third of a win">WP</th><th scope="col" className="th hidden text-right lg:table-cell" title="Opponents' winning percentage">OWP</th><th scope="col" className="th hidden text-right lg:table-cell" title="Opponents' opponents' winning percentage">OOWP</th>
-              {d1 && <th scope="col" className="th text-right" title="NCAA.com's published order">NCAA</th>}
+              {d1 && <th scope="col" className="th text-right" title="The published order">Published</th>}
             </tr></thead>
             <tbody>{q.data.rows.map((r) => (
               <tr key={r.program.id} className="border-t border-field-700">

@@ -70,7 +70,6 @@ const ProCompare = lazy(() => import('./pages/pro/ProCompare'));
 const ProTransfers = lazy(() => import('./pages/pro/ProTransfers'));
 const ProCollege = lazy(() => import('./pages/pro/ProCollege'));
 const ProAbroad = lazy(() => import('./pages/pro/ProAbroad'));
-const ProSources = lazy(() => import('./pages/pro/ProSources'));
 // International (national teams): its own lists; a tournament, team, player or match page is Pro's.
 const IntlTournaments = lazy(() => import('./pages/intl/IntlTournaments'));
 const IntlTeams = lazy(() => import('./pages/intl/IntlTeams'));
@@ -145,7 +144,7 @@ const router = createBrowserRouter([
           { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
           // One home page for every area (2026-10-14): the old Pro and International homes lead there.
           { path: 'pro', element: <Redirect to={() => '/'} /> },
-          { path: 'pro/sources', element: <ProSources /> },
+          { path: 'pro/sources', element: <Navigate to="/sources" replace /> },
           { path: 'pro/matches', element: <ProMatches /> },
           { path: 'pro/matches/:slug', element: <ProMatch /> },
           { path: 'pro/leagues', element: <ProLeagues /> },

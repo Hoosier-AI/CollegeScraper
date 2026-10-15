@@ -47,7 +47,7 @@ export default function Tv() {
           <div className="frame divide-y divide-field-700">{list.map((g) => <MatchRow key={g.id} g={g} />)}</div>
         </section>
       ))}
-      {q.data && shown.length > 0 && <p className="text-xs text-chalk-500">From each school's own schedule (the home school's listing first), else NCAA.com. Pro and international TV listings are not available yet.</p>}
+      {q.data && shown.length > 0 && <p className="text-xs text-chalk-500">From the schools' own schedules. Pro and international TV listings are not available yet.</p>}
     </div>
   );
 }

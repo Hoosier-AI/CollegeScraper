@@ -1,7 +1,7 @@
 // Pure: International (/intl) page models -> <head> metadata and the escaped #ssr summary search engines and
 // no-JavaScript readers get. A tournament, team or match page is Pro's renderer (src/seo/pro/pages.ts), which puts it
 // under /intl; these are the section's own pages: the front door, the scoreboard, the lists, rankings, a nation's
-// history and a player's international career. Every block of open-source data credits its source.
+// history and a player's international career. Licence notices for open data are on /sources.
 import type * as I from '../../pro/intl.js';
 import type * as Q from '../../pro/queries.js';
 import { abs, breadcrumbs, ld, NOINDEX, ogImage, SUFFIX, type HeadContext, type HeadMeta } from '../head.js';
@@ -21,7 +21,6 @@ const home = [{ name: INTL, path: '/intl' }];
 const day = (iso: string) => longDate(iso.slice(0, 10));
 const matchLine = (m: Q.ProMatchRow) => `${a(proPaths.match(m.slug, m.league.scope), proIsFinal(m) ? proScoreLine(m) : `${m.home.name} vs ${m.away.name}`)} (${esc(m.league.name)})`;
 const resultLine = (r: I.IntlResult) => `${esc(day(r.date))}: ${r.match_slug ? a(proPaths.match(r.match_slug, 'intl'), `${r.home.name} ${r.home_score ?? ''}-${r.away_score ?? ''} ${r.away.name}`) : esc(`${r.home.name} ${r.home_score ?? ''}-${r.away_score ?? ''} ${r.away.name}`)} (${esc(r.tournament)})`;
-const credits = (cs: { name: string; url: string; license: string }[]) => (cs.length ? `<p>Sources: ${cs.map((c) => `<a href="${esc(c.url)}" rel="noopener">${esc(c.name)}</a> (${esc(c.license)})`).join('; ')}.</p>` : '');
 const page = (ctx: HeadContext, path: string, title: string, description: string, crumbs: { name: string; path: string }[], robots: string | null = null): HeadMeta => ({
   title, description: clip(description), canonical: abs(ctx, path), robots, ogType: 'website', image: ogImage(ctx), jsonLd: [breadcrumbs(ctx, crumbs)],
 });
@@ -106,7 +105,7 @@ export function intlHistorySection(h: IntlHistoryPage): string {
 ${comps.length ? `<h2>By competition</h2>${table(`${h.nation.name} by competition`, ['Competition', 'P', 'W', 'D', 'L', 'GF', 'GA'], comps)}` : ''}
 ${scorers.length ? `<h2>Top scorers</h2>${table(`${h.nation.name} top scorers`, ['Player', 'Goals', 'Years'], scorers)}` : ''}
 ${caps.length ? `<h2>Most caps among the players we follow</h2>${table(`${h.nation.name} most caps`, ['Player', 'Caps', 'Goals'], caps)}` : ''}
-${h.recent.length ? `<h2>Latest results</h2><ul>${h.recent.slice(0, 15).map((x) => `<li>${resultLine(x)}</li>`).join('')}</ul>` : ''}${credits(h.credits)}`;
+${h.recent.length ? `<h2>Latest results</h2><ul>${h.recent.slice(0, 15).map((x) => `<li>${resultLine(x)}</li>`).join('')}</ul>` : ''}`;
 }
 export function intlHistoryBody(h: IntlHistoryPage): string {
   return wrapBody('intl', [...home, { name: 'Teams', path: '/intl/teams' }, { name: h.nation.name, path: `/intl/teams/${h.nation.slug ?? h.nation.key}` }], `<h1>${esc(h.nation.name)}${h.gender === 'w' ? " Women's" : ''} National Team</h1>${intlHistorySection(h)}`);
@@ -127,7 +126,7 @@ export function intlPlayerBody(p: { player: ProPlayerPage; intl: Awaited<ReturnT
   const seasons = p.player.seasons.filter((s) => s.team?.national).map((s) => tr([esc(s.season), s.league ? a(proPaths.league(s.league.slug), s.league.name) : '', s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', n(s.apps), n(s.goals), n(s.assists)]));
   const wcs = p.intl.world_cups.map((w) => `<li>${esc(w.year)} World Cup${w.nation ? ` with ${esc(w.nation.name)}` : ''}${w.shirt ? `, shirt ${esc(w.shirt)}` : ''}</li>`).join('');
   return wrapBody('intl', [...home, { name: 'Players', path: '/intl/players' }, { name: pl.name, path: `/intl/players/${pl.slug}` }],
-    `<h1>${esc(pl.name)}: International Career</h1><p>${a(proPaths.player(pl.slug), `${pl.name}'s club career`)}.</p>${caps.length ? `<h2>Caps</h2>${table(`${pl.name} caps`, ['Nation', 'Caps', 'Goals', 'Years'], caps)}` : ''}${seasons.length ? `<h2>By competition</h2>${table(`${pl.name} international competitions`, ['Season', 'Competition', 'Team', 'Apps', 'Goals', 'Assists'], seasons)}` : ''}${wcs ? `<h2>World Cups</h2><ul>${wcs}</ul>` : ''}${credits(p.intl.credits)}`);
+    `<h1>${esc(pl.name)}: International Career</h1><p>${a(proPaths.player(pl.slug), `${pl.name}'s club career`)}.</p>${caps.length ? `<h2>Caps</h2>${table(`${pl.name} caps`, ['Nation', 'Caps', 'Goals', 'Years'], caps)}` : ''}${seasons.length ? `<h2>By competition</h2>${table(`${pl.name} international competitions`, ['Season', 'Competition', 'Team', 'Apps', 'Goals', 'Assists'], seasons)}` : ''}${wcs ? `<h2>World Cups</h2><ul>${wcs}</ul>` : ''}`);
 }
 
 /** Today's (or the next) national-team matches for the one home page (/). */

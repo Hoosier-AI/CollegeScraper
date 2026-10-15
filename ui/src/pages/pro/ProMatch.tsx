@@ -18,7 +18,7 @@ import { MoveSection } from '../../components/pro/MoveSection';
 import { EloMatchCard } from '../../components/intl/EloMatchCard';
 import { WinChances, type EloChances } from '../../components/elo/WinChances';
 import { useSection } from '../../lib/section';
-import { Credit, MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
+import { MatchAdvancedFacts, ShotMap, type AdvMatch } from '../../components/pro/Advanced';
 import { MatchPreview, type ProPreview } from '../../components/pro/MatchPreview';
 import { ProRefereeCard } from '../../components/Referee';
 import { MatchFlow } from '../../components/match/Flow';
@@ -90,7 +90,7 @@ export default function ProMatch() {
           <TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} />
         </RailCard>
       )}
-      {d.advanced && <RailCard title="From American Soccer Analysis"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></RailCard>}
+      {d.advanced && <RailCard title="Advanced stats"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></RailCard>}
       {m.referee && <ProRefereeCard fixtureId={m.id} competition={m.league.name} />}
     </>
   );
@@ -134,7 +134,7 @@ export default function ProMatch() {
       {tab === 'stats' && (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
           {hasStats && <Section title="Team stats" className={hasShots ? '' : 'lg:col-span-2'}><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
-          {hasShots && <Section title="Shot map" className={hasShotsWide ? 'lg:col-span-2' : ''}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /><Credit credit={d.advanced!.credit} /></Section>}
+          {hasShots && <Section title="Shot map" className={hasShotsWide ? 'lg:col-span-2' : ''}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /></Section>}
           {hasLineups && <Section title="Player stats" className="lg:col-span-2"><PlayerMatchStats home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}
         </div>
       )}

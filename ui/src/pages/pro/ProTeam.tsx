@@ -17,7 +17,7 @@ import { Flag, GoalsByPeriod, TransfersList, type TransferLine } from '../../com
 import { EmptyState, ErrorBox, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo, PageWithRail, RailCard, RailRow } from '../../components/primitives';
 import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
 import { PointsLine, ResultStrip } from '../../components/pro/Charts';
-import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
+import { TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { ProHero, StatTile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
 import { ClubExtras } from '../../components/pro/ClubExtras';
@@ -216,7 +216,7 @@ export default function ProTeam() {
               </div>
             </Section>
           )}
-          {d.advanced && d.advanced.competitions.length > 0 && <Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /><Credit credit={d.advanced.credit} /></Section>}
+          {d.advanced && d.advanced.competitions.length > 0 && <Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /></Section>}
           {(d.season_detail?.length ?? 0) > 0 && <Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section>}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {periodShown ? <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
@@ -228,7 +228,7 @@ export default function ProTeam() {
             </Section>
           </div>
           {d.payroll && (
-            <Section title={`${d.payroll.season} payroll`} right={<span className="text-2xs text-chalk-500">MLS Players Association, {fmt.date(d.payroll.release_date)}</span>}>
+            <Section title={`${d.payroll.season} payroll`} right={<span className="text-2xs text-chalk-500">As of {fmt.date(d.payroll.release_date)}</span>}>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-[14rem_minmax(0,1fr)]">
                 <div className="self-start"><StatTile label="Guaranteed compensation" value={usd(d.payroll.total)} sub={`${d.payroll.players} players`} accent /></div>
                 <ul className="frame divide-y divide-field-700 text-sm">

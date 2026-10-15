@@ -52,14 +52,14 @@ export function PollsView(props: { conference?: string; embedded?: boolean } = {
     { key: 'value', label: 'Value', num: true, render: (r) => fmt.num(r.value, Number(r.value) % 1 ? 2 : 0) },
   ];
   const check = q.data?.ncaaCheck?.[`${f.gender}/${division}`];
-  const pollOptions = (q.data?.polls ?? []).map((p: any) => ({ value: p.poll, label: p.label, group: p.poll === 'usc' ? undefined : 'NCAA.com statistical leaders' }));
+  const pollOptions = (q.data?.polls ?? []).map((p: any) => ({ value: p.poll, label: p.label, group: p.poll === 'usc' ? undefined : 'National statistical leaders' }));
   const scope = `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
   const weekLabel = weeks[wi]?.label ?? '';
   return (
     <div className="space-y-4">
-      <PageHeader as="h2" title={usc ? "Coaches' poll" : "NCAA.com rankings"} meta={usc ? `United Soccer Coaches poll, ${scope}` : `NCAA.com statistical rankings, ${scope}`}>
+      <PageHeader as="h2" title={usc ? "Coaches' poll" : "Statistical rankings"} meta={usc ? `Coaches' poll, ${scope}` : `National statistical rankings, ${scope}`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v === 'd1' ? null : v, week: null })} options={DIV_OPTIONS} />}</Field>
-        <Field label="Poll">{(id) => <Select id={id} value={q.data?.poll ?? poll} onChange={(v) => patch({ poll: v === 'usc' ? null : v, week: null })} options={pollOptions.length ? pollOptions : [{ value: poll || 'usc', label: 'United Soccer Coaches' }]} className="max-w-[240px]" />}</Field>
+        <Field label="Poll">{(id) => <Select id={id} value={q.data?.poll ?? poll} onChange={(v) => patch({ poll: v === 'usc' ? null : v, week: null })} options={pollOptions.length ? pollOptions : [{ value: poll || 'usc', label: "Coaches' poll" }]} className="max-w-[240px]" />}</Field>
       </PageHeader>
       {weeks.length > 0 && (
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Poll week">
@@ -68,12 +68,12 @@ export function PollsView(props: { conference?: string; embedded?: boolean } = {
           <button className="btn-ghost btn-icon" aria-label="Later poll" disabled={latest} onClick={() => setWeek(weeks[wi - 1]?.week_of ?? null)}><ChevronRight size={16} /></button>
           {latest ? <Chip on>Latest</Chip> : <Chip onClick={() => setWeek(null)}>Back to latest</Chip>}
           {usc && latest && check && (check.mismatches?.length
-            ? <span className="text-xs text-note">ncaa.com's copy differs: {check.mismatches.join(', ')}</span>
-            : <span className="text-xs text-chalk-400">Matches ncaa.com's copy{check.ncaa_week ? ` (${check.ncaa_week})` : ''}</span>)}
+            ? <span className="text-xs text-note">Published copy differs: {check.mismatches.join(', ')}</span>
+            : <span className="text-xs text-chalk-400">Matches the published copy{check.ncaa_week ? ` (${check.ncaa_week})` : ''}</span>)}
         </div>
       )}
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
-      <DataTable rows={top} columns={cols} rowKey={(r) => String(r.id)} caption={`${usc ? 'United Soccer Coaches poll' : q.data?.polls?.find((p: any) => p.poll === q.data.poll)?.label ?? 'Rankings'}${weekLabel ? `, ${weekLabel}` : ''}, ${scope}`} loading={q.isPending} defaultSort={{ key: 'name', dir: 'asc' }} dense
+      <DataTable rows={top} columns={cols} rowKey={(r) => String(r.id)} caption={`${usc ? "Coaches' poll" : q.data?.polls?.find((p: any) => p.poll === q.data.poll)?.label ?? 'Rankings'}${weekLabel ? `, ${weekLabel}` : ''}, ${scope}`} loading={q.isPending} defaultSort={{ key: 'name', dir: 'asc' }} dense
         rowHref={(r) => (r.college_player_seasons ? `/players/${r.college_player_seasons.player_id}` : r.college_programs ? href(`/teams/${r.college_programs.id}`) : null)}
         empty={<EmptyState title={`No poll for ${scope} yet`} body={admin ? 'Run refresh-rankings from the Jobs page.' : 'The first poll of the season has not been published, or it is still being collected.'} />} />
       {rv.length > 0 && (
@@ -82,7 +82,7 @@ export function PollsView(props: { conference?: string; embedded?: boolean } = {
           <span className="inline-flex flex-wrap gap-1.5 align-middle">{rv.map((r) => <Chip key={r.id} to={r.college_programs ? href(`/teams/${r.college_programs.id}`) : undefined}>{r.college_programs?.name ?? r.subject_name} <span className="text-chalk-500 tnum">{r.value}</span></Chip>)}</span>
         </div>
       )}
-      {usc && <p className="text-xs text-chalk-500">Source: unitedsoccercoaches.org. Every poll of the season is kept; use the arrows to move between weeks.</p>}
+      {usc && <p className="text-xs text-chalk-500">Every poll of the season is kept; use the arrows to move between weeks.</p>}
     </div>
   );
 }

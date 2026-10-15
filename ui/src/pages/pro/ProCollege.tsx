@@ -31,7 +31,7 @@ export default function ProCollege() {
         meta={q.data ? `${fmt.num(q.data.total)} ${gender === 'w' ? "women's" : "men's"} professional players from ${fmt.num(q.data.schools)} colleges` : 'Professional players who played NCAA soccer'}>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="School or player" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
-      <p className="text-sm text-chalk-400">Matched from Wikidata's education records and our own college rosters, by birth date and name; only confident or checked links are shown. See also <Link to={`${proPaths2.country('usa')}`} className="text-pitch-300 hover:text-pitch-200">American players abroad</Link>.</p>
+      <p className="text-sm text-chalk-400">Matched from public career records and our own college rosters, by birth date and name; only confident or checked links are shown. See also <Link to={`${proPaths2.country('usa')}`} className="text-pitch-300 hover:text-pitch-200">American players abroad</Link>.</p>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-96" />}
       {q.data && !groups.length && <EmptyState title="No links yet" body="Links appear as player profiles with birth dates arrive and the weekly college match runs." />}

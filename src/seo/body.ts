@@ -43,7 +43,7 @@ export function teamBody(t: TeamPage, ctx: HeadContext): string {
   if (t.record) facts.push(`${esc(rec(t.record.w, t.record.l, t.record.t))} overall`);
   if (t.record?.conf) facts.push(`${esc(rec(t.record.conf.w, t.record.conf.l, t.record.conf.t))} in conference`);
   if (t.standing?.rank) facts.push(`${esc(String(t.standing.rank))}${t.standing.pod ? ` in the ${esc(t.standing.pod)}` : ' in the conference table'}`);
-  if (t.poll) facts.push(`No. ${esc(String(t.poll.rank))} in the United Soccer Coaches poll${t.poll.label ? ` (${esc(t.poll.label)})` : ''}`);
+  if (t.poll) facts.push(`No. ${esc(String(t.poll.rank))} in the coaches' poll${t.poll.label ? ` (${esc(t.poll.label)})` : ''}`);
   if (head) facts.push(`head coach ${esc(head.name)}`);
   if (t.record && t.record.gf != null) facts.push(`${esc(String(t.record.gf))} goals for, ${esc(String(t.record.ga ?? 0))} against`);
   const other = t.seasons.filter((s) => s !== t.season).slice(0, 6);
@@ -150,20 +150,20 @@ export function conferenceBody(c: ConferencePage, ctx: HeadContext): string {
     return `<h2>${esc(label)}</h2>${table(`${c.name} ${label}, ${c.season}${t.source === 'computed' ? ' (computed from results)' : ''}`, ['#', 'Team', 'Conf', 'Pts', 'Overall', 'GF-GA'], rows)}`;
   }).join('');
   const inner = `<h1>${esc(c.name)} Soccer Standings ${esc(c.season)}</h1>
-<p>${esc(c.division ? divisionLabel(c.division) : 'NCAA')} conference. Official conference tables where the conference publishes one, checked against the records computed from every result.</p>${tables}`;
+<p>${esc(c.division ? divisionLabel(c.division) : 'NCAA')} conference. Conference tables, checked against the records computed from every result.</p>${tables}`;
   return wrapBody('conference', [{ name: SITE_NAME, path: '/' }, { name: 'Conferences', path: '/conferences' }, { name: c.name, path: conferencePath(c.seo) }], inner);
 }
 
 // ---------- rankings / teams / home ----------
 function pollBlock(p: Poll, season: number, ctx: HeadContext, limit = 25): string {
-  const heading = `${divisionLabel(p.division)} ${genderWord(p.gender)}: United Soccer Coaches poll${p.label ? `, ${p.label}` : ''}`;
+  const heading = `${divisionLabel(p.division)} ${genderWord(p.gender)}: coaches' poll${p.label ? `, ${p.label}` : ''}`;
   const rows = p.rows.slice(0, limit).map((r) => tr([esc(r.rank), r.team ? a(teamPath(r.team, season, ctx.currentSeason), r.name) : esc(r.name), esc(r.record ?? ''), n(r.points), r.previous_rank ? esc(r.previous_rank) : 'NR']));
   return `<h2>${esc(heading)}</h2>${table(`${heading} (week of ${longDate(p.week_of)})`, ['Rank', 'Team', 'Record', 'Points', 'Previous'], rows)}`;
 }
 
 export function rankingsBody(r: RankingsPage, ctx: HeadContext): string {
   const inner = `<h1>College Soccer Rankings ${esc(r.season)}</h1>
-<p>The latest United Soccer Coaches polls for NCAA men's and women's soccer, Division I to III.</p>${r.polls.length ? r.polls.map((p) => pollBlock(p, r.season, ctx)).join('') : '<p>No polls published yet this season.</p>'}`;
+<p>The latest coaches' polls for NCAA men's and women's soccer, Division I to III.</p>${r.polls.length ? r.polls.map((p) => pollBlock(p, r.season, ctx)).join('') : '<p>No polls published yet this season.</p>'}`;
   return wrapBody('rankings', [{ name: SITE_NAME, path: '/' }, { name: 'Rankings', path: '/rankings' }], inner);
 }
 
@@ -190,7 +190,7 @@ export function homeBody(h: HomePage, ctx: HeadContext, more: { pro?: string | n
   const inner = `<h1>Soccer stats from college to the World Cup</h1>
 <p>Every NCAA program, MLS, the NWSL and the pro leagues abroad, and national teams back to 1872: live scores, box scores, tables, rankings and player stats.</p>
 <h2>College soccer</h2>
-<p>Every NCAA soccer program, Division I to III, men's and women's: ${esc(h.teams)} teams with rosters, box scores, season stats, conference standings and the United Soccer Coaches polls for ${esc(h.season)}. Browse ${a('/matches', "today's matches")}, ${a('/teams', 'all teams')} or the ${a('/rankings', 'rankings')}.</p>${polls}${confs}${more.pro ?? ''}${more.intl ?? ''}`;
+<p>Every NCAA soccer program, Division I to III, men's and women's: ${esc(h.teams)} teams with rosters, box scores, season stats, conference standings and the coaches' polls for ${esc(h.season)}. Browse ${a('/matches', "today's matches")}, ${a('/teams', 'all teams')} or the ${a('/rankings', 'rankings')}.</p>${polls}${confs}${more.pro ?? ''}${more.intl ?? ''}`;
   return wrapBody('home', [], inner);
 }
 

@@ -57,7 +57,7 @@ export default function Referees() {
         </p>
       )}
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
-      {q.data && !q.data.rows.length && !q.isFetching && <EmptyState title={search.value ? `No referee matches “${search.value}”` : 'No referees here yet'} body="A referee appears after five games whose box score names them. Box scores from NCAA.com do not list officials, so many games have none." action={search.value ? <button className="btn-ghost btn-sm" onClick={search.clear}>Clear search</button> : undefined} />}
+      {q.data && !q.data.rows.length && !q.isFetching && <EmptyState title={search.value ? `No referee matches “${search.value}”` : 'No referees here yet'} body="A referee appears after five games whose box score names them. Some box scores do not list officials, so many games have none." action={search.value ? <button className="btn-ghost btn-sm" onClick={search.clear}>Clear search</button> : undefined} />}
       {(q.isPending || (q.data && q.data.rows.length > 0)) && (
         <div className={q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}>
           <DataTable rows={q.data?.rows ?? []} columns={cols} rowKey={(r) => r.slug} caption="College referees" rowHref={(r) => `/referees/${r.slug}`} mode="server" sort={sort} onSort={(s) => { setSort(s); setPage(1); }} loading={q.isPending} />

@@ -44,7 +44,7 @@ export default function Teams() {
       const o = p.official!; const r = p.record;
       const behind = o.w <= r.w && o.l <= r.l && o.t <= r.t;
       const state = off === ours ? 'ok' : p.ncaa_check?.state ?? (behind ? 'lag' : 'mismatch');
-      return <span className="inline-flex items-center gap-2 tnum">{ours}<VerifiedMark compact state={state} details={state === 'ok' ? undefined : [{ field: `NCAA.com record${p.official?.at ? ` (${fmt.agoWords(p.official.at)})` : ''}`, official: off, ours }]} /></span>;
+      return <span className="inline-flex items-center gap-2 tnum">{ours}<VerifiedMark compact state={state} details={state === 'ok' ? undefined : [{ field: `Official record${p.official?.at ? ` (${fmt.agoWords(p.official.at)})` : ''}`, official: off, ours }]} /></span>;
     } },
     { key: 'gf', label: 'GF', title: 'Goals for', num: true, value: (p) => p.record?.gf ?? null, priority: 2 },
     { key: 'ga', label: 'GA', title: 'Goals against', num: true, value: (p) => p.record?.ga ?? null, priority: 2 },

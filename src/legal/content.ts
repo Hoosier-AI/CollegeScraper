@@ -31,7 +31,7 @@ const ABOUT: LegalPage = {
       'Our own work on top of the numbers: Plaibook Elo ratings, a live RPI, match ratings, team of the week, win probability and season simulations.',
     ])] },
     { id: 'data', heading: 'Where the data comes from', blocks: [
-      'We compile factual, publicly available information from official sources (school and conference athletics sites, NCAA.com and the competitions themselves), from data providers we pay for, and from open data published under free licences. Every source is listed with its credit on our [Data sources](/sources) page. When sources disagree we show where, and we correct errors when they are reported.',
+      'We compile factual, publicly available information from public sources, licensed data providers and open data. Licence notices are on our [Credits](/sources) page. When sources disagree we show where, and we correct errors when they are reported.',
     ] },
     { id: 'independent', heading: 'Independent', blocks: [
       `${SITE_NAME} is independent. It is not affiliated with, endorsed by or sponsored by the NCAA, any conference, school, league, club or federation. Team names, logos and competition names are trademarks of their owners and are used only to identify the teams and competitions they belong to.`,
@@ -82,7 +82,7 @@ const TERMS: LegalPage = {
       'Search engines may crawl the Site as our robots.txt allows. We may block any address or client that breaks these rules.',
     ] },
     { id: 'attribution', heading: 'Sharing and attribution', blocks: [
-      `You are welcome to share links, screenshots and individual numbers. When you use data from the Site, credit "${SITE_NAME}" and link to the page you used. Some data is licensed from others and carries its own credit (see [Data sources](/sources)); keep those credits too.`,
+      `You are welcome to share links, screenshots and individual numbers. When you use data from the Site, credit "${SITE_NAME}" and link to the page you used. Some data is adapted from openly licensed sources and carries its own licence (see [Credits](/sources)); keep those notices too.`,
     ] },
     { id: 'ip', heading: 'Intellectual property', blocks: [
       `The Site's design, text, charts, ratings, rankings and simulations, and the way the data is selected and arranged, belong to ${COMPANY} or its licensors. We claim no ownership of underlying facts such as scores and statistics. Team names, logos and competition names are trademarks of their owners; their use here identifies teams and does not mean any affiliation or endorsement. Data from providers and open-data projects remains subject to their licences.`,
@@ -167,39 +167,18 @@ const PRIVACY: LegalPage = {
 };
 
 const SOURCES: LegalPage = {
-  slug: 'sources', path: '/sources', nav: 'Data sources', title: 'Data sources and credits',
-  description: 'Every source Plaibook Stats uses, what it supplies, how it is collected and the credit or licence it carries.',
-  intro: `${SITE_NAME} compiles facts from the sources below. Statistics and results are facts; we credit every source, follow each provider's terms and licence, and link back. If you run one of these sources and have a question, email ${CONTACT}.`,
+  slug: 'sources', path: '/sources', nav: 'Credits', title: 'Credits',
+  description: 'Licence notices for the open data used on Plaibook Stats.',
+  intro: `Some of the data on ${SITE_NAME} is adapted from open sources whose licences ask for the notices below. Questions: ${CONTACT}.`,
   sections: [
-    { id: 'college', heading: 'College soccer', blocks: [T(['Source', 'What it supplies', 'How'], [
-      ['Official school athletics websites', 'Rosters, schedules, results, box scores, play-by-play, player and team statistics, TV and watch links', 'Read from each school\'s public pages and feeds, a page at a time with pauses between requests'],
-      ['Conference websites', 'Official conference standings', 'Public standings pages'],
-      ['NCAA.com', 'Scoreboards, game details, statistical rankings, RPI, standings, school list', 'Public pages and scoreboard data'],
-      ['United Soccer Coaches', 'The weekly coaches\' polls', 'Public poll pages'],
-      ['National Weather Service', 'Kickoff weather forecasts', 'Public weather.gov API (US government work, public domain)'],
-    ])] },
-    { id: 'pro', heading: 'Professional and international', blocks: [T(['Source', 'What it supplies', 'Licence or terms'], [
-      ['API-Football (api-sports.io)', 'Fixtures, live scores, events, lineups, player and team statistics, ratings, standings, transfers, injuries', 'Paid licence; shown on our pages only, never redistributed'],
-      ['American Soccer Analysis', 'Expected goals (xG), goals added, MLS player salaries (published by the MLS Players Association)', 'Public API, credited where shown'],
-      ['football-data.co.uk', 'Historical European match statistics', 'Free data, credited where shown'],
-      ['Wikipedia', 'League tables, squads and international caps from season articles', '[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/): credited with a link to the article; tables we build from it are shared under the same licence'],
-      ['Wikidata', 'Player and club identifiers, links between college and pro careers', 'CC0 (public domain)'],
-      ['openfootball', 'Historical league and World Cup results', 'CC0 (public domain)'],
-      ['international_results (Mart Jürisoo)', 'International results since 1872', 'CC0 (public domain)'],
-      ['The Fjelstul World Cup Database (Joshua C. Fjelstul)', 'World Cup matches, squads and goals', '[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)'],
-    ])] },
-    { id: 'news', heading: 'News', blocks: [
-      'News lists show a story\'s headline, the publisher, the time and a link to the publisher\'s own page. When a publisher\'s feed supplies a picture, we show it loaded from the publisher. We never copy articles.',
-      T(['Source', 'What it supplies', 'Terms'], [
-        ['School athletics sites', 'Their own news feeds', 'Headline, link and credit'],
-        ['BBC Sport', 'Football news feeds', 'Headline, link and credit, as the BBC allows for its feeds'],
-        ['ESPN', 'Soccer news feed', 'Headline and link to espn.com, credited'],
-        ['Club and federation websites', 'Their official news feeds', 'Headline, link and credit; sites that ask crawlers not to read them are skipped'],
-        ['GDELT Project', 'An open index of news from many outlets', 'Headline and link to the outlet; no pictures'],
-      ]),
+    { id: 'wikipedia', heading: 'Wikipedia', blocks: [
+      'Some historical league tables, player career lines and international caps are adapted from [Wikipedia](https://en.wikipedia.org/) articles (the article for the season, player or national team concerned), by Wikipedia contributors, licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). We have selected, combined and reformatted that material; tables built from it are shared under the same licence.',
     ] },
-    { id: 'ours', heading: 'Our own work', blocks: [
-      'Plaibook Elo ratings, the live RPI, match ratings, team of the week, win probability, attack momentum, season simulations and tournament odds are calculated by us from the results above. Methods are described on the pages where they appear.',
+    { id: 'fjelstul', heading: 'The Fjelstul World Cup Database', blocks: [
+      'World Cup squads and matches are adapted from the Fjelstul World Cup Database, © 2023 Joshua C. Fjelstul, Ph.D. ([github.com/jfjelstul/worldcup](https://github.com/jfjelstul/worldcup)), licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). We have selected and reformatted the data; what we build from it is shared under the same licence.',
+    ] },
+    { id: 'news', heading: 'News', blocks: [
+      'Headlines belong to their publishers. Each one names its publisher and links to the publisher\'s own page; we never copy articles. Some news links are found through the [GDELT Project](https://www.gdeltproject.org/).',
     ] },
     { id: 'marks', heading: 'Logos and names', blocks: [
       'Team names, logos and competition names are trademarks of their owners and are shown only to identify teams and competitions. No affiliation or endorsement is implied. Owners who want a logo removed can email us.',

@@ -169,8 +169,8 @@ export function rankingsHead(r: RankingsPage, ctx: HeadContext): HeadMeta {
   const path = `/rankings${seasonQuery(r.season, ctx.currentSeason)}`;
   const tops = r.polls.filter((p) => p.division === 'd1').map((p) => { const top = p.rows[0]; return top ? `${top.name} No. 1 in D1 ${genderLower(p.gender)}` : null; }).filter(Boolean);
   return {
-    title: `College Soccer Rankings ${r.season}: United Soccer Coaches Polls${SUFFIX}`,
-    description: clip(`The ${r.season} United Soccer Coaches polls for NCAA Division I, II and III men's and women's soccer, with points, records and movement.${tops.length ? ` ${tops.join('; ')}.` : ''}`),
+    title: `College Soccer Rankings ${r.season}: Coaches' Polls${SUFFIX}`,
+    description: clip(`The ${r.season} coaches' polls for NCAA Division I, II and III men's and women's soccer, with points, records and movement.${tops.length ? ` ${tops.join('; ')}.` : ''}`),
     canonical: abs(ctx, path), robots: null, ogType: 'website', image: ogImage(ctx),
     jsonLd: [breadcrumbs(ctx, [{ name: SITE_NAME, path: '/' }, { name: 'Rankings', path }])],
   };

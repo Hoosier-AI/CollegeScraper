@@ -30,10 +30,6 @@ const dec = (v: number | null | undefined, d = 2) => (v == null ? null : Math.ro
 const pct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round(v * 1000) / 10}%`);
 const signed = (v: number | null | undefined, d = 2) => (v == null ? '–' : `${v > 0 ? '+' : ''}${v.toFixed(d)}`);
 
-export function Credit({ credit }: { credit: SourceCredit }) {
-  return <p className="text-2xs text-chalk-500">Advanced stats: <a href={credit.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{credit.name}</a>, checked against our match data. <Link to="/pro/sources" className="underline hover:text-pitch-300">Sources</Link></p>;
-}
-
 /** Goals added (above average) by action: bars either side of zero. */
 export function GplusBars({ byAction, caption }: { byAction: Gplus | Record<string, { for: number | null; against: number | null }>; caption: string }) {
   const rows = Object.entries(byAction).map(([action, v]) => ({ action, value: 'above_avg' in v ? v.above_avg ?? 0 : (v.for ?? 0) - (v.against ?? 0) }));

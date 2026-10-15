@@ -17,11 +17,6 @@ export function useNationHistory(slug: string, gender?: 'm' | 'w') {
 
 export const nationHref = (n: NationRef) => `/intl/teams/${n.slug ?? n.key}`;
 
-export function Credits({ credits }: { credits: Credit[] }) {
-  if (!credits.length) return null;
-  return <p className="text-2xs text-chalk-500">Sources: {credits.map((c, i) => <span key={c.url}>{i ? '; ' : ''}<a href={c.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{c.name}</a> ({c.license})</span>)}.</p>;
-}
-
 const TONE = { W: 'bg-win/15 text-win', D: 'bg-field-700 text-chalk-300', L: 'bg-loss/15 text-loss' } as const;
 
 /** Results as lines: date, the two sides, the score (a link when the match has its own page), the competition. */
@@ -90,8 +85,8 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
             <li key={`${c.name}-${i}`} className="flex items-center gap-2 px-3 py-1.5"><span className="w-5 text-right text-xs tnum text-chalk-500">{i + 1}</span><PlayerAvatar src={c.photo} name={c.name} size={22} />
               {c.slug ? <Link to={proPath.player(c.slug)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.name}</Link> : <span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{c.name}</span>}
               <span className="text-2xs tnum text-chalk-500">{c.goals != null ? `${c.goals} goals` : ''}</span><span className="display w-8 text-right tnum text-chalk-100">{c.caps}</span></li>
-          ))}</ol> : <p className="text-sm text-chalk-400">Caps come from players' Wikipedia careers as the people crawl reads them.</p>}
-          {h.caps.length > 0 && <p className="text-2xs text-chalk-500">From the Wikipedia careers of the players Plaibook Stats follows (today's and recent players); earlier greats are added as the people crawl reaches them.</p>}
+          ))}</ol> : <p className="text-sm text-chalk-400">Caps appear as players' careers are added.</p>}
+          {h.caps.length > 0 && <p className="text-2xs text-chalk-500">Players Plaibook Stats follows (today's and recent players); earlier greats are added over time.</p>}
         </Section>
       </div>
       <Section title="Latest results"><ResultList rows={h.recent} nation={key} /></Section>
@@ -103,7 +98,6 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
       <Section title="Against each opponent" right={<Link to={`/intl/h2h${qs({ a: slug })}`} className="text-xs text-pitch-300 hover:text-pitch-200">Head to head</Link>}>
         <DataTable rows={h.opponents} columns={oppCols} rowKey={(o) => o.nation.key} caption={`${h.nation.name} against each opponent`} rowHref={(o) => `/intl/h2h${qs({ a: slug, b: o.nation.slug ?? o.nation.key })}`} dense />
       </Section>
-      <Credits credits={h.credits} />
     </div>
   );
 }

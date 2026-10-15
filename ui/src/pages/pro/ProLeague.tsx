@@ -18,7 +18,7 @@ import { ProMoved } from './ProMoved';
 import { MoveSection } from '../../components/pro/MoveSection';
 import { useSection } from '../../lib/section';
 import { ProHero, StatTile } from '../../components/pro/Hero';
-import { AdvancedLeaders, Credit, ExpectedTable, type AdvLeaderLine, type ExpectedLine, type SourceCredit } from '../../components/pro/Advanced';
+import { AdvancedLeaders, ExpectedTable, type AdvLeaderLine, type ExpectedLine, type SourceCredit } from '../../components/pro/Advanced';
 
 interface TeamLine { team: ProTeamRef; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; shots: number | null; shots_on: number | null; corners: number | null; fouls: number | null; yellow: number | null; red: number | null; possession: number | null }
 interface LeagueData { league: ProLeagueRef & { current_season: number | null }; season: number | null; seasons: number[]; standings: { name: string; rows: ProStandingRow[] }[]; results: ProMatch[]; fixtures: ProMatch[]; scorers: ProLeader[]; assists: ProLeader[]; teams: number;
@@ -192,8 +192,8 @@ export default function ProLeague() {
                 {l.type !== 'cup' && d.season && <div className="flex justify-end"><TableViewSwitch value={tview} onChange={setTview} /></div>}
                 {tview !== 'all' && d.season ? <ProTableView league={l.id} season={d.season} view={tview} hrefOf={(t) => (t.slug ? proPath.team(t.slug, d.season, l.scope === 'intl') : null)} />
                 : d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
-                {(d.advanced_leaders?.table?.length ?? 0) > 0 && <Section title="Expected table"><ExpectedTable rows={d.advanced_leaders!.table!} season={d.season} /><Credit credit={d.advanced_leaders!.credit} /></Section>}
-                {d.history_sources && <p className="text-2xs text-chalk-500">{d.history_sources.map((h, i) => <span key={i}>{i ? '; ' : ''}{h.what}: {h.url ? <a href={h.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{h.name}</a> : h.name}{h.license ? ` (${h.license})` : ''}</span>)}.</p>}</div>
+                {(d.advanced_leaders?.table?.length ?? 0) > 0 && <Section title="Expected table"><ExpectedTable rows={d.advanced_leaders!.table!} season={d.season} /></Section>}
+                </div>
             : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Matches.' : 'The table appears once the first matches have been played.'} />}
           <aside className="space-y-4">
             <NewsSection title="Latest news" q={{ league: String(l.id) }} hide={`pro_league:${l.id}`} max={4} dense right={<Link to={tabHref('news')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>} />
@@ -214,7 +214,7 @@ export default function ProLeague() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Section title="Top scorers"><Leaders rows={d.scorers} stat="goals" label="Goals" /></Section>
           <Section title="Most assists"><Leaders rows={d.assists} stat="assists" label="Assists" /></Section>
-          {d.advanced_leaders && <div className="md:col-span-2"><Section title="Advanced leaders"><AdvancedLeaders data={d.advanced_leaders} season={d.season} /><Credit credit={d.advanced_leaders.credit} /></Section></div>}
+          {d.advanced_leaders && <div className="md:col-span-2"><Section title="Advanced leaders"><AdvancedLeaders data={d.advanced_leaders} season={d.season} /></Section></div>}
         </div>
       )}
       {tab === 'week' && d.season && <TeamOfWeek league={l.id} season={d.season} round={round} onRound={setRound} />}

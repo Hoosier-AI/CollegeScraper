@@ -16,7 +16,7 @@ import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
-import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proTodayBlock, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proMinorHead, proMinorBody, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
+import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proTodayBlock, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proMinorHead, proMinorBody, proTeamBody, proTeamHead } from './pro/pages.js';
 import type { IntlSeoData } from './intl/data.js';
 import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlTodayBlock, intlLeadersBody, intlLeadersHead, intlMatchesBody, intlMatchesHead, intlPlayerBody, intlPlayerHead, intlRankingsBody, intlRankingsHead, intlTeamsBody, intlTeamsHead, intlTournamentsBody, intlTournamentsHead } from './intl/pages.js';
 import { eastern } from '../jobs/seasons.js';
@@ -245,7 +245,8 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       return c ? { head: proCountryHead(c, ctx()), body: proCountryBody(c) } : null;
     }));
     app.get('/pro/college', (req, reply) => serve(req, reply, keyOf(req), async () => { const h = await pro.college(); return { head: proCollegeHead(h, ctx()), body: proCollegeBody(h) }; }));
-    app.get('/pro/sources', (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: proSourcesHead(ctx()), body: proSourcesBody() })));
+    // The Pro sources page became the site-wide Credits page.
+    app.get('/pro/sources', (_req, reply) => reply.code(301).header('location', '/sources').send());
     app.get('/pro/transfers', (req, reply) => serve(req, reply, keyOf(req), async () => { const t = await pro.transfers(); return { head: proTransfersHead(t, ctx()), body: proTransfersBody(t) }; }));
     app.get('/pro/abroad', (req, reply) => serve(req, reply, keyOf(req), async () => { const p = await pro.abroad(); return { head: proAbroadHead(p, ctx()), body: proAbroadBody(p) }; }));
     if (opts.news) {

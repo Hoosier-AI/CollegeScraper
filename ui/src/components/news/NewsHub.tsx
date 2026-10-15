@@ -33,12 +33,3 @@ export function NewsHub({ base, filters, aside, intro }: { base: NewsQuery; filt
   );
 }
 
-/** Where the stories come from (shown on each News page). */
-export function NewsCredit({ college }: { college?: boolean }) {
-  return (
-    <p className="text-xs text-chalk-500">
-      Headlines link to the outlet that published them. {college ? 'Most college stories come from the schools\' own athletics sites. ' : ''}
-      Also from BBC Sport, ESPN and outlets found through <a className="underline hover:text-chalk-300" href="https://www.gdeltproject.org" target="_blank" rel="noopener noreferrer">GDELT</a>. Tags and links to teams and players are ours.
-    </p>
-  );
-}

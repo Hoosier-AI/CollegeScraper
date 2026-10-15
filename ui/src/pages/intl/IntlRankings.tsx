@@ -8,7 +8,7 @@ import { useUrlState } from '../../lib/urlState';
 import { CONFEDERATIONS, CONFEDERATION_LABEL, monthLabel, type IntlMover, type IntlRankings as Rankings } from '../../lib/intl';
 import { Sparkline } from '../../components/intl/Sparkline';
 import { DataTable, type Column } from '../../components/DataTable';
-import { Credits, nationHref } from '../../components/intl/NationHistory';
+import { nationHref } from '../../components/intl/NationHistory';
 import { ErrorBox, Field, PageHeader, Section, Select, TeamLogo } from '../../components/primitives';
 import { useProGender } from '../../lib/proGender';
 
@@ -35,7 +35,7 @@ export default function IntlRankings() {
       <PageHeader title={`${gender === 'w' ? "Women's" : "Men's"} national team rankings`} meta={q.data?.updated_at ? `Plaibook Elo, updated ${fmt.date(q.data.updated_at)}` : 'Plaibook Elo'}>
         <Field label="Confederation">{(id) => <Select id={id} value={conf} onChange={setConf} options={[{ value: '', label: 'Every confederation' }, ...CONFEDERATIONS.filter((c) => c !== 'FIFA').map((c) => ({ value: c, label: CONFEDERATION_LABEL[c] ?? c }))]} />}</Field>
       </PageHeader>
-      <p className="max-w-3xl text-xs text-chalk-400">Plaibook Elo is our own rating, worked out from every international result since 1872 with the World Football Elo method: a win against a strong side is worth more, a World Cup match more than a friendly, a big win more than a narrow one, and home advantage counts. A new side's first 15 matches move only its own rating, so ratings do not creep upward over the decades, and a result between confederations moves a little of the whole region, so a strong side in a region that seldom played the world is not rated among the world's best. Today's ratings sit within about 25 points of the published World Football Elo ratings. Ratings from different eras do not compare, so a side's best is its best world rank, dated to the first month it held it. It is not FIFA's ranking. Sides with fewer than {gender === 'w' ? '10' : '30'} matches or none in four years are left out.{gender === 'w' ? " Women's ratings use the results our sources have, which are thinner before 2010." : ''}</p>
+      <p className="max-w-3xl text-xs text-chalk-400">Plaibook Elo is our own rating, worked out from every international result since 1872: a win against a strong side is worth more, a World Cup match more than a friendly, a big win more than a narrow one, and home advantage counts. A new side's first 15 matches move only its own rating, so ratings do not creep upward over the decades, and a result between confederations moves a little of the whole region, so a strong side in a region that seldom played the world is not rated among the world's best. Ratings from different eras do not compare, so a side's best is its best world rank, dated to the first month it held it. It is not FIFA's ranking. Sides with fewer than {gender === 'w' ? '10' : '30'} matches or none in four years are left out.{gender === 'w' ? " Women's ratings use the results our sources have, which are thinner before 2010." : ''}</p>
       <details className="max-w-3xl text-xs text-chalk-400">
         <summary className="w-fit cursor-pointer text-pitch-300 hover:text-pitch-200">How a rating moves</summary>
         <div className="mt-2 space-y-1.5">
@@ -55,7 +55,6 @@ export default function IntlRankings() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       <DataTable rows={rows} columns={cols} rowKey={(r) => r.nation.key} caption="Plaibook Elo rankings" rowHref={(r) => nationHref(r.nation)} loading={q.isPending} dense
         empty={<p className="p-4 text-sm text-chalk-400">Ratings appear after the first results sync.</p>} />
-      {q.data?.credit && <Credits credits={[q.data.credit, { name: 'international_results (Mart Jürisoo)', url: 'https://github.com/martj42/international_results', license: 'public domain (CC0)' }]} />}
     </div>
   );
 }

@@ -72,7 +72,7 @@ export default function Legal({ slug }: { slug: string }) {
         </section>
       ))}
       <p className="border-t border-field-700 pt-4 text-xs text-chalk-500">
-        Plaibook Stats is operated by Plaibook Technologies, Inc. See also <Link to="/terms" className="text-pitch-300 hover:text-pitch-200">Terms</Link>, <Link to="/privacy" className="text-pitch-300 hover:text-pitch-200">Privacy</Link> and <Link to="/sources" className="text-pitch-300 hover:text-pitch-200">Data sources</Link>.
+        Plaibook Stats is operated by Plaibook Technologies, Inc. See also <Link to="/terms" className="text-pitch-300 hover:text-pitch-200">Terms</Link>, <Link to="/privacy" className="text-pitch-300 hover:text-pitch-200">Privacy</Link> and <Link to="/sources" className="text-pitch-300 hover:text-pitch-200">Credits</Link>.
       </p>
     </div>
   );

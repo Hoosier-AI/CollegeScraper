@@ -63,7 +63,7 @@ export function StandingsGrid(props: { conference?: string; embedded?: boolean }
               <div className="flex items-center justify-between gap-2 px-3 py-2.5">
                 <h2 id={`conf-${g.id}`} className="display text-lg">{conf}</h2>
                 {official
-                  ? <a className="badge bg-pitch-400/15 text-pitch-300 hover:bg-pitch-400/25" href={rows[0].source_url} target="_blank" rel="noreferrer">Official table <ExternalLink size={11} aria-hidden /><span className="sr-only">(opens the conference site)</span></a>
+                  ? <span className="badge bg-pitch-400/15 text-pitch-300">Official table</span>
                   : <Badge tone="gray" title="Computed from stored results, 3 points for a win, 1 for a tie">Computed</Badge>}
               </div>
               <div className="overflow-x-auto">

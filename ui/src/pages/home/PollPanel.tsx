@@ -27,7 +27,7 @@ export function PollPanel({ scope, className }: { scope: Scope; className?: stri
   const rows: any[] = (q.data?.rows ?? []).filter((r: any) => r.program_id && !String(r.label ?? '').endsWith('(RV)')).slice(0, 10);
   const week = q.data?.weeks?.find((w: any) => w.week_of === q.data?.week);
   return (
-    <Panel className={className} title="Coaches' poll" meta={week ? `United Soccer Coaches, ${week.label}, ${fmt.day(week.week_of)}` : 'United Soccer Coaches'}
+    <Panel className={className} title="Coaches' poll" meta={week ? `${week.label}, ${fmt.day(week.week_of)}` : undefined}
       footer={{ to: href('/rankings', { division: scope.division }), label: 'Full poll and past weeks' }}>
       {q.isPending && <div className="space-y-2" aria-busy="true">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-6" />)}</div>}
       {q.data && !rows.length && <p className="text-sm text-chalk-500">No poll published yet for {divisionLabel(scope.division)} {genderLabel(scope.gender)}.</p>}

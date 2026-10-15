@@ -23,12 +23,12 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { Flag, PercentileBars, TransfersList, type TransferLine } from '../../components/pro/People';
 import { FormLine, PercentileWheel, SeasonBars } from '../../components/pro/Charts';
-import { Credit, GplusBars, PlayerAdvancedTable, type AdvPlayerSeason, type SourceCredit } from '../../components/pro/Advanced';
+import { GplusBars, PlayerAdvancedTable, type AdvPlayerSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { EmptyState, ErrorBox, PlayerAvatar, Section, SegmentedControl, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
 import { ProHero, StatTile as Tile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
 import { useSection } from '../../lib/section';
-import { Credits, nationHref } from '../../components/intl/NationHistory';
+import { nationHref } from '../../components/intl/NationHistory';
 import type { Credit as IntlCredit, NationRef } from '../../lib/intl';
 
 interface IntlCareer {
@@ -85,8 +85,8 @@ type CareerCredit = { name: string; url: string; license: string; wikidata?: str
 type CareerRow = { kind: 'senior' | 'youth' | 'college' | 'international'; years: string | null; team: string; apps: number | null; goals: number | null; loan: boolean; club: ProTeamRef | null };
 const CAREER_TITLE: Record<CareerRow['kind'], string> = { senior: 'Senior career', youth: 'Youth career', college: 'College career', international: 'International career' };
 
-/** The career from the player's Wikipedia article: years, club, apps and goals, grouped (youth, college, senior, international). */
-function CareerTable({ rows, credit }: { rows: CareerRow[]; credit: CareerCredit }) {
+/** The career from the player's Wikipedia article (licence notice on /sources): years, club, apps and goals, grouped. */
+function CareerTable({ rows }: { rows: CareerRow[] }) {
   const groups = (['senior', 'youth', 'college', 'international'] as const).map((k) => [k, rows.filter((r) => r.kind === k)] as const).filter(([, r]) => r.length);
   return (
     <div className="space-y-3">
@@ -112,10 +112,7 @@ function CareerTable({ rows, credit }: { rows: CareerRow[]; credit: CareerCredit
           </table>
         </div>
       ))}
-      <p className="text-2xs text-chalk-500">
-        Career from <a href={credit.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{credit.name}</a> ({credit.license})
-        {credit.wikidata && <>, details from <a href={credit.wikidata} target="_blank" rel="noopener" className="underline hover:text-pitch-300">Wikidata</a></>}. League appearances and goals; clubs we cover link to their pages.
-      </p>
+      <p className="text-2xs text-chalk-500">League appearances and goals; clubs we cover link to their pages.</p>
     </div>
   );
 }
@@ -343,7 +340,6 @@ export default function ProPlayer() {
                 </ul>
               </Section>
             )}
-            {onIntl && career.data && <Credits credits={career.data.credits} />}
             {winners.length > 0 && <p className="flex items-center gap-2 text-sm text-chalk-300"><Trophy size={16} aria-hidden className="text-note" />{winners.length} {winners.length === 1 ? 'trophy' : 'trophies'} won, <Link to={hrefFor('career')} className="text-pitch-300 hover:text-pitch-200">see career</Link></p>}
             {d.percentiles && d.percentiles.rows.length > 0 && (
               <Section title="Compared with peers">
@@ -368,7 +364,6 @@ export default function ProPlayer() {
             <Section title="Advanced">
               <PlayerAdvancedTable seasons={d.advanced.seasons} />
               {d.advanced.seasons[0]!.g_plus_by_action && <GplusBars byAction={d.advanced.seasons[0]!.g_plus_by_action} caption={`Goals added above average by action, ${d.advanced.seasons[0]!.season}${d.advanced.seasons[0]!.team ? `, ${d.advanced.seasons[0]!.team.name}` : ''}`} />}
-              <Credit credit={d.advanced.credit} />
             </Section>
           )}
         </div>
@@ -398,7 +393,7 @@ export default function ProPlayer() {
                 </div>
               </aside>
             )}
-            {d.career && d.career.rows.length > 0 && <Section title="Career"><CareerTable rows={d.career.rows} credit={d.career.credit} /></Section>}
+            {d.career && d.career.rows.length > 0 && <Section title="Career"><CareerTable rows={d.career.rows} /></Section>}
             <Section title="Transfers"><TransfersList rows={d.transfers} /></Section>
           </div>
           <div className="space-y-5">

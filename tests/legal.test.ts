@@ -40,6 +40,14 @@ describe('policy pages', () => {
     expect(JSON.stringify(LEGAL.terms)).toContain('Advertising, sponsorships and paid features');
     expect(JSON.stringify(LEGAL.privacy)).toContain('Your privacy choices');
   });
+  it('keeps the licence notices the open sources require on /sources', () => {
+    const credits = JSON.stringify(LEGAL.sources);
+    expect(credits).toContain('Wikipedia');
+    expect(credits).toContain('CC BY-SA 4.0');
+    expect(credits).toContain('Joshua C. Fjelstul');
+    expect(credits).toContain('github.com/jfjelstul/worldcup');
+    expect(credits).toContain('gdeltproject.org');
+  });
   it('splits inline links', () => {
     expect(inlineParts('See [Terms](/terms) now')).toEqual([{ text: 'See ' }, { text: 'Terms', href: '/terms' }, { text: ' now' }]);
   });

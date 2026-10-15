@@ -14,7 +14,7 @@ import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Crumbs } from '../components/shell';
 import { WinChances } from '../components/elo/WinChances';
-import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav, PageWithRail, RailCard } from '../components/primitives';
+import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, TabsNav, PageWithRail, RailCard } from '../components/primitives';
 import { CollegePlayerOfMatch, HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
 import { RatingBadge } from '../components/Rating';
 import { Pitch } from '../components/match/Pitch';
@@ -108,15 +108,12 @@ export default function Match() {
       <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
         <ShareButton title={`${g.away?.name ?? '?'} at ${g.home?.name ?? '?'}`} />
-        {/* Where it is shown, from the schools' schedules (else NCAA.com), with the school's watch link. */}
+        {/* Where it is shown, from the schools' schedules, with the school's watch link. */}
         {(g.broadcast?.network || g.broadcast?.url) && (g.broadcast.url
           ? <a href={g.broadcast.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-pitch-400/10 px-3 text-xs font-medium text-pitch-300 ring-1 ring-inset ring-pitch-400/30 hover:bg-pitch-400/20"><Tv size={14} aria-hidden />{g.status === 'final' ? 'Shown on' : 'Watch on'} {g.broadcast.network ?? 'the school\'s stream'}<ExternalLink size={12} aria-hidden /><span className="sr-only">(opens in a new tab)</span></a>
           : <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-field-800 px-3 text-xs font-medium text-chalk-200"><Tv size={14} aria-hidden />{g.status === 'final' ? 'Shown on' : 'On'} {g.broadcast.network}</span>)}
-        {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
         {referee && <span>Referee <span className="text-chalk-300">{referee}</span>{assistants.length ? `, assistants ${assistants.join(' and ')}` : ''}</span>}
         {duration && <span>Played in {duration}</span>}
-        {g.ncaa_contest_id && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={`https://www.ncaa.com/game/${g.ncaa_contest_id}`} target="_blank" rel="noreferrer">NCAA.com <ExternalLink size={12} aria-hidden /></a>}
-        {Object.entries(box.data?.game?.site_game_refs ?? {}).map(([host, url]) => (url ? <a key={host} className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={String(url)} target="_blank" rel="noreferrer">{host} <ExternalLink size={12} aria-hidden /></a> : null))}
         {g.status === 'live' && (
           <span className="inline-flex items-center gap-1.5 font-medium text-win"><span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />Live, {liveClock(g.live ?? { period: g.live_period, clock: g.live_clock }).long.replace(/^./, (c) => c.toLowerCase())}{(g.live?.updated_at ?? g.live_updated_at) ? ` · score updated ${agoShort(g.live?.updated_at ?? g.live_updated_at, now)}` : ''}{provisional && box.data?.stats?.live_stats_at ? ` · stats ${agoShort(box.data.stats.live_stats_at, now)}` : ''}</span>
         )}
@@ -142,8 +139,8 @@ export default function Match() {
           )}
           {referee && <CollegeRefereeCard gameId={g.id} division={g.division ?? null} gender={g.gender} />}
         </>}>
-          {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of NCAA.com's in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
-          {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}
+          {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of the in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
+          {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when the in-game feed starts.</Note>}
           {(g.status === 'final' || g.status === 'live') && <MatchFlow url={`/api/games/${g.id}/flow`} live={g.status === 'live'} home={g.home.short_name ?? g.home.name ?? 'Home'} away={g.away.short_name ?? g.away.name ?? 'Away'} homeLogo={g.home.logo} awayLogo={g.away.logo} homeSeo={g.home.seo} awaySeo={g.away.seo} />}
           <Section title="Events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
           {g.status === 'live' && players.length > 0 && (
@@ -193,15 +190,15 @@ export default function Match() {
       )}
 
       {tab === 'stats' && (
-        <Section title="Team stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
+        <Section title="Team stats" right={sources.length === 2 ? <SegmentedControl label="Box score version" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'Version A' : 'Version B' }))} /> : undefined}>
           {box.isPending ? <Skeleton className="h-48" /> : <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />}
-          {sources.length === 2 && <Note>The school's stat crew and NCAA.com count shots differently; goals, cards and saves should agree.</Note>}
+          {sources.length === 2 && <Note>The two published box scores count shots differently; goals, cards and saves should agree.</Note>}
         </Section>
       )}
       {tab === 'stats' && (
         <div className="space-y-6">
           {played && players.length > 0 && (
-            <Section title="Full player stats" right={sources.length === 2 ? <SegmentedControl label="Source" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'School site' : 'NCAA.com' }))} /> : undefined}>
+            <Section title="Full player stats" right={sources.length === 2 ? <SegmentedControl label="Box score version" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'Version A' : 'Version B' }))} /> : undefined}>
               {[g.home.program_id, g.away.program_id].map((pid) => (
                 <div key={pid} className="space-y-1">
                   <h3 className="text-sm font-semibold text-chalk-100">{pid === g.home.program_id ? g.home.name : g.away.name}</h3>

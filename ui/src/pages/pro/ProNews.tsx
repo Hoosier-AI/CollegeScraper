@@ -2,7 +2,7 @@
 // and linked to clubs, players and leagues. Men's or women's from the header toggle.
 import { PageHeader, Section } from '../../components/primitives';
 import { NewsFeed } from '../../components/news/News';
-import { NewsCredit, NewsHub } from '../../components/news/NewsHub';
+import { NewsHub } from '../../components/news/NewsHub';
 import { useProGender } from '../../lib/proGender';
 import { PRO_FILTERS } from '../../lib/news';
 
@@ -18,7 +18,6 @@ export default function ProNews() {
         <Section title={gender === 'w' ? 'NWSL' : 'MLS'}><NewsFeed q={{ league: gender === 'w' ? NWSL : MLS, limit: 6 }} max={6} dense empty="No league news lately" /></Section>
         <Section title="Americans abroad"><NewsFeed q={{ american: true, gender, limit: 6 }} max={6} dense empty="No news about Americans abroad lately" /></Section>
         <Section title="Transfers"><NewsFeed q={{ ...base, kind: ['transfer', 'loan'], limit: 6 }} max={6} dense empty="No transfer news lately" /></Section>
-        <NewsCredit />
       </>} />
     </div>
   );

@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom';
 import { fmt, useAdmin } from '../../lib/api';
 import { DataTable, type Column } from '../../components/DataTable';
-import { Badge, EmptyState, ResultBadge, SourceBadge, TeamLogo } from '../../components/primitives';
+import { Badge, EmptyState, ResultBadge, TeamLogo } from '../../components/primitives';
 import { sideOf, statusWord } from './Masthead';
 
 export function GamesList({ games, id, loading, href }: { games: any[]; id: string; loading: boolean; href: (p: string) => string }) {
@@ -22,7 +22,6 @@ export function GamesList({ games, id, loading, href }: { games: any[]; id: stri
     { key: 'fo', label: 'Fouls', num: true, priority: 2, value: (g) => stat(g, 'fouls') },
   ];
   if (admin) cols.push(
-    { key: 'truth', label: 'Source', priority: 3, value: (g) => g.source_of_truth, render: (g) => <SourceBadge source={g.source_of_truth} /> },
     { key: 'sources', label: 'Have', priority: 3, render: (g) => <span className="flex gap-1">{g.team_stats?.some((t: any) => t.source === 'site') && <Badge tone="teal">site</Badge>}{g.team_stats?.some((t: any) => t.source === 'ncaa') && <Badge tone="blue">ncaa</Badge>}</span> },
   );
   if (!loading && !games.length) return <EmptyState title="No matches yet" body="The schedule has not been collected, or the season has not started." />;

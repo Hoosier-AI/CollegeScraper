@@ -358,7 +358,7 @@ export async function standings(db: Db, o: { season: number; gender?: string; di
 export async function rankings(db: Db, o: { season: number; gender?: string; division?: string; poll?: string; week_of?: string }) {
   const polls = await selectAll<any>(db, 'college_rankings', 'poll,week_of,label', (q) => { q = q.eq('season', o.season); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; });
   const pollNames = [...new Set(polls.map((p) => p.poll))].sort((a, b) => (a === 'usc' ? -1 : b === 'usc' ? 1 : a.localeCompare(b)));
-  const labelOf = (poll: string) => poll === 'usc' ? 'United Soccer Coaches' : (polls.find((p) => p.poll === poll)?.label ?? poll);
+  const labelOf = (poll: string) => poll === 'usc' ? "Coaches' poll" : (polls.find((p) => p.poll === poll)?.label ?? poll);
   const poll = o.poll && pollNames.includes(o.poll) ? o.poll : (pollNames.includes('usc') ? 'usc' : pollNames[0]);
   const weekRows = polls.filter((p) => p.poll === poll);
   const weeks = [...new Map(weekRows.map((p) => [p.week_of, { week_of: p.week_of, label: p.poll === 'usc' ? String(p.label ?? '').replace(/ \(RV\)$/, '') : p.week_of }])).values()].sort((a, b) => b.week_of.localeCompare(a.week_of));

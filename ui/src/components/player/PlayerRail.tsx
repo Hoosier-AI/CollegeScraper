@@ -61,7 +61,7 @@ export function PlayerRail({ id, latest, gameLog, keeper, own, href, news = true
               <RailRow key={r.category} left={<><span className="w-9 shrink-0 font-semibold text-chalk-100 tnum">{fmt.ordinal(r.rank)}</span><span className="truncate">{r.category}</span></>} right={r.value} />
             ))}
           </ol>
-          <p className="mt-1.5 text-2xs text-chalk-500">NCAA.com's statistical rankings.</p>
+          <p className="mt-1.5 text-2xs text-chalk-500">National statistical rankings.</p>
         </RailCard>
       )}
       {news && <RailNews q={{ player: id }} hide={`college_player:${id}`} to={href(`/players/${id}`, { tab: 'news' })} />}

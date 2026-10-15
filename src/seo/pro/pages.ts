@@ -123,7 +123,7 @@ export function proLeagueBody(p: ProLeaguePage): string {
   const list = (title: string, ms: Q.ProMatchRow[]) => (ms.length ? `<h2>${esc(title)}</h2><ul>${ms.map((m) => `<li>${esc(day(m.kickoff))}: ${a(proPaths.match(m.slug, m.league.scope), proIsFinal(m) ? proScoreLine(m) : proMatchName(m))}</li>`).join('')}</ul>` : '');
   const leaders = p.scorers.length ? `<h2>Top scorers</h2>${table(`${l.name} top scorers`, ['Player', 'Club', 'Goals', 'Apps'], p.scorers.map((s) => tr([a(proPaths.player(s.player.slug), s.player.name), s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', n(s.goals), n(s.apps)])))}` : '';
   const inner = `<h1>${esc(l.name)}${p.season ? ` ${esc(p.season)}` : ''}</h1>
-<p>${esc(where(l))}, ${esc(genderWord(l.gender))} ${l.type === 'cup' ? 'cup competition' : 'league'}${p.teams ? `, ${esc(p.teams)} clubs` : ''}.${p.seasons.length > 1 ? ` Seasons: ${p.seasons.slice(0, 8).map((s) => a(proPaths.league(l.slug, s, l.current_season), String(s))).join(', ')}.` : ''}</p>${tables}${p.history_sources?.length ? `<p>${p.history_sources.map((h) => `${esc(h.what)}: ${h.url ? `<a href="${esc(h.url)}" rel="noopener">${esc(h.name)}</a>` : esc(h.name)}${h.license ? ` (${esc(h.license)})` : ''}`).join('; ')}.</p>` : ''}${leaders}${list('Latest results', p.results.slice(0, 20))}${list('Upcoming fixtures', p.fixtures.slice(0, 20))}`;
+<p>${esc(where(l))}, ${esc(genderWord(l.gender))} ${l.type === 'cup' ? 'cup competition' : 'league'}${p.teams ? `, ${esc(p.teams)} clubs` : ''}.${p.seasons.length > 1 ? ` Seasons: ${p.seasons.slice(0, 8).map((s) => a(proPaths.league(l.slug, s, l.current_season), String(s))).join(', ')}.` : ''}</p>${tables}${leaders}${list('Latest results', p.results.slice(0, 20))}${list('Upcoming fixtures', p.fixtures.slice(0, 20))}`;
   return wrapBody(l.scope === 'intl' ? 'intl' : 'pro', [...sectionCrumbs(l.scope === 'intl'), listCrumb(l.scope === 'intl'), { name: l.name, path: proPaths.league(l.slug) }], inner);
 }
 
@@ -210,7 +210,7 @@ export function proPlayerBody(p: ProPlayerPage): string {
   const seasons = p.seasons.length ? table(`${pl.name} season by season`, ['Season', 'Club', 'Competition', 'Apps', 'Min', 'G', 'A'], p.seasons.map((s) => tr([esc(s.season), s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', s.league ? a(proPaths.league(s.league.slug), s.league.name) : '', n(s.apps), n(s.minutes), n(s.goals), n(s.assists)]))) : '<p>No season stats yet.</p>';
   const recent = p.matches.length ? `<h2>Recent matches</h2><ul>${p.matches.slice(0, 15).map((r) => `<li>${esc(day(r.match.kickoff))}: ${a(proPaths.match(r.match.slug, r.match.league.scope), proIsFinal(r.match) ? proScoreLine(r.match) : proMatchName(r.match))}${r.minutes != null ? `, ${esc(r.minutes)} minutes` : ''}${r.goals ? `, ${esc(r.goals)} goal${r.goals > 1 ? 's' : ''}` : ''}</li>`).join('')}</ul>` : '';
   const advRows = p.advanced?.seasons ?? [];
-  const adv = advRows.length ? `<h2>Advanced stats</h2>${table(`${pl.name} advanced stats`, ['Season', 'Club', 'Min', 'xG', 'xA', 'Goals added'], advRows.map((s) => tr([esc(s.season), esc(s.team?.name ?? ''), n(s.minutes), esc(s.xg?.toFixed(2) ?? '–'), esc(s.xa?.toFixed(2) ?? '–'), esc(s.g_plus?.toFixed(2) ?? '–')])))}<p>Advanced stats: <a href="${esc(p.advanced!.credit.url)}" rel="noopener">${esc(p.advanced!.credit.name)}</a>.</p>` : '';
+  const adv = advRows.length ? `<h2>Advanced stats</h2>${table(`${pl.name} advanced stats`, ['Season', 'Club', 'Min', 'xG', 'xA', 'Goals added'], advRows.map((s) => tr([esc(s.season), esc(s.team?.name ?? ''), n(s.minutes), esc(s.xg?.toFixed(2) ?? '–'), esc(s.xa?.toFixed(2) ?? '–'), esc(s.g_plus?.toFixed(2) ?? '–')])))}` : '';
   const hurt = p.injury_history?.length ? `<h2>Injury history</h2><ul>${p.injury_history.slice(0, 15).map((h) => `<li>${esc(h.type)}: ${esc(day(h.start))} to ${h.end ? esc(day(h.end)) : 'now'}${h.matches_missed ? `, ${esc(h.matches_missed)} matches missed` : ''}</li>`).join('')}</ul>` : '';
   const inner = `<h1>${esc(pl.name)}</h1>${bio ? `<p>${bio}.</p>` : ''}${p.team ? `<p>Club: ${a(proPaths.team(p.team.slug), p.team.name)}.</p>` : ''}${college}<h2>Season stats</h2>${seasons}${adv}${recent}${hurt}`;
   return wrapBody('pro', [...crumbsHome, ...(p.team ? [{ name: p.team.name, path: proPaths.team(p.team.slug) }] : []), { name: pl.name, path: proPaths.player(pl.slug) }], inner);
@@ -256,7 +256,7 @@ export function proMatchBody(p: ProMatchPage): string {
   const stats = p.home.stats || p.away.stats ? `<h2>Team stats</h2>${table('Team stats', ['', m.home.name, m.away.name], [stat('possession', 'Possession %'), stat('shots', 'Shots'), stat('shots_on', 'Shots on target'), stat('corners', 'Corners'), stat('fouls', 'Fouls'), stat('yellow', 'Yellow cards'), stat('red', 'Red cards')].filter(Boolean))}` : '';
   const h2h = p.h2h.length ? `<h2>Earlier meetings</h2><ul>${p.h2h.map((x) => `<li>${esc(day(x.kickoff))}: ${a(proPaths.match(x.slug, x.league.scope), proScoreLine(x))} (${esc(x.league.name)})</li>`).join('')}</ul>` : '';
   const adv = p.advanced && p.advanced.xg[0] != null
-    ? `<p>${esc(`Expected goals ${p.advanced.xg[0].toFixed(2)} to ${(p.advanced.xg[1] ?? 0).toFixed(2)}${p.advanced.attendance ? `; attendance ${p.advanced.attendance.toLocaleString('en-US')}` : ''}.`)} Advanced stats: <a href="${esc(p.advanced.credit.url)}" rel="noopener">${esc(p.advanced.credit.name)}</a>.</p>` : '';
+    ? `<p>${esc(`Expected goals ${p.advanced.xg[0].toFixed(2)} to ${(p.advanced.xg[1] ?? 0).toFixed(2)}${p.advanced.attendance ? `; attendance ${p.advanced.attendance.toLocaleString('en-US')}` : ''}.`)}</p>` : '';
   const inner = `<h1>${esc(h1)}</h1><p>${a(proPaths.team(m.home.slug), m.home.name)} vs ${a(proPaths.team(m.away.slug), m.away.name)}. ${facts}.</p>${adv}${events ? `<h2>Goals and cards</h2><ol>${events}</ol>` : ''}${stats}${p.home.starters.length || p.away.starters.length ? `<h2>Lineups</h2>${lineup(m.home.name, p.home)}${lineup(m.away.name, p.away)}` : ''}${h2h}`;
   return wrapBody(m.league.scope === 'intl' ? 'intl' : 'pro', [...sectionCrumbs(m.league.scope === 'intl'), { name: m.league.name, path: proPaths.league(m.league.slug) }, { name: proMatchName(m), path: proPaths.match(m.slug, m.league.scope) }], inner);
 }
@@ -355,24 +355,6 @@ export function proAbroadBody(p: ProAbroadPage): string {
   };
   const next = p.upcoming.slice(0, 30).map((u) => `<li>${esc(longDate(u.match.kickoff))}: ${a(proPaths.match(u.match.slug, u.match.league.scope), `${u.match.home.name} v ${u.match.away.name}`)}, ${u.players.map((x) => esc(x!.name)).join(', ')}</li>`).join('');
   return wrapBody('pro', [...crumbsHome, { name: 'Americans abroad', path: '/pro/abroad' }], `<h1>Americans abroad</h1><h2>This week</h2><ul>${p.lines.slice(0, 40).map(line).join('')}</ul><h2>Coming up</h2><ul>${next}</ul>`);
-}
-
-// ---------- where the data comes from ----------
-export const PRO_SOURCES = [
-  { name: 'API-Football', url: 'https://www.api-football.com', what: 'Fixtures, results, tables, lineups, match events, player match stats, squads, transfers, injuries, coaches and honours for competitions worldwide.', terms: 'Licensed (paid plan).' },
-  { name: 'American Soccer Analysis', url: 'https://www.americansocceranalysis.com', what: 'Expected goals and assists, passing over expected, goals added, shot maps, attendance, referees and grounds for MLS, NWSL, USL Championship, USL League One, MLS Next Pro and USL Super League.', terms: 'Free public data, credited on every page that shows it.' },
-  { name: 'Wikidata', url: 'https://www.wikidata.org', what: 'Which professional players played college soccer.', terms: 'Public domain (CC0).' },
-  { name: 'openfootball', url: 'https://github.com/openfootball/world', what: 'MLS results from 2005, used for the seasons before our main feed begins.', terms: 'Public domain (CC0).' },
-  { name: 'Wikipedia', url: 'https://en.wikipedia.org', what: 'League tables for early MLS, NWSL and USL seasons.', terms: 'CC BY-SA 4.0, credited on each table.' },
-];
-
-export function proSourcesHead(ctx: HeadContext): HeadMeta {
-  return { title: `Where Plaibook Stats Pro Data Comes From${SUFFIX}`, description: clip('The sources behind Plaibook Stats Pro: API-Football for matches worldwide, American Soccer Analysis for advanced US stats, Wikidata for college links, and how we check them.'),
-    canonical: abs(ctx, '/pro/sources'), robots: null, ogType: 'website', image: ogImage(ctx), jsonLd: [breadcrumbs(ctx, [...crumbsHome, { name: 'Sources', path: '/pro/sources' }])] };
-}
-export function proSourcesBody(): string {
-  const items = PRO_SOURCES.map((s) => `<li><a href="${esc(s.url)}" rel="noopener">${esc(s.name)}</a>: ${esc(s.what)} ${esc(s.terms)}</li>`).join('');
-  return wrapBody('pro', [...crumbsHome, { name: 'Sources', path: '/pro/sources' }], `<h1>Where the data comes from</h1><ul>${items}</ul><p>${esc('Numbers from other sources are compared with API-Football before they are shown: every score, and each player\'s minutes, goals and assists. A competition season only shows them when at least 90% agree, and a player row whose minutes disagree is left out.')}</p>`);
 }
 
 /** Today's pro matches for the one home page (/): the top competitions, linked. */

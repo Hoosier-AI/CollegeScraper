@@ -57,7 +57,7 @@ export function EloView() {
         </div>
       )}
       {pager}
-      <p className="max-w-3xl text-xs text-chalk-500">Plaibook Elo is our own rating, worked out every morning from every result since 2024 with the World Football Elo method: a win against a stronger side gains more, a bigger margin counts a little more, and home sides get a small edge. Conferences carry a level that results between conferences move, so a strong record in a weaker conference counts for less. Teams with three or more games this season are ranked within their division.</p>
+      <p className="max-w-3xl text-xs text-chalk-500">Plaibook Elo is our own rating, worked out every morning from every result since 2024: a win against a stronger side gains more, a bigger margin counts a little more, and home sides get a small edge. Conferences carry a level that results between conferences move, so a strong record in a weaker conference counts for less. Teams with three or more games this season are ranked within their division.</p>
     </div>
   );
 }

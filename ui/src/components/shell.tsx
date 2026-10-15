@@ -259,16 +259,9 @@ export function Crumbs({ items }: { items: { label: ReactNode; to?: string }[] }
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: 'College', links: [['/matches', 'Matches'], ['/conferences', 'Conferences'], ['/rankings', 'Rankings'], ['/team-of-the-week', 'Team of the week'], ['/tournament', 'NCAA tournament odds'], ['/tv', 'On TV']] },
   { title: 'Pro and International', links: [['/pro/matches', 'Pro matches'], ['/pro/leagues', 'Leagues'], ['/pro/abroad', 'Americans abroad'], ['/intl/matches', 'International matches'], ['/intl/tournaments', 'Tournaments'], ['/intl/rankings', 'World rankings']] },
-  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Data sources and credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API'], ['/contact#who', 'Advertise with us']] },
+  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API'], ['/contact#who', 'Advertise with us']] },
   { title: 'Legal', links: [['/terms', 'Terms of use'], ['/privacy', 'Privacy'], ['/privacy#browser', 'Cookies and storage'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility']] },
 ];
-
-/** The area's data credit in one line (the full list is on /sources). */
-function areaCredit(pathname: string): string {
-  if (isIntlPath(pathname)) return 'International results from international_results (CC0), the Fjelstul World Cup Database (CC BY-SA 4.0), openfootball (CC0) and Wikipedia (CC BY-SA 4.0); live data from API-Football.';
-  if (isProPath(pathname)) return 'Pro data from API-Football (api-sports.io) and American Soccer Analysis; some tables from Wikipedia (CC BY-SA 4.0).';
-  return 'College stats from official school athletics sites, conference sites, NCAA.com and United Soccer Coaches, checked against each other.';
-}
 
 export function Footer() {
   const { pathname } = useLocation();
@@ -295,7 +288,6 @@ export function Footer() {
           </nav>
         </div>
         <div className="mt-8 space-y-2 border-t border-field-700 pt-5 text-xs leading-relaxed text-chalk-500">
-          <p>{areaCredit(pathname)} News headlines link to the publishers that wrote them. Full credits on <Link to="/sources" className="text-chalk-300 hover:text-pitch-300">Data sources</Link>.</p>
           <p>Team names, logos and competition names are trademarks of their owners. Plaibook Stats is independent and is not affiliated with or endorsed by the NCAA, any conference, school, league or federation.</p>
           <p className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-chalk-400">
             <span>© {year} Plaibook Technologies, Inc.</span>

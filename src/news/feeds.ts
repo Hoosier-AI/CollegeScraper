@@ -18,8 +18,8 @@ export interface PublisherFeed {
 }
 
 export const PUBLISHER_FEEDS: PublisherFeed[] = [
-  { id: 'feed:bbc-football', name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', scope: 'pro', terms: 'Headlines and summaries on other sites with a credit and a link back; no charging for them', termsUrl: 'https://www.bbc.co.uk/news/10628494', on: true },
-  { id: 'feed:bbc-womens', name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/football/womens/rss.xml', scope: 'pro', gender: 'w', terms: 'Headlines and summaries on other sites with a credit and a link back; no charging for them', termsUrl: 'https://www.bbc.co.uk/news/10628494', on: true },
+  { id: 'feed:bbc-football', name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', scope: 'pro', terms: 'Off since 2026-10-15: BBC terms lean to personal, non-commercial use and the site now carries ads; review before switching on', termsUrl: 'https://www.bbc.co.uk/news/10628494', on: false },
+  { id: 'feed:bbc-womens', name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/football/womens/rss.xml', scope: 'pro', gender: 'w', terms: 'Off since 2026-10-15: BBC terms lean to personal, non-commercial use and the site now carries ads; review before switching on', termsUrl: 'https://www.bbc.co.uk/news/10628494', on: false },
   { id: 'feed:espn-soccer', name: 'ESPN', url: 'https://www.espn.com/espn/rss/soccer/news', scope: 'pro', terms: 'Feed content shown unmodified with a credit and a link to espn.com; no ads inside it', termsUrl: 'https://www.espn.com/espn/news/story?id=3437834', on: true },
   { id: 'feed:ncaa-msoc-d1', name: 'NCAA.com', url: 'https://www.ncaa.com/news/soccer-men/d1/rss.xml', scope: 'college', gender: 'm', terms: 'Not published for feeds: review before switching on', termsUrl: 'https://www.ncaa.com/tos', on: false },
   { id: 'feed:ncaa-wsoc-d1', name: 'NCAA.com', url: 'https://www.ncaa.com/news/soccer-women/d1/rss.xml', scope: 'college', gender: 'w', terms: 'Not published for feeds: review before switching on', termsUrl: 'https://www.ncaa.com/tos', on: false },

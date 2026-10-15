@@ -17,7 +17,7 @@ const GROUPS: { key: string; label: string; statuses: string[]; pending?: boolea
   { key: 'live', label: 'Live', statuses: ['live'] },
   { key: 'upcoming', label: 'Upcoming', statuses: ['scheduled'], pending: false },
   { key: 'final', label: 'Final', statuses: ['final'] },
-  { key: 'pending', label: 'Result not in yet', statuses: ['scheduled'], pending: true, note: 'These matches should have been played, but neither the schools nor NCAA.com have posted a score yet. Most arrive within a day.' },
+  { key: 'pending', label: 'Result not in yet', statuses: ['scheduled'], pending: true, note: 'These matches should have been played, but no score has been posted yet. Most arrive within a day.' },
   { key: 'other', label: 'Postponed or cancelled', statuses: ['postponed', 'cancelled'] },
 ];
 

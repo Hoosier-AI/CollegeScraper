@@ -68,7 +68,7 @@ export class Sitemaps {
     if (this.coaches && file === 'coaches.xml') return urlsetXml(this.baseUrl, await this.coaches());
     if (this.intl && file === 'intl-core.xml') return urlsetXml(this.baseUrl, await this.intl.sitemap());
     if (this.pro) {
-      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/teams' }, { path: '/pro/rankings' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/news' }, { path: '/intl/news' }, { path: '/pro/sources' }, ...(await this.pro.sitemapLeagues())]);
+      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/teams' }, { path: '/pro/rankings' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/news' }, { path: '/intl/news' }, ...(await this.pro.sitemapLeagues())]);
       if (file === 'pro-countries.xml') return urlsetXml(this.baseUrl, await this.pro.sitemapCountries());
       const p = PRO_FILE.exec(file);
       if (p) {

@@ -11,10 +11,6 @@ export function Badge({ children, tone = 'gray', title, className = '' }: { chil
   return <span className={`badge ${map[tone]} ${className}`} title={title}>{children}</span>;
 }
 
-export function SourceBadge({ source }: { source: 'site' | 'ncaa' | null | undefined }) {
-  if (!source) return <Badge tone="red">no source</Badge>;
-  return <Badge tone={source === 'site' ? 'teal' : 'blue'}>{source === 'site' ? 'school site' : 'NCAA.com'}</Badge>;
-}
 
 /** Page title row: title on the left, controls on the right, both wrapping on narrow screens. */
 export function PageHeader({ title, meta, children, as = 'h1' }: { title: ReactNode; meta?: ReactNode; children?: ReactNode; as?: 'h1' | 'h2' }) {

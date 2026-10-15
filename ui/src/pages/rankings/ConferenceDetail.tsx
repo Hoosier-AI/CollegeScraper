@@ -57,10 +57,6 @@ export function ConferenceDetail({ id }: { id: string }) {
           <Crumbs items={[{ label: divisionLabel(c.division), to: href('/conferences', { division: c.division }) }, { label: c.short_name ?? c.name }]} />
           <h1 className="display mt-1 text-3xl sm:text-4xl">{c.name}</h1>
           <p className="mt-2 text-sm text-chalk-300">{d.members.length} {genderLabel(f.gender)} teams, {divisionLabel(c.division)}, {f.season}{d.ranked.length ? `, ${d.ranked.length} in the coaches poll` : ''}</p>
-          <p className="mt-2 flex flex-wrap gap-2 text-xs">
-            {official?.source_url && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={official.source_url} target="_blank" rel="noreferrer">Official standings <ExternalLink size={12} aria-hidden /></a>}
-            {c.site_host && <a className="inline-flex items-center gap-1 text-chalk-400 hover:text-pitch-300" href={`https://${c.site_host}`} target="_blank" rel="noreferrer">{c.site_host} <ExternalLink size={12} aria-hidden /></a>}
-          </p>
   </div>
         <dl className="grid min-w-0 grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4 lg:max-w-[40rem] lg:flex-1">
           <HeroStat label="Teams" value={d.members.length} sub={`${genderLabel(f.gender).toLowerCase()}, ${f.season}`} />

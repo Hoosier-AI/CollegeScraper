@@ -48,7 +48,7 @@ export default function ProRankings() {
         </div>
       )}
       {pager}
-      <p className="max-w-3xl text-xs text-chalk-500">Plaibook Elo is our own rating, worked out every morning from every club result since 2023 in every competition we follow, with the World Football Elo method. Each league carries a level that cup and continental matches move, so a title in a weaker league counts for less. Ranked: professional clubs with ten or more matches and one in the last year; amateur US leagues (USL League Two, NPSL) are rated but not ranked.</p>
+      <p className="max-w-3xl text-xs text-chalk-500">Plaibook Elo is our own rating, worked out every morning from every club result since 2023 in every competition we follow,. Each league carries a level that cup and continental matches move, so a title in a weaker league counts for less. Ranked: professional clubs with ten or more matches and one in the last year; amateur US leagues (USL League Two, NPSL) are rated but not ranked.</p>
     </div>
   );
 }

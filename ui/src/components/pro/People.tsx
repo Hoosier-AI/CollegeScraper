@@ -117,8 +117,8 @@ export function LeadersTable({ rows, stat, per90, caption, loading, showLeague =
     // Expected goals and assists where American Soccer Analysis covers the competition (shown only when a row has them).
     ...(rows.some((r) => r.xg != null) ? [
       // Per 90 with the rest of the table when the Per 90 switch is on (the value column is).
-      { key: 'xg', label: per90 ? 'xG/90' : 'xG', title: `Expected goals${per90 ? ' per 90' : ''} (American Soccer Analysis)`, num: true, sortable: false, priority: 2 as const, decimals: per90 ? 2 : 1, value: (r: LeaderRow) => rate(r.xg, r.minutes, per90) },
-      { key: 'xa', label: per90 ? 'xA/90' : 'xA', title: `Expected assists${per90 ? ' per 90' : ''} (American Soccer Analysis)`, num: true, sortable: false, priority: 2 as const, decimals: per90 ? 2 : 1, value: (r: LeaderRow) => rate(r.xa, r.minutes, per90) },
+      { key: 'xg', label: per90 ? 'xG/90' : 'xG', title: `Expected goals${per90 ? ' per 90' : ''}`, num: true, sortable: false, priority: 2 as const, decimals: per90 ? 2 : 1, value: (r: LeaderRow) => rate(r.xg, r.minutes, per90) },
+      { key: 'xa', label: per90 ? 'xA/90' : 'xA', title: `Expected assists${per90 ? ' per 90' : ''}`, num: true, sortable: false, priority: 2 as const, decimals: per90 ? 2 : 1, value: (r: LeaderRow) => rate(r.xa, r.minutes, per90) },
     ] : []),
   ];
   return <DataTable rows={rows} columns={cols} rowKey={(r) => `${r.player.id}-${r.team?.id}-${r.league?.id}`} caption={caption} rowHref={(r) => proPath.player(r.player.slug)} loading={loading} dense

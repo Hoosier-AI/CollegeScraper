@@ -8,7 +8,7 @@ import { useProGender } from '../../lib/proGender';
 import { PRO_FILTERS } from '../../lib/news';
 import { PageHeader, Section } from '../../components/primitives';
 import { NewsFeed, NewsSection } from '../../components/news/News';
-import { NewsCredit, NewsHub } from '../../components/news/NewsHub';
+import { NewsHub } from '../../components/news/NewsHub';
 
 const FILTERS = [PRO_FILTERS[0]!, { id: 'callups', label: 'Call-ups', kinds: ['callup' as const] }, PRO_FILTERS[1]!, { id: 'results', label: 'Results', kinds: ['report' as const] }, { id: 'coaching', label: 'Coaching', kinds: ['coaching' as const] }];
 
@@ -25,7 +25,6 @@ export default function IntlNews() {
         aside={<>
           <Section title="Call-ups"><NewsFeed q={{ scope: 'international', gender, kind: ['callup'], limit: 6 }} max={6} dense empty="No call-up news lately" /></Section>
           <Section title="Injuries"><NewsFeed q={{ scope: 'international', gender, kind: ['injury', 'suspension'], limit: 6 }} max={6} dense empty="No injury news lately" /></Section>
-          <NewsCredit />
         </>} />
     </div>
   );
