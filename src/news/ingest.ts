@@ -96,8 +96,13 @@ export async function store(db: Db, src: NewsSource, prepared: Prepared[], recen
   const known = new Set<string>();
   const hashes = [...byHash.keys()];
   for (let i = 0; i < hashes.length; i += 200) {
-    const { data } = await db.from('news_articles').select('url_hash').in('url_hash', hashes.slice(i, i + 200));
-    for (const r of (data ?? []) as { url_hash: string }[]) known.add(r.url_hash);
+    const { data } = await db.from('news_articles').select('url_hash,image_url').in('url_hash', hashes.slice(i, i + 200));
+    for (const r of (data ?? []) as { url_hash: string; image_url: string | null }[]) {
+      known.add(r.url_hash);
+      // A story stored before its feed's picture was read (or before the feed added one) gets it now.
+      const img = byHash.get(r.url_hash)?.item.image;
+      if (img && !r.image_url) await db.from('news_articles').update({ image_url: img }).eq('url_hash', r.url_hash).is('image_url', null);
+    }
   }
   const fresh = [...byHash.values()].filter((p) => !known.has(p.hash));
   let added = 0, linked = 0;
@@ -109,7 +114,7 @@ export async function store(db: Db, src: NewsSource, prepared: Prepared[], recen
     const { data, error } = await db.from('news_articles').insert({
       url_hash: p.hash, url: p.item.url, source_id: src.id, publisher, title: p.title, published_at: p.at.toISOString(),
       kinds: p.kinds, scope: [...p.scope], gender: p.gender, cluster_id: cluster, importance: p.importance,
-      match_text: `${p.item.title}. ${p.item.lede}`.slice(0, 600),
+      match_text: `${p.item.title}. ${p.item.lede}`.slice(0, 600), image_url: p.item.image ?? null,
     }).select('id').single();
     if (error) { if (/duplicate key/i.test(error.message)) continue; throw new Error(`news insert: ${error.message}`); }
     const id = (data as { id: number }).id;

@@ -5,7 +5,7 @@ import { clusterFor, overlap, titleTokens } from '../../src/news/cluster.js';
 import { EntityIndex, personCandidates, resolvePeople, type PersonHit } from '../../src/news/entities.js';
 import { classicSidearmFeed, ENGLISH_COUNTRIES, isSoccerItem, YOUTH_STORY, LEAGUE_RUN, LEAGUE_RUN_PAGE, PUBLISHER_FEEDS, schoolFeedUrl } from '../../src/news/feeds.js';
 import { genderOf, prepare, urlHash, type NewsSource } from '../../src/news/ingest.js';
-import { cleanUrl, feedLinks, parseFeed, parseGdelt, parseGuardian, plainText } from '../../src/news/rss.js';
+import { cleanUrl, feedLinks, imageUrl, parseFeed, parseGdelt, parseGuardian, plainText } from '../../src/news/rss.js';
 
 const fx = (f: string) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url), 'utf8');
 
@@ -29,12 +29,30 @@ describe('feeds', () => {
   });
   it('reads Atom, GDELT and the Guardian', () => {
     const atom = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Club signs keeper</title><link rel="alternate" href="https://club.example/news/1?utm_source=rss"/><published>2026-10-12T10:00:00Z</published><summary>&lt;p&gt;He joins from&amp;nbsp;Leeds&lt;/p&gt;</summary></entry></feed>`;
-    expect(parseFeed(atom)).toEqual([{ title: 'Club signs keeper', url: 'https://club.example/news/1', published: new Date('2026-10-12T10:00:00Z'), lede: 'He joins from Leeds', categories: [] }]);
+    expect(parseFeed(atom)).toEqual([{ title: 'Club signs keeper', url: 'https://club.example/news/1', published: new Date('2026-10-12T10:00:00Z'), lede: 'He joins from Leeds', categories: [], image: null }]);
     const gd = JSON.stringify({ articles: [{ url: 'https://a.example/x', title: 'USWNT beat Spain', seendate: '20261012T201500Z', domain: 'a.example', language: 'English' }, { url: 'https://b.example/y', title: 'Hola', seendate: '20261012T201500Z', language: 'Spanish' }] });
-    expect(parseGdelt(gd)).toEqual([{ title: 'USWNT beat Spain', url: 'https://a.example/x', published: new Date('2026-10-12T20:15:00Z'), lede: '', categories: [] }]);
+    expect(parseGdelt(gd)).toEqual([{ title: 'USWNT beat Spain', url: 'https://a.example/x', published: new Date('2026-10-12T20:15:00Z'), lede: '', categories: [], image: null }]);
     expect(parseGdelt('Please limit requests to one every 5 seconds')).toEqual([]);
     const gu = JSON.stringify({ response: { results: [{ webTitle: 'Pulisic scores', webUrl: 'https://www.theguardian.com/football/x', webPublicationDate: '2026-10-12T10:00:00Z', fields: { trailText: '<strong>Milan</strong> win' }, tags: [{ type: 'keyword', webTitle: 'AC Milan' }, { type: 'contributor', webTitle: 'A Writer' }] }] } });
     expect(parseGuardian(gu)[0]).toMatchObject({ title: 'Pulisic scores', lede: 'Milan win', categories: ['AC Milan'] });
+  });
+  it('keeps the picture a feed supplies, https only', () => {
+    expect(parseFeed(fx('sidearm-indiana-msoc.xml')).filter((i) => i.image).length).toBeGreaterThan(3);
+    expect(parseFeed(fx('bbc-womens.xml')).every((i) => i.image?.startsWith('https://ichef.bbci.co.uk/') && !i.image.includes('/240/'))).toBe(true);
+    const rss = (inner: string) => `<?xml version="1.0"?><rss xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><item><title>A</title><link>https://p.example/a</link>${inner}</item></channel></rss>`;
+    const img = (inner: string) => parseFeed(rss(inner))[0]!.image;
+    expect(img('<media:content url="https://p.example/s.jpg" medium="image" width="240"/><media:content url="https://p.example/l.jpg" medium="image" width="960"/>')).toBe('https://p.example/l.jpg');
+    expect(img('<media:content url="https://p.example/v.mp4" type="video/mp4"/>')).toBeNull();
+    expect(img('<enclosure url="http://p.example/e.jpg" type="image/jpeg" length="1"/>')).toBe('https://p.example/e.jpg');
+    expect(img('<description>&lt;p&gt;&lt;img src="/i/x.png" alt=""&gt; Text&lt;/p&gt;</description>')).toBe('https://p.example/i/x.png');
+    expect(img('<content:encoded><![CDATA[<p><img class="a" src="https://p.example/c.webp"></p>]]></content:encoded>')).toBe('https://p.example/c.webp');
+    expect(img('<description>No picture</description>')).toBeNull();
+    expect(imageUrl('data:image/png;base64,AAAA')).toBeNull();
+    expect(imageUrl('https://p.example/pixel.gif')).toBeNull();
+    expect(imageUrl('https://p.example/logo.svg')).toBeNull();
+    expect(imageUrl('ftp://p.example/a.jpg')).toBeNull();
+    expect(parseGdelt(JSON.stringify({ articles: [{ url: 'https://a.example/x', title: 'T', seendate: '20261012T201500Z', socialimage: 'https://a.example/og.jpg' }] }))[0]!.image).toBe('https://a.example/og.jpg');
+    expect(parseGuardian(JSON.stringify({ response: { results: [{ webTitle: 'T', webUrl: 'https://www.theguardian.com/x', fields: { thumbnail: 'https://media.guim.co.uk/a/500.jpg' } }] } }))[0]!.image).toBe('https://media.guim.co.uk/a/500.jpg');
   });
   it('finds the feeds a page announces', () => {
     const html = '<head><link rel="alternate" type="application/rss+xml" href="/news/feed"><link rel="alternate" type="application/rss+xml" href="/comments/feed"><link rel="stylesheet" href="/a.css"></head>';
@@ -163,14 +181,14 @@ describe('linking', () => {
   it('prepares a school story: its own team, opponent, players, kind, importance', async () => {
     const src: NewsSource = { id: 'school:p-ind-m', kind: 'school', name: 'Indiana', scope: 'college', gender: 'm', program_id: 'p-ind-m', pro_team_id: null, link_label: 'Indiana (men)', link_href: '/teams/indiana/men' };
     const people = async () => new Map([['oduro|sam', [{ type: 'college_player' as const, id: 'pl-1', label: 'Sam Oduro', href: '/players/sam-oduro', key: 'oduro|sam', teamIds: ['p-ind-m'] }]]]);
-    const [p] = await prepare({} as any, ix, src, [{ title: 'Hoosiers Beat Butler, 3-1', url: 'https://iuhoosiers.com/news/1', published: new Date('2026-10-10T00:00:00Z'), lede: 'Sam Oduro scored twice.', categories: [] }], Date.parse('2026-10-11T00:00:00Z'), people);
+    const [p] = await prepare({} as any, ix, src, [{ title: 'Hoosiers Beat Butler, 3-1', url: 'https://iuhoosiers.com/news/1', published: new Date('2026-10-10T00:00:00Z'), lede: 'Sam Oduro scored twice.', categories: [], image: null }], Date.parse('2026-10-11T00:00:00Z'), people);
     expect(p!.kinds).toEqual(['report']);
     expect(p!.links.map((l) => [l.type, l.id, l.method, l.primary])).toEqual([['program', 'p-ind-m', 'scope', true], ['program', 'p-but-m', 'exact', false], ['college_player', 'pl-1', 'context', false]]);
     expect(p!.scope).toEqual(new Set(['college']));
   });
   it('knows a story is international when a national team is in it', async () => {
     const src: NewsSource = { id: 'feed:espn-soccer', kind: 'publisher', name: 'ESPN', scope: 'pro', gender: null, program_id: null, pro_team_id: null, link_label: null, link_href: null };
-    const [p] = await prepare(null, ix, src, [{ title: 'Hayes wants fast start from USWNT in second game against Spain', url: 'https://espn.com/x', published: new Date('2026-10-10T00:00:00Z'), lede: '', categories: [] }], Date.parse('2026-10-11T00:00:00Z'));
+    const [p] = await prepare(null, ix, src, [{ title: 'Hayes wants fast start from USWNT in second game against Spain', url: 'https://espn.com/x', published: new Date('2026-10-10T00:00:00Z'), lede: '', categories: [], image: null }], Date.parse('2026-10-11T00:00:00Z'));
     expect([...p!.scope].sort()).toEqual(['international', 'pro']);
     expect(p!.gender).toBe('w');
     expect(p!.links[0]).toMatchObject({ id: '2385', primary: true });

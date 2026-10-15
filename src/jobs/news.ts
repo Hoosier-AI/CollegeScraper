@@ -1,5 +1,6 @@
 // News jobs (src/news): read the school, publisher, GDELT, Guardian, club and federation feeds, and turn new items into
-// tagged, linked stories in the same run. Headlines and links only are shown on the site.
+// tagged, linked stories in the same run. The site shows the headline, the link and the feed's own picture (each
+// publisher feed's pictures can be switched off in the hub).
 //   news-schools   school athletics feeds (Sidearm), the due third each hour in season, daily out of it
 //   news-feeds     publisher RSS, the Guardian, club and federation feeds
 //   news-gdelt     one GDELT query per run (GDELT asks for one request every 5 s); the queries take turns
@@ -242,7 +243,7 @@ registerJob('news-retag', async (ctx: JobContext) => {
   for (const [sourceId, list] of bySource) {
     const src = sources.get(sourceId);
     if (!src) continue;
-    const items = list.map((a) => ({ title: a.title as string, url: a.url as string, published: new Date(a.published_at), lede: String(a.match_text ?? '').slice(String(a.title).length + 2), categories: [] as string[] }));
+    const items = list.map((a) => ({ title: a.title as string, url: a.url as string, published: new Date(a.published_at), lede: String(a.match_text ?? '').slice(String(a.title).length + 2), categories: [] as string[], image: null }));
     const prepared = await prepare(db, ix, src, items, Date.now(), undefined, 400);
     const byHash = new Map(prepared.map((p) => [p.hash, p]));
     for (const a of list) {

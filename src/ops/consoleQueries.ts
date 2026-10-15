@@ -175,7 +175,7 @@ export async function crawlHealth(db: Db) {
 export async function settings(db: Db) {
   const [live, paused, crawl, overrides, contact, sources] = await Promise.all([liveSettings(db), schedulerPaused(db), crawlPaused(db), schedulerOverrides(db), cachedKv<string | null>(db, KV.contactEmail, null), cachedKv<boolean>(db, KV.proSourcesVisible, false)]);
   const off = await cachedKv<string[]>(db, KV.proSourcesOff, []);
-  const { data: feeds } = await db.from('news_sources').select('id,kind,name,url,scope,gender,enabled,terms_url,last_ok_at,last_error,fails,items').in('kind', ['publisher', 'gdelt', 'guardian']).order('kind').order('name');
+  const { data: feeds } = await db.from('news_sources').select('id,kind,name,url,scope,gender,enabled,show_images,terms_url,last_ok_at,last_error,fails,items').in('kind', ['publisher', 'gdelt', 'guardian']).order('kind').order('name');
   return { live, scheduler_paused: paused, crawl_paused: crawl, overrides, contact_email: contact ?? loadConfig().contactEmail, pro_sources_visible: !!sources, pro_sources_off: Array.isArray(off) ? off : [], news_feeds: feeds ?? [], guardian_key_set: !!loadConfig().GUARDIAN_API_KEY, jobs: Object.keys(JOB_META) };
 }
 

@@ -1,7 +1,8 @@
-// News lists: a story is its headline (to the publisher, new tab), the outlet and time, our tags, the teams and players
-// it is about (to our pages), and how many outlets ran it. Used on the News pages, team, player, league and country
+// News lists: a story is its headline (to the publisher, new tab), the picture the publisher's feed supplies (loaded
+// from the publisher, hidden when there is none or it fails), the outlet and time, our tags, the teams and players it
+// is about (to our pages), and how many outlets ran it. Used on the News pages, team, player, league and country
 // pages, and the match previews (Team news).
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Newspaper } from 'lucide-react';
 import { fmt } from '../../lib/api';
@@ -17,11 +18,25 @@ export function KindBadge({ kind }: { kind: NewsKind }) {
   return <Badge tone={KIND_TONE[kind] ?? 'gray'}>{KIND_LABEL[kind] ?? kind}</Badge>;
 }
 
+/** The story's picture at a fixed size (nothing shifts as it loads), gone when it fails to load. Decorative: the
+ *  headline beside it says what it is. */
+function Thumb({ src, href, dense }: { src: string; href: string; dense?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden className={`shrink-0 overflow-hidden rounded bg-field-800 ${dense ? 'h-12 w-12' : 'h-14 w-24 sm:h-[4.5rem] sm:w-32'}`}>
+      <img src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
+    </a>
+  );
+}
+
 /** One story. `hide` leaves out a link the whole list is already about (the team on its own page). */
 export function NewsItem({ s, hide, dense }: { s: Story; hide?: string; dense?: boolean }) {
   const links = s.links.filter((l) => l.href && `${l.type}:${l.id}` !== hide).slice(0, dense ? 3 : 5);
   return (
-    <li className={`group ${dense ? 'px-3 py-2' : 'px-3 py-2.5'}`}>
+    <li className={`group flex items-start gap-3 ${dense ? 'px-3 py-2' : 'px-3 py-2.5'}`}>
+      {s.image_url && <Thumb src={s.image_url} href={s.url} dense={dense} />}
+      <div className="min-w-0 flex-1">
       <a href={s.url} target="_blank" rel="noopener noreferrer" className={`flex items-start gap-1 font-medium text-chalk-100 hover:text-pitch-300 ${dense ? 'text-sm' : 'text-[15px] leading-snug'}`}>
         <span className="min-w-0">{s.title}</span>
         <ArrowUpRight size={14} aria-hidden className="mt-1 shrink-0 text-chalk-500 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -41,6 +56,7 @@ export function NewsItem({ s, hide, dense }: { s: Story; hide?: string; dense?: 
             {l.label}
           </Link>
         ))}
+      </div>
       </div>
     </li>
   );

@@ -34,9 +34,9 @@ export const CRAWL_SITES: CrawlSite[] = [
   { id: 'wikidata', name: 'Wikidata', url: 'https://www.wikidata.org', license: 'CC0 (careers from Wikipedia, CC BY-SA 4.0)', scraped: true,
     feeds: ['bios', 'careers'], jobs: ['wikidata-sync', 'wikidata-fill'], cadence: 'every hour at :20 (US clubs first)' },
   // News: headlines and links only, each publisher's terms recorded in src/news/feeds.ts.
-  { id: 'news-schools', name: 'School athletics news', url: 'https://www.plaibook.live/news', license: 'official school feeds, headline and link', scraped: true,
+  { id: 'news-schools', name: 'School athletics news', url: 'https://www.plaibook.live/news', license: 'official school feeds, headline, link and the feed picture', scraped: true,
     feeds: ['news'], jobs: ['news-schools'], cadence: 'every hour; each school every 3 hours in season' },
-  { id: 'news-publishers', name: 'Publisher feeds', url: 'https://www.plaibook.live/pro/news', license: 'public RSS, headline and link with credit (per-feed terms in Settings)', scraped: true,
+  { id: 'news-publishers', name: 'Publisher feeds', url: 'https://www.plaibook.live/pro/news', license: 'public RSS, headline, link and the feed picture with credit (per-feed terms and picture switch in Settings)', scraped: true,
     feeds: ['news'], jobs: ['news-feeds'], cadence: 'every 15 min' },
   { id: 'gdelt', name: 'GDELT', url: 'https://www.gdeltproject.org', license: 'open data, any use, credited', scraped: true,
     feeds: ['news'], jobs: ['news-gdelt'], cadence: 'one query an hour, in turn' },

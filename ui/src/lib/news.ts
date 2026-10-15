@@ -1,5 +1,6 @@
 // News on the site (src/news on the server): stories linked to our teams, players, leagues and conferences. We show the
-// headline (linking out to the publisher), the outlet, the time and our own tags; never the publisher's text or photos.
+// headline (linking out to the publisher), the picture the publisher's feed supplies (loaded from the publisher), the
+// outlet, the time and our own tags; never the publisher's text.
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { api, qs } from './api';
 
@@ -8,6 +9,8 @@ export interface NewsLink { type: 'program' | 'college_player' | 'conference' | 
 export interface Story {
   id: number; url: string; title: string; publisher: string; published_at: string; kinds: NewsKind[]; scope: string[];
   gender: 'm' | 'w' | null; importance: number; outlets: number; also: { publisher: string; url: string }[]; links: NewsLink[];
+  /** The picture the publisher's feed gives the story, loaded from the publisher; null when it gives none. */
+  image_url?: string | null;
 }
 export interface NewsPage { stories: Story[]; top?: Story[]; kinds: Record<NewsKind, string>; next_before: string | null }
 

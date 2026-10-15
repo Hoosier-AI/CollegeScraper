@@ -49,7 +49,7 @@ export const GDELT_QUERIES: { id: string; name: string; query: string; scope: Sc
 ];
 export const gdeltUrl = (q: string) => `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(`${q} sourcelang:english`)}&mode=artlist&maxrecords=75&format=json&sort=datedesc&timespan=1d`;
 
-export const GUARDIAN_URL = (key: string) => `https://content.guardianapis.com/search?section=football&page-size=50&order-by=newest&show-fields=trailText&show-tags=keyword&api-key=${encodeURIComponent(key)}`;
+export const GUARDIAN_URL = (key: string) => `https://content.guardianapis.com/search?section=football&page-size=50&order-by=newest&show-fields=trailText,thumbnail&show-tags=keyword&api-key=${encodeURIComponent(key)}`;
 
 /**
  * A program's own sport news feed on its athletics site, or null when the platform publishes none we can read.

@@ -87,7 +87,7 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   app.get('/api/console/crawl', async () => cq.crawlHealth(getDb()));
 
   app.get('/api/console/settings', async () => cq.settings(getDb()));
-  app.put<{ Body: { live?: Partial<LiveSettings>; scheduler_paused?: boolean; crawl_paused?: boolean; contact_email?: string; pro_sources_visible?: boolean; pro_sources_off?: string[]; news_feeds?: Record<string, boolean> } | null }>('/api/console/settings', async (req) => {
+  app.put<{ Body: { live?: Partial<LiveSettings>; scheduler_paused?: boolean; crawl_paused?: boolean; contact_email?: string; pro_sources_visible?: boolean; pro_sources_off?: string[]; news_feeds?: Record<string, boolean>; news_images?: Record<string, boolean> } | null }>('/api/console/settings', async (req) => {
     const db = getDb(); const b = req.body ?? {};
     if (b.live) await setKv(db, KV.live, normalizeLive(b.live));
     if (typeof b.scheduler_paused === 'boolean') await setKv(db, KV.schedulerPaused, b.scheduler_paused);
@@ -97,6 +97,8 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
     if (Array.isArray(b.pro_sources_off)) await setKv(db, KV.proSourcesOff, [...new Set(b.pro_sources_off.map(String).filter((s) => SCRAPED_SOURCES.includes(s)))]);
     // One news feed on or off (publishers, GDELT queries, the Guardian): ids like 'feed:bbc-football'.
     if (b.news_feeds && typeof b.news_feeds === 'object') for (const [id, on] of Object.entries(b.news_feeds)) if (/^(feed|gdelt|guardian):[a-z0-9-]+$/.test(id) && typeof on === 'boolean') await db.from('news_sources').update({ enabled: on }).eq('id', id);
+    // A feed's pictures on or off (off: its stories show the headline only, stored pictures included).
+    if (b.news_images && typeof b.news_images === 'object') for (const [id, on] of Object.entries(b.news_images)) if (/^(feed|gdelt|guardian):[a-z0-9-]+$/.test(id) && typeof on === 'boolean') await db.from('news_sources').update({ show_images: on }).eq('id', id);
     forgetKv();
     forgetSwr('console-pro');
     return cq.settings(db);
