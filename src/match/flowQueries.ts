@@ -9,6 +9,13 @@ import { memo } from '../pro/memo.js';
 import { COLLEGE_WEIGHTS, fitRates, momentum, winProbCurve, xgRace, type Action, type FlowEvent, type Probs } from './flow.js';
 
 const HOME = { college: 60, pro: 70 } as const;
+/** A play-by-play name as people write it ("RANGON, Malcolm" -> "Malcolm Rangon"); null for "Team" lines. */
+const personName = (raw: string | null): string | null => {
+  const s = String(raw ?? '').trim();
+  if (!s || /^team$/i.test(s)) return null;
+  const flipped = /,/.test(s) ? s.split(',').map((x) => x.trim()).reverse().join(' ') : s;
+  return flipped === flipped.toUpperCase() ? flipped.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase()) : flipped;
+};
 const DEFAULT_DRAW: DrawModel = [0.27, 0.26, 0.24, 0.22, 0.2, 0.17, 0.14, 0.11, 0.08, 0.05];
 
 export interface Flow {
@@ -17,7 +24,7 @@ export interface Flow {
   winprob: { m: number; h: number; d: number; a: number }[] | null;
   momentum: { m: number; v: number }[] | null;
   xg: { m: number; h: number; a: number }[] | null;
-  marks: { m: number; side: 'home' | 'away'; type: 'goal' | 'red' }[];
+  marks: { m: number; side: 'home' | 'away'; type: 'goal' | 'red'; who?: string | null }[];
   source: string;
 }
 
@@ -45,7 +52,7 @@ export async function collegeFlow(db: Db, id: string): Promise<Flow | null> {
   if (!game || (game.status !== 'final' && game.status !== 'live') || !game.home_program_id || !game.away_program_id) return null;
   const live = game.status === 'live';
   return memo(`flow-c:${id}:${game.status}`, async () => {
-    const evs = await selectAll<{ source: string; period: number; clock_seconds: number | null; program_id: string | null; event_type: string }>(db, 'college_game_events', 'source,period,clock_seconds,program_id,event_type',
+    const evs = await selectAll<{ source: string; period: number; clock_seconds: number | null; program_id: string | null; event_type: string; player_name_raw: string | null }>(db, 'college_game_events', 'source,period,clock_seconds,program_id,event_type,player_name_raw',
       (q) => q.eq('game_id', id).in('event_type', ['shot', 'goal', 'pk', 'corner', 'save', 'red']));
     // The play-by-play of the box score we trust, else the other one if it has more.
     const by = (s: string) => evs.filter((e) => e.source === s && e.clock_seconds != null && e.program_id);
@@ -59,8 +66,8 @@ export async function collegeFlow(db: Db, id: string): Promise<Flow | null> {
       const s = side(e.program_id); if (!s) continue;
       const m = minute(e.clock_seconds!);
       if (e.event_type === 'save') actions.push({ m, side: s === 'home' ? 'away' : 'home', w: 0.5 });
-      else if (e.event_type === 'red') marks.push({ m, side: s, type: 'red' });
-      else { actions.push({ m, side: s, w: COLLEGE_WEIGHTS[e.event_type] ?? 0 }); if (e.event_type === 'goal') marks.push({ m, side: s, type: 'goal' }); }
+      else if (e.event_type === 'red') marks.push({ m, side: s, type: 'red', who: personName(e.player_name_raw) });
+      else { actions.push({ m, side: s, w: COLLEGE_WEIGHTS[e.event_type] ?? 0 }); if (e.event_type === 'goal') marks.push({ m, side: s, type: 'goal', who: personName(e.player_name_raw) }); }
     }
     const lastEvent = Math.max(0, ...pick.map((e) => minute(e.clock_seconds!)));
     const until = live ? Math.max(lastEvent, liveMinute(game.live_period, game.live_clock) ?? 0) : Math.max(90, lastEvent);
@@ -114,19 +121,20 @@ export async function proFlow(db: Db, fixtureId: number): Promise<Flow | null> {
   return memo(`flow-p:${fixtureId}:${fx.status}:${live ? fx.elapsed : ''}`, async () => {
     const gender: 'm' | 'w' = fx.pro_leagues?.gender === 'w' ? 'w' : 'm';
     const [events, adv] = await Promise.all([
-      selectAll<{ minute: number | null; extra: number | null; team_id: number; type: string; detail: string | null; comments: string | null }>(db, 'pro_fixture_events', 'minute,extra,team_id,type,detail,comments', (q) => q.eq('fixture_id', fixtureId).in('type', ['goal', 'card'])),
+      selectAll<{ minute: number | null; extra: number | null; team_id: number; type: string; detail: string | null; comments: string | null; player_name: string | null }>(db, 'pro_fixture_events', 'minute,extra,team_id,type,detail,comments,player_name', (q) => q.eq('fixture_id', fixtureId).in('type', ['goal', 'card'])),
       matchAdvanced(db, fixtureId, fx.home_team_id).catch(() => null),
     ]);
     const side = (t: number): 'home' | 'away' => (t === fx.home_team_id ? 'home' : 'away');
     const mOf = (e: { minute: number | null; extra: number | null }) => (e.minute ?? 0) + (e.extra ?? 0);
     const goalsEv = events.filter((e) => e.type === 'goal' && e.detail !== 'Missed Penalty' && !/shootout/i.test(e.comments ?? '') && e.minute != null);
-    const build = (flipOwn: boolean) => goalsEv.map((e) => ({ m: mOf(e), side: (e.detail === 'Own Goal' && flipOwn ? (side(e.team_id) === 'home' ? 'away' : 'home') : side(e.team_id)) as 'home' | 'away', type: 'goal' as const }));
+    const build = (flipOwn: boolean) => goalsEv.map((e) => ({ m: mOf(e), side: (e.detail === 'Own Goal' && flipOwn ? (side(e.team_id) === 'home' ? 'away' : 'home') : side(e.team_id)) as 'home' | 'away', type: 'goal' as const,
+      who: e.player_name ? `${e.player_name}${e.detail === 'Own Goal' ? ' (own goal)' : e.detail === 'Penalty' ? ' (pen)' : ''}` : null }));
     const fits = (gs: { side: string }[]) => gs.filter((g) => g.side === 'home').length === (fx.home_goals ?? -1) && gs.filter((g) => g.side === 'away').length === (fx.away_goals ?? -1);
     // The provider files an own goal under one side or the other: whichever reading gives the score.
     let goals = build(false);
     if (!fits(goals)) goals = build(true);
     const scoreOk = fits(goals);
-    const reds = events.filter((e) => e.type === 'card' && /red|second yellow/i.test(e.detail ?? '') && e.minute != null).map((e) => ({ m: mOf(e), side: side(e.team_id), type: 'red' as const }));
+    const reds = events.filter((e) => e.type === 'card' && /red|second yellow/i.test(e.detail ?? '') && e.minute != null).map((e) => ({ m: mOf(e), side: side(e.team_id), type: 'red' as const, who: e.player_name ?? null }));
     const marks = [...goals, ...reds].sort((a, b) => a.m - b.m);
     const extraTime = ['AET', 'PEN'].includes(fx.status_short) || (live && ['ET', 'BT', 'P'].includes(fx.status_short));
     const length = extraTime ? 120 : 90;

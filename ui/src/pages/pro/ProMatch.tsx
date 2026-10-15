@@ -110,7 +110,7 @@ export default function ProMatch() {
       {tab === 'summary' && (
         <PageWithRail label="Match in numbers" rail={rail}>
           {m.status === 'live' && <LiveNote live={d.live ?? null} hasDetail={d.events.length > 0 || hasLineups || hasStats} />}
-          {played && <MatchFlow url={`/api/pro/fixtures/${m.id}/flow`} live={m.status === 'live'} home={m.home.name} away={m.away.name} />}
+          {played && <MatchFlow url={`/api/pro/fixtures/${m.id}/flow`} live={m.status === 'live'} home={m.home.name} away={m.away.name} homeLogo={m.home.logo} awayLogo={m.away.logo} />}
           {d.events.length
             ? <Section title="Events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>
             : m.status === 'live'
