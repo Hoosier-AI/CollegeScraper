@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, ApiError, fmt, qs } from '../../lib/api';
 import { TeamOfWeek, totwUrl, type Totw } from '../../components/pro/TeamOfWeek';
+import { ProTableView, TableViewSwitch, type TableViewKey } from '../../components/TableViews';
 import { useUrlPatch, useUrlState } from '../../lib/urlState';
 import { proPath, genderWord, PRO_STATS, POSITIONS, type ProLeader, type ProLeagueRef, type ProMatch, type ProStandingRow, type ProTeamRef } from '../../lib/pro';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -145,6 +146,7 @@ export default function ProLeague() {
   const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'players', 'week', 'teams', 'news', 'history', ...Object.keys(OLD_TAB)] });
   const tab = OLD_TAB[rawTab] ?? (rawTab as Tab);
   const [round, setRound] = useUrlState('round');
+  const [tview, setTview] = useUrlState('view', 'all', { allow: ['all', 'home', 'away', 'form'] }) as [TableViewKey, (v: string) => void];
   const q = useQuery({ queryKey: ['pro-league', slug, seasonParam], queryFn: () => api<LeagueData>(`/api/pro/leagues/${slug}${qs({ season: seasonParam })}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   // Team of the week: a tab only where the matches have player ratings (the latest round, shared with the tab).
   const lid = q.data?.league.id, lseason = q.data?.season;
@@ -186,7 +188,10 @@ export default function ProLeague() {
         // The table, and beside it on wide screens what a reader looks for next: who scores, who just played, who is next.
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           {d.standings.length
-            ? <div className="space-y-4">{d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
+            ? <div className="space-y-4">
+                {l.type !== 'cup' && d.season && <div className="flex justify-end"><TableViewSwitch value={tview} onChange={setTview} /></div>}
+                {tview !== 'all' && d.season ? <ProTableView league={l.id} season={d.season} view={tview} hrefOf={(t) => (t.slug ? proPath.team(t.slug, d.season, l.scope === 'intl') : null)} />
+                : d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
                 {(d.advanced_leaders?.table?.length ?? 0) > 0 && <Section title="Expected table"><ExpectedTable rows={d.advanced_leaders!.table!} season={d.season} /><Credit credit={d.advanced_leaders!.credit} /></Section>}
                 {d.history_sources && <p className="text-2xs text-chalk-500">{d.history_sources.map((h, i) => <span key={i}>{i ? '; ' : ''}{h.what}: {h.url ? <a href={h.url} target="_blank" rel="noopener" className="underline hover:text-pitch-300">{h.name}</a> : h.name}{h.license ? ` (${h.license})` : ''}</span>)}.</p>}</div>
             : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Matches.' : 'The table appears once the first matches have been played.'} />}

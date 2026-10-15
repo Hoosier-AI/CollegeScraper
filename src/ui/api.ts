@@ -15,6 +15,10 @@ import { follows, parseFollows } from './follows.js';
 import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { collegeFlow } from '../match/flowQueries.js';
 import { simOdds, tournamentOdds } from '../college/simOdds.js';
+import { collegeTableView } from '../standings/viewQueries.js';
+import { icsCalendar } from '../calendar/ics.js';
+import { collegeRecords } from '../college/records.js';
+import { collegeTeamCompare, proTeamCompare } from '../compare/teams.js';
 import { COLLEGE_REF_SORTS, collegeGameReferee, collegeReferee, collegeRefereeList } from '../referees.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -151,6 +155,61 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
       conference: UUID.test(r.conference ?? '') ? r.conference! : null,
     };
     return reply.header('Cache-Control', 'public, max-age=300').send({ ...(await collegeTeamOfWeek(getDb(), f)), season: f.season, division: f.division });
+  });
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/conferences/:id/table', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const view = (['all', 'home', 'away', 'form'] as const).find((v) => v === req.query.view) ?? 'home';
+    return reply.header('Cache-Control', 'public, max-age=300').send(await collegeTableView(getDb(), req.params.id, s, req.query.gender === 'w' ? 'w' : 'm', view));
+  });
+  // A team's matches as a calendar feed (webcal subscribe or download).
+  app.get<{ Params: { id: string } }>('/api/teams/:id/calendar.ics', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const db = getDb();
+    const { data: p } = await db.from('college_programs').select('id,name,gender').eq('id', req.params.id).maybeSingle();
+    if (!p) return reply.code(404).send({ error: 'not found' });
+    const s = (await q.meta(db)).currentSeason;
+    const games = await q.programGames(db, req.params.id, s);
+    const base = `https://${req.headers.host ?? 'www.plaibook.live'}`;
+    const ics = icsCalendar(`${(p as any).name} ${(p as any).gender === 'w' ? "women's" : "men's"} soccer`, games.filter((g: any) => g.status !== 'cancelled').map((g: any) => ({
+      uid: `${g.id}@plaibook.live`, start: g.start_epoch && !q.kickoffTbd(g.start_epoch) ? new Date(g.start_epoch * 1000) : null, date: String(g.game_date).slice(0, 10),
+      summary: `${g.away_name ?? '?'} at ${g.home_name ?? '?'}${g.status === 'final' && g.home_score != null ? ` (${g.away_score}-${g.home_score})` : g.status === 'postponed' ? ' (postponed)' : ''}`,
+      location: [g.venue_name, g.venue_city].filter(Boolean).join(', ') || null,
+      description: [g.broadcast ? `On ${g.broadcast}` : null, `${base}/matches/${g.id}`].filter(Boolean).join('\n'), url: `${base}/matches/${g.id}`,
+    })));
+    return reply.header('Content-Type', 'text/calendar; charset=utf-8').header('Content-Disposition', `inline; filename="${String((p as any).name).replace(/[^A-Za-z0-9]+/g, '-')}.ics"`).header('Cache-Control', 'public, max-age=3600').send(ics);
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/compare/teams', async (req, reply) => {
+    const { a, b } = req.query;
+    if (!UUID.test(a ?? '') || !UUID.test(b ?? '')) return reply.code(400).send({ error: 'a and b program ids required' });
+    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const r = await collegeTeamCompare(getDb(), a!, b!, s);
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/pro/compare/teams', async (req, reply) => {
+    const { a, b } = req.query;
+    if (!/^[a-z0-9-]{1,160}$/.test(a ?? '') || !/^[a-z0-9-]{1,160}$/.test(b ?? '')) return reply.code(400).send({ error: 'a and b club slugs required' });
+    const r = await proTeamCompare(getDb(), a!, b!);
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  // Records and streaks.
+  app.get<{ Querystring: Record<string, string> }>('/api/records', async (req, reply) => {
+    const s = season(req.query.season) ?? (await q.meta(getDb())).currentSeason;
+    const division = ['d1', 'd2', 'd3'].includes(req.query.division ?? '') ? req.query.division! : 'd1';
+    const { runs, ...r } = await collegeRecords(getDb(), { season: s, gender: req.query.gender === 'w' ? 'w' : 'm', division });
+    return reply.header('Cache-Control', 'public, max-age=300').send(r);
+  });
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/streaks', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const db = getDb();
+    const s = season(req.query.season) ?? (await q.meta(db)).currentSeason;
+    const [{ data: ps }, { data: p }] = await Promise.all([
+      db.from('college_program_seasons').select('division').eq('program_id', req.params.id).eq('season', s).maybeSingle(),
+      db.from('college_programs').select('gender').eq('id', req.params.id).maybeSingle(),
+    ]);
+    if (!ps || !p) return reply.send({ streaks: null });
+    const r = await collegeRecords(db, { season: s, gender: (p as any).gender === 'w' ? 'w' : 'm', division: (ps as any).division });
+    return reply.header('Cache-Control', 'public, max-age=300').send({ streaks: r.runs[req.params.id] ?? null, division: (ps as any).division });
   });
   // Season simulations (migration 190): the NCAA tournament page, a conference's title race, a team's chances.
   app.get<{ Querystring: Record<string, string> }>('/api/tournament', async (req, reply) => {

@@ -21,6 +21,8 @@ import { BROKEN_AT, advForLeaders, sourcesOff } from '../pro/sources.js';
 import { swr } from '../ops/swr.js';
 import { teamOfWeek } from '../pro/teamOfWeek.js';
 import { proFlow } from '../match/flowQueries.js';
+import { proTableView } from '../standings/viewQueries.js';
+import { icsCalendar } from '../calendar/ics.js';
 import { PRO_REF_SORTS, proMatchReferee, proReferee, proRefereeLeagues, proRefereeList } from '../referees.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -91,6 +93,58 @@ export function registerProApi(app: FastifyInstance): void {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const r = await pro.match(getDb(), req.params.slug);
     return r ? reply.header('Cache-Control', CACHE).send(r) : notFound(reply, 'match', req.params.slug);
+  });
+  app.get<{ Params: { slug: string } }>('/api/pro/teams/:slug/calendar.ics', async (req, reply) => {
+    if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const db = getDb();
+    const { data: t } = await db.from('pro_teams').select('id,name,national').eq('slug', req.params.slug).maybeSingle();
+    if (!t) return reply.code(404).send({ error: 'not found' });
+    const tid = (t as any).id;
+    const from = new Date(Date.now() - 60 * 86400_000).toISOString(), to = new Date(Date.now() + 365 * 86400_000).toISOString();
+    const { data } = await db.from('pro_fixtures').select(pro.FIXTURE_SELECT).or(`home_team_id.eq.${tid},away_team_id.eq.${tid}`).gte('kickoff', from).lte('kickoff', to).order('kickoff').limit(200);
+    const base = `https://${req.headers.host ?? 'www.plaibook.live'}`;
+    const ms = ((data ?? []) as any[]).map(pro.toMatchRow).filter((m) => m.status !== 'cancelled');
+    const ics = icsCalendar((t as any).name, ms.map((m) => ({
+      uid: `pro-${m.id}@plaibook.live`, start: new Date(m.kickoff), date: m.kickoff.slice(0, 10),
+      summary: `${m.home.name} vs ${m.away.name}${m.status === 'final' && m.home.score != null ? ` (${m.home.score}-${m.away.score})` : ''}, ${m.league.name}`,
+      location: m.venue ?? null, description: `${base}${m.league.scope === 'intl' ? '/intl' : '/pro'}/matches/${m.slug}`, url: `${base}${m.league.scope === 'intl' ? '/intl' : '/pro'}/matches/${m.slug}`,
+    })));
+    return reply.header('Content-Type', 'text/calendar; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(ics);
+  });
+  // A club's Plaibook Elo (rating, world and country rank, last 30 days) and the seasons it finished top of a table.
+  app.get<{ Params: { slug: string } }>('/api/pro/teams/:slug/extras', async (req, reply) => {
+    if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const db = getDb();
+    const { data: t } = await db.from('pro_teams').select('id').eq('slug', req.params.slug).maybeSingle();
+    if (!t) return reply.code(404).send({ error: 'not found' });
+    const tid = (t as any).id;
+    const [eloRes, tops] = await Promise.all([
+      db.from('pro_elo').select('rating,rank,games,change_30d,country,gender,updated_at').eq('team_id', tid).maybeSingle(),
+      selectAll<any>(db, 'pro_standings', 'league_id,season,group_name,points', (q) => q.eq('team_id', tid).eq('rank', 1)),
+    ]);
+    const e = eloRes.data as any;
+    let country_rank: number | null = null;
+    if (e?.country && e.rating != null) {
+      const { count } = await db.from('pro_elo').select('team_id', { count: 'exact', head: true }).eq('country', e.country).eq('gender', e.gender).gt('rating', e.rating).gte('games', 10);
+      country_rank = (count ?? 0) + 1;
+    }
+    const ids = [...new Set(tops.map((x) => x.league_id))];
+    const [leagues, cur] = await Promise.all([pro.leaguesById(db, ids), ids.length ? selectAll<any>(db, 'pro_leagues', 'id,current_season', (q) => q.in('id', ids)) : Promise.resolve([])]);
+    const current = new Map(cur.map((l) => [l.id, l.current_season ?? 9999]));
+    const finished = tops.filter((x) => { const l = leagues.get(x.league_id) as any; return l && x.season < (current.get(x.league_id) ?? 9999) && l.type !== 'cup'; })
+      .map((x) => ({ league: leagues.get(x.league_id)!, season: x.season, group: /^(overall|league|regular|table)/i.test(x.group_name ?? '') || !x.group_name || x.group_name === leagues.get(x.league_id)!.name ? null : x.group_name, points: x.points }))
+      .sort((a, b) => b.season - a.season || (a.group ? 1 : 0) - (b.group ? 1 : 0));
+    return reply.header('Cache-Control', 'public, max-age=3600').send({
+      elo: e && e.games >= 10 ? { rating: Math.round(Number(e.rating)), rank: e.rank ?? null, country: e.country ?? null, country_rank, change_30d: e.change_30d == null ? null : Math.round(Number(e.change_30d)), games: e.games, as_of: String(e.updated_at).slice(0, 10) } : null,
+      tops: finished,
+    });
+  });
+  // Home / Away / Form tables (src/standings/views.ts).
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/pro/leagues/:id/table', async (req, reply) => {
+    const id = Number(req.params.id), s = season(req.query.season);
+    const view = (['all', 'home', 'away', 'form'] as const).find((v) => v === req.query.view) ?? 'home';
+    if (!Number.isInteger(id) || id <= 0 || !s) return reply.code(400).send({ error: 'league id and season required' });
+    return reply.header('Cache-Control', 'public, max-age=300').send(await proTableView(getDb(), id, s, view));
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/pro/leagues/:id/team-of-week', async (req, reply) => {
     const id = Number(req.params.id), s = season(req.query.season);

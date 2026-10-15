@@ -1,6 +1,7 @@
 // One conference: its table, this week's matches, its leading players, members, news and ranked teams. Tabs follow the
 // competition order every area uses: Table, Matches, Players, Teams, News, then Rankings.
 import { TitleRace } from '../../components/SimOdds';
+import { CollegeTableView, TableViewSwitch, type TableViewKey } from '../../components/TableViews';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
@@ -25,6 +26,7 @@ export function ConferenceDetail({ id }: { id: string }) {
   const { pathname } = useLocation();
   const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'players', 'teams', 'news', 'rankings', 'leaders', 'polls'] });
   const tab = OLD_TAB[rawTab] ?? (rawTab as Tab);
+  const [tview, setTview] = useUrlState('view', 'all', { allow: ['all', 'home', 'away', 'form'] }) as [TableViewKey, (v: string) => void];
   const q = useQuery({ queryKey: ['conference', id, f.season, f.gender], queryFn: () => api<any>(`/api/conferences/${id}${qs({ season: f.season, gender: f.gender })}`) });
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
@@ -99,7 +101,11 @@ export function ConferenceDetail({ id }: { id: string }) {
         )}
         {tab !== 'news' && <RailNews q={{ conference: id }} hide={`conference:${id}`} to={href(pathname, { tab: 'news' })} />}
       </>}>
-        {tab === 'table' && <><StandingsGrid conference={id} embedded />{f.season === f.currentSeason && <TitleRace conference={id} season={f.season} gender={f.gender} />}</>}
+        {tab === 'table' && <>
+          <div className="flex justify-end"><TableViewSwitch value={tview} onChange={setTview} /></div>
+          {tview === 'all' ? <StandingsGrid conference={id} embedded /> : <CollegeTableView conference={id} season={f.season} gender={f.gender} view={tview} hrefOf={(t) => href(`/teams/${t.id}`)} />}
+          {f.season === f.currentSeason && <TitleRace conference={id} season={f.season} gender={f.gender} />}
+        </>}
         {tab === 'matches' && (byDate.size ? [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, games]) => (
         <section key={date} className="space-y-2"><h2 className="text-sm font-semibold text-chalk-100">{longDay(date)}</h2><div className="frame divide-y divide-field-700">{games.map((g: any) => <MatchRow key={g.id} g={g} />)}</div></section>
       )) : <EmptyState title="No matches this week" body="Conference members have nothing scheduled Monday to Sunday." action={<Chip to={href('/matches', { conference: id })}>Browse matches</Chip>} />)}

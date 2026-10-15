@@ -3,7 +3,7 @@
 // (Conferences, Leagues, Tournaments); pages only one area has sit under More. The header, the phone bar and its
 // More sheet all read this table.
 import type { LucideIcon } from 'lucide-react';
-import { ArrowLeftRight, BarChart3, CalendarDays, Flag, Star, Network, Globe, GraduationCap, Medal, Newspaper, Shield, Swords, Trophy, Users, Map as MapIcon, Tv } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, CalendarDays, Flag, Star, Network, Flame, Globe, GraduationCap, Medal, Newspaper, Shield, Swords, Trophy, Users, Map as MapIcon, Tv } from 'lucide-react';
 import type { Section } from './section';
 
 export type SlotKey = 'matches' | 'competitions' | 'teams' | 'players' | 'leaders' | 'rankings' | 'news';
@@ -30,6 +30,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       { key: 'compare', to: '/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
       { key: 'h2h', to: '/h2h', label: 'Head to head', icon: Swords, hint: 'Every meeting between two teams' },
       { key: 'tournament', to: '/tournament', label: 'NCAA tournament odds', icon: Network, hint: 'Who makes the field, from thousands of simulated seasons' },
+      { key: 'records', to: '/records', label: 'Records and streaks', icon: Flame, hint: 'Runs still going and the best games this season' },
       { key: 'totw', to: '/team-of-the-week', label: 'Team of the week', icon: Star, hint: 'The best-rated XI of each week' },
       { key: 'tv', to: '/tv', label: 'On TV', icon: Tv, hint: 'Games on TV and streaming this week' },
       { key: 'referees', to: '/referees', label: 'Referees', icon: Flag, hint: 'Cards, fouls and penalty kicks a game by referee' },

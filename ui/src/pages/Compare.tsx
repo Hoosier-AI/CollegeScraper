@@ -7,7 +7,12 @@ import { X } from 'lucide-react';
 import { api, fmt, qs } from '../lib/api';
 import { genderLabel, useHref } from '../lib/filters';
 import { useEntityId } from '../lib/entity';
-import { useUrlPatch } from '../lib/urlState';
+import { useUrlPatch, useUrlState } from '../lib/urlState';
+import { ProgramPicker } from './H2H';
+import { MatchRow } from '../components/match/MatchRow';
+import { TeamCompareHead, TeamCompareRows, type CompareRow } from '../components/TeamCompare';
+import { useFilters } from '../lib/filters';
+import { SegmentedControl } from '../components/primitives';
 import { EmptyState, ErrorBox, PageHeader, PlayerAvatar, Skeleton, TeamLogo } from '../components/primitives';
 
 type Row = [key: string, label: string, kind: 'n' | 'd2' | 'pct' | 'low'];
@@ -38,7 +43,7 @@ function Picker({ label, onPick }: { label: string; onPick: (id: string) => void
   );
 }
 
-export default function Compare() {
+function ComparePlayers() {
   const [sp] = useSearchParams();
   const patch = useUrlPatch();
   const href = useHref();
@@ -136,5 +141,54 @@ function PercentileMirror({ names, stats, keeper }: { names: string[]; stats: (a
       </ul>
       <p className="mt-2 text-2xs text-chalk-500">{keeper ? 'Among keepers with 180+ minutes in goal' : 'Among players who played 30%+ of their team\'s minutes'}, within their own division and season. A dash: not enough minutes for a percentile.</p>
     </figure>
+  );
+}
+
+/** Players or teams (?mode=teams). */
+export default function Compare() {
+  const [mode, setMode] = useUrlState('mode', 'players', { allow: ['players', 'teams'] });
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end"><SegmentedControl label="Compare" size="sm" value={mode} onChange={setMode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Teams' }]} /></div>
+      {mode === 'teams' ? <CompareTeams /> : <ComparePlayers />}
+    </div>
+  );
+}
+
+interface TeamSide { team: { id: string; name: string; gender: 'm' | 'w'; seo: string | null; logo: string | null }; division: string | null; record: { w: number; l: number; t: number; gp: number } | null; form: string | null; elo: { rating: number; rank: number | null } | null; rpi: { rank: number; rpi: number } | null }
+
+function CompareTeams() {
+  const f = useFilters();
+  const href = useHref();
+  const patch = useUrlPatch();
+  const [ta] = useUrlState('ta'); const [tb] = useUrlState('tb');
+  const q = useQuery({ queryKey: ['compare-teams', ta, tb, f.season], queryFn: () => api<{ a: TeamSide; b: TeamSide; rows: CompareRow[]; meetings: { games?: any[]; played?: number } | null }>(`/api/compare/teams${qs({ a: ta, b: tb, season: f.season })}`), enabled: !!ta && !!tb && ta !== tb });
+  const head = (s: TeamSide, key: 'ta' | 'tb') => (
+    <div className="card relative flex flex-col items-center gap-1.5 px-3 py-4 text-center">
+      <button type="button" className="btn-ghost btn-icon absolute right-1 top-1" aria-label={`Change ${s.team.name}`} onClick={() => patch({ [key]: null })}><X size={14} /></button>
+      <Link to={href(`/teams/${s.team.id}`, { gender: s.team.gender })} className="flex flex-col items-center gap-1.5 hover:text-pitch-300"><TeamLogo src={s.team.logo} seo={s.team.seo} name={s.team.name} size={56} /><span className="display text-lg text-chalk-100">{s.team.name}</span></Link>
+      <span className="text-xs text-chalk-400">{[s.division?.toUpperCase(), s.record ? fmt.rec(s.record.w, s.record.l, s.record.t) : null].filter(Boolean).join(', ')}</span>
+      <span className="text-xs text-chalk-300">{[s.elo ? `Elo ${s.elo.rating}${s.elo.rank ? ` (No. ${s.elo.rank})` : ''}` : null, s.rpi ? `RPI No. ${s.rpi.rank}` : null].filter(Boolean).join(' · ')}</span>
+    </div>
+  );
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Compare teams" meta={`Two college teams side by side, ${f.season}: a game, against their own division, with Elo, RPI and their meetings.`} />
+      {(!ta || !tb) && <div className="flex flex-wrap gap-4">{!ta && <ProgramPicker label="First team" gender={f.gender} onPick={(id) => patch({ ta: id })} />}{!tb && <ProgramPicker label="Second team" gender={f.gender} onPick={(id) => patch({ tb: id })} />}</div>}
+      {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
+      {ta && tb && q.isPending && <Skeleton className="h-96" />}
+      {q.data && (
+        <div className="mx-auto max-w-4xl space-y-4">
+          <TeamCompareHead a={head(q.data.a, 'ta')} b={head(q.data.b, 'tb')} />
+          {q.data.rows.length ? <TeamCompareRows rows={q.data.rows} peerNote="its own division this season" /> : <EmptyState title="No numbers yet this season" />}
+          {(q.data.meetings?.games?.length ?? 0) > 0 && (
+            <section className="space-y-2">
+              <h2 className="flex items-baseline justify-between text-base font-semibold text-chalk-100">Last meetings<Link to={href('/h2h', { a: ta, b: tb })} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
+              <div className="frame divide-y divide-field-700">{q.data.meetings!.games!.slice(0, 5).map((g: any) => <MatchRow key={g.id} g={g} showDate />)}</div>
+            </section>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

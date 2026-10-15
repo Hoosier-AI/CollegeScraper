@@ -7,6 +7,12 @@ import { ProSearchBox, type Hit } from '../../components/pro/ProSearchBox';
 import { Flag, PercentileBars } from '../../components/pro/People';
 import { EmptyState, ErrorBox, PageHeader, PlayerAvatar, Skeleton, TeamLogo } from '../../components/primitives';
 import type { PlayerData } from './ProPlayer';
+import { X } from 'lucide-react';
+import { useUrlPatch, useUrlState } from '../../lib/urlState';
+import { SegmentedControl } from '../../components/primitives';
+import { ProMatchRow } from '../../components/pro/ProMatchRow';
+import { TeamCompareHead, TeamCompareRows, type CompareRow } from '../../components/TeamCompare';
+import type { ProMatch } from '../../lib/pro';
 
 const ROWS: [string, string, boolean][] = [['apps', 'Appearances', false], ['minutes', 'Minutes', false], ['goals', 'Goals per 90', true], ['assists', 'Assists per 90', true], ['shots', 'Shots per 90', true], ['key_passes', 'Key passes per 90', true], ['tackles', 'Tackles per 90', true], ['interceptions', 'Interceptions per 90', true], ['dribbles_won', 'Dribbles per 90', true], ['pass_accuracy', 'Pass accuracy %', false], ['rating', 'Average rating', false]];
 
@@ -16,7 +22,7 @@ function mainSeason(p: PlayerData) {
   return p.seasons.filter((s) => s.season === latest && !s.team?.national).sort((a, b) => b.minutes - a.minutes)[0] ?? null;
 }
 
-export default function ProCompare() {
+function ComparePlayers() {
   const [sp] = useSearchParams();
   const nav = useNavigate();
   const a = sp.get('a') ?? '', b = sp.get('b') ?? '';
@@ -70,6 +76,56 @@ export default function ProCompare() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {sides.map((p) => p.percentiles && p.percentiles.rows.length > 0 ? <PercentileBars key={p.player.id} rows={p.percentiles.rows} caption={`${p.player.name}: ${p.percentiles.league?.name ?? ''} ${p.percentiles.season}`} /> : <p key={p.player.id} className="text-sm text-chalk-400">No percentiles for {p.player.name} yet (450+ minutes needed).</p>)}
       </div>
+    </div>
+  );
+}
+
+/** Players or clubs (?mode=teams). */
+export default function ProCompare() {
+  const [mode, setMode] = useUrlState('mode', 'players', { allow: ['players', 'teams'] });
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end"><SegmentedControl label="Compare" size="sm" value={mode} onChange={setMode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Clubs' }]} /></div>
+      {mode === 'teams' ? <CompareClubs /> : <ComparePlayers />}
+    </div>
+  );
+}
+
+interface ClubSide { team: { id: number; name: string; slug: string; logo: string | null; national: boolean }; competition: { name: string; slug: string; season: number; logo: string | null } | null; record: { w: number; d: number; l: number; played: number } | null; elo: { rating: number; rank: number | null } | null }
+
+function CompareClubs() {
+  const patch = useUrlPatch();
+  const [ta] = useUrlState('ta'); const [tb] = useUrlState('tb');
+  const q = useQuery({ queryKey: ['pro-compare-teams', ta, tb], queryFn: () => api<{ a: ClubSide; b: ClubSide; rows: CompareRow[]; meetings: { record: { played: number; w: number; d: number; l: number }; matches: ProMatch[] } | null }>(`/api/pro/compare/teams?a=${encodeURIComponent(ta)}&b=${encodeURIComponent(tb)}`), enabled: !!ta && !!tb && ta !== tb });
+  const pick = (key: 'ta' | 'tb', label: string) => (
+    <div className="w-full max-w-sm"><p className="mb-1 text-xs text-chalk-400">{label}</p><ProSearchBox placeholder="Find a club" pickTeams onPick={(h: Hit) => h.kind === 'team' && patch({ [key]: h.slug })} /></div>
+  );
+  const head = (s: ClubSide, key: 'ta' | 'tb') => (
+    <div className="card relative flex flex-col items-center gap-1.5 px-3 py-4 text-center">
+      <button type="button" className="btn-ghost btn-icon absolute right-1 top-1" aria-label={`Change ${s.team.name}`} onClick={() => patch({ [key]: null })}><X size={14} /></button>
+      <Link to={proPath.team(s.team.slug)} className="flex flex-col items-center gap-1.5 hover:text-pitch-300"><TeamLogo src={s.team.logo} name={s.team.name} size={56} /><span className="display text-lg text-chalk-100">{s.team.name}</span></Link>
+      <span className="text-xs text-chalk-400">{s.competition ? `${s.competition.name} ${s.competition.season}` : 'No league season yet'}{s.record ? `, ${s.record.w}-${s.record.d}-${s.record.l}` : ''}</span>
+      {s.elo && <span className="text-xs text-chalk-300">Elo {s.elo.rating}{s.elo.rank ? ` (No. ${s.elo.rank} in the world)` : ''}</span>}
+    </div>
+  );
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Compare clubs" meta="Two clubs side by side: this season a match in their league, against the rest of that league, with Plaibook Elo and their meetings." />
+      {(!ta || !tb) && <div className="flex flex-wrap gap-4">{!ta && pick('ta', 'First club')}{!tb && pick('tb', 'Second club')}</div>}
+      {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
+      {ta && tb && q.isPending && <Skeleton className="h-96" />}
+      {q.data && (
+        <div className="mx-auto max-w-4xl space-y-4">
+          <TeamCompareHead a={head(q.data.a, 'ta')} b={head(q.data.b, 'tb')} />
+          {q.data.rows.length ? <TeamCompareRows rows={q.data.rows} peerNote="its own league this season" /> : <EmptyState title="No league numbers yet this season" />}
+          {(q.data.meetings?.matches.length ?? 0) > 0 && (
+            <section className="space-y-2">
+              <h2 className="flex items-baseline justify-between text-base font-semibold text-chalk-100">Last meetings<Link to={`/pro/h2h?a=${ta}&b=${tb}`} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
+              <div className="frame divide-y divide-field-700">{q.data.meetings!.matches.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 }

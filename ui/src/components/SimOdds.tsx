@@ -64,3 +64,24 @@ export function PostseasonCard({ program, season }: { program: string; season: n
     </RailCard>
   );
 }
+
+/** A team's runs still going (unbeaten, winning, clean sheets, scoring, winless), when any is two games or more. */
+export function StreaksCard({ program, season }: { program: string; season: number }) {
+  const href = useHref();
+  const q = useQuery({ queryKey: ['streaks', program, season], queryFn: () => api<{ streaks: { unbeaten: number; winning: number; clean: number; scoring: number; winless: number } | null; division?: string }>(`/api/programs/${program}/streaks${qs({ season })}`), staleTime: 300_000 });
+  const s = q.data?.streaks;
+  if (!s) return null;
+  const items = [
+    s.winning >= 2 ? `${s.winning} wins in a row` : s.unbeaten >= 2 ? `Unbeaten in ${s.unbeaten}` : null,
+    s.winning >= 2 && s.unbeaten > s.winning ? `unbeaten in ${s.unbeaten}` : null,
+    s.clean >= 2 ? `${s.clean} clean sheets in a row` : null,
+    s.scoring >= 3 ? `scored in ${s.scoring} straight` : null,
+    s.winless >= 3 ? `without a win in ${s.winless}` : null,
+  ].filter(Boolean) as string[];
+  if (!items.length) return null;
+  return (
+    <RailCard title="Streaks" to={href('/records', { division: q.data?.division })} toLabel="All records">
+      <ul className="space-y-1">{items.map((t) => <li key={t} className="text-chalk-200">{t.charAt(0).toUpperCase() + t.slice(1)}</li>)}</ul>
+    </RailCard>
+  );
+}

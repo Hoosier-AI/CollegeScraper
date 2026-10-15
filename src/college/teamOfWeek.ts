@@ -4,7 +4,7 @@ import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { memo } from '../pro/memo.js';
 
-const titleCase = (s: string) => (s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase()) : s);
+export const titleCase = (s: string) => (s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase()) : s);
 
 export interface TotwFilter { season: number; gender: 'm' | 'w'; division: string | null; week: string | null; conference: string | null }
 

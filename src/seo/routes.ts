@@ -360,6 +360,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   }
   app.get('/tv', (_req, reply) => shell(reply));
   app.get('/tournament', (_req, reply) => shell(reply));
+  app.get('/records', (_req, reply) => shell(reply));
   app.get('/compare', (_req, reply) => shell(reply));
   app.get('/h2h', (_req, reply) => shell(reply));
   app.get('/pro/h2h', (_req, reply) => shell(reply));

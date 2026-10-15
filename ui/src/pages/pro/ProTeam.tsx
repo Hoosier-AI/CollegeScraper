@@ -20,6 +20,7 @@ import { PointsLine, ResultStrip } from '../../components/pro/Charts';
 import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
 import { ProHero, StatTile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
+import { ClubExtras } from '../../components/pro/ClubExtras';
 import { MoveSection } from '../../components/pro/MoveSection';
 import { NationHistoryTab } from '../../components/intl/NationHistory';
 import { IntlNation } from '../intl/IntlNation';
@@ -127,7 +128,7 @@ export default function ProTeam() {
         line={<>{t.country && <span className="inline-flex items-center gap-1.5"><Flag country={t.country} />{t.country}</span>}{coach && <span>Coach {coach.name}</span>}</>}
         chips={[t.founded ? `Founded ${t.founded}` : null, t.venue ? `${t.venue.name}${t.venue.capacity ? ` · ${fmt.num(t.venue.capacity)}` : ''}` : null, t.venue?.surface ? cap(t.venue.surface) : null]}
         actions={<>
-          <PageActions title={t.name} follow={{ kind: 'pro-team', id: String(t.id), name: t.name, href: proPath.team(t.slug), image: t.logo ?? null, sub: t.country ?? null }} />
+          <PageActions title={t.name} calendar={`/api/pro/teams/${t.slug}/calendar.ics`} follow={{ kind: 'pro-team', id: String(t.id), name: t.name, href: proPath.team(t.slug), image: t.logo ?? null, sub: t.country ?? null }} />
           {d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: v === String(d.seasons[0]) ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}
         </>}>
         {d.season != null && total.p > 0 && (
@@ -161,6 +162,7 @@ export default function ProTeam() {
             </RailCard>
           )}
           {d.fixtures.length > 0 && <RailCard title="Next matches" to={hrefFor('matches')} flush><div className="divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></RailCard>}
+          {!t.national && <ClubExtras slug={t.slug} />}
           {t.venue && <RailCard title="Ground" flush><GroundCard ground={t.venue} /></RailCard>}
           <RailNews q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} to={hrefFor('news')} />
         </>}>
