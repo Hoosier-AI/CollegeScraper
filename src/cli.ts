@@ -86,7 +86,7 @@ for (const job of ['pro-catalog', 'pro-scoreboard', 'pro-live', 'pro-final-detai
 
 // International (national teams): open sources, no API-Football requests.
 // Plaibook Elo for college programs and pro clubs (no requests).
-for (const job of ['college-elo', 'pro-elo', 'asa-salaries', 'college-rpi']) {
+for (const job of ['college-elo', 'pro-elo', 'asa-salaries', 'college-rpi', 'stat-audit']) {
   program.command(job).description(`run the ${job} job inline`).action(async () => console.log(JSON.stringify(await runInline(getDb(), job, {}), null, 2)));
 }
 

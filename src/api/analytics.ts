@@ -20,7 +20,14 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/teams\/[^/]+(\/[mw])?$/, 'College team', 'college'],
   [/^\/matches$/, 'College matches', 'college'],
   [/^\/matches\/[^/]+$/, 'College match', 'college'],
+  [/^\/conferences$/, 'College conferences', 'college'],
   [/^\/conferences\/[^/]+$/, 'College conference', 'college'],
+  [/^\/players$/, 'College players', 'college'],
+  [/^\/leaders$/, 'College leaders', 'college'],
+  [/^\/transfers$/, 'College transfers', 'college'],
+  [/^\/compare$/, 'College compare', 'college'],
+  [/^\/h2h$/, 'College head to head', 'college'],
+  [/^\/coaches\/[^/]+$/, 'College coach', 'college'],
   [/^\/players\/[^/]+$/, 'College player', 'college'],
   [/^\/rankings$/, 'College rankings', 'college'],
   [/^\/search$/, 'Search', 'college'],
@@ -29,7 +36,11 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/pro\/matches\/[^/]+$/, 'Pro match', 'pro'],
   [/^\/pro\/leagues$/, 'Pro leagues', 'pro'],
   [/^\/pro\/leagues\/[^/]+$/, 'Pro league', 'pro'],
+  [/^\/pro\/teams$/, 'Pro teams', 'pro'],
   [/^\/pro\/teams\/[^/]+$/, 'Pro team', 'pro'],
+  [/^\/pro\/rankings$/, 'Pro rankings', 'pro'],
+  [/^\/pro\/h2h$/, 'Pro head to head', 'pro'],
+  [/^\/pro\/coaches\/[^/]+$/, 'Pro coach', 'pro'],
   [/^\/pro\/players$/, 'Pro players', 'pro'],
   [/^\/pro\/players\/[^/]+$/, 'Pro player', 'pro'],
   [/^\/pro\/leaders$/, 'Pro leaders', 'pro'],
@@ -46,6 +57,7 @@ const PAGES: [RegExp, string, Section][] = [
   [/^\/intl\/tournaments(\/[^/]+)?$/, 'International tournament', 'pro'],
   [/^\/intl\/teams(\/[^/]+)?$/, 'International team', 'pro'],
   [/^\/intl\/players(\/[^/]+)?$/, 'International player', 'pro'],
+  [/^\/intl\/leaders$/, 'International leaders', 'pro'],
   [/^\/intl\/(rankings|h2h)$/, 'International rankings', 'pro'],
 ];
 /** Pages that are never counted: the owner's own. */
@@ -132,7 +144,7 @@ export class AnalyticsMeter {
   }
 
   /** A search the visitor settled on (the viewer sends it once typing stops), with whether anything matched. */
-  search(scope: 'college' | 'pro', query: string | undefined, results: number, now = Date.now()): boolean {
+  search(scope: 'college' | 'pro' | 'all', query: string | undefined, results: number, now = Date.now()): boolean {
     const q = normalizeQuery(query);
     if (!q) return false;
     const day = new Date(now).toISOString().slice(0, 10);

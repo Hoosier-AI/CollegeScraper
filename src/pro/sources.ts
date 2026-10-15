@@ -10,8 +10,8 @@ import { ASA_CREDIT } from '../sources/asa/leagues.js';
 import { leaguesById, teamsById } from './queries.js';
 
 const SOURCE = 'asa';
-export const TRUST_AT = 0.97;
-/** Below this a league season's matching is broken: its numbers are not shown. */
+/** Below this a league season's matching is broken: its numbers are not shown (the one threshold; the site and the
+ *  hub both quote it). */
 export const BROKEN_AT = 0.9;
 
 /** The scraped sources switched off in the hub. */

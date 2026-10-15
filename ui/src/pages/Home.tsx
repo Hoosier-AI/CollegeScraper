@@ -19,6 +19,7 @@ import { LeadersPanel } from './home/LeadersPanel';
 import { Board, collegeLane, intlLane, proLane } from './home/Board';
 import { Explore } from './home/Explore';
 import { UniversalSearch } from './home/UniversalSearch';
+import { FollowingPanel } from './home/Following';
 import { useCollegeDays, useIntlHome, useProHome } from './home/data';
 
 const EXAMPLES = { m: ['Indiana', 'Christian Pulisic', 'MLS', 'USA'], w: ['Stanford', 'Trinity Rodman', 'NWSL', 'USA'] } as const;
@@ -55,6 +56,8 @@ export default function Home() {
         </div>
         <div className="mt-5 max-w-2xl"><UniversalSearch examples={[...EXAMPLES[gender]]} /></div>
       </section>
+
+      <FollowingPanel />
 
       <section aria-labelledby="today" className="space-y-3">
         <h2 id="today" className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold text-chalk-100">Today<span className="text-sm font-normal text-chalk-500">{longDay(todayEastern())}</span></h2>

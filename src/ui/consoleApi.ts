@@ -69,6 +69,14 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   });
 
   app.get<{ Querystring: Record<string, string> }>('/api/console/quality', async (req) => cq.qualityHistory(getDb(), Number(req.query.season) || currentSeason()));
+  // The daily stat audit (src/jobs/statAudit.ts): the newest run per check with its last 30 rates.
+  app.get('/api/console/stat-audit', async () => {
+    const { data, error } = await getDb().from('stat_audit_runs').select('run_at,area,check_key,label,compared,agree,rate,target,worst').gte('run_at', new Date(Date.now() - 45 * 86400_000).toISOString()).order('run_at', { ascending: false }).limit(3000);
+    if (error) return { checks: [], missing: true };
+    const by = new Map<string, any[]>(); for (const r of data ?? []) { const l = by.get(r.check_key) ?? []; if (l.length < 30) l.push(r); by.set(r.check_key, l); }
+    return { checks: [...by.values()].map((rows) => ({ ...rows[0], rate: Number(rows[0].rate), target: rows[0].target == null ? null : Number(rows[0].target), history: rows.map((r) => Number(r.rate)).reverse() })) };
+  });
+  app.post('/api/console/stat-audit/run', async (_req, reply) => reply.code(202).send(await enqueue(getDb(), 'stat-audit', {})));
   app.post<{ Body: { season?: number } | null }>('/api/console/quality/run', async (req, reply) => reply.code(202).send(await enqueue(getDb(), 'quality', { season: Number(req.body?.season) || currentSeason() })));
   app.post<{ Body: { check?: string; season?: number } | null }>('/api/console/quality/fix', async (req, reply) => {
     const fix = fixFor(String(req.body?.check ?? ''), Number(req.body?.season) || currentSeason());

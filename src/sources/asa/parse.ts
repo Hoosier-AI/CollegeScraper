@@ -182,7 +182,7 @@ export function parseShots(items: AsaShot[]): ShotRow[] {
     source: SOURCE, game_ext: s.game_id, seq: i + 1, period: int(s.period_id), minute: int(s.game_minute), team_ext: str(s.team_id),
     shooter_ext: str(s.shooter_player_id), shooter_name: str(s.shooter_player_name), assist_ext: str(s.assist_player_id),
     x: num(s.shot_location_x), y: num(s.shot_location_y), end_x: num(s.shot_end_location_x), end_y: num(s.shot_end_location_y), distance_yds: round(s.distance_from_goal_yds, 1),
-    xg: round(s.shot_xg), psxg: round(s.shot_psxg) || null, goal: !!s.goal, own_goal: !!s.own_goal, blocked: !!s.blocked, head: !!s.head, pattern: str(s.pattern_of_play),
+    xg: round(s.shot_xg), psxg: round(s.shot_psxg), goal: !!s.goal, own_goal: !!s.own_goal, blocked: !!s.blocked, head: !!s.head, pattern: str(s.pattern_of_play),
   }));
 }
 

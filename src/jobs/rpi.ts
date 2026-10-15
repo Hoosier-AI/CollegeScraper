@@ -44,7 +44,8 @@ export async function collegeRpi(ctx: JobContext): Promise<void> {
   const yesterday = new Date(Date.parse(`${today}T12:00:00Z`) - 86400_000).toISOString().slice(0, 10);
   const [games, seasons, programs, prev, off] = await Promise.all([
     selectAll<any>(ctx.db, 'college_games', 'gender,home_program_id,away_program_id,home_score,away_score,neutral_site',
-      (q) => q.eq('season', season).eq('status', 'final').not('home_score', 'is', null).not('away_score', 'is', null).not('home_program_id', 'is', null).not('away_program_id', 'is', null).order('id')),
+      // Forfeits are a nominal 1-0 (migration 124), not a result: left out.
+      (q) => q.eq('season', season).eq('status', 'final').or('forfeit.is.null,forfeit.eq.false').not('home_score', 'is', null).not('away_score', 'is', null).not('home_program_id', 'is', null).not('away_program_id', 'is', null).order('id')),
     selectAll<any>(ctx.db, 'college_program_seasons', 'program_id,division,conference_id,ncaa_member', (q) => q.eq('season', season).order('program_id')),
     selectAll<any>(ctx.db, 'college_programs', 'id,name,gender', (q) => q.order('id')),
     selectAll<any>(ctx.db, 'college_rpi_history', 'program_id,rank', (q) => q.eq('season', season).eq('day', yesterday).order('program_id')),
@@ -74,7 +75,7 @@ export async function collegeRpi(ctx: JobContext): Promise<void> {
       if (d === 'd1' && offRank.size) {
         const ours = res.map((r) => r.team).filter((t) => offRank.has(t));
         const theirs = [...offRank].sort((a, b) => a[1].rank - b[1].rank).map(([t]) => t);
-        const top = theirs.slice(0, 25), dev = top.map((t) => Math.abs(ours.indexOf(t) - theirs.indexOf(t)));
+        const top = theirs.slice(0, 25).filter((t) => ours.includes(t)), dev = top.map((t) => Math.abs(ours.indexOf(t) - theirs.indexOf(t)));
         agreement[g] = { spearman: Math.round(spearman(ours, theirs) * 10000) / 10000, teams: ours.length, top25_mean_diff: Math.round((dev.reduce((a, b) => a + b, 0) / Math.max(1, dev.length)) * 100) / 100, as_of: off?.asOf[g] ?? null };
       }
     }

@@ -99,6 +99,8 @@ export function GoalsByPeriod({ rows }: { rows: { period: string; for: number; a
 export interface LeaderRow { rank: number; player: { id: number; name: string; slug: string; photo: string | null; nationality: string | null; birth_date: string | null; position: string | null }; team: ProTeamRef | null; league: ProLeagueRef | null; season: number; apps: number; minutes: number; goals: number; assists: number; rating: number | null; value: number | null; /** American Soccer Analysis, where it covers the competition. */ xg?: number | null; xa?: number | null }
 
 /** The leaders / directory table: rank, player (flag, age, position), club, competition, the sorted stat. */
+const rate = (v: number | null | undefined, minutes: number, per90?: boolean) => (v == null ? null : per90 ? (minutes > 0 ? (v * 90) / minutes : null) : v);
+
 export function LeadersTable({ rows, stat, per90, caption, loading, showLeague = true, empty }: { rows: LeaderRow[]; stat: string; per90?: boolean; caption: string; loading?: boolean; showLeague?: boolean; empty?: React.ReactNode }) {
   const valueLabel = `${statLabel(stat)}${per90 && !['rating', 'minutes', 'apps', 'starts', 'ppg', 'pps'].includes(stat) ? ' per 90' : ''}`;
   const cols: Column<LeaderRow>[] = [
@@ -114,8 +116,9 @@ export function LeadersTable({ rows, stat, per90, caption, loading, showLeague =
     { key: 'value', label: valueLabel, num: true, sortable: false, decimals: per90 || stat === 'rating' || stat === 'ppg' || stat === 'pps' ? 2 : 0, value: (r) => r.value, className: 'font-semibold text-chalk-100' },
     // Expected goals and assists where American Soccer Analysis covers the competition (shown only when a row has them).
     ...(rows.some((r) => r.xg != null) ? [
-      { key: 'xg', label: 'xG', title: 'Expected goals (American Soccer Analysis)', num: true, sortable: false, priority: 2 as const, decimals: 1, value: (r: LeaderRow) => r.xg ?? null },
-      { key: 'xa', label: 'xA', title: 'Expected assists (American Soccer Analysis)', num: true, sortable: false, priority: 2 as const, decimals: 1, value: (r: LeaderRow) => r.xa ?? null },
+      // Per 90 with the rest of the table when the Per 90 switch is on (the value column is).
+      { key: 'xg', label: per90 ? 'xG/90' : 'xG', title: `Expected goals${per90 ? ' per 90' : ''} (American Soccer Analysis)`, num: true, sortable: false, priority: 2 as const, decimals: per90 ? 2 : 1, value: (r: LeaderRow) => rate(r.xg, r.minutes, per90) },
+      { key: 'xa', label: per90 ? 'xA/90' : 'xA', title: `Expected assists${per90 ? ' per 90' : ''} (American Soccer Analysis)`, num: true, sortable: false, priority: 2 as const, decimals: per90 ? 2 : 1, value: (r: LeaderRow) => rate(r.xa, r.minutes, per90) },
     ] : []),
   ];
   return <DataTable rows={rows} columns={cols} rowKey={(r) => `${r.player.id}-${r.team?.id}-${r.league?.id}`} caption={caption} rowHref={(r) => proPath.player(r.player.slug)} loading={loading} dense

@@ -35,6 +35,8 @@ export interface AttentionInput {
   traffic: { views_7d: number; views_prev_7d: number; zero_searches_7d: number };
   /** News sources switched on, by kind, with how many keep failing (3+ in a row and nothing read for a day). */
   news?: { kind: string; name: string; on: number; failing: number }[];
+  /** The latest stat-audit result per check (stat_audit_runs): our numbers against NCAA.com, ASA and the provider. */
+  audits?: { check_key: string; label: string; rate: number; target: number | null; compared: number }[];
 }
 
 const FAILED_DEPLOY = new Set(['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']);
@@ -100,6 +102,10 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
   const hidden = i.sources.filter((s) => s.compared >= 20 && s.rate < BROKEN_AT);
   if (hidden.length) add('info', 'sources:disagree', `${hidden.length} source ${hidden.length === 1 ? 'season disagrees' : 'seasons disagree'} with API-Football`, `${hidden.slice(0, 3).map((s) => `${s.league} ${s.season} (${Math.round(s.rate * 100)}%)`).join(', ')}${hidden.length > 3 ? ' ...' : ''}. Hidden from the site until they agree ${Math.round(BROKEN_AT * 100)}%.`, '/stats/quality');
 
+  // Stat accuracy: an agreement rate under its target (enough rows compared to mean something).
+  const low = (i.audits ?? []).filter((a) => a.target != null && a.compared >= 20 && a.rate < a.target);
+  for (const a of low) add('warn', `audit:${a.check_key}`, `${a.label} below target`, `${(a.rate * 100).toFixed(1)}% agree of ${a.compared.toLocaleString('en-US')} compared; the target is ${Math.round(a.target! * 100)}%.`, '/stats/quality');
+
   const t = i.traffic;
   if (t.views_prev_7d >= 50 && t.views_7d < t.views_prev_7d * 0.6) add('warn', 'traffic:drop', 'Site traffic down', `${t.views_7d.toLocaleString('en-US')} page views in the last 7 days, ${Math.round((1 - t.views_7d / t.views_prev_7d) * 100)}% fewer than the 7 days before.`, '/stats/traffic');
   if (t.zero_searches_7d >= 5) add('info', 'search:zero', `${t.zero_searches_7d} searches found nothing this week`, 'What visitors looked for and did not find: content to add.', '/stats/traffic#searches');
@@ -113,6 +119,14 @@ export function attentionFrom(i: AttentionInput): AttentionItem[] {
 
   const rank: Record<Level, number> = { error: 0, warn: 1, info: 2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
+}
+
+/** The newest stat-audit row per check (the last week's runs; none before migration 182). */
+export async function latestAudits(db: Db): Promise<NonNullable<AttentionInput['audits']>> {
+  const { data, error } = await db.from('stat_audit_runs').select('check_key,label,rate,target,compared,run_at').gte('run_at', new Date(Date.now() - 7 * 86400_000).toISOString()).order('run_at', { ascending: false }).limit(500);
+  if (error) return [];
+  const seen = new Map<string, any>(); for (const r of data ?? []) if (!seen.has(r.check_key)) seen.set(r.check_key, r);
+  return [...seen.values()].map((r) => ({ check_key: r.check_key, label: r.label, rate: Number(r.rate), target: r.target == null ? null : Number(r.target), compared: r.compared }));
 }
 
 /** News sources by kind (publishers one by one): how many are on and how many keep failing (3+ failures, nothing for a day). */
@@ -212,7 +226,7 @@ async function build(db: Db, days: number, startedAt: number) {
   const render = cfg.RENDER_API_KEY && cfg.RENDER_SERVICE_ID ? new RenderClient(cfg.RENDER_API_KEY, cfg.RENDER_SERVICE_ID) : null;
   const n = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);
 
-  const [h, sched, rollup, paused, traffic, traffic14, usage, growth, quota, progress, proRuns, live, liveFresh, running, queued, quality, agreement, deploys, world, stages, newsSources] = await Promise.all([
+  const [h, sched, rollup, paused, traffic, traffic14, usage, growth, quota, progress, proRuns, live, liveFresh, running, queued, quality, agreement, deploys, world, stages, newsSources, audits] = await Promise.all([
     serviceHealth(db, startedAt),
     scheduleState(db),
     jobRollup(db),
@@ -234,6 +248,7 @@ async function build(db: Db, days: number, startedAt: number) {
     worldCoverage(db),
     db.rpc('college_sync_progress', { p_season: season }).then((r) => (r.data ?? []) as any[]),
     selectAll<{ kind: string; name: string; enabled: boolean; fails: number; last_ok_at: string | null }>(db, 'news_sources', 'kind,name,enabled,fails,last_ok_at', (q) => q.eq('enabled', true)).catch(() => []),
+    latestAudits(db),
   ]);
 
   // Traffic: names for the top pages, and this week against last week.
@@ -282,6 +297,7 @@ async function build(db: Db, days: number, startedAt: number) {
     quality: (latestQ?.checks ?? []).map((c) => ({ id: c.id, label: c.label, count: c.count, previous: prevCount.get(c.id) ?? null })),
     sources, deploy, traffic: { views_7d: views7, views_prev_7d: viewsPrev7, zero_searches_7d: zero7 },
     news: newsGroups(newsSources, now),
+    audits,
   });
 
   const lanes = Object.values(h.lanes);

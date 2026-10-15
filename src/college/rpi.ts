@@ -48,13 +48,15 @@ export function computeRpi(games: RpiGame[], pool: Set<string>, o: RpiOptions = 
   const owp = new Map<string, number>();
   for (const [t, ls] of lines) {
     const vals = ls.map((l) => wpWithout(l.opp, t)).filter((v): v is number => v != null);
-    owp.set(t, vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0);
+    if (vals.length) owp.set(t, vals.reduce((a, b) => a + b, 0) / vals.length);
   }
   const out = new Map<string, RpiRow>();
   for (const [t, ls] of lines) {
-    const oowp = ls.reduce((a, l) => a + (owp.get(l.opp) ?? 0), 0) / ls.length;
+    // An opponent with no other games in the pool has no OWP: left out of the average rather than counted as 0.
+    const oo = ls.map((l) => owp.get(l.opp)).filter((v): v is number => v != null);
+    const oowp = oo.length ? oo.reduce((a, b) => a + b, 0) / oo.length : 0;
     const w = ls.filter((l) => l.result === 'W').length, l = ls.filter((x) => x.result === 'L').length;
-    const row = { team: t, w, l, t: ls.length - w - l, wp: wp.get(t)!, owp: owp.get(t)!, oowp, rpi: 0 };
+    const row = { team: t, w, l, t: ls.length - w - l, wp: wp.get(t)!, owp: owp.get(t) ?? 0, oowp, rpi: 0 };
     row.rpi = 0.25 * row.wp + 0.5 * row.owp + 0.25 * row.oowp;
     out.set(t, row);
   }

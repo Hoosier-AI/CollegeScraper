@@ -20,6 +20,9 @@ import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlTodayBlock, i
 import { eastern } from '../jobs/seasons.js';
 import { newsBody, newsHead, type NewsArea } from './news.js';
 import type { Story } from '../news/queries.js';
+import * as ex from './extra.js';
+import { cardFor, limiter, ogCache, renderCard } from './og.js';
+import type { ExtraSeo } from './extra.js';
 
 export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 const REDIRECT_CACHE_CONTROL = 'public, max-age=3600';
@@ -49,6 +52,8 @@ export interface SeoOptions {
   intl?: IntlSeoData | null;
   /** The News pages' stories (src/news). Absent in tests and without a database. */
   news?: ((area: NewsArea) => Promise<Story[]>) | null;
+  /** Conferences, Leaders, Players, Transfers, coaches, Pro clubs and club rankings (src/seo/extra.ts). */
+  extra?: ExtraSeo | null;
 }
 
 export type CachedPage = { status: 200; html: string } | { status: 301; path: string };
@@ -67,7 +72,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   const { data, template } = opts;
   const baseUrl = trimBase(opts.baseUrl);
   const cache = opts.cache ?? new LruCache<CachedPage>(500, 5 * 60_000);
-  const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null, opts.intl ?? null);
+  const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null, opts.intl ?? null, opts.extra?.sitemapCoaches ?? null);
   const warn = (obj: unknown, msg: string) => opts.log?.warn(obj, msg);
   const ctx = (): HeadContext => ({ baseUrl, currentSeason: data.currentSeason() });
 
@@ -111,6 +116,28 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   const keyOf = (req: FastifyRequest) => `${pathOf(req.url)}|${seasonParam(req) ?? ''}`;
   type P<T> = FastifyRequest<{ Params: T }>;
 
+  // Share cards (src/seo/og.ts): /og/<page path>.png. No such page, or a failed draw: the site's card instead.
+  const cards = ogCache(), drawing = limiter(2);
+  app.get('/og/*', async (req, reply) => {
+    const raw = String((req.params as Record<string, string>)['*'] ?? '');
+    if (!raw.endsWith('.png')) return reply.code(404).send();
+    const path = `/${raw.slice(0, -4)}`;
+    const fallback = () => reply.header('Cache-Control', 'public, max-age=600').redirect('/brand/og.png', 302);
+    const hit = cards.get(path);
+    if (hit) return reply.header('Cache-Control', 'public, max-age=21600').type('image/png').send(hit);
+    if (opts.limit && !(await opts.limit(req, reply))) return reply;
+    try {
+      const card = await cardFor(path, data, opts.pro ?? null);
+      if (!card) return fallback();
+      const png = await drawing(() => renderCard(card));
+      cards.set(path, png);
+      return reply.header('Cache-Control', 'public, max-age=21600').type('image/png').send(png);
+    } catch (err) {
+      warn({ err: String(err), path }, 'share card failed');
+      return fallback();
+    }
+  });
+
   // ---------- pages ----------
   // The one home page for college, pro and international (2026-10-14): today's pro and international matches join
   // the college summary when those sections are on; a slow or failed one is left out rather than failing the page.
@@ -132,8 +159,11 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
 
   if (opts.news) { const news = opts.news; app.get('/news', (req, reply) => serve(req, reply, keyOf(req), async () => { const s = await news('college'); return { head: newsHead('college', s, ctx()), body: newsBody('college', s) }; })); }
   app.get('/rankings', (req, reply) => serve(req, reply, keyOf(req), async () => {
-    const c = ctx(); const r = await data.rankings(seasonParam(req) ?? c.currentSeason);
-    return { head: rankingsHead(r, c), body: rankingsBody(r, c) };
+    const c = ctx(); const season = seasonParam(req) ?? c.currentSeason;
+    const [r, ratings] = await Promise.all([data.rankings(season), opts.extra && season === c.currentSeason ? opts.extra.collegeRatings().catch(() => null) : null]);
+    const body = rankingsBody(r, c);
+    // The live RPI and Elo go inside the summary, before its closing article.
+    return { head: rankingsHead(r, c), body: ratings ? body.replace('</article>', `${ex.collegeRatingsBody(ratings)}</article>`) : body };
   }));
 
   app.get('/teams/:school/:gender', (req: P<{ school: string; gender: string }>, reply) => serve(req, reply, keyOf(req), async () => {
@@ -291,16 +321,31 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   };
   app.get('/standings', moved('/conferences'));
   // Conferences, Leaders and the college player list are the app's own pages (2026-10-14; they were Rankings tabs).
-  app.get('/conferences', (_req, reply) => shell(reply));
-  app.get('/leaders', (_req, reply) => shell(reply));
-  app.get('/players', (_req, reply) => shell(reply));
-  app.get('/transfers', (_req, reply) => shell(reply));
+  // The 2026-10-14 pages: rendered when the loader is there (src/seo/extra.ts), else the shell. Head-to-head and compare
+  // stay app-only (a pair chosen in the page).
+  const x = opts.extra ?? null;
+  const season = (req: FastifyRequest) => seasonParam(req) ?? ctx().currentSeason;
+  if (x) {
+    app.get('/conferences', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.conferences(season(req)); return { head: ex.conferencesHead(d, ctx()), body: ex.conferencesBody(d, ctx()) }; }));
+    app.get('/leaders', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.leaders(season(req)); return { head: ex.leadersHead(d, ctx()), body: ex.leadersBody(d, ctx()) }; }));
+    app.get('/players', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.players(season(req)); return { head: ex.playersHead(d, ctx()), body: ex.playersBody(d, ctx()) }; }));
+    app.get('/transfers', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.transfers(season(req)); return { head: ex.transfersHead(d, ctx()), body: ex.transfersBody(d, ctx()) }; }));
+    app.get('/coaches/:id', (req: P<{ id: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+      if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return null;
+      const d = await x.coach(req.params.id); return d ? { head: ex.coachHead(d, req.params.id, ctx()), body: ex.coachBody(d, req.params.id, ctx()) } : null;
+    }));
+    app.get('/pro/teams', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.proTeams(); return { head: ex.proTeamsHead(d, ctx()), body: ex.proTeamsBody(d) }; }));
+    app.get('/pro/rankings', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.proRankings(); return { head: ex.proRankingsHead(d, ctx()), body: ex.proRankingsBody(d) }; }));
+    app.get('/pro/coaches/:id', (req: P<{ id: string }>, reply) => serve(req, reply, keyOf(req), async () => {
+      const id = Number(req.params.id); if (!Number.isInteger(id) || id <= 0) return null;
+      const d = await x.proCoach(id); return d ? { head: ex.proCoachHead(d, id, ctx()), body: ex.proCoachBody(d, id) } : null;
+    }));
+  } else {
+    for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings']) app.get(path, (_req, reply) => shell(reply));
+  }
   app.get('/compare', (_req, reply) => shell(reply));
   app.get('/h2h', (_req, reply) => shell(reply));
-  app.get('/coaches/:id', (_req, reply) => shell(reply));
   app.get('/pro/h2h', (_req, reply) => shell(reply));
-  app.get('/pro/coaches/:id', (_req, reply) => shell(reply));
-  app.get('/pro/rankings', (_req, reply) => shell(reply));
   app.get('/games/:id', async (req: P<{ id: string }>, reply) => {
     const id = req.params.id;
     // Straight to the slug when we know it, so crawlers do not follow two hops.

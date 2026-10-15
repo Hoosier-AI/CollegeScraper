@@ -235,7 +235,7 @@ export function registerProApi(app: FastifyInstance): void {
 
 /**
  * Other sources for the hub: whether they show on the site, each league season's sync and agreement with
- * API-Football (shown = switch on and 97%+ agree), how many clubs, players and games are matched, the shot backlog.
+ * API-Football (shown = switch on and BROKEN_AT, 90%+, agree), how many clubs, players and games are matched, the shot backlog.
  */
 async function sourcesBlock(db: ReturnType<typeof getDb>) {
   const count = (t: string, f: (q: any) => any) => f(db.from(t).select('*', { count: 'exact', head: true })).then((r: { count: number | null }) => r.count ?? 0);

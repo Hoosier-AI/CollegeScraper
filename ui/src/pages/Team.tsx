@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PointsLine, ResultStrip } from '../components/pro/Charts';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, qs, fmt, useAdmin } from '../lib/api';
@@ -7,7 +8,7 @@ import { useUrlState } from '../lib/urlState';
 import { useEntityId } from '../lib/entity';
 import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, Section, Skeleton, TabsNav, TeamLogo } from '../components/primitives';
 import { RunProgress } from '../components/RunProgress';
-import { TeamMasthead } from './team/Masthead';
+import { TeamMasthead, sideOf } from './team/Masthead';
 import { RosterTable } from './team/RosterTable';
 import { GamesList } from './team/GamesList';
 import { NewsFeed } from '../components/news/News';
@@ -50,6 +51,9 @@ export default function Team() {
   const t = team.data; const p = t.program; const s = t.teamStats;
   const honors = (roster.data ?? []).flatMap((r: any) => r.honors.map((h: string) => ({ player: r.player?.display_name, id: r.player?.id, text: h })));
   const tabHref = (x: Tab) => href(pathname, { tab: x === 'roster' ? null : x });
+  // Finals in date order (forfeits left out, as in the standings' points), for the results strip and points line.
+  const formItems = (games.data ?? []).filter((g: any) => g.status === 'final' && !g.forfeit).sort((a: any, b: any) => String(a.game_date).localeCompare(String(b.game_date)))
+    .flatMap((g: any) => { const x = sideOf(g, id); return x.result ? [{ result: x.result, title: `${fmt.date(g.game_date)}: ${x.home ? 'vs' : 'at'} ${x.opp ?? '?'}, ${x.us}-${x.them}`, href: href(`/matches/${g.id}`) }] : []; });
   const tabs = [
     { id: 'roster' as Tab, label: 'Roster', count: roster.data?.length },
     { id: 'matches' as Tab, label: 'Matches', count: games.data?.length },
@@ -84,7 +88,15 @@ export default function Team() {
       )}
       <TabsNav label="Team sections" tabs={tabs} value={tab as Tab} hrefFor={tabHref} />
       {tab === 'roster' && <RosterTable rows={roster.data ?? []} loading={roster.isPending} playerHref={(r) => `/players/${r.player?.id}`} />}
-      {tab === 'matches' && <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />}
+      {tab === 'matches' && <>
+        {formItems.length >= 3 && (
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            <ResultStrip items={formItems.slice(-15)} caption={`Last ${Math.min(15, formItems.length)} results`} />
+            <PointsLine results={formItems.map((x) => x.result)} caption={`Points over the ${f.season} season (3 a win, 1 a tie)`} />
+          </div>
+        )}
+        <GamesList games={games.data ?? []} id={id} loading={games.isPending} href={href} />
+      </>}
       {tab === 'stats' && <SeasonProfile t={t} id={id} season={f.season} href={href} admin={admin} />}
       {tab === 'news' && <NewsFeed q={{ program: id }} hide={`program:${id}`} empty="No news for this team yet" />}
       {tab === 'coaches' && (t.coaches?.length
@@ -97,6 +109,21 @@ export default function Team() {
         ? <ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any, i: number) => <li key={i} className="flex flex-wrap gap-x-2 px-3 py-2"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={`/players/${h.id}`}>{h.player}</Link><span className="text-chalk-300">{h.text}</span></li>)}</ul>
         : <EmptyState title="No honors yet" body="Awards are read from player bios as they are published." />)}
     </div>
+  );
+}
+
+/** A team's Plaibook Elo after each day it played this season. */
+function RatingTrend({ points }: { points: { day: string; rating: number }[] }) {
+  const w = 280, h = 56, max = Math.max(...points.map((p) => p.rating)), min = Math.min(...points.map((p) => p.rating));
+  const x = (i: number) => (i / (points.length - 1)) * (w - 8) + 4, y = (r: number) => (max === min ? h / 2 : 4 + ((max - r) / (max - min)) * (h - 8));
+  const first = points[0]!, last = points[points.length - 1]!;
+  return (
+    <figure>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-14 w-full" role="img" aria-label={`Elo rating from ${Math.round(first.rating)} on ${first.day} to ${Math.round(last.rating)} now`}>
+        <polyline fill="none" stroke="currentColor" strokeWidth="2" className="text-pitch-400" points={points.map((p, i) => `${x(i)},${y(p.rating)}`).join(' ')} />
+      </svg>
+      <figcaption className="flex justify-between text-2xs text-chalk-500 tnum"><span>{first.day.slice(5)}: {Math.round(first.rating)}</span><span>high {Math.round(max)}</span><span>now {Math.round(last.rating)}</span></figcaption>
+    </figure>
   );
 }
 
@@ -124,6 +151,9 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
   const pd = periods.data;
   const rpi = useQuery({ queryKey: ['program-rpi', id, season], queryFn: () => api<{ rpi: { division: string; rank: number | null; rank_yesterday: number | null; official_rank: number | null; rpi: number; wp: number; owp: number; oowp: number; history: { day: string; rpi: number; rank: number | null }[] } | null }>(`/api/programs/${id}/rpi${qs({ season })}`), staleTime: 60_000 });
   const rp = rpi.data?.rpi;
+  const elo = useQuery({ queryKey: ['program-elo', id], queryFn: () => api<{ elo: { rating: number; rank: number | null; division: string | null; change_30d: number | null; history: { day: string; rating: number }[] } | null }>(`/api/programs/${id}/elo`), staleTime: 300_000 });
+  const { currentSeason } = useFilters();
+  const el = season === currentSeason ? elo.data?.elo : null;
   const periodsShown = !!pd && pd.games > 0 && pd.timed >= 0.6 * pd.games;
   const row = (label: string, value: string, note?: string) => <tr key={label}><th scope="row" className="td !whitespace-normal text-left font-normal text-chalk-400">{label}</th><td className="td num text-chalk-100">{value}</td><td className="td !whitespace-normal text-xs text-chalk-500">{note ?? ''}</td></tr>;
   return (
@@ -143,8 +173,8 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
             {row('Corners', `${s.corners ?? '–'}`, `${fmt.num(s.corners_pg, 1)} a game`)}
             {row('Fouls', `${s.fouls ?? '–'}`, `${s.offsides ?? '–'} offsides`)}
             {row('Attendance', fmt.num(s.avg_attendance), 'average at home')}
-            {row('Attack percentile', fmt.pct(s.div_pct_gf_pg), 'goals a game, within the division')}
-            {row('Defence percentile', fmt.pct(s.div_pct_ga_pg), 'goals against a game, within the division')}
+            {row('Attack percentile', fmt.pctile(s.div_pct_gf_pg), 'goals a game, within the division')}
+            {row('Defence percentile', fmt.pctile(s.div_pct_ga_pg), 'goals against a game, within the division')}
             {row('Conference rank', s.conf_rank_ppg ? fmt.ordinal(s.conf_rank_ppg) : '–', 'by points a game')}
           </tbody></table>
         ) : <EmptyState title="No season totals yet" />}
@@ -169,6 +199,19 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
               </div>
               <p className="text-xs text-chalk-500 tnum">Winning % {rp.wp.toFixed(3)}, opponents' {rp.owp.toFixed(3)}, opponents' opponents' {rp.oowp.toFixed(3)}</p>
               {rp.history.length > 1 && <RankTrend points={rp.history} />}
+            </div>
+          </Section>
+        )}
+        {el && (
+          <Section title="Plaibook Elo" right={<Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href('/rankings', { tab: 'elo', division: el.division })}>Full ranking</Link>}>
+            <div className="frame space-y-2 p-3">
+              <div className="flex flex-wrap items-end gap-x-5 gap-y-1">
+                <span><span className="display text-3xl text-chalk-100 tnum">{el.rank ?? '–'}</span><span className="ml-1 text-xs text-chalk-400">in {String(el.division ?? '').toUpperCase()}</span></span>
+                <span className="text-sm text-chalk-300 tnum">Rating {Math.round(el.rating)}</span>
+                {el.change_30d != null && el.change_30d !== 0 && <span className={`text-xs tnum ${el.change_30d > 0 ? 'text-win' : 'text-loss'}`}>{el.change_30d > 0 ? '+' : ''}{Math.round(el.change_30d)} in 30 days</span>}
+              </div>
+              {el.history.length > 1 && <RatingTrend points={el.history} />}
+              <p className="text-xs text-chalk-500">Our own rating from every result since 2024, weighted by the opponent's strength and the margin.</p>
             </div>
           </Section>
         )}

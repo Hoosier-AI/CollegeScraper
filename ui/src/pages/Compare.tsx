@@ -81,12 +81,13 @@ export default function Compare() {
       {ready && (
         <>
           <div className="mx-auto grid max-w-4xl grid-cols-2 gap-3">{sides.map((d, i) => card(d, i))}</div>
+          <PercentileMirror names={sides.map((d) => d.player.display_name)} stats={seasons.map((x) => x?.stats ?? null)} keeper={keeper} />
           <div className="frame mx-auto max-w-4xl divide-y divide-field-700">
             {rows.map(([k, label, kind]) => {
               const x = seasons[0]?.stats?.[k], y = seasons[1]?.stats?.[k];
               const nx = x == null ? null : Number(x), ny = y == null ? null : Number(y);
               const better = nx != null && ny != null && nx !== ny ? ((kind === 'low' ? nx < ny : nx > ny) ? 0 : 1) : null;
-              const show = (v: number | null) => (v == null ? '–' : kind === 'pct' ? fmt.pct(v) : kind === 'n' ? fmt.num(v) : fmt.num(v, 2));
+              const show = (v: number | null) => (v == null ? '–' : k.startsWith('pct_') ? fmt.pctile(v) : kind === 'pct' ? fmt.pct(v) : kind === 'n' ? fmt.num(v) : fmt.num(v, 2));
               return (
                 <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2 text-sm">
                   <span className={`text-right tnum ${better === 0 ? 'font-semibold text-win' : 'text-chalk-200'}`}>{show(nx)}</span>
@@ -100,5 +101,40 @@ export default function Compare() {
         </>
       )}
     </div>
+  );
+}
+
+const MIRROR_FIELD: [string, string][] = [['pct_points_p90', 'Points per 90'], ['pct_goals_p90', 'Goals per 90'], ['pct_assists_p90', 'Assists per 90'], ['pct_shots_p90', 'Shots per 90']];
+const MIRROR_KEEPER: [string, string][] = [['pct_save_pct', 'Save %'], ['pct_gaa', 'Goals against avg']];
+const tone = (p: number) => (p >= 0.8 ? 'bg-win' : p >= 0.5 ? 'bg-pitch-400' : p >= 0.25 ? 'bg-note' : 'bg-loss');
+
+/** Each player's division percentiles face to face: the first player's bars grow left, the second's right. */
+function PercentileMirror({ names, stats, keeper }: { names: string[]; stats: (any | null)[]; keeper: boolean }) {
+  const rows = (keeper ? MIRROR_KEEPER : MIRROR_FIELD).filter(([k]) => stats.some((st) => st?.[k] != null));
+  if (!rows.length) return null;
+  const bar = (v: number | null, side: 'l' | 'r') => (
+    <span className={`flex h-2.5 overflow-hidden rounded bg-field-700 ${side === 'l' ? 'justify-end' : ''}`} aria-hidden>
+      {v != null && <span className={`block h-full ${tone(v)}`} style={{ width: `${Math.max(3, Math.round(v * 100))}%` }} />}
+    </span>
+  );
+  return (
+    <figure className="frame mx-auto max-w-4xl p-3">
+      <figcaption className="mb-2 grid grid-cols-[1fr_auto_1fr] gap-3 text-xs text-chalk-400"><span className="truncate text-right">{names[0]}</span><span className="w-44 text-center">Division percentile</span><span className="truncate">{names[1]}</span></figcaption>
+      <ul className="space-y-1.5">
+        {rows.map(([k, label]) => {
+          const a = stats[0]?.[k] == null ? null : Number(stats[0][k]), b = stats[1]?.[k] == null ? null : Number(stats[1][k]);
+          return (
+            <li key={k} className="grid grid-cols-[2.5rem_1fr_auto_1fr_2.5rem] items-center gap-2 text-sm" aria-label={`${label}: ${names[0]} ${a == null ? 'no sample' : fmt.pctile(a)}, ${names[1]} ${b == null ? 'no sample' : fmt.pctile(b)}`}>
+              <span className="text-right text-xs tnum text-chalk-200">{a == null ? '–' : fmt.pctile(a)}</span>
+              {bar(a, 'l')}
+              <span className="w-36 truncate text-center text-xs text-chalk-300 sm:w-44">{label}</span>
+              {bar(b, 'r')}
+              <span className="text-xs tnum text-chalk-200">{b == null ? '–' : fmt.pctile(b)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-2xs text-chalk-500">{keeper ? 'Among keepers with 180+ minutes in goal' : 'Among players who played 30%+ of their team\'s minutes'}, within their own division and season. A dash: not enough minutes for a percentile.</p>
+    </figure>
   );
 }

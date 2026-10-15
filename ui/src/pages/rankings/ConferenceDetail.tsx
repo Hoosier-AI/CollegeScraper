@@ -68,7 +68,7 @@ export function ConferenceDetail({ id }: { id: string }) {
           {leaderList('Points', d.leaders.points, (r) => `${r.points} pts`)}
           {leaderList('Goals', d.leaders.goals, (r) => `${r.goals} G`)}
           {leaderList('Assists', d.leaders.assists, (r) => `${r.assists} A`)}
-          {leaderList('Save percentage (450+ min)', d.leaders.save_pct, (r) => fmt.pct(r.save_pct))}
+          {leaderList('Save percentage (450+ minutes in goal)', d.leaders.save_pct, (r) => fmt.pct(r.save_pct))}
           <p className="text-xs text-chalk-500 md:col-span-2"><Link className="text-pitch-400 hover:text-pitch-300" to={href('/leaders', { conference: id, division: c.division })}>All leaders in the {c.short_name ?? c.name}</Link></p>
         </div>
       )}

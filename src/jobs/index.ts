@@ -38,6 +38,7 @@ import './sources/wikidata.js';
 import './sources/intl.js';
 import './elo.js';
 import './rpi.js';
+import './statAudit.js';
 import './news.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

@@ -145,7 +145,7 @@ export async function player(db: Db, id: string) {
     ids.length ? selectAll<any>(db, 'college_player_honors', '*', (q) => q.in('player_season_id', ids)) : [],
     db.from('college_v_player_career').select('*').eq('player_id', id).maybeSingle(),
     selectAll<any>(db, 'college_transfers', '*', (q) => q.eq('player_id', id)),
-    ids.length ? selectAll<any>(db, 'college_game_player_stats', '*,college_games!inner(id,game_date,season,home_program_id,away_program_id,home_name,away_name,home_score,away_score,source_of_truth)', (q) => q.in('player_season_id', ids)) : [],
+    ids.length ? selectAll<any>(db, 'college_game_player_stats', '*,college_games!inner(id,game_date,season,status,home_program_id,away_program_id,home_name,away_name,home_score,away_score,source_of_truth)', (q) => q.in('player_season_id', ids)) : [],
     ids.length ? selectAll<any>(db, 'college_player_season_splits', '*', (q) => q.in('player_season_id', ids)) : [],
     ids.length ? selectAll<any>(db, 'college_rankings', 'player_season_id,season,poll,label,rank,value,week_of', (q) => q.in('player_season_id', ids).order('rank')) : [],
   ]);
@@ -265,6 +265,16 @@ export async function goalsByPeriod(db: Db, programId: string, season: number) {
   return { games: games.length, timed, rows };
 }
 
+/** Rate stats need a sample before a player can lead them (a keeper with 4 minutes and none conceded topped GAA). */
+export const PLAYER_MIN_SAMPLE: Record<string, { col: string; n: number; label: string }> = {
+  gaa: { col: 'gk_minutes', n: 450, label: '450+ minutes in goal' }, save_pct: { col: 'gk_minutes', n: 450, label: '450+ minutes in goal' }, saves_p90: { col: 'gk_minutes', n: 450, label: '450+ minutes in goal' },
+  conversion_pct: { col: 'shots', n: 10, label: '10+ shots' }, shot_accuracy: { col: 'shots', n: 10, label: '10+ shots' }, pk_pct: { col: 'pk_att', n: 3, label: '3+ penalty attempts' },
+  minutes_per_goal: { col: 'goals', n: 3, label: '3+ goals' }, shots_per_goal: { col: 'goals', n: 3, label: '3+ goals' },
+  goals_p90: { col: 'minutes', n: 450, label: '450+ minutes' }, assists_p90: { col: 'minutes', n: 450, label: '450+ minutes' }, points_p90: { col: 'minutes', n: 450, label: '450+ minutes' },
+  shots_p90: { col: 'minutes', n: 450, label: '450+ minutes' }, sog_p90: { col: 'minutes', n: 450, label: '450+ minutes' },
+  ppg: { col: 'res_apps', n: 5, label: '5+ games' }, pps: { col: 'pps_starts', n: 5, label: '5+ starts of 45+ minutes' },
+};
+
 export interface LeadersFilter { season: number; gender?: string; division?: string; conference?: string; kind?: string; stat?: string; min_minutes?: unknown; limit?: unknown; offset?: unknown; q?: string; members?: boolean;
   /** Players only: GK, D, M or F; class year 1 (freshman) to 5 (graduate and fifth year). */ position?: string; class_year?: unknown }
 
@@ -286,9 +296,8 @@ export async function leaders(db: Db, o: LeadersFilter) {
     if (!team) {
       q = q.eq('suppress', false); const mm = clamp(o.min_minutes, 0, 5000, 0); if (mm) q = q.gte('minutes', mm);
       if (o.position && ['GK', 'D', 'M', 'F'].includes(o.position)) q = q.eq('position', o.position);
-      // PPG and PPS need a sample: 5+ games, 5+ starts of 45+ minutes.
-      if (stat === 'ppg') q = q.gte('res_apps', 5);
-      if (stat === 'pps') q = q.gte('pps_starts', 5);
+      // Rate stats need a sample (PLAYER_MIN_SAMPLE).
+      const floor = PLAYER_MIN_SAMPLE[stat]; if (floor) q = q.gte(floor.col, floor.n);
       const cy = clamp(o.class_year, 0, 5, 0); if (cy) q = cy === 5 ? q.gte('class_year', 5) : q.eq('class_year', cy);
     }
     // Name search: PostgREST's `or` syntax reserves commas and parentheses, so they are dropped from the term.
@@ -312,7 +321,7 @@ export async function leaders(db: Db, o: LeadersFilter) {
     }
     throw new Error(`leaders: ${error.message}`);
   }
-  return { stat, rows: data ?? [], total: count ?? (data?.length ?? 0), limit, offset };
+  return { stat, rows: data ?? [], total: count ?? (data?.length ?? 0), limit, offset, min_sample: team ? null : PLAYER_MIN_SAMPLE[stat]?.label ?? null };
 }
 
 export async function standings(db: Db, o: { season: number; gender?: string; division?: string; conference?: string }) {
@@ -773,7 +782,7 @@ export async function conference(db: Db, id: string, o: { season: number; gender
     leaders(db, { season: o.season, gender: o.gender, conference: id, kind: 'player', stat: 'points', limit: 5 }),
     leaders(db, { season: o.season, gender: o.gender, conference: id, kind: 'player', stat: 'goals', limit: 5 }),
     leaders(db, { season: o.season, gender: o.gender, conference: id, kind: 'player', stat: 'assists', limit: 5 }),
-    leaders(db, { season: o.season, gender: o.gender, conference: id, kind: 'player', stat: 'save_pct', min_minutes: 450, limit: 5 }),
+    leaders(db, { season: o.season, gender: o.gender, conference: id, kind: 'player', stat: 'save_pct', limit: 5 }),
   ]);
   const stats = new Map((await selectAll<any>(db, 'college_team_season_stats', 'program_id,gp,w,l,t,conf_w,conf_l,conf_t,gf,ga,gd,form_last5,streak,ppg', (q) => q.eq('season', o.season).in('program_id', memberRows.map((m) => m.program_id)))).map((x) => [x.program_id, x]));
   const members = memberRows.map((m) => ({ id: m.program_id, name: m.college_programs.name, short_name: m.college_programs.short_name, seo: m.college_programs.school_seo, logo: m.college_programs.college_schools?.logo_svg_url ?? null, division: m.division, member: m.ncaa_member !== false, official: m.official_w != null ? { w: m.official_w, l: m.official_l, t: m.official_t } : null, stats: (() => { const s = stats.get(m.program_id); return s ? { ...s, form: { last5: formOldestFirst(s.form_last5), streak: s.streak } } : null; })(), rank: ranks.get(m.program_id)?.rank ?? null })).sort((a, b) => a.name.localeCompare(b.name));

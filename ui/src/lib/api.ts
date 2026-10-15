@@ -52,6 +52,8 @@ export const tbaEpoch = (epoch: number): boolean => new Date(epoch * 1000).toLoc
 
 export const fmt = {
   num: (v: unknown, d = 0) => (v === null || v === undefined || v === '' ? '–' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d })),
+  /** A percentile rank stored as 0..1, as people say it: "88th". */
+  pctile: (v: unknown) => (v === null || v === undefined ? '–' : fmt.ordinal(Math.max(1, Math.min(99, Math.round(Number(v) * 100))))),
   pct: (v: unknown) => (v === null || v === undefined ? '–' : `${(Number(v) * 100).toFixed(1)}%`),
   date: (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '–'),
   dt: (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : '–'),

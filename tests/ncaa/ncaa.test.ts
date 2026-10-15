@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fixture, FakeFetcher } from '../helpers/fakeFetcher.js';
 import * as n from '../../src/sources/ncaa/index.js';
+import { classifyPlay } from '../../src/sources/ncaa/game.js';
 
 const F = (x: string) => JSON.parse(fixture(`ncaa/${x}`));
 
@@ -93,5 +94,27 @@ describe('persisted queries', () => {
     expect(res.boxscore.ok).toBe(true);
     expect(store.get('boxscore')).toBe(good);
     expect(calls).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('goal lines', () => {
+  // Real lines (2026): the scorer's season tally after the assist was read as part of the assister's name, so the
+  // assist never matched a player.
+  const c = (t: string) => { const x = classifyPlay(t); return [x.type, x.abbrev, x.player, x.assist]; };
+  it('drops the scorer notes that follow the assist', () => {
+    expect(c('GOAL by SUF Kennedy, Paige, Assist by Vazquez, Sophia, goal number 1 for season.')).toEqual(['goal', 'SUF', 'Kennedy, Paige', 'Vazquez, Sophia']);
+    expect(c('GOAL by BRY Smith, John, goal number 4 for season.')).toEqual(['goal', 'BRY', 'Smith, John', null]);
+    expect(c('GOAL by USC Aiken Gillian Young (FIRST GOAL), Assist by Payton Bates, goal number 1 for season.')[3]).toBe('Payton Bates');
+  });
+  it('also with a trailing star, or the note before the name', () => {
+    expect(c('GOAL by Smith, Jo, Assist by Anna Button, goal number 2 for season. *')[3]).toBe('Anna Button');
+    expect(c('GOAL by Smith, Jo, Assist by goal number 1 for season Maeva Lichtensteiger')[3]).toBe('Maeva Lichtensteiger');
+  });
+  it('keeps the first of two assisters', () => {
+    expect(c('Header GOAL by SUF Porter, Avery, Assist by Flynn, Tatum and Petronio, Daniela, goal number 1 for season.')[3]).toBe('Flynn, Tatum');
+  });
+  it('leaves the plain forms alone', () => {
+    expect(c('Goal by Jane Doe Assisted by Mary Roe.')).toEqual(['goal', null, 'Jane Doe', 'Mary Roe']);
+    expect(c('GOAL by UNH Last, First Assist by Other, Person.')).toEqual(['goal', 'UNH', 'Last, First', 'Other, Person']);
   });
 });

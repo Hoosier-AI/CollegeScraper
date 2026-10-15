@@ -21,6 +21,8 @@ export const NOINDEX = 'noindex,follow';
 
 export const abs = (ctx: HeadContext, path: string) => `${trimBase(ctx.baseUrl)}${path}`;
 export const ogImage = (ctx: HeadContext) => abs(ctx, '/brand/og.png');
+/** A page's own share card (src/seo/og.ts): /og/<path>.png, without the query. */
+export const ogCard = (ctx: HeadContext, path: string) => abs(ctx, `/og${path.split('?')[0]}.png`);
 export const ld = (type: string, body: Record<string, unknown>) => ({ '@context': 'https://schema.org', '@type': type, ...body });
 
 export function breadcrumbs(ctx: HeadContext, items: { name: string; path: string }[]): Record<string, unknown> {
@@ -55,7 +57,7 @@ export function teamHead(t: TeamPage, ctx: HeadContext): HeadMeta {
   });
   return {
     title: `${name} ${t.season}: Roster, Schedule and Stats${SUFFIX}`,
-    description, canonical, robots: t.member ? null : NOINDEX, ogType: 'website', image: ogImage(ctx),
+    description, canonical, robots: t.member ? null : NOINDEX, ogType: 'website', image: ogCard(ctx, teamPath(t)),
     jsonLd: [team, breadcrumbs(ctx, [{ name: SITE_NAME, path: '/' }, { name: 'Teams', path: '/teams' }, { name, path: teamPath(t, t.season, ctx.currentSeason) }])],
   };
 }
@@ -87,7 +89,7 @@ export function playerHead(p: PlayerPage, ctx: HeadContext): HeadMeta {
     title: `${p.name}${team ? ` - ${teamTitle(team)}` : ''} Stats${SUFFIX}`,
     description, canonical,
     robots: p.noindex || appearances(p) === 0 ? NOINDEX : null,
-    ogType: 'profile', image: ogImage(ctx),
+    ogType: 'profile', image: ogCard(ctx, playerPath(p.slug)),
     jsonLd: [person, breadcrumbs(ctx, crumbs)],
   };
 }
@@ -143,7 +145,7 @@ export function matchHead(m: MatchPage, ctx: HeadContext): HeadMeta {
     superEvent: m.tournament ? { '@type': 'SportsEvent', name: m.tournament } : undefined,
   });
   const crumbs = [{ name: SITE_NAME, path: '/' }, ...(m.home.team ? [{ name: teamTitle(m.home.team), path: teamPath(m.home.team) }] : []), { name: matchName(m), path: matchPath(m.slug) }];
-  return { title, description, canonical, robots: isThinMatch(m) || isUnplayed(m) ? NOINDEX : null, ogType: 'website', image: ogImage(ctx), jsonLd: [event, breadcrumbs(ctx, crumbs)] };
+  return { title, description, canonical, robots: isThinMatch(m) || isUnplayed(m) ? NOINDEX : null, ogType: 'website', image: ogCard(ctx, matchPath(m.slug)), jsonLd: [event, breadcrumbs(ctx, crumbs)] };
 }
 
 // ---------- conference ----------

@@ -19,8 +19,8 @@ import { listApi, useSection } from '../../lib/section';
 // Team leaders (Show: Teams): each team's current season in each competition.
 const TEAM_STATS = [
   { key: 'points', label: 'Points' }, { key: 'ppg', label: 'Points a match', d: 2 }, { key: 'w', label: 'Wins' }, { key: 'gf', label: 'Goals scored' }, { key: 'gf_pg', label: 'Goals a match', d: 2 },
-  { key: 'ga', label: 'Goals conceded (fewest)' }, { key: 'ga_pg', label: 'Conceded a match (fewest)', d: 2 }, { key: 'gd', label: 'Goal difference' }, { key: 'clean_sheets', label: 'Clean sheets' },
-  { key: 'shots', label: 'Shots' }, { key: 'shots_on', label: 'Shots on target' }, { key: 'possession', label: 'Possession %', d: 1 }, { key: 'corners', label: 'Corners' }, { key: 'yellow', label: 'Yellow cards (fewest)' }, { key: 'red', label: 'Red cards (fewest)' },
+  { key: 'ga_pg', label: 'Conceded a match (fewest)', d: 2 }, { key: 'gd', label: 'Goal difference' }, { key: 'clean_sheets', label: 'Clean sheets' },
+  { key: 'shots', label: 'Shots' }, { key: 'shots_on', label: 'Shots on target' }, { key: 'possession', label: 'Possession %', d: 1 }, { key: 'corners', label: 'Corners' }, { key: 'yellow', label: 'Yellow cards a match (fewest)', d: 2 }, { key: 'red', label: 'Red cards a match (fewest)', d: 2 },
 ] as const;
 interface TeamRow { rank: number; team: ProTeamRef | null; league: ProLeagueRef | null; season: number; played: number; w: number; d: number; l: number; gf: number; ga: number; points: number; value: number }
 interface TeamPage { stat: string; total: number; limit: number; offset: number; rows: TeamRow[] }

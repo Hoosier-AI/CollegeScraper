@@ -4,13 +4,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
 import * as q from './queries.js';
-import { collegeElo } from './elo.js';
+import { collegeElo, programElo } from './elo.js';
 import { programRpi, rpiTable } from './rpi.js';
 import { isBot } from '../pro/onView.js';
 import { eastern } from '../jobs/seasons.js';
 import { registerProApi } from './proApi.js';
 import { registerIntlApi } from './intlApi.js';
 import { registerNewsApi } from '../news/queries.js';
+import { follows, parseFollows } from './follows.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -77,6 +78,10 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const div = str(req.query.division), conf = str(req.query.conference);
     return reply.header('Cache-Control', 'public, max-age=60').send(await rpiTable(getDb(), { gender: req.query.gender === 'w' ? 'w' : 'm', division: div && ['d1', 'd2', 'd3'].includes(div) ? div : 'd1', conference: conf && UUID.test(conf) ? conf : undefined, limit: req.query.limit, offset: req.query.offset }));
   });
+  app.get<{ Params: { id: string } }>('/api/programs/:id/elo', async (req, reply) => {
+    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'id required' });
+    return reply.header('Cache-Control', 'public, max-age=300').send({ elo: await programElo(getDb(), req.params.id) });
+  });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/rpi', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return reply.header('Cache-Control', 'public, max-age=60').send({ rpi: await programRpi(getDb(), req.params.id, s) });
@@ -91,6 +96,12 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (!a || !b || !UUID.test(a) || !UUID.test(b) || a === b) return reply.code(400).send({ error: 'a and b must be two program ids' });
     const r = await q.programH2H(getDb(), a, b);
     return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+  });
+  // The home page's Following panel (src/ui/follows.ts): ?f=team:<id>,pro-player:<id>,...
+  app.get<{ Querystring: Record<string, string> }>('/api/follows', async (req, reply) => {
+    const refs = parseFollows(req.query.f);
+    if (!refs.length) return reply.send({ items: [] });
+    return reply.header('Cache-Control', 'public, max-age=120').send({ items: await follows(getDb(), refs) });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/transfers', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

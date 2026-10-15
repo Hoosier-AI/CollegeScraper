@@ -21,12 +21,12 @@ export function trackView(path: string): void {
   landed = true;
 }
 
-let pending: { scope: 'college' | 'pro'; q: string; n: number } | null = null;
+let pending: { scope: 'college' | 'pro' | 'all'; q: string; n: number } | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastSent = '';
 
 /** The search box's latest answer. Sent once typing has stopped for a moment, or at once when a result is picked. */
-export function trackSearch(scope: 'college' | 'pro', q: string, n: number): void {
+export function trackSearch(scope: 'college' | 'pro' | 'all', q: string, n: number): void {
   if (q.trim().length < 2) return;
   pending = { scope, q: q.trim(), n };
   if (timer) clearTimeout(timer);

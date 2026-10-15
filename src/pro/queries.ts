@@ -295,7 +295,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const games = s == null ? [] : (await selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => q.or(`home_team_id.eq.${tm.id},away_team_id.eq.${tm.id}`).eq('season', s).order('kickoff'))).map(toMatchRow);
   const today = new Date().toISOString().slice(0, 10);
   const [squadRows, totals, standingRows, listed, coachRows, moves, hurt, ground, detailRows] = await Promise.all([
-    s == null ? [] : selectAll<any>(db, 'pro_player_season_stats', 'player_id,league_id,apps,starts,minutes,goals,assists,yellow,red,saves,conceded,clean_sheets,rating,position,number,player:pro_players(id,display_name,slug,photo,position,nationality,birth_date)', (q) => q.eq('team_id', tm.id).eq('season', s)),
+    s == null ? [] : selectAll<any>(db, 'pro_player_season_stats', 'player_id,league_id,source,apps,starts,minutes,goals,assists,yellow,red,saves,conceded,clean_sheets,rating,position,number,player:pro_players(id,display_name,slug,photo,position,nationality,birth_date)', (q) => q.eq('team_id', tm.id).eq('season', s)),
     s == null ? [] : selectAll<any>(db, 'pro_team_season_stats', '*', (q) => q.eq('team_id', tm.id).eq('season', s)),
     s == null ? [] : selectAll<any>(db, 'pro_standings', 'league_id,group_name,rank,points,played,win,draw,lose,gf,ga,gd,form', (q) => q.eq('team_id', tm.id).eq('season', s)),
     // The current squad (players/squads), only shown for the latest season.
@@ -319,16 +319,21 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const lgs = await leaguesById(db, [...totals.map((x) => x.league_id), ...games.map((g) => g.league.id), ...standingRows.map((x) => x.league_id), ...detailRows.map((x) => x.league_id)]);
   // One squad line per player: the listed squad first, plus anyone who played for the club this season.
   const squad = new Map<number, any>();
-  const blank = (pl: any, number: number | null, pos: string | null) => ({ player: { id: pl?.id, name: pl?.display_name, slug: pl?.slug, photo: pl?.photo ?? null, position: pos ?? pl?.position ?? null, nationality: pl?.nationality ?? null, birth_date: pl?.birth_date ?? null }, number, listed: false, apps: 0, starts: 0, minutes: 0, goals: 0, assists: 0, yellow: 0, red: 0, saves: null as number | null, conceded: null as number | null, clean_sheets: null as number | null, rating: null as number | null, _rw: 0 });
+  const blank = (pl: any, number: number | null, pos: string | null) => ({ player: { id: pl?.id, name: pl?.display_name, slug: pl?.slug, photo: pl?.photo ?? null, position: pos ?? pl?.position ?? null, nationality: pl?.nationality ?? null, birth_date: pl?.birth_date ?? null }, number, listed: false, apps: 0, starts: 0, minutes: 0, goals: 0, assists: 0, yellow: 0, red: 0, saves: null as number | null, conceded: null as number | null, clean_sheets: null as number | null, rating: null as number | null, _rw: 0, _rm: 0 });
   for (const r of listed) { if (!r.player) continue; const b = blank(r.player, r.number ?? null, r.position ?? null); b.listed = true; squad.set(r.player_id, b); }
+  // A provider row with more appearances than the club's matches in that competition (+2) is filed under the wrong
+  // competition (migration 152: Mitrovic's league games under the Club World Cup): left out, as on player pages.
+  const clubMatches = new Map<number, number>(); for (const g of games) clubMatches.set(g.league.id, (clubMatches.get(g.league.id) ?? 0) + 1);
   for (const r of squadRows) {
     if (!r.player) continue;
+    if (r.source === 'provider' && clubMatches.has(r.league_id) && r.apps > clubMatches.get(r.league_id)! + 2) continue;
     const row = squad.get(r.player_id) ?? blank(r.player, r.number ?? null, r.position ?? null);
     const add = (a: number | null | undefined, b: number | null | undefined) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
     for (const k of ['apps', 'starts', 'minutes', 'goals', 'assists', 'yellow', 'red'] as const) row[k] = (row[k] ?? 0) + (r[k] ?? 0);
     for (const k of ['saves', 'conceded', 'clean_sheets'] as const) row[k] = add(row[k], r[k]);
-    row._rw += (Number(r.rating) || 0) * r.apps;
-    row.rating = row.apps && row._rw ? Math.round((row._rw / row.apps) * 100) / 100 : null;
+    // Rating weighted by minutes, over the rows that have one (rows without a rating no longer pull it down).
+    if (r.rating != null && (r.minutes ?? 0) > 0) { row._rw += Number(r.rating) * r.minutes; row._rm += r.minutes; }
+    row.rating = row._rm ? Math.round((row._rw / row._rm) * 100) / 100 : null;
     if (row.number == null && r.number != null) row.number = r.number;
     squad.set(r.player_id, row);
   }
@@ -356,7 +361,9 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const byPeriod = periods.map((p) => ({ period: p, for: 0, against: 0 }));
   const finalIds = finals.map((g) => g.id);
   for (const ids of chunkIds(finalIds, 150)) {
-    const goals = await selectAll<any>(db, 'pro_fixture_events', 'team_id,minute,detail', (q) => q.in('fixture_id', ids).eq('type', 'goal').neq('detail', 'Missed Penalty'));
+    // Penalty-shootout kicks are goal events too: never goals (they landed in the ET bucket).
+    const goals = (await selectAll<any>(db, 'pro_fixture_events', 'team_id,minute,detail,comments', (q) => q.in('fixture_id', ids).eq('type', 'goal').neq('detail', 'Missed Penalty')))
+      .filter((e) => e.comments !== 'Penalty Shootout');
     for (const e of goals) {
       const m = Number(e.minute) || 0;
       // Stoppage time keeps its half's minute (45+2 is 45, 90+3 is 90); extra time runs 91 to 120.
@@ -400,11 +407,12 @@ export async function team(db: Db, slug: string, season?: number | null) {
       venue: ground.data ? { name: (ground.data as any).name, city: (ground.data as any).city, capacity: (ground.data as any).capacity, address: (ground.data as any).address ?? null, surface: (ground.data as any).surface ?? null, image: (ground.data as any).image ?? null }
         : tm.venue_name ? { name: tm.venue_name, city: tm.venue_city, capacity: tm.venue_capacity, address: null, surface: null, image: null } : null },
     season: s, seasons,
-    competitions: totals.map((x) => ({ league: lgs.get(x.league_id) ?? null, played: x.played, w: x.w, d: x.d, l: x.l, gf: x.gf, ga: x.ga, clean_sheets: x.clean_sheets, possession: x.possession == null ? null : Number(x.possession),
+    // stat_played: the finals with match detail, which shots, corners, cards and possession come from.
+    competitions: totals.map((x) => ({ league: lgs.get(x.league_id) ?? null, played: x.played, stat_played: finals.filter((g) => g.league.id === x.league_id && g.detail).length, w: x.w, d: x.d, l: x.l, gf: x.gf, ga: x.ga, clean_sheets: x.clean_sheets, possession: x.possession == null ? null : Number(x.possession),
       shots: x.shots ?? null, shots_on: x.shots_on ?? null, corners: x.corners ?? null, fouls: x.fouls ?? null, yellow: x.yellow ?? null, red: x.red ?? null }))
       .sort((a, b) => (a.league?.priority ?? 999) - (b.league?.priority ?? 999)),
     standings: standingRows.map((x) => ({ league: lgs.get(x.league_id) ?? null, group: x.group_name, rank: x.rank, points: x.points, played: x.played, win: x.win, draw: x.draw, lose: x.lose, gf: x.gf, ga: x.ga, gd: x.gd, form: x.form })),
-    squad: mergeSquadDuplicates([...squad.values()]).map(({ _rw, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
+    squad: mergeSquadDuplicates([...squad.values()]).map(({ _rw, _rm, ...r }) => r).sort((a, b) => posRank(a.player.position) - posRank(b.player.position) || b.minutes - a.minutes || (a.number ?? 99) - (b.number ?? 99)),
     coaches: coachRows.filter((c) => c.coach && !coachSeen.has(c.coach.id) && coachSeen.add(c.coach.id)).slice(0, 8)
       .map((c) => ({ id: c.coach.id, name: c.coach.display_name, photo: c.coach.photo ?? null, nationality: c.coach.nationality ?? null, birth_date: c.coach.birth_date ?? null, start: c.start === '1900-01-01' ? null : c.start, end: c.end ?? null, current: isCurrent(c), ...honoursOf(c.coach.id) }))
       .sort((a, b) => Number(b.current) - Number(a.current)),
@@ -784,7 +792,8 @@ export async function teamLeaders(db: Db, f: TeamLeadersFilter) {
   const rows = pick.length ? [...new Map((await selectIn<any>(db, 'pro_team_season_stats', 'team_id,league_id,season,played,w,d,l,gf,ga,clean_sheets,shots,shots_on,corners,yellow,red,possession', 'league_id', pick.map((l) => l.id), (q) => q.order('team_id').order('league_id').order('season')))
     .filter((r) => r.season === season.get(r.league_id) && r.played > 0).map((r) => [`${r.team_id}|${r.league_id}`, r])).values()] : [];
   const per = (n: number | null, p: number) => (n == null || p < 3 ? null : n / p);
-  const scored = rows.map((r) => ({ ...r, points: r.w * 3 + r.d, ppg: per(r.w * 3 + r.d, r.played), gd: r.gf - r.ga, gf_pg: per(r.gf, r.played), ga_pg: per(r.ga, r.played), possession: r.possession == null ? null : Number(r.possession) }))
+  // Fewest conceded and fewest cards rank per match (a club with fewer matches is not 'better' for it).
+  const scored = rows.map((r) => ({ ...r, points: r.w * 3 + r.d, ppg: per(r.w * 3 + r.d, r.played), gd: r.gf - r.ga, gf_pg: per(r.gf, r.played), ga_pg: per(r.ga, r.played), ga: per(r.ga, r.played), yellow: per(r.yellow, r.played), red: per(r.red, r.played), possession: r.possession == null ? null : Number(r.possession) }))
     .filter((r) => (r as any)[stat] != null);
   const dir = TEAM_ASC.has(stat) ? 1 : -1;
   scored.sort((a, b) => dir * ((a as any)[stat] - (b as any)[stat]) || b.played - a.played || a.team_id - b.team_id);

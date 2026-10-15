@@ -26,7 +26,7 @@ async function collegeElo(ctx: JobContext): Promise<void> {
   const at = new Date().toISOString(), today = eastern().date, cut30 = daysAgo(30);
   const [games, seasons] = await Promise.all([
     selectAll<any>(ctx.db, 'college_games', 'id,season,game_date,gender,home_program_id,away_program_id,home_score,away_score,neutral_site,postseason',
-      (q) => q.eq('status', 'final').gte('season', 2024).not('home_program_id', 'is', null).not('away_program_id', 'is', null).not('home_score', 'is', null).not('away_score', 'is', null).order('id')),
+      (q) => q.eq('status', 'final').gte('season', 2024).or('forfeit.is.null,forfeit.eq.false').not('home_program_id', 'is', null).not('away_program_id', 'is', null).not('home_score', 'is', null).not('away_score', 'is', null).order('id')),
     selectAll<any>(ctx.db, 'college_program_seasons', 'program_id,season,division,conference_id,ncaa_member', (q) => q.gte('season', 2024).order('program_id').order('season')),
   ]);
   const current = Math.max(...games.map((g) => g.season));
@@ -39,7 +39,7 @@ async function collegeElo(ctx: JobContext): Promise<void> {
     const post = new Set(mine.filter((g) => g.postseason).map((g) => g.id));
     const matches: (EloMatch & { id: string })[] = mine.map((g) => ({ id: g.id, date: g.game_date, home: g.home_program_id, away: g.away_program_id, home_score: g.home_score, away_score: g.away_score, tournament: post.has(g.id) ? 'postseason' : 'season', neutral: !!g.neutral_site }));
     const draws = drawCounter();
-    const { ratings, played, snapshot } = runElo(matches, { ...eloCollege(), snapshotAt: cut30, onMatch: (_m, we, w) => draws.add(we, w) });
+    const { ratings, played, snapshot, steps } = runElo(matches, { ...eloCollege(), keepSteps: true, snapshotAt: cut30, onMatch: (_m, we, w) => draws.add(we, w) });
     const then = snapshot!;
     const thisSeason = new Map<string, number>(); for (const g of mine) if (g.season === current) for (const p of [g.home_program_id, g.away_program_id]) thisSeason.set(p, (thisSeason.get(p) ?? 0) + 1);
     const rows = [...ratings].map(([pid, rating]) => { const s = now.get(pid) ?? latest.get(pid); return { program_id: pid, gender, season: current, division: s?.division ?? null, conference_id: s?.conference_id ?? null, rating: r1(rating), games: played.get(pid)!.n, last_match: played.get(pid)!.last, change_30d: then.has(pid) ? r1(rating - then.get(pid)!) : null, rank: null as number | null, rank_all: null as number | null, updated_at: at, member: !!now.get(pid)?.ncaa_member && (thisSeason.get(pid) ?? 0) >= 3 }; });
@@ -47,6 +47,11 @@ async function collegeElo(ctx: JobContext): Promise<void> {
     ranked.forEach((r, i) => { r.rank_all = i + 1; });
     for (const d of ['d1', 'd2', 'd3']) ranked.filter((r) => r.division === d).forEach((r, i) => { r.rank = i + 1; });
     ctx.inc(`${gender}_rated`, await upsertChunked(ctx.db, 'college_elo', rows.map(({ member: _m, ...r }) => r), { onConflict: 'program_id' }));
+    // The season's trend for the team page: each program's rating at the end of every day it played this season.
+    const start = mine.filter((g) => g.season === current).reduce((m, g) => (g.game_date < m ? g.game_date : m), today);
+    const daily = new Map<string, { program_id: string; day: string; rating: number; rank: null }>();
+    for (const st of steps) if (st.date >= start) daily.set(`${st.nation}|${st.date}`, { program_id: st.nation, day: st.date, rating: r1(st.rating), rank: null });
+    ctx.inc(`${gender}_history`, await upsertChunked(ctx.db, 'college_elo_history', [...daily.values()], { onConflict: 'program_id,day', chunk: 1000 }));
     ctx.inc(`${gender}_ranked`, ranked.length);
     await kvSet(ctx.db, COLLEGE_DRAW_KEY(gender), draws.model());
   }

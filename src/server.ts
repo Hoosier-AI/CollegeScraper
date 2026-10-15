@@ -1,4 +1,5 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
+import { makeExtraSeo } from './seo/extra.js';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import { loadConfig } from './config.js';
@@ -99,7 +100,7 @@ app.post('/api/t', async (req, reply) => {
   let b: any = req.body;
   if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = null; } }
   if (b && b.t === 'view') analytics.view({ path: String(b.path ?? ''), ref: typeof b.ref === 'string' ? b.ref : null, ua, ip: req.ip });
-  else if (b && b.t === 'search' && (b.scope === 'pro' || b.scope === 'college')) analytics.search(b.scope, String(b.q ?? ''), Number(b.n) || 0);
+  else if (b && b.t === 'search' && (b.scope === 'pro' || b.scope === 'college' || b.scope === 'all')) analytics.search(b.scope, String(b.q ?? ''), Number(b.n) || 0);
   return reply.code(204).send();
 });
 
@@ -136,6 +137,7 @@ const seo = cfg.SUPABASE_URL ? registerSeo(app, {
   pro: new DbProSeoData(getDb()),
   intl: new DbIntlSeoData(getDb()),
   news: (area) => newsFeed(getDb(), { scope: area, limit: 40 }),
+  extra: makeExtraSeo(getDb()),
   log,
 }) : null;
 

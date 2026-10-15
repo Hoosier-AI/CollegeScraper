@@ -43,7 +43,7 @@ export class DbIntlSeoData implements IntlSeoData {
       selectAll<{ key: string }>(this.db, 'intl_nations', 'key', (q) => q.is('team_m', null).is('team_w', null).gte('matches', 20)).catch(() => []),
     ]);
     return [
-      { path: '/intl/matches' }, { path: '/intl/tournaments' }, { path: '/intl/teams' }, { path: '/intl/rankings' }, { path: '/intl/players' },
+      { path: '/intl/matches' }, { path: '/intl/tournaments' }, { path: '/intl/teams' }, { path: '/intl/rankings' }, { path: '/intl/players' }, { path: '/intl/leaders' },
       ...ts.map((t) => ({ path: `/intl/tournaments/${t.slug}` })),
       ...ns.filter((n) => n.level === 'senior').map((n) => ({ path: `/intl/teams/${n.slug}` })),
       ...history.map((h) => ({ path: `/intl/teams/${h.key}` })),

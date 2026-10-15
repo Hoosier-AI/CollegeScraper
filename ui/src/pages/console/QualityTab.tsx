@@ -9,6 +9,7 @@ import { useConsole, useConsoleAction, type QualityData } from '../../lib/consol
 import { RunProgress } from '../../components/RunProgress';
 import { Badge, EmptyState, ErrorBox, Note, Skeleton } from '../../components/primitives';
 import { Sparkline, StatTile } from './parts';
+import { StatAudit } from './StatAudit';
 
 export default function QualityTab() {
   const f = useFilters(); const href = useHref(); const now = useNow(15_000);
@@ -21,11 +22,13 @@ export default function QualityTab() {
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const d = q.data;
   const runButton = <button className="btn-primary btn-sm" onClick={() => run.mutate(f.season)} disabled={run.isPending}>{run.isPending ? 'Queuing…' : 'Run checks now'}</button>;
-  if (!d.latest) return <EmptyState title="No quality snapshot yet" body={<span>The nightly stores one; the checks take a few minutes over a season.</span>} action={runButton} />;
+  if (!d.latest) return <div className="space-y-6"><StatAudit /><EmptyState title="No quality snapshot yet" body={<span>The nightly stores one; the checks take a few minutes over a season.</span>} action={runButton} /></div>;
   const flagged = d.latest.checks.filter((c) => c.count > 0);
   const worse = flagged.filter((c) => (c.delta ?? 0) > 0).length, better = d.latest.checks.filter((c) => (c.delta ?? 0) < 0).length;
   return (
     <div className="space-y-6">
+      <StatAudit />
+      <h2 className="text-base font-semibold text-chalk-100">Crawl checks</h2>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Checks flagged" value={`${flagged.length} of ${d.latest.checks.length}`} tone={flagged.length ? 'warn' : 'ok'} />

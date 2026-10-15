@@ -5,6 +5,7 @@ import { fmt, resultOf, useAdmin } from '../../lib/api';
 import { todayEastern } from '../../lib/dates';
 import { genderLabel, divisionLabel, useHref } from '../../lib/filters';
 import { Badge, Figure, FormPips, ResultBadge, TeamLogo, VerifiedMark, type VerifyState } from '../../components/primitives';
+import { PageActions } from '../../components/PageActions';
 
 export function sideOf(g: any, id: string) {
   const home = g.home_program_id === id;
@@ -56,6 +57,8 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
               {t.season && t.season.ncaa_member === false && <Badge tone="amber">Not an NCAA member</Badge>}
               {school?.athletics_host && <a className="inline-flex items-center gap-1 text-chalk-400 hover:text-pitch-300" href={`https://${school.athletics_host}`} target="_blank" rel="noreferrer">{school.athletics_host}<ExternalLink size={12} aria-hidden /><span className="sr-only">(opens the school's site)</span></a>}
             </div>
+            <PageActions className="mt-3" title={`${p.name} ${genderLabel(p.gender).toLowerCase()} soccer`}
+              follow={{ kind: 'team', id: p.id, name: p.name, href: `/teams/${p.school_seo}/${p.gender === 'w' ? 'women' : 'men'}`, image: school?.logo_svg_url ?? null, sub: `${genderLabel(p.gender)} soccer` }} />
             {admin && <p className="mt-2 text-xs text-chalk-500">roster {fmt.ago(t.season?.roster_synced_at)}, schedule {fmt.ago(t.season?.schedule_synced_at)}, stats {fmt.ago(t.season?.stats_synced_at)}, box scores {fmt.ago(t.season?.boxscores_synced_at)}{t.season?.site_parse_failures ? `, ${t.season.site_parse_failures} parse failures` : ''}{school?.site_platform ? `, ${school.site_platform}` : ''}</p>}
           </div>
         </div>

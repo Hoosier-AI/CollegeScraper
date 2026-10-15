@@ -56,7 +56,7 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
   const meta = useQuery({ queryKey: ['meta'], queryFn: () => api<{ conferences: { id: string; name: string; division: string | null }[] }>('/api/meta') });
   const q = useQuery({
     queryKey: ['leaders', f.season, f.gender, kind, stat, division, conference, minMin, search.value, pos, cls, page],
-    queryFn: () => api<{ stats: string[]; stat: string; rows: any[]; total: number; limit: number; offset: number }>(`/api/leaders${qs({ season: f.season, gender: f.gender, kind, stat, division, conference, min_minutes: minMin, q: search.value, position: pos, class_year: cls, limit: PAGE, offset: page * PAGE })}`),
+    queryFn: () => api<{ stats: string[]; stat: string; rows: any[]; total: number; limit: number; offset: number; min_sample?: string | null }>(`/api/leaders${qs({ season: f.season, gender: f.gender, kind, stat, division, conference, min_minutes: minMin, q: search.value, position: pos, class_year: cls, limit: PAGE, offset: page * PAGE })}`),
     // Keep the table on screen while paging within the same list; a new list gets fresh rows.
     placeholderData: (prev, prevQuery) => (prevQuery && prevQuery.queryKey.slice(0, 11).join('|') === [ 'leaders', f.season, f.gender, kind, stat, division, conference, minMin, search.value, pos, cls ].join('|') ? prev : undefined),
   });
@@ -70,10 +70,10 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
 
   const statCell = (key: string): Column<any> => {
     const d = statDef(isTeam ? 'team' : 'player', key);
-    return { key, label: d.short, title: d.label, num: true, priority: 2, render: (r) => d.pct ? fmt.pct(r[key]) : fmt.num(r[key], d.decimals ?? 0) };
+    return { key, label: d.short, title: d.label, num: true, priority: 2, render: (r) => d.group === 'Percentiles' ? fmt.pctile(r[key]) : d.pct ? fmt.pct(r[key]) : fmt.num(r[key], d.decimals ?? 0) };
   };
   const support = (isTeam ? TEAM_SUPPORT : PLAYER_SUPPORT)[def.group] ?? (isTeam ? TEAM_SUPPORT : PLAYER_SUPPORT).default!;
-  const chosen: Column<any> = { key: stat, label: def.short, title: def.label, num: true, className: 'font-semibold text-pitch-300', render: (r) => def.pct ? fmt.pct(r[stat]) : fmt.num(r[stat], dec(stat)) };
+  const chosen: Column<any> = { key: stat, label: def.short, title: def.label, num: true, className: 'font-semibold text-pitch-300', render: (r) => def.group === 'Percentiles' ? fmt.pctile(r[stat]) : def.pct ? fmt.pct(r[stat]) : fmt.num(r[stat], dec(stat)) };
   const rankCell = (i: number) => <span className="w-7 shrink-0 text-right text-chalk-500 tnum">{offset + i + 1}</span>;
   const playerCols: Column<any>[] = [
     { key: 'display_name', label: 'Player', primary: true, render: (r, i) => <span className="flex items-center gap-2">{rankCell(i)}<PlayerAvatar src={r.headshot_url} name={r.display_name} size={22} /><span>{r.display_name}</span></span> },
@@ -93,7 +93,7 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
   const pager = <Pager page={page} pageSize={PAGE} total={total} onPage={setPage} busy={busy} noun={isTeam ? 'teams' : 'players'} />;
   return (
     <div className="space-y-4">
-      <PageHeader as={props.embedded ? 'h2' : 'h1'} title={dir ? 'Players' : 'Leaders'} meta={dir ? `Everyone who has played, most minutes first, ${scope}` : `${def.label}, ${scope}`}>
+      <PageHeader as={props.embedded ? 'h2' : 'h1'} title={dir ? 'Players' : 'Leaders'} meta={dir ? `Everyone who has played, most minutes first, ${scope}` : `${def.label}${q.data?.min_sample ? ` (${q.data.min_sample})` : ''}, ${scope}`}>
         {!dir && <Field label="Show">{() => <SegmentedControl label="Players or teams" size="sm" value={kind as 'player' | 'team'} onChange={(v) => patch({ kind: v === 'player' ? null : v, stat: null, min: null })} options={[{ value: 'player', label: 'Players' }, { value: 'team', label: 'Teams' }]} />}</Field>}
         {!dir && <Field label="Stat">{(id) => <Select id={id} value={statParam} onChange={setStat} options={statOptions} className="max-w-[240px]" />}</Field>}
         {!dir && !isTeam && PER90[statParam] && <Field label="Numbers">{() => <SegmentedControl label="Totals or per 90" size="sm" value={rate} onChange={setRate} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>}

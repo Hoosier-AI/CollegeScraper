@@ -53,7 +53,7 @@ export function UniversalSearch({ examples, size = 'lg', autoFocus }: { examples
   const pending = on && (college.isPending || pro.isPending || intl.isPending);
   const allDone = on && !pending;
   useEffect(() => { setCursor(0); }, [items]);
-  useEffect(() => { if (allDone) trackSearch('pro', debounced, items.length); }, [allDone, debounced, items.length]);
+  useEffect(() => { if (allDone) trackSearch('all', debounced, items.length); }, [allDone, debounced, items.length]);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };

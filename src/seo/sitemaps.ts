@@ -8,6 +8,7 @@
 //   /sitemaps/pro-matches-<year>-<n>.xml finals with detail (score-only finals and unplayed matches are noindex)
 //   /sitemaps/pro-players-<n>.xml        players who have played
 //   /sitemaps/intl-core.xml             International: its pages, every tournament, every senior national team
+//   /sitemaps/coaches.xml               college coaches of the last two seasons and pro coaches with a club
 // Every document is built on demand and kept in memory for an hour.
 import type { SeoData, SitemapEntry } from './types.js';
 import type { ProSeoData } from './pro/data.js';
@@ -39,7 +40,7 @@ export function sitemapIndexXml(base: string, files: { path: string; lastmod?: s
 
 export class Sitemaps {
   private cache: LruCache<string>;
-  constructor(private data: SeoData, private baseUrl: string, private opts: { perFile?: number; ttlMs?: number } = {}, private pro: ProSeoData | null = null, private intl: IntlSeoData | null = null) {
+  constructor(private data: SeoData, private baseUrl: string, private opts: { perFile?: number; ttlMs?: number } = {}, private pro: ProSeoData | null = null, private intl: IntlSeoData | null = null, private coaches: (() => Promise<SitemapEntry[]>) | null = null) {
     this.cache = new LruCache<string>(200, opts.ttlMs ?? 3600_000);
   }
   private get perFile() { return this.opts.perFile ?? PER_FILE; }
@@ -60,12 +61,13 @@ export class Sitemaps {
     const file = m[1]!;
     if (file === 'core.xml') {
       const confs = await this.data.sitemapConferences();
-      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/news' }, ...confs]);
+      return urlsetXml(this.baseUrl, [{ path: '/' }, { path: '/rankings' }, { path: '/teams' }, { path: '/conferences' }, { path: '/leaders' }, { path: '/players' }, { path: '/transfers' }, { path: '/news' }, ...confs]);
     }
     if (file === 'teams.xml') return urlsetXml(this.baseUrl, await this.data.sitemapTeams());
+    if (this.coaches && file === 'coaches.xml') return urlsetXml(this.baseUrl, await this.coaches());
     if (this.intl && file === 'intl-core.xml') return urlsetXml(this.baseUrl, await this.intl.sitemap());
     if (this.pro) {
-      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/news' }, { path: '/intl/news' }, { path: '/pro/sources' }, ...(await this.pro.sitemapLeagues())]);
+      if (file === 'pro-core.xml') return urlsetXml(this.baseUrl, [{ path: '/pro/matches' }, { path: '/pro/leagues' }, { path: '/pro/teams' }, { path: '/pro/rankings' }, { path: '/pro/players' }, { path: '/pro/leaders' }, { path: '/pro/countries' }, { path: '/pro/college' }, { path: '/pro/transfers' }, { path: '/pro/abroad' }, { path: '/pro/news' }, { path: '/intl/news' }, { path: '/pro/sources' }, ...(await this.pro.sitemapLeagues())]);
       if (file === 'pro-countries.xml') return urlsetXml(this.baseUrl, await this.pro.sitemapCountries());
       const p = PRO_FILE.exec(file);
       if (p) {
@@ -92,7 +94,7 @@ export class Sitemaps {
 
   /** Index entries: core and teams first, then each season's matches and players, newest season first. */
   async files(): Promise<{ path: string }[]> {
-    const out: { path: string }[] = [{ path: '/sitemaps/core.xml' }, { path: '/sitemaps/teams.xml' }];
+    const out: { path: string }[] = [{ path: '/sitemaps/core.xml' }, { path: '/sitemaps/teams.xml' }, ...(this.coaches ? [{ path: '/sitemaps/coaches.xml' }] : [])];
     const seasons = (await this.data.sitemapSeasons()).sort((a, b) => b - a);
     for (const s of seasons) {
       const [games, players] = await Promise.all([this.data.countMatches(s), this.data.countPlayers(s)]);

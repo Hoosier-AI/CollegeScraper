@@ -13,7 +13,7 @@ export interface ProSideDetail { formation: string | null; coach: string | null;
 const minute = (e: Pick<ProEvent, 'minute' | 'extra'>) => (e.minute == null ? '' : e.minute < 0 ? 'Pre' : `${e.minute}${e.extra ? `+${e.extra}` : ''}′`);
 
 function EventIcon({ e }: { e: ProEvent }) {
-  if (e.type === 'goal') return <span className={e.detail === 'Missed Penalty' ? 'opacity-40' : ''}><Goals n={1} size={14} /></span>;
+  if (e.type === 'goal') return <span className={e.detail === 'Missed Penalty' || e.comments === 'Penalty Shootout' ? 'opacity-40' : ''}><Goals n={1} size={14} /></span>;
   if (e.type === 'card') return <Square size={12} aria-hidden className={/red/i.test(e.detail ?? '') ? 'fill-loss text-loss' : 'fill-note text-note'} />;
   if (e.type === 'subst') return <ArrowLeftRight size={13} aria-hidden className="text-chalk-400" />;
   return <span aria-hidden className="rounded bg-field-700 px-1 text-[9px] font-semibold text-chalk-200">VAR</span>;
@@ -21,6 +21,8 @@ function EventIcon({ e }: { e: ProEvent }) {
 
 function eventText(e: ProEvent): string {
   if (e.type === 'goal') {
+    // Shootout kicks come as goal events marked 'Penalty Shootout'; they are not goals.
+    if (e.comments === 'Penalty Shootout') return `${e.player_name ?? 'Kick'} (shootout, ${e.detail === 'Missed Penalty' ? 'missed' : 'scored'})`;
     const kind = e.detail === 'Own Goal' ? ' (own goal)' : e.detail === 'Penalty' ? ' (pen)' : e.detail === 'Missed Penalty' ? ' (missed pen)' : '';
     return `${e.player_name ?? 'Goal'}${kind}${e.assist_name && e.detail !== 'Own Goal' ? `, assist ${e.assist_name}` : ''}`;
   }

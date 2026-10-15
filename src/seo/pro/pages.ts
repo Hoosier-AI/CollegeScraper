@@ -2,7 +2,7 @@
 // search engines and no-JavaScript readers get. Same rules as the college pages: unplayed and score-only matches,
 // players without an appearance and competitions without a match stay out of search (noindex,follow).
 import type * as Q from '../../pro/queries.js';
-import { abs, breadcrumbs, ld, NOINDEX, ogImage, SUFFIX, type HeadContext, type HeadMeta } from '../head.js';
+import { abs, breadcrumbs, ld, NOINDEX, ogCard, ogImage, SUFFIX, type HeadContext, type HeadMeta } from '../head.js';
 import { a, n, table, tr, wrapBody } from '../body.js';
 import { clip, esc, longDate, SITE_NAME } from '../util.js';
 import { isIntlLeague, isIntlMatchSlug, isIntlTeam } from '../../pro/intlRegistry.js';
@@ -137,7 +137,7 @@ export function proTeamHead(p: ProTeamPage, ctx: HeadContext): HeadMeta {
   return {
     title: `${t.name}${p.season ? ` ${p.season}` : ''}: Squad, Results, Fixtures and Stats${SUFFIX}`,
     description: clip(`${t.name}${t.country ? ` (${t.country})` : ''}${p.season ? ` ${p.season}` : ''}${bits.length ? `: ${bits.join(', ')}` : ''}. Squad with appearances, goals and ratings, every result and the next fixtures.`),
-    canonical: abs(ctx, path), robots: !p.results.length && !p.fixtures.length ? NOINDEX : null, ogType: 'website', image: ogImage(ctx),
+    canonical: abs(ctx, path), robots: !p.results.length && !p.fixtures.length ? NOINDEX : null, ogType: 'website', image: ogCard(ctx, path),
     jsonLd: [
       ld('SportsTeam', { '@id': `${abs(ctx, proPaths.team(t.slug))}#team`, name: t.name, sport: 'Soccer', url: abs(ctx, path), logo: t.logo ?? undefined, gender: t.gender === 'w' ? 'Female' : t.gender === 'm' ? 'Male' : undefined, foundingDate: t.founded ? String(t.founded) : undefined,
         location: t.venue ? { '@type': 'Place', name: t.venue.name, address: t.venue.city ?? undefined } : undefined,
@@ -183,7 +183,7 @@ export function proPlayerHead(p: ProPlayerPage, ctx: HeadContext): HeadMeta {
   return {
     title: `${pl.name}${p.team ? ` (${p.team.name})` : ''}: Stats, Matches and Career${SUFFIX}`,
     description: clip(`${pl.name}${pl.position ? `, ${pl.position.toLowerCase()}` : ''}${p.team ? ` for ${p.team.name}` : ''}${pl.nationality ? `, ${pl.nationality}` : ''}.${line ? ` ${line}.` : ''}${college ? ` Played college soccer at ${college.college_name}.` : ''} Season-by-season stats and match ratings.`),
-    canonical, robots: pl.noindex || apps === 0 ? NOINDEX : null, ogType: 'profile', image: ogImage(ctx),
+    canonical, robots: pl.noindex || apps === 0 ? NOINDEX : null, ogType: 'profile', image: ogCard(ctx, proPaths.player(pl.slug)),
     jsonLd: [
       ld('Person', { '@id': `${canonical}#person`, name: pl.name, url: canonical, birthDate: pl.birth_date ?? undefined, nationality: pl.nationality ?? undefined, height: pl.height_cm ? `${pl.height_cm} cm` : undefined,
         image: pl.photo && /^https:/.test(pl.photo) ? pl.photo : undefined, jobTitle: 'Professional soccer player',
@@ -217,7 +217,7 @@ export function proMatchHead(p: ProMatchPage, ctx: HeadContext): HeadMeta {
   const canonical = abs(ctx, proPaths.match(m.slug, m.league.scope));
   const final = proIsFinal(m);
   const when = day(m.kickoff);
-  const scorers = p.events.filter((e) => e.type === 'goal' && e.detail !== 'Missed Penalty' && e.player_name).map((e) => `${e.player_name} ${e.minute ?? ''}'`.trim()).slice(0, 6);
+  const scorers = p.events.filter((e) => e.type === 'goal' && e.detail !== 'Missed Penalty' && e.comments !== 'Penalty Shootout' && e.player_name).map((e) => `${e.player_name} ${e.minute ?? ''}'`.trim()).slice(0, 6);
   const title = final ? `${proScoreLine(m)}, ${m.league.name}, ${when}${SUFFIX}` : `${proMatchName(m)}, ${m.league.name}, ${when}${SUFFIX}`;
   const description = clip(final
     ? `${proScoreLine(m)} in the ${m.league.name}${m.round ? ` (${m.round})` : ''}, ${when}${m.venue ? ` at ${m.venue}` : ''}. ${scorers.length ? `Goals: ${scorers.join('; ')}. ` : ''}Lineups, ratings and match stats.`
@@ -225,7 +225,7 @@ export function proMatchHead(p: ProMatchPage, ctx: HeadContext): HeadMeta {
   const side = (s: Q.ProMatchSide) => teamLd(ctx, s);
   return {
     title, description, canonical,
-    robots: proIsUnplayed(m) || proIsThin(p) ? NOINDEX : null, ogType: 'website', image: ogImage(ctx),
+    robots: proIsUnplayed(m) || proIsThin(p) ? NOINDEX : null, ogType: 'website', image: ogCard(ctx, proPaths.match(m.slug, m.league.scope)),
     jsonLd: [
       ld('SportsEvent', { '@id': `${canonical}#event`, name: `${proMatchName(m)} (${m.league.name})`, sport: 'Soccer', url: canonical, startDate: m.kickoff,
         eventStatus: EVENT_STATUS[m.status] ?? 'https://schema.org/EventScheduled', eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
@@ -241,7 +241,7 @@ export function proMatchBody(p: ProMatchPage): string {
   const final = proIsFinal(m);
   const h1 = final || m.status === 'live' ? proScoreLine(m) : proMatchName(m);
   const facts = [a(proPaths.league(m.league.slug), m.league.name), m.round ? esc(m.round) : null, esc(day(m.kickoff)), m.venue ? esc(m.venue) : null, m.referee ? `referee ${esc(m.referee)}` : null, m.ht[0] != null && final ? `half-time ${esc(m.ht[0])}-${esc(m.ht[1])}` : null].filter(Boolean).join('; ');
-  const events = p.events.filter((e) => e.type === 'goal' || e.type === 'card').map((e) => `<li>${esc(e.minute ?? '')}' ${e.type === 'goal' ? (e.detail === 'Missed Penalty' ? 'Missed penalty' : 'Goal') : esc(e.detail ?? 'Card')} (${esc(e.side === 'home' ? m.home.name : m.away.name)}): ${esc(e.player_name ?? '')}${e.type === 'goal' && e.assist_name && e.detail !== 'Own Goal' ? `, assisted by ${esc(e.assist_name)}` : ''}${e.detail === 'Own Goal' ? ' (own goal)' : e.detail === 'Penalty' ? ' (penalty)' : ''}</li>`).join('');
+  const events = p.events.filter((e) => e.type === 'goal' || e.type === 'card').map((e) => `<li>${esc(e.minute ?? '')}' ${e.type === 'goal' ? (e.comments === 'Penalty Shootout' ? (e.detail === 'Missed Penalty' ? 'Shootout kick missed' : 'Shootout kick scored') : e.detail === 'Missed Penalty' ? 'Missed penalty' : 'Goal') : esc(e.detail ?? 'Card')} (${esc(e.side === 'home' ? m.home.name : m.away.name)}): ${esc(e.player_name ?? '')}${e.type === 'goal' && e.assist_name && e.detail !== 'Own Goal' ? `, assisted by ${esc(e.assist_name)}` : ''}${e.detail === 'Own Goal' ? ' (own goal)' : e.detail === 'Penalty' ? ' (penalty)' : ''}</li>`).join('');
   const lineup = (name: string, s: ProMatchPage['home']) => (s.starters.length ? `<h3>${esc(name)}${s.formation ? ` (${esc(s.formation)})` : ''}</h3>${table(`${name} lineup`, ['#', 'Player', 'Pos', 'Min', 'G', 'A', 'Rating'], [...s.starters, ...s.bench.filter((b) => (b.minutes ?? 0) > 0)].map((l) => tr([esc(l.number ?? ''), l.slug ? a(proPaths.player(l.slug), l.display) : esc(l.display), esc(l.pos ?? ''), n(l.minutes), n(l.goals), n(l.assists), l.rating != null ? esc(Number(l.rating).toFixed(1)) : '–'])))}` : '');
   const stat = (k: string, label: string) => (p.home.stats?.[k] != null || p.away.stats?.[k] != null ? tr([esc(label), n(p.home.stats?.[k] as number | null), n(p.away.stats?.[k] as number | null)]) : '');
   const stats = p.home.stats || p.away.stats ? `<h2>Team stats</h2>${table('Team stats', ['', m.home.name, m.away.name], [stat('possession', 'Possession %'), stat('shots', 'Shots'), stat('shots_on', 'Shots on target'), stat('corners', 'Corners'), stat('fouls', 'Fouls'), stat('yellow', 'Yellow cards'), stat('red', 'Red cards')].filter(Boolean))}` : '';
@@ -363,7 +363,7 @@ export function proSourcesHead(ctx: HeadContext): HeadMeta {
 }
 export function proSourcesBody(): string {
   const items = PRO_SOURCES.map((s) => `<li><a href="${esc(s.url)}" rel="noopener">${esc(s.name)}</a>: ${esc(s.what)} ${esc(s.terms)}</li>`).join('');
-  return wrapBody('pro', [...crumbsHome, { name: 'Sources', path: '/pro/sources' }], `<h1>Where the data comes from</h1><ul>${items}</ul><p>${esc('Numbers from other sources are compared with API-Football before they are shown: every score, and each player\'s minutes, goals and assists. A competition season only shows them when at least 97% agree, and a player row whose minutes disagree is left out.')}</p>`);
+  return wrapBody('pro', [...crumbsHome, { name: 'Sources', path: '/pro/sources' }], `<h1>Where the data comes from</h1><ul>${items}</ul><p>${esc('Numbers from other sources are compared with API-Football before they are shown: every score, and each player\'s minutes, goals and assists. A competition season only shows them when at least 90% agree, and a player row whose minutes disagree is left out.')}</p>`);
 }
 
 /** Today's pro matches for the one home page (/): the top competitions, linked. */

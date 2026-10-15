@@ -100,11 +100,11 @@ export function PercentileWheel({ rows, labels, caption }: { rows: { stat: strin
   );
 }
 
-/** The last results as W/D/L chips, oldest on the left, each linking to its match. */
-export function ResultStrip({ items, caption }: { items: { result: 'W' | 'D' | 'L'; title: string; href: string }[]; caption: string }) {
+/** The last results as W/D/L chips (W/T/L for college), oldest on the left, each linking to its match. */
+export function ResultStrip({ items, caption }: { items: { result: 'W' | 'D' | 'L' | 'T'; title: string; href: string }[]; caption: string }) {
   if (!items.length) return null;
-  const tone = { W: 'bg-win/20 text-win', D: 'bg-draw/20 text-draw', L: 'bg-loss/20 text-loss' } as const;
-  const w = items.filter((i) => i.result === 'W').length, d = items.filter((i) => i.result === 'D').length;
+  const tone = { W: 'bg-win/20 text-win', D: 'bg-draw/20 text-draw', T: 'bg-draw/20 text-draw', L: 'bg-loss/20 text-loss' } as const;
+  const w = items.filter((i) => i.result === 'W').length, d = items.filter((i) => i.result === 'D' || i.result === 'T').length;
   return (
     <figure className="frame p-3">
       <figcaption className="mb-2 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">{w}-{d}-{items.length - w - d}</span></figcaption>
@@ -116,11 +116,11 @@ export function ResultStrip({ items, caption }: { items: { result: 'W' | 'D' | '
 }
 
 /** Points piling up over the season, match by match (3 a win, 1 a draw), against a points-a-match pace line. */
-export function PointsLine({ results, caption }: { results: ('W' | 'D' | 'L')[]; caption: string }) {
+export function PointsLine({ results, caption }: { results: ('W' | 'D' | 'L' | 'T')[]; caption: string }) {
   if (results.length < 3) return null;
   const W = 600, H = 160, PAD = 26;
   const pts: number[] = [];
-  for (const r of results) pts.push((pts[pts.length - 1] ?? 0) + (r === 'W' ? 3 : r === 'D' ? 1 : 0));
+  for (const r of results) pts.push((pts[pts.length - 1] ?? 0) + (r === 'W' ? 3 : r === 'D' || r === 'T' ? 1 : 0));
   const max = Math.max(3, results.length * 2, pts[pts.length - 1]!);
   const x = (i: number) => PAD + (i * (W - PAD * 2)) / Math.max(1, pts.length - 1);
   const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);

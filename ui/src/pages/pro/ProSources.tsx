@@ -25,7 +25,7 @@ export default function ProSources() {
         </ul>
       </Section>
       <Section title="How the numbers are checked">
-        <p className="max-w-prose text-sm text-chalk-300">Numbers from other sources are compared with API-Football before they are shown: every score, and each player&apos;s minutes, goals and assists. A competition season only shows them when at least 97% agree, and a player row whose minutes disagree is left out.</p>
+        <p className="max-w-prose text-sm text-chalk-300">Numbers from other sources are compared with API-Football before they are shown: every score, and each player&apos;s minutes, goals and assists. A competition season only shows them when at least 90% agree, and a player row whose minutes disagree is left out.</p>
       </Section>
     </div>
   );

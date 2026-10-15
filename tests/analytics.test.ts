@@ -107,6 +107,16 @@ describe('attention rules', () => {
     traffic: { views_7d: 100, views_prev_7d: 100, zero_searches_7d: 0 },
   });
   it('is quiet when all is well', () => { expect(attentionFrom(base())).toEqual([]); });
+  it('warns when a stat check falls below its target, with enough compared', () => {
+    const i = base(); i.audits = [
+      { check_key: 'ncaa:Total Assists', label: 'Players: Total Assists vs NCAA.com', rate: 0.82, target: 0.88, compared: 1500 },
+      { check_key: 'ncaa:Total Goals', label: 'Players: Total Goals vs NCAA.com', rate: 0.96, target: 0.95, compared: 1500 },
+      { check_key: 'pro-us:asa_goals', label: 'Pro US: goals vs ASA', rate: 0.5, target: 0.9, compared: 4 },
+    ];
+    const out = attentionFrom(i);
+    expect(out.map((a) => a.id)).toEqual(['audit:ncaa:Total Assists']);
+    expect(out[0]!.detail).toContain('82.0% agree of 1,500');
+  });
   it('flags a failed job, an overdue job and a stalled scheduler, worst first', () => {
     const i = base();
     i.rollup.nightly = { last_done: { finished_at: iso(2 * 86400_000) }, last_failed: { finished_at: iso(3600_000), error: 'boom' }, queued: 0, running: 0 };

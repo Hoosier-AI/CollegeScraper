@@ -107,6 +107,10 @@ export interface ClassifiedPlay {
   extra: { type: EventType; player: string | null } | null;
 }
 
+/** The scorer's season tally some feeds put at the end of a goal line, and the "first goal" note. */
+const GOAL_NOTE = /\s*,?\s*goal\s+(?:number|no\.?|#)\s*\d+\s+(?:for|of)\s+(?:the\s+)?season\s*\.?\s*\*?\s*$/i;
+const FIRST_GOAL = /\s*\((?:first|1st)\s+goal\)/gi;
+
 /** Classify one play-by-play line using the shared site-adapter vocabulary. */
 export function classifyPlay(text: string): ClassifiedPlay {
   const t = cleanName(text);
@@ -148,14 +152,20 @@ export function classifyPlay(text: string): ClassifiedPlay {
   }
   if (/^goal\b(?!\s*kick)/i.test(t) || /\bGOAL by\b/.test(t) || /^goal\s*\(/i.test(t)) {
     out.type = 'goal';
-    const m = t.match(new RegExp(String.raw`\bby\s+((?:[A-Z0-9&]{2,6}\s+)?.+?)\s+Assist(?:ed)?\s+by\s+(.+?)\.?$`, 'iu'));
+    // Some feeds append the scorer's notes after the assist ("Assist by X, goal number 3 for season.", "(FIRST GOAL)"),
+    // which read as part of the assister's name; and two assisters come as "A and B" (the first is kept).
+    const g = t.replace(GOAL_NOTE, '').replace(FIRST_GOAL, '');
+    const firstOf = (a: string | null | undefined) => tidy(a?.replace(/^goal\s+(?:number|no\.?|#)\s*\d+\s+(?:for|of)\s+(?:the\s+)?season\s+/i, '').split(/\s+and\s+/i)[0]);
+    const m = g.match(new RegExp(String.raw`\bby\s+((?:[A-Z0-9&]{2,6}\s+)?.+?),?\s+Assist(?:ed)?\s+by\s+(.+?)\.?$`, 'iu'));
     if (m) {
       const p = stripAbbrev(m[1]!.trim()); if (p.abbrev) out.abbrev = p.abbrev;
-      out.player = tidy(p.name); out.assist = tidy(m[2]);
+      out.player = tidy(p.name); out.assist = firstOf(m[2]);
     } else {
-      out.player = anyBy();
-      const a = t.match(/\bassist(?:ed)?\s+by\s+(.+?)\.?$/i); if (a) out.assist = tidy(a[1]);
+      const b = g.match(/\bby\s+((?:[A-Z0-9&]{2,6}\s+)?.+?)\.?$/u);
+      out.player = anyBy() ?? (b ? tidy(stripAbbrev(b[1]!.trim()).name) : null);
+      const a = g.match(/\bassist(?:ed)?\s+by\s+(.+?)\.?$/i); if (a) out.assist = firstOf(a[1]);
     }
+    if (out.player) out.player = tidy(out.player.replace(GOAL_NOTE, '').replace(FIRST_GOAL, ''));
     return out;
   }
   if (/^assist\b/i.test(t)) { out.type = 'other'; out.assist = anyBy(); return out; }

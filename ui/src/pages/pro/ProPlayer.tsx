@@ -8,6 +8,7 @@
 //   Career    college, transfers, honours, injury history
 // Pro (/pro/players) shows his club football; International (/intl/players) the same page over his national-team
 // matches, with caps by nation (Wikipedia careers) and World Cup squads.
+import { PageActions } from '../../components/PageActions';
 import { NewsFeed } from '../../components/news/News';
 import { Crumbs } from '../../components/shell';
 import { KeyFacts, type Salary } from '../../components/player/KeyFacts';
@@ -236,7 +237,10 @@ export default function ProPlayer() {
           {p.nationality && <span className="inline-flex items-center gap-1.5"><Flag country={p.nationality} />{p.nationality}</span>}
         </>}
         chips={[...chips, p.birth_date ? `Born ${fmt.date(p.birth_date)}${p.birth_place ? `, ${p.birth_place}` : ''}` : null]}
-        actions={<Link to={proPaths2.compare(p.slug)} className="btn-ghost btn-sm"><GitCompare size={14} /> Compare</Link>}
+        actions={<>
+          <PageActions title={p.name} follow={{ kind: 'pro-player', id: String(p.id), name: p.name, href: `/pro/players/${p.slug}`, image: p.photo ?? null, sub: d.team?.name ?? null }} />
+          <Link to={proPaths2.compare(p.slug)} className="btn-ghost btn-sm"><GitCompare size={14} /> Compare</Link>
+        </>}
       >
         <div className="mb-3"><KeyFacts position={p.position ?? now?.position} season={latest} apps={now?.res_apps} pts={now?.res_pts} starts={now?.res_starts45} startPts={now?.res_pts45} salary={d.salary?.latest} salaryNote={d.salary_note} /></div>
         {now && (

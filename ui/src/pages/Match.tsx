@@ -1,4 +1,5 @@
 // One match: the scoreline masthead, then Summary / Lineups / Stats / Head-to-head / Preview.
+import { ShareButton } from '../components/PageActions';
 import { TeamNews } from '../components/news/News';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { liveClock } from '../lib/liveClock';
@@ -102,6 +103,7 @@ export default function Match() {
       <Crumbs items={[{ label: `${g.away?.name ?? '?'} at ${g.home?.name ?? '?'}` }]} />
       <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
+        <ShareButton title={`${g.away?.name ?? '?'} at ${g.home?.name ?? '?'}`} />
         {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
         {referee && <span>Referee <span className="text-chalk-300">{referee}</span>{assistants.length ? `, assistants ${assistants.join(' and ')}` : ''}</span>}
         {duration && <span>Played in {duration}</span>}

@@ -1,5 +1,8 @@
 // One college player. Tabs in the order every area uses: Overview (career figures, splits, national ranks, honors),
 // Stats (season by season), Matches (game log), Career (transfers, the pro career), News.
+import { GameForm, type FormGame } from '../components/player/GameForm';
+import { SeasonBars } from '../components/pro/Charts';
+import { PageActions } from '../components/PageActions';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { NewsFeed } from '../components/news/News';
 import { Crumbs } from '../components/shell';
@@ -46,7 +49,7 @@ export default function Player() {
   const st = latest?.stats;
   const isGk = seasons.some((s) => s.stats?.gk_minutes > 0 || s.position === 'GK');
   const n = (v: unknown, d = 0) => fmt.num(v, d);
-  const sc = (key: string, label: string, title: string, opts: { d?: number; pct?: boolean } = {}): Column<any> => ({ key, label, title, num: true, priority: 3, value: (s) => s.stats?.[key], render: (s) => opts.pct ? fmt.pct(s.stats?.[key]) : n(s.stats?.[key], opts.d ?? 0) });
+  const sc = (key: string, label: string, title: string, opts: { d?: number; pct?: boolean } = {}): Column<any> => ({ key, label, title, num: true, priority: 3, value: (s) => s.stats?.[key], render: (s) => ((key === 'ppg' && (s.stats?.res_apps ?? 0) < 5) || (key === 'pps' && (s.stats?.pps_starts ?? 0) < 5) ? '–' : key.startsWith('pct_') ? fmt.pctile(s.stats?.[key]) : opts.pct ? fmt.pct(s.stats?.[key]) : n(s.stats?.[key], opts.d ?? 0)) });
   const seasonCols: Column<any>[] = [
     { key: 'season', label: 'Season', primary: true, render: (s) => String(s.season) },
     { key: 'program', label: 'Team', priority: 3, value: (s) => s.program?.name, render: (s) => <Link className="flex items-center gap-2 hover:text-pitch-300" to={href(`/teams/${s.program?.id}`, { season: s.season, gender: s.program?.gender })}><TeamLogo src={s.program?.college_schools?.logo_svg_url} name={s.program?.name} size={20} />{s.program?.name}</Link> },
@@ -75,7 +78,14 @@ export default function Player() {
     { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats', count: seasons.length || undefined }, { id: 'matches', label: 'Matches', count: gameLog.length || undefined },
     { id: 'career', label: 'Career' }, { id: 'news', label: 'News' },
   ];
-  const hasOverview = (career && seasons.length > 1) || latest?.splits?.length > 0 || latest?.ranks?.length > 0 || honors.length > 0;
+  // Charts: goals and assists by season (two or more), and the latest season's last 12 games.
+  const bySeason = [...seasons].filter((s) => s.stats).sort((a, b) => a.season - b.season).map((s) => ({ label: String(s.season), a: s.stats.goals ?? 0, b: s.stats.assists ?? 0 }));
+  const form: FormGame[] = gameLog.filter((r) => r.game?.status === 'final' && r.game.season === latest?.season && r.participated !== false)
+    .sort((a, b) => String(a.game.game_date).localeCompare(String(b.game.game_date))).slice(-12)
+    .map((r) => { const g = r.game, home = g.home_program_id === own(r); const us = home ? g.home_score : g.away_score, them = home ? g.away_score : g.home_score;
+      return { href: href(`/matches/${g.id}`), date: fmt.day(g.game_date), opponent: `${home ? 'vs' : 'at'} ${(home ? g.away_name : g.home_name) ?? '?'}`, result: resultOf(us, them) as FormGame['result'], minutes: r.minutes ?? null, goals: r.goals ?? 0, assists: r.assists ?? 0, started: !!r.starter }; });
+  const hasCharts = bySeason.length > 1 || form.length >= 3;
+  const hasOverview = hasCharts || (career && seasons.length > 1) || latest?.splits?.length > 0 || latest?.ranks?.length > 0 || honors.length > 0;
   return (
     <div className="space-y-5">
       <Crumbs items={[{ label: p.display_name }]} />
@@ -86,6 +96,8 @@ export default function Player() {
           {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
           <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, (latest?.high_school ?? p.high_school) ? `${latest?.high_school ?? p.high_school}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null, latest?.major ? `studying ${latest.major}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
           <p className="mt-1 flex flex-wrap gap-x-4 text-xs">{bioUrl && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={bioUrl} target="_blank" rel="noreferrer">School bio <ExternalLink size={12} aria-hidden /></a>}<Link className="text-pitch-400 hover:text-pitch-300" to={`/compare?a=${p.id}`}>Compare with another player</Link></p>
+          <PageActions className="mt-3" title={p.display_name}
+            follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
           {pro.data?.pro && <p className="mt-2"><Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2 py-1 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link></p>}
         </div>
         {st && (
@@ -97,7 +109,7 @@ export default function Player() {
             </> : <>
               <Figure big label={`${latest.season} goals`} value={st.goals ?? 0} sub={`${st.assists ?? 0} assists`} />
               <Figure label="Games" value={`${st.gp ?? 0}`} sub={`${st.gs ?? 0} starts, ${n(st.minutes)} min`} />
-              <Figure label="Goals per 90" value={n(st.goals_p90, 2)} sub={st.pct_goals_p90 != null ? `${fmt.pct(st.pct_goals_p90)} percentile` : undefined} />
+              <Figure label="Goals per 90" value={n(st.goals_p90, 2)} sub={st.pct_goals_p90 != null ? `${fmt.pctile(st.pct_goals_p90)} percentile in the division` : undefined} />
             </>}
           </div>
         )}
@@ -106,6 +118,12 @@ export default function Player() {
         other={{ label: 'Class', value: latest?.class_raw ?? '–', sub: latest?.season ? `${latest.season} roster` : undefined }} />
       <TabsNav label="Player sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'overview' ? null : x })} />
       {tab === 'overview' && <div className="space-y-6">
+      {hasCharts && (
+        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+          <GameForm games={form} caption={`Last ${form.length} games, ${latest?.season}`} />
+          {bySeason.length > 1 && <SeasonBars rows={bySeason} a="Goals" b="Assists" caption="Goals and assists by season" />}
+        </div>
+      )}
       {career && seasons.length > 1 && (
         <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6">
           <Figure label="Seasons" value={career.seasons} sub={`${career.programs} program${career.programs === 1 ? '' : 's'}`} />

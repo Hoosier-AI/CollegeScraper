@@ -2,6 +2,7 @@
 // injuries, ground, goals by 15-minute period, home/away splits, the provider's season stats (formations, biggest
 // results, streaks, clean sheets, penalties, cards by minute), transfers in and out, results and fixtures. A national team (its page is International's) has its history instead of
 // transfers.
+import { PageActions } from '../../components/PageActions';
 import { NewsFeed, NewsSection } from '../../components/news/News';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -33,7 +34,7 @@ interface Split { played: number; w: number; d: number; l: number; gf: number; g
 interface TeamData {
   team: ProTeamRef & { founded: number | null; national: boolean; venue: Ground | null };
   season: number | null; seasons: number[];
-  competitions: { league: (ProLeagueRef & { priority: number }) | null; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; possession: number | null; shots?: number | null; shots_on?: number | null; corners?: number | null; fouls?: number | null; yellow?: number | null; red?: number | null }[];
+  competitions: { league: (ProLeagueRef & { priority: number }) | null; played: number; stat_played?: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; possession: number | null; shots?: number | null; shots_on?: number | null; corners?: number | null; fouls?: number | null; yellow?: number | null; red?: number | null }[];
   standings: { league: ProLeagueRef | null; group: string; rank: number | null; points: number | null; played: number | null; form: string | null }[];
   squad: SquadRow[];
   coaches: { id: number; name: string; photo: string | null; nationality: string | null; birth_date: string | null; start: string | null; end: string | null; current: boolean; trophies?: number }[];
@@ -92,10 +93,12 @@ export default function ProTeam() {
   const sum = total.p > 0 ? (() => {
     const withStats = d.competitions.filter((c) => c.shots != null);
     const add = (k: 'shots' | 'shots_on' | 'corners' | 'yellow' | 'red') => (withStats.length ? withStats.reduce((n, c) => n + (c[k] ?? 0), 0) : null);
-    const possRows = d.competitions.filter((c) => c.possession != null && c.played);
-    return { ...total, cs: d.competitions.reduce((n, c) => n + c.clean_sheets, 0), statP: Math.max(1, withStats.reduce((n, c) => n + c.played, 0)),
+    // Shots, corners, cards and possession exist only for matches with detail: averaged over those matches.
+    const sp = (c: (typeof d.competitions)[number]) => (c.stat_played || c.played);
+    const possRows = d.competitions.filter((c) => c.possession != null && sp(c));
+    return { ...total, cs: d.competitions.reduce((n, c) => n + c.clean_sheets, 0), statP: Math.max(1, withStats.reduce((n, c) => n + sp(c), 0)),
       shots: add('shots'), shotsOn: add('shots_on'), corners: add('corners'), yellow: add('yellow'), red: add('red'),
-      poss: possRows.length ? possRows.reduce((n, c) => n + c.possession! * c.played, 0) / possRows.reduce((n, c) => n + c.played, 0) : null };
+      poss: possRows.length ? possRows.reduce((n, c) => n + c.possession! * sp(c), 0) / possRows.reduce((n, c) => n + sp(c), 0) : null };
   })() : null;
   // Goals by period from our own match events only once they cover most of the season's goals (lower leagues have few).
   const periodGoals = d.goals_by_period.reduce((n, r) => n + r.for + r.against, 0);
@@ -122,7 +125,10 @@ export default function ProTeam() {
       <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-[4.5rem] sm:w-[4.5rem]"><TeamLogo src={t.logo} name={t.name} size={60} chip={false} /></span>} title={t.name}
         line={<>{t.country && <span className="inline-flex items-center gap-1.5"><Flag country={t.country} />{t.country}</span>}{coach && <span>Coach {coach.name}</span>}</>}
         chips={[t.founded ? `Founded ${t.founded}` : null, t.venue ? `${t.venue.name}${t.venue.capacity ? ` · ${fmt.num(t.venue.capacity)}` : ''}` : null, t.venue?.surface ? cap(t.venue.surface) : null]}
-        actions={d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: v === String(d.seasons[0]) ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}>
+        actions={<>
+          <PageActions title={t.name} follow={{ kind: 'pro-team', id: String(t.id), name: t.name, href: proPath.team(t.slug), image: t.logo ?? null, sub: t.country ?? null }} />
+          {d.seasons.length > 1 && <Select aria-label="Season" className="h-9 text-sm" value={String(d.season ?? '')} onChange={(v) => patch({ season: v === String(d.seasons[0]) ? null : v })} options={d.seasons.map((s) => ({ value: String(s), label: String(s) }))} />}
+        </>}>
         {d.season != null && total.p > 0 && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatTile label={`${d.season} record`} value={`${total.w}-${total.d}-${total.l}`} sub="won, drawn, lost" />
@@ -225,7 +231,7 @@ export default function ProTeam() {
             <ul className="frame divide-y divide-field-700 text-sm">
               {d.competitions.map((c) => c.league && (
                 <li key={c.league.id} className="flex flex-wrap items-center gap-x-3 px-3 py-2"><Link to={proPath.league(c.league.slug, d.season)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.league.name}</Link>
-                  <span className="text-xs tnum text-chalk-300">{c.w}-{c.d}-{c.l} · {c.gf}:{c.ga} · {c.clean_sheets} clean sheets{c.possession != null ? ` · ${Math.round(c.possession)}% possession` : ''}{c.shots != null && c.played ? ` · ${(c.shots / c.played).toFixed(1)} shots a match` : ''}</span></li>
+                  <span className="text-xs tnum text-chalk-300">{c.w}-{c.d}-{c.l} · {c.gf}:{c.ga} · {c.clean_sheets} clean sheets{c.possession != null ? ` · ${Math.round(c.possession)}% possession` : ''}{c.shots != null && (c.stat_played || c.played) ? ` · ${(c.shots / (c.stat_played || c.played)).toFixed(1)} shots a match` : ''}</span></li>
               ))}
             </ul>
           </Section>

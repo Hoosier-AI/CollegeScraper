@@ -1,6 +1,7 @@
 // One pro match: the score (live minute, half-time, extra time, penalties), then tabs in the order every area uses.
 // Played: Summary (events), Lineups (both elevens on the pitch, lineups with ratings), Stats (team stats, shot map),
 // Head to head. Before kickoff: Preview, Head to head, Lineups (once announced).
+import { ShareButton } from '../../components/PageActions';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
@@ -83,6 +84,7 @@ export default function ProMatch() {
         {d.advanced && d.advanced.xg[0] != null && <span className="mr-2 font-medium text-chalk-200 tnum" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}.</span>}
         {kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}
       </p>
+      <div className="flex justify-center"><ShareButton title={`${m.home.name} vs ${m.away.name}, ${m.league.name}`} /></div>
       {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
       {/* International: Plaibook Elo's chances before kickoff, each side's rating move once played. */}
       {intl && <EloMatchCard slug={slug} />}
