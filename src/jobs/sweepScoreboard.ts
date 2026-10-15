@@ -105,13 +105,15 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
           else if (g.state === 'live') Object.assign(patch, { status: 'live', home_score: g.home.score, away_score: g.away.score, live_period: g.currentPeriod, live_clock: g.contestClock, live_updated_at: new Date().toISOString() });
         }
         if (existing.home_score == null && g.home.score != null && played(g)) { patch.home_score = g.home.score; patch.away_score = g.away.score; }
+        // Where it is shown: NCAA.com's broadcaster only when neither school's schedule named one.
+        if (g.network && !(existing as any).broadcast) { patch.broadcast = g.network; patch.broadcast_source = 'ncaa'; }
         await updateGame(db, existing.id, patch);
         existing.ncaa_contest_id = Number(g.contestId);
         byContest.set(g.contestId, existing);
         ctx.inc('games_updated');
       } else {
         try {
-          const row = await upsertGameByNcaa(db, { ...base, ncaa_contest_id: Number(g.contestId), status: played(g) ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: played(g) ? g.home.score : null, away_score: played(g) ? g.away.score : null });
+          const row = await upsertGameByNcaa(db, { ...base, ...(g.network ? { broadcast: g.network, broadcast_source: 'ncaa' } : {}), ncaa_contest_id: Number(g.contestId), status: played(g) ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: played(g) ? g.home.score : null, away_score: played(g) ? g.away.score : null });
           games.push(row); byContest.set(g.contestId, row);
           ctx.inc('games_created');
         } catch (err) {

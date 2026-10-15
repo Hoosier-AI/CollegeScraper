@@ -1,5 +1,6 @@
 // Current-season scoreboard via the NCAA GraphQL "contests by date" persisted query. The old
 // data.ncaa.com casablanca feed stopped at the 2025 season; ncaa.com itself now reads this query.
+import { normalizeNetwork } from '../../normalize/networks.js';
 import type { Division, Gender, Fetcher } from '../../model.js';
 import { graphqlGet } from './graphql.js';
 import { PersistedQueryStore } from './persistedQueries.js';
@@ -9,7 +10,7 @@ import { int } from '../../normalize/num.js';
 export const GQL_SCOREBOARD_FROM_SEASON = 2025;
 
 export interface GqlContestTeam { isHome: boolean; isWinner?: boolean; score?: number | null; nameShort?: string | null; name6Char?: string | null; seoname?: string | null; seed?: number | null; teamRank?: number | null; conferenceSeo?: string | null }
-export interface GqlContest { contestId: number | string; url?: string | null; gameState?: string | null; currentPeriod?: string | null; contestClock?: string | null; finalMessage?: string | null; startTimeEpoch?: number | string | null; startTime?: string | null; startDate?: string | null; roundNumber?: number | null; roundDescription?: string | null; teams: GqlContestTeam[] }
+export interface GqlContest { broadcasterName?: string | null; contestId: number | string; url?: string | null; gameState?: string | null; currentPeriod?: string | null; contestClock?: string | null; finalMessage?: string | null; startTimeEpoch?: number | string | null; startTime?: string | null; startDate?: string | null; roundNumber?: number | null; roundDescription?: string | null; teams: GqlContestTeam[] }
 
 export function scoreboardVariables(gender: Gender, division: Division, date: string): Record<string, unknown> {
   const [y, m, d] = date.split('-');
@@ -49,6 +50,7 @@ export function parseGqlScoreboard(doc: unknown, gender: Gender, division: Divis
       currentPeriod: c.currentPeriod ?? null, contestClock: c.contestClock ?? null, finalMessage: c.finalMessage ?? null, title: `${away.nameShort ?? ''} ${home.nameShort ?? ''}`.trim() || null,
       bracketRound: c.roundDescription || (c.roundNumber != null ? String(c.roundNumber) : null),
       home: team(home), away: team(away),
+      network: normalizeNetwork(c.broadcasterName),
     });
   }
   return out;

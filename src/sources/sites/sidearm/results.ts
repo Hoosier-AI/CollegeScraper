@@ -5,6 +5,7 @@ import { normalizeResult } from '../../../normalize/records.js';
 // carrying a full W/L result), so a populated result wins over the display state.
 import type { GameState, ScheduleEntry, SiteContext } from '../../../model.js';
 import { int } from '../../../normalize/num.js';
+import { normalizeNetwork, watchUrl } from '../../../normalize/networks.js';
 import { absUrl, arr, bool, inSeason, isObj, isoDate, isoTime, obj, str, stripRank, type Dict } from './common.js';
 
 export function resultsUrl(baseUrl: string, sportId: number, kind: 'results' | 'upcoming', pageSize = 100): string {
@@ -75,6 +76,9 @@ export function parseResultItem(raw: unknown, ctx: SiteContext, prettyLinks?: Ma
     boxScoreUrl,
     siteGameId: gameId,
     attendance: null,
+    // media.tv names the network ("ACC Network Extra", "ESPN+"); media.video is the school's watch link.
+    broadcast: normalizeNetwork(str(obj(item['media'])['tv'])),
+    watchUrl: watchUrl(str(obj(item['media'])['video'])),
   };
 }
 

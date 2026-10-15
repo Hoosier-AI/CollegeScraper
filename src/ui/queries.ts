@@ -462,6 +462,8 @@ export async function latestUscRanks(db: Db, season: number): Promise<Map<string
 
 export interface MatchSide { program_id: string | null; name: string | null; short_name: string | null; seo: string | null; logo: string | null; conference: { id: string; name: string; short: string | null } | null; division: string | null; rank: number | null; score: number | null }
 export interface MatchRow {
+  /** Where it is shown (the schools' schedules, else NCAA.com) and the school's watch link. */
+  broadcast: { network: string | null; url: string | null } | null;
   id: string; season: number; game_date: string; start_epoch: number | null; gender: string; division: string | null; status: string;
   home: MatchSide; away: MatchSide; live: { period: string | null; clock: string | null; updated_at: string | null } | null;
   venue: { name: string | null; city: string | null } | null; neutral_site: boolean; conference_game: boolean; tournament: string | null;
@@ -500,6 +502,7 @@ export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = 
     forfeit: !!r.forfeit, overtime: !!r.overtime, shootout: !!r.shootout, source_of_truth: r.source_of_truth ?? null, ncaa_contest_id: r.ncaa_contest_id ?? null,
     result_pending: resultPending, kickoff_tbd: tbd,
     weather: r.weather ? { ...r.weather, read_at: r.weather_at ?? null } : null,
+    broadcast: r.broadcast || r.watch_url ? { network: r.broadcast ?? null, url: r.watch_url ?? null } : null,
   };
 }
 
@@ -511,7 +514,8 @@ export function sortMatches(rows: MatchRow[]): MatchRow[] {
   return [...rows].sort((a, b) => group(a) - group(b) || a.game_date.localeCompare(b.game_date) || kick(a) - kick(b) || (a.home.name ?? '').localeCompare(b.home.name ?? ''));
 }
 
-export interface MatchesFilter { date: string; days?: unknown; gender?: string; division?: string; conference?: string; status?: string; only?: string }
+export interface MatchesFilter { date: string; days?: unknown; gender?: string; division?: string; conference?: string; status?: string; only?: string;
+  /** on_tv: only games with a network; network: that network. */ on_tv?: boolean; network?: string }
 
 /** Every game in a date range (1–7 days), live first, then by kickoff. */
 export async function gamesByDate(db: Db, f: MatchesFilter) {
@@ -527,6 +531,8 @@ export async function gamesByDate(db: Db, f: MatchesFilter) {
       if (f.status) q = q.eq('status', f.status);
       if (f.conference) q = q.or(`home_conference_id.eq.${f.conference},away_conference_id.eq.${f.conference}`);
       if (f.only === 'conf') q = q.eq('conference_game', true);
+      if (f.on_tv || f.network) q = q.not('broadcast', 'is', null);
+      if (f.network) q = q.eq('broadcast', f.network);
       return q;
     }),
     latestUscRanks(db, season),

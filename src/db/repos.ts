@@ -26,6 +26,7 @@ export interface GameRow {
   home_name: string | null; away_name: string | null; home_score: number | null; away_score: number | null; status: string; ncaa_contest_id: number | null;
   site_game_refs: Record<string, string>; source_of_truth: 'site' | 'ncaa' | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; live_stats_at?: string | null; detail_attempts: number; forfeit?: boolean;
   venue_name?: string | null; venue_city?: string | null; start_epoch?: number | null;
+  broadcast?: string | null; watch_url?: string | null; broadcast_source?: string | null;
 }
 
 // ---------- schools / programs ----------
@@ -422,6 +423,16 @@ export interface ScheduleWriteInput {
   existing: GameRow[];
 }
 
+/** Where a game is shown, from a school's schedule: the home school's listing wins over the away school's, and
+ *  either over NCAA.com's; a later read of the same school replaces its own earlier one. */
+const BROADCAST_RANK: Record<string, number> = { home: 3, away: 2, ncaa: 1 };
+function broadcastPatch(game: GameRow | null, e: ScheduleEntry, isHome: boolean): Record<string, unknown> {
+  if (!e.broadcast && !e.watchUrl) return {};
+  const src = isHome ? 'home' : 'away';
+  if (game?.broadcast_source && (BROADCAST_RANK[game.broadcast_source] ?? 0) > BROADCAST_RANK[src]!) return {};
+  return { broadcast: e.broadcast ?? game?.broadcast ?? null, watch_url: e.watchUrl ?? game?.watch_url ?? null, broadcast_source: src };
+}
+
 export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<{ created: number; updated: number; unresolvedOpponents: string[]; gameIds: Map<string, string> }> {
   let created = 0, updated = 0;
   const unresolved: string[] = [];
@@ -482,6 +493,7 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
       if (e.result?.forfeit && !game.forfeit) patch.forfeit = true;
       if (e.homeAway === 'N') patch.neutral_site = true;
       if (e.attendance != null) patch.attendance = e.attendance;
+      Object.assign(patch, broadcastPatch(game, e, isHome));
       await updateGame(db, game.id, patch);
       // The same list serves every program in the run: the other school's schedule must see this write.
       Object.assign(game, patch);
@@ -493,6 +505,7 @@ export async function writeSchedule(db: Db, input: ScheduleWriteInput): Promise<
         home_score: homeScore, away_score: awayScore, status: status ?? 'scheduled', neutral_site: e.homeAway === 'N', forfeit: !!e.result?.forfeit,
         tournament: e.tournament, attendance: e.attendance, site_game_refs: e.boxScoreUrl ? refs : {},
         venue_name: venue.name, venue_city: venueCity,
+        ...broadcastPatch(null, e, isHome),
       });
       input.existing.push(game);
       created += 1;

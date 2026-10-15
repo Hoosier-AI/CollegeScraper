@@ -1,5 +1,6 @@
 import { normalizeResult } from '../../../normalize/records.js';
 // Presto schedule parsers: the HTML card list (`.event-row`) and the `?print=rss` feed.
+import { networkInText, watchUrl } from '../../../normalize/networks.js';
 import * as cheerio from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
 import type { AnyNode } from 'domhandler';
@@ -142,6 +143,10 @@ function parseEventRow($: CheerioAPI, row: AnyNode, baseUrl: string, season: num
   e.siteGameId = id || null;
   const att = ws(R.text()).match(/attendance:?\s*([\d,]+)/i);
   if (att) e.attendance = int(att[1]);
+  // Where it is shown: the notes line ("ESPN+") and the row's Video link.
+  e.broadcast = networkInText(txt(R.find('.event-notes, .notes, .event-tv, .tv').first())) ?? networkInText(txt(R.find('.event-info, .details').first()));
+  const video = R.find('.links a, a').filter((_, a) => /video|watch/i.test(`${$(a).text()} ${$(a).attr('title') ?? ''} ${$(a).find('i,span').attr('class') ?? ''}`)).first().attr('href');
+  e.watchUrl = video ? watchUrl(absUrl(baseUrl, video)) : null;
   return e;
 }
 
@@ -256,6 +261,8 @@ export function parseScheduleRss(xml: string, _baseUrl: string, _season: number)
     const e = emptyEntry(date, opponentName);
     e.startTimeLocal = time;
     e.homeAway = homeAway;
+    // "CCSU vs. UAlbany, ESPN+, Final, 0-1": the network part.
+    e.broadcast = networkInText(desc);
     const result = parseResultText(score);
     if (result) {
       e.result = normalizeResult(result);

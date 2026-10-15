@@ -65,6 +65,9 @@ export interface ScheduleEntry {
   boxScoreUrl: string | null;
   siteGameId: string | null;
   attendance: Num;
+  /** Where it is shown, as the school lists it (src/normalize/networks.ts), and the school's watch link. */
+  broadcast?: string | null;
+  watchUrl?: string | null;
 }
 
 /** Season-to-date line for one player from the school's cumulative stats page. */

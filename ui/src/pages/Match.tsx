@@ -4,7 +4,7 @@ import { TeamNews } from '../components/news/News';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { liveClock } from '../lib/liveClock';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Tv } from 'lucide-react';
 import { api, fmt, useAdmin } from '../lib/api';
 import { useHref } from '../lib/filters';
 import { agoShort, useNow } from '../lib/hooks';
@@ -104,6 +104,10 @@ export default function Match() {
       <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
         <ShareButton title={`${g.away?.name ?? '?'} at ${g.home?.name ?? '?'}`} />
+        {/* Where it is shown, from the schools' schedules (else NCAA.com), with the school's watch link. */}
+        {(g.broadcast?.network || g.broadcast?.url) && (g.broadcast.url
+          ? <a href={g.broadcast.url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-pitch-400/10 px-3 text-xs font-medium text-pitch-300 ring-1 ring-inset ring-pitch-400/30 hover:bg-pitch-400/20"><Tv size={14} aria-hidden />{g.status === 'final' ? 'Shown on' : 'Watch on'} {g.broadcast.network ?? 'the school\'s stream'}<ExternalLink size={12} aria-hidden /><span className="sr-only">(opens in a new tab)</span></a>
+          : <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-field-800 px-3 text-xs font-medium text-chalk-200"><Tv size={14} aria-hidden />{g.status === 'final' ? 'Shown on' : 'On'} {g.broadcast.network}</span>)}
         {truth && <span className="inline-flex items-center gap-1">Box score from <SourceBadge source={truth} /></span>}
         {referee && <span>Referee <span className="text-chalk-300">{referee}</span>{assistants.length ? `, assistants ${assistants.join(' and ')}` : ''}</span>}
         {duration && <span>Played in {duration}</span>}

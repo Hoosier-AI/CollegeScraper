@@ -107,6 +107,8 @@ export interface ScoreboardGame {
   bracketRound: string | null;
   home: ScoreboardTeam;
   away: ScoreboardTeam;
+  /** The broadcaster NCAA.com lists (GraphQL broadcasterName), when it lists one. */
+  network?: string | null;
 }
 
 export function mapGameState(raw: string | null | undefined): GameState {

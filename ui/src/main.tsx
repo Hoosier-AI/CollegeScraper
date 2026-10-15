@@ -19,6 +19,7 @@ const Rankings = lazy(() => import('./pages/Rankings'));
 const Conferences = lazy(() => import('./pages/Conferences'));
 const Leaders = lazy(() => import('./pages/Leaders'));
 const Players = lazy(() => import('./pages/Players'));
+const Tv = lazy(() => import('./pages/Tv'));
 const Transfers = lazy(() => import('./pages/Transfers'));
 const Compare = lazy(() => import('./pages/Compare'));
 const H2H = lazy(() => import('./pages/H2H'));
@@ -95,6 +96,7 @@ const router = createBrowserRouter([
           { path: 'players', element: <Players /> },
           { path: 'players/:id', element: <Player /> },
           { path: 'transfers', element: <Transfers /> },
+          { path: 'tv', element: <Tv /> },
           { path: 'compare', element: <Compare /> },
           { path: 'h2h', element: <H2H /> },
           { path: 'coaches/:id', element: <Coach /> },

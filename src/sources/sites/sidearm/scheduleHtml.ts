@@ -3,6 +3,7 @@ import { normalizeResult } from '../../../normalize/records.js';
 // Used (a) to map gameId → pretty box score URL, and (b) as a best-effort ScheduleEntry fallback
 // when the EventsResults JSON endpoints are unavailable. Handles the nextgen `.s-game-card`
 // markup and the legacy `.sidearm-schedule-game` list.
+import { isKnownNetwork, networkInText, normalizeNetwork, watchUrl } from '../../../normalize/networks.js';
 import { load, type CheerioAPI } from 'cheerio';
 import type { Element } from 'domhandler';
 import type { ScheduleEntry, SiteContext } from '../../../model.js';
@@ -53,14 +54,16 @@ function homeAwayFromStamp(stamp: string | null, neutralHint: boolean): 'H' | 'A
   return 'H';
 }
 
-function classify(descriptors: string[]): { isExhibition: boolean; tournament: string | null; isConference: boolean } {
-  let isExhibition = false; let tournament: string | null = null; let isConference = false;
+function classify(descriptors: string[]): { isExhibition: boolean; tournament: string | null; isConference: boolean; broadcast: string | null } {
+  let isExhibition = false; let tournament: string | null = null; let isConference = false; let broadcast: string | null = null;
   for (const d of descriptors) {
+    // A network in a descriptor cell ("ESPN+", "ACCNX") is where the game is shown, not a conference flag.
+    if (isKnownNetwork(d)) { broadcast ??= normalizeNetwork(d); continue; }
     if (/exhib|scrimmage/i.test(d)) isExhibition = true;
     else if (/tournament|championship|invitational|classic|cup|playoff|final|semifinal|quarterfinal|round/i.test(d)) tournament ??= d;
     else if (/^\*?[A-Z0-9&. -]{2,20}\*?$/.test(d) || /conference|league/i.test(d)) isConference = true;
   }
-  return { isExhibition, tournament, isConference };
+  return { isExhibition, tournament, isConference, broadcast };
 }
 
 function parseNextgenCard($: CheerioAPI, cardEl: Element, ctx: SiteContext): ScheduleEntry | null {
@@ -81,7 +84,7 @@ function parseNextgenCard($: CheerioAPI, cardEl: Element, ctx: SiteContext): Sch
   const location = t('[data-test-id="s-game-card-facility-and-location__standard-location-details"], [class*="location-details"], [class*="__location"]');
   const facility = t('[data-test-id="s-game-card-facility-and-location__game-facility-title-link"], [data-test-id="s-game-card-facility-and-location__standard-facility-title"]');
   const descriptors = card.find('[data-test-id="s-descriptor__text"], [class*="s-descriptor__text"], [class*="tournament-name"], [class*="conf-text"]').map((_, e) => collapse($(e).text()) ?? '').get().filter(Boolean);
-  const { isExhibition, tournament, isConference } = classify(descriptors);
+  const { isExhibition, tournament, isConference, broadcast } = classify(descriptors);
   const boxHref = card.find('a[href*="boxscore"]').first().attr('href');
   const oppHistoryHref = card.find('a[href*="opponent-history"]').first().attr('href');
   const result = parseScore(scoreRaw);
@@ -103,6 +106,8 @@ function parseNextgenCard($: CheerioAPI, cardEl: Element, ctx: SiteContext): Sch
     boxScoreUrl: absUrl(ctx.baseUrl, boxHref),
     siteGameId: gameIdFromHref(boxHref),
     attendance: null,
+    broadcast,
+    watchUrl: watchUrl(absUrl(ctx.baseUrl, card.find('a[href*="watch"], a[aria-label*="Watch" i], a:contains("Watch")').first().attr('href'))),
   };
 }
 
@@ -128,7 +133,7 @@ function parseLegacyGame($: CheerioAPI, el: Element, ctx: SiteContext): Schedule
   const isAway = g.hasClass('sidearm-schedule-game-away') || /\bat\b/i.test(stamp ?? '') || /^(at|@)$/i.test(sideSpan ?? '');
   const boxHref = g.find('a[href*="boxscore"]').first().attr('href');
   const descriptors = g.find('.sidearm-schedule-game-conference, .sidearm-schedule-game-tournament, .sidearm-schedule-game-conference-conference').map((_, e) => collapse($(e).text()) ?? '').get().filter(Boolean);
-  const { isExhibition, tournament, isConference } = classify(descriptors);
+  const { isExhibition, tournament, isConference, broadcast } = classify(descriptors);
   return {
     date,
     startTimeLocal: clockFromDisplayTime(timeRaw),
@@ -144,6 +149,8 @@ function parseLegacyGame($: CheerioAPI, el: Element, ctx: SiteContext): Schedule
     boxScoreUrl: absUrl(ctx.baseUrl, boxHref),
     siteGameId: gameIdFromHref(boxHref),
     attendance: null,
+    broadcast: broadcast ?? networkInText(t('.sidearm-schedule-game-tv, [class*="game-links-tv"], [class*="schedule-game-tv"]')),
+    watchUrl: watchUrl(absUrl(ctx.baseUrl, g.find('a[href*="watch"], a:contains("Watch")').first().attr('href'))),
   };
 }
 

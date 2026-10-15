@@ -1,5 +1,7 @@
 // One match in a list: the moment (minute, kickoff or FT) on the left, both sides stacked, the score on the right.
 import { Link } from 'react-router-dom';
+import { Tv } from 'lucide-react';
+import { networkShort, type Broadcast } from '../../lib/tv';
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
 import { Badge, TeamLogo } from '../primitives';
@@ -15,6 +17,8 @@ export interface MatchLike {
   result_pending?: boolean;
   venue?: { name: string | null; city: string | null } | null;
   weather?: MatchWeather | null;
+  /** Where it is shown and the school's watch link (src/normalize/networks.ts). */
+  broadcast?: Broadcast | null;
 }
 
 /** The minute being played ("86′", "Half time"), for places with room for one word. */
@@ -53,12 +57,15 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
         </span>
         {/* Live: how much of the match is left, in words ("5 min left", "Added time"). */}
         {live && clock.detail && <span className="block whitespace-nowrap text-2xs font-normal text-win/80">{clock.detail}</span>}
+        {/* The network, short, under the time (phones have no room elsewhere). */}
+        {!final && g.broadcast?.network && <span className="block truncate text-2xs font-normal text-pitch-300 sm:hidden" title={g.broadcast.network}>{networkShort(g.broadcast.network)}</span>}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
         <Side s={g.home} winner={homeWin} loser={awayWin} home={!g.neutral_site} />
         <Side s={g.away} winner={awayWin} loser={homeWin} />
       </span>
       <span className="hidden shrink-0 flex-col items-end gap-0.5 text-right text-2xs text-chalk-500 sm:flex">
+        {!final && g.broadcast?.network && <span className="inline-flex items-center gap-1 font-medium text-pitch-300" title={`On ${g.broadcast.network}`}><Tv size={11} aria-hidden />{g.broadcast.network}</span>}
         {tag && <span>{tag}{g.neutral_site ? ', neutral' : ''}</span>}
         {!tag && g.neutral_site && <span>Neutral site</span>}
         {(g.venue?.city || (g.weather && !final)) && <span className="inline-flex items-center gap-2">{g.venue?.city && <span>{g.venue.city}</span>}{g.weather && !final && !live && <WeatherMini w={g.weather} />}</span>}
