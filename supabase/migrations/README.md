@@ -89,6 +89,7 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 192_stats_requests.sql | Corrections and removal requests (`stats_requests`, the /corrections form); GDELT pictures off | yes (checked in the database 2026-10-15) |
 | 193_pro_minors_not_indexed.sql | No indexable pro player pages for anyone under 18 (`pro_refresh_player_rank`) | yes (checked in the database 2026-10-15) |
 | 194_stats_traffic_intl.sql | `stats_traffic` section_days splits International from Pro (an `intl` column) for the hub's Traffic tab | yes (2026-10-15) |
+| 195_college_rate_recent_scope.sql | `college_rate_recent` picks games that went final or were re-fetched recently (its `updated_at` test matched every final, ~28k games) | yes (2026-10-15) |
 
 Two files share the number 171 (`171_pro_leaders_fast.sql` and `171_pro_more_player_stats.sql`); both are applied, fast first.
 
