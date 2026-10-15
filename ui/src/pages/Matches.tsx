@@ -1,6 +1,8 @@
 // Matchday: every game of a day, live first, with the date strip as the one loud element.
 import { useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { Tv as TvIcon } from 'lucide-react';
 import { useNow } from '../lib/hooks';
 import { api, qs } from '../lib/api';
 import { useFilters, genderLabel, divisionLabel } from '../lib/filters';
@@ -34,6 +36,9 @@ export default function Matches() {
   const [only, setOnly] = useUrlState('only', '', { allow: ['conf', 'ranked'] });
   // Live only, as on Pro and International (?show=live).
   const [show, setShow] = useUrlState('show', '', { allow: ['live'] });
+  // On TV or streaming only (?tv=1): the games a school's schedule (or NCAA.com) names a network for (a bare watch
+  // link with no network is not enough: the row would not say where).
+  const [tv, setTv] = useUrlState('tv', '', { allow: ['1'] });
   const meta = useQuery({ queryKey: ['meta'], queryFn: () => api<{ conferences: { id: string; name: string; division: string | null }[] }>('/api/meta') });
   const q = useQuery({
     queryKey: ['matches', date, f.gender, division, conference, only],
@@ -45,7 +50,9 @@ export default function Matches() {
   const week = useQuery({ queryKey: ['matches-week', date, f.gender, division, conference], queryFn: () => api<MatchesResponse>(`/api/matches${qs({ date: shiftIso(date, -3), days: 7, gender: f.gender, division, conference })}`), staleTime: 120_000 });
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const g of week.data?.games ?? []) c[g.game_date] = (c[g.game_date] ?? 0) + 1; return c; }, [week.data]);
   const now = useNow();
-  const games = (q.data?.games ?? []).filter((g) => show !== 'live' || g.status === 'live');
+  const onTv = (g: { broadcast?: { network: string | null } | null }) => !!g.broadcast?.network;
+  const tvCount = (q.data?.games ?? []).filter(onTv).length;
+  const games = (q.data?.games ?? []).filter((g) => (show !== 'live' || g.status === 'live') && (!tv || onTv(g)));
   const confOptions = useMemo(() => [{ value: '', label: 'All conferences' }, ...(meta.data?.conferences ?? []).filter((c) => !division || c.division === division).map((c) => ({ value: c.id, label: c.name }))], [meta.data, division]);
   const setDate = (iso: string) => patch({ date: iso === today ? null : iso }, { replace: false });
   const nextWithGames = (week.data?.games ?? []).map((g) => g.game_date).filter((d) => d > date).sort()[0];
@@ -61,12 +68,14 @@ export default function Matches() {
       <div className="sticky top-14 z-20 -mx-4 bg-field-950/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"><DateStrip date={date} today={today} onChange={setDate} counts={counts} /></div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Show only">
         <Chip on={show === 'live'} onClick={() => setShow(show === 'live' ? '' : 'live')}>Live{q.data?.live ? ` (${q.data.live})` : ''}</Chip>
+        <Chip on={!!tv} onClick={() => setTv(tv ? '' : '1')} title="Games with a TV or streaming listing">On TV{q.data ? ` (${tvCount})` : ''}</Chip>
         <Chip on={only === 'conf'} onClick={() => setOnly(only === 'conf' ? '' : 'conf')}>Conference games</Chip>
         <Chip on={only === 'ranked'} onClick={() => setOnly(only === 'ranked' ? '' : 'ranked')}>Ranked teams</Chip>
         {q.data && <span className="ml-auto text-chalk-500">{q.data.games.length} matches{q.data.live ? `, ${q.data.live} live` : ''}{updated != null && q.data.live ? ` · updated ${updated} s ago` : ''}</span>}
       </div>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <div className="space-y-2" aria-busy="true">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>}
+      {q.data && q.data.games.length > 0 && !games.length && tv && show !== 'live' && <EmptyState icon={<TvIcon size={24} />} title={`No games with a TV listing on ${longDay(date)}`} body="Schools list the network on their schedules a few days ahead; most smaller games are not televised or streamed." action={<span className="flex flex-wrap justify-center gap-2"><button className="btn-ghost btn-sm" onClick={() => setTv('')}>Show every match</button><Link className="btn-ghost btn-sm" to="/tv">This week on TV</Link></span>} />}
       {q.data && !games.length && show === 'live' && <EmptyState title="Nothing live right now" body={`${q.data.games.length} matches on ${longDay(date)}.`} action={<button className="btn-ghost btn-sm" onClick={() => setShow('')}>Show every match</button>} />}
       {q.data && !q.data.games.length && (
         <EmptyState title={`No matches on ${longDay(date)}`} body={nextWithGames ? `The next matchday is ${longDay(nextWithGames)}.` : 'Try another day or widen the filters.'}

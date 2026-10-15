@@ -6,6 +6,18 @@ import { parseResults } from '../src/sources/sites/sidearm/results.js';
 import { parseScheduleHtml, parseScheduleRss } from '../src/sources/sites/presto/schedule.js';
 import { fixture } from './helpers/fakeFetcher.js';
 
+describe('network cleanup', () => {
+  it('drops placeholders and promotions, tidies spellings', () => {
+    for (const junk of ['To Be Announced', 'No Broadcast', 'NO STREAM', 'Senior Night', 'Senior Day', 'Alumni Day / 5v5', 'TBA']) expect(normalizeNetwork(junk)).toBeNull();
+    expect(normalizeNetwork('ESPN+_')).toBe('ESPN+');
+    expect(normalizeNetwork('ACC Network Xtra')).toBe('ACC Network Extra');
+    expect(normalizeNetwork("Arizona's Family Sports (delayed) / MW+")).toBe("Arizona's Family Sports / MW+");
+    expect(normalizeNetwork('ACC Network+ | ESPN+')).toBe('ACC Network Extra / ESPN+');
+    expect(normalizeNetwork('FloCollege ($)')).toBe('FloSports');
+    expect(normalizeNetwork('Pac 12 YouTube')).toBe('Pac-12 YouTube');
+  });
+});
+
 describe('network names', () => {
   it('one spelling for the many a school writes', () => {
     expect(normalizeNetwork('ACCNX')).toBe('ACC Network Extra');
