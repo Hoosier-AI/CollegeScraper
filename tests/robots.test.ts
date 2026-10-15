@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { MAX_CRAWL_DELAY_MS, parseRobots, RobotsCache, UNREACHABLE_RETRY_MS } from '../src/http/robots.js';
 
 const UA = 'Mozilla/5.0 PlaibookCollege/1.0';
-const fake = (status: number, body = '', throws = false) => {
+const fake = (status: number, body = '', throws = false, type = 'text/html') => {
   let calls = 0;
-  const f = (async () => { calls++; if (throws) throw new Error('down'); return { ok: status < 400, status, text: async () => body }; }) as any;
+  const f = (async () => { calls++; if (throws) throw new Error('down'); return { ok: status < 400, status, headers: new Headers({ 'content-type': type }), text: async () => body }; }) as any;
   return { f, calls: () => calls };
 };
 
@@ -30,6 +30,10 @@ describe('robots.txt', () => {
     expect(down.calls()).toBe(2);
     const err = new RobotsCache(UA, fake(0, '', true).f);
     expect(await err.allowed('https://b.example/')).toBe(false);
+  });
+  it('an API host answering robots.txt with a JSON error has no robots.txt (NCAA sdataprod)', async () => {
+    const r = new RobotsCache(UA, fake(500, '{"errors":[]}', false, 'application/json; charset=utf-8').f);
+    expect(await r.allowed('https://sdataprod.example/?extensions=x')).toBe(true);
   });
   it('gives the delay once the file has been read', async () => {
     const r = new RobotsCache(UA, fake(200, 'User-agent: *\nCrawl-delay: 2').f);
