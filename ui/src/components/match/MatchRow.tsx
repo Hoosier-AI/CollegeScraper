@@ -73,3 +73,25 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
     </Link>
   );
 }
+
+/** A match in a page's rail: the two sides on two lines (away over home, as college lists them), the score or the
+ *  kickoff on the right. Narrow enough for a 20rem column. */
+export function RailMatch({ g, href }: { g: MatchLike; href: string }) {
+  const done = g.status === 'final' || g.status === 'live';
+  const side = (x: MatchLike['home'], other: MatchLike['home']) => (
+    <span className="flex min-w-0 items-center gap-2">
+      <TeamLogo src={x.logo} seo={x.seo} name={x.name} size={18} />
+      {x.rank != null && <span className="text-2xs text-chalk-500 tnum">{x.rank}</span>}
+      <span className={`truncate ${done && (x.score ?? 0) > (other.score ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-200'}`}>{x.short_name ?? x.name ?? 'TBD'}</span>
+      {done && <span className="ml-auto pl-2 tnum text-chalk-100">{x.score ?? '–'}</span>}
+    </span>
+  );
+  const when = g.start_epoch ? new Date(g.start_epoch * 1000).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : new Date(`${g.game_date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return (
+    <Link to={href} className="grid grid-cols-[1fr_auto] items-center gap-x-3 px-3 py-2 text-sm hover:bg-field-800">
+      <span className="min-w-0 space-y-1">{side(g.away, g.home)}{side(g.home, g.away)}</span>
+      {!done && <span className="text-right text-2xs text-chalk-400">{when}</span>}
+      {g.status === 'live' && <span className="text-right text-2xs font-semibold text-win">Live</span>}
+    </Link>
+  );
+}

@@ -4,7 +4,8 @@
 import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useHref } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
-import { PageHeader, TabsNav } from '../components/primitives';
+import { PageHeader, PageWithRail, TabsNav } from '../components/primitives';
+import { RankingsRail } from './rankings/RankingsRail';
 import { PollsView } from './rankings/PollsView';
 import { EloView } from './rankings/EloView';
 import { RpiView } from './rankings/RpiView';
@@ -32,7 +33,9 @@ export default function Rankings() {
     <div className="space-y-4">
       <PageHeader title="Rankings" meta="The coaches' poll and NCAA.com's statistical rankings, live RPI, and Plaibook Elo, our own rating from every result" />
       <TabsNav label="Rankings sections" tabs={[{ id: 'polls' as Tab, label: 'Polls' }, { id: 'rpi' as Tab, label: 'Live RPI' }, { id: 'elo' as Tab, label: 'Plaibook Elo' }]} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'polls' ? null : x, page: null, conference: null })} />
-      {tab === 'elo' ? <EloView /> : tab === 'rpi' ? <RpiView /> : <PollsView />}
+      <PageWithRail label="Other rankings" rail={<RankingsRail tab={tab as Tab} />}>
+        {tab === 'elo' ? <EloView /> : tab === 'rpi' ? <RpiView /> : <PollsView />}
+      </PageWithRail>
     </div>
   );
 }

@@ -14,7 +14,7 @@ import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
 import { Crumbs } from '../components/shell';
 import { WinChances } from '../components/elo/WinChances';
-import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav } from '../components/primitives';
+import { Badge, EmptyState, ErrorBox, JsonViewer, Note, Section, SegmentedControl, Skeleton, SourceBadge, TabsNav, PageWithRail, RailCard } from '../components/primitives';
 import { HeadToHead, KeyPlayers, LineupColumn, MatchMasthead, StatBars, Timeline, type SideLineup } from '../components/match/parts';
 import { Pitch } from '../components/match/Pitch';
 
@@ -117,30 +117,31 @@ export default function Match() {
       <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => href(pathname, { tab: x === defaultTab ? null : x })} />
 
       {tab === 'summary' && (
-        <div className="space-y-6">
+        <PageWithRail label="Match in numbers" rail={<>
+          {played && (teamRow(g.home.program_id, statSrc) || teamRow(g.away.program_id, statSrc)) && (
+            <RailCard title={g.status === 'live' ? 'Match stats so far' : 'Match stats'} to={href(pathname, { tab: 'stats' })} toLabel="All stats" flush>
+              <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.short_name ?? g.home.name} awayName={g.away.short_name ?? g.away.name} />
+            </RailCard>
+          )}
+          {periodLines && (
+            <RailCard title="By period" flush>
+              <table className="w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Score by period</caption>
+                <thead><tr><th scope="col" className="th">Team</th>{periodLines.rows[0].period_lines.map((pl: any) => <th key={pl.period} scope="col" className="th text-right">{pl.period > 2 ? `OT${pl.period - 2 > 1 ? pl.period - 2 : ''}` : `${pl.period === 1 ? '1st' : '2nd'} half`}</th>)}<th scope="col" className="th text-right">Final</th></tr></thead>
+                <tbody>{periodLines.rows.map((t) => <tr key={t.program_id}><th scope="row" className="td text-left font-medium">{t.program_id === g.home.program_id ? g.home.name : g.away.name}</th>{t.period_lines.map((pl: any) => <td key={pl.period} className="td num">{pl.score ?? '–'}</td>)}<td className="td num font-semibold">{t.goals ?? '–'}</td></tr>)}</tbody>
+              </table>
+            </RailCard>
+          )}
+        </>}>
           {g.status === 'live' && provisional && <Note tone="warn">Live stats are provisional: a snapshot of NCAA.com's in-game feed, refreshed about every two minutes and replaced by the final box score after full time.</Note>}
           {g.status === 'live' && !provisional && !box.isPending && <Note>Live stats arrive a few minutes after kickoff, when NCAA.com's in-game feed starts.</Note>}
           <Section title="Events">{box.isPending ? <Skeleton className="h-32" /> : <Timeline events={events} homeId={g.home.program_id} homeName={g.home.name} awayName={g.away.name} source={evSource} />}</Section>
-          {g.status === 'live' && players.length > 0 && (
-            <Section title="Match stats so far">
-              <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />
-            </Section>
-          )}
           {g.status === 'live' && players.length > 0 && (
             <Section title="On the pitch">
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><LineupColumn title={g.home.name ?? 'Home'} side={homeLu} /><LineupColumn title={g.away.name ?? 'Away'} side={awayLu} /></div>
             </Section>
           )}
-          {periodLines && (
-            <Section title="By period">
-              <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Score by period</caption>
-                <thead><tr><th scope="col" className="th">Team</th>{periodLines.rows[0].period_lines.map((pl: any) => <th key={pl.period} scope="col" className="th text-right">{pl.period > 2 ? `OT${pl.period - 2 > 1 ? pl.period - 2 : ''}` : `${pl.period === 1 ? '1st' : '2nd'} half`}</th>)}<th scope="col" className="th text-right">Final</th></tr></thead>
-                <tbody>{periodLines.rows.map((t) => <tr key={t.program_id}><th scope="row" className="td text-left font-medium">{t.program_id === g.home.program_id ? g.home.name : g.away.name}</th>{t.period_lines.map((pl: any) => <td key={pl.period} className="td num">{pl.score ?? '–'}</td>)}<td className="td num font-semibold">{t.goals ?? '–'}</td></tr>)}</tbody>
-              </table>
-            </Section>
-          )}
           {!played && null}
-        </div>
+        </PageWithRail>
       )}
 
       {tab === 'lineups' && (

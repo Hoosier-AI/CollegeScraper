@@ -60,14 +60,29 @@ export default function ProMatches() {
         {blocks.map(({ title, list }) => list.length > 0 && (
           <section key={title || 'all'} className="space-y-2" aria-label={title || 'Competitions'}>
             {title && <h2 className="text-sm font-semibold text-chalk-100">{title}</h2>}
-            <div className={`gap-3 ${list.length > 2 ? 'xl:columns-2' : ''}`}>
-              {list.map((g) => (
-                <section key={g.league.id} className="frame mb-3 break-inside-avoid divide-y divide-field-700 overflow-hidden" aria-label={g.league.name}>
-                  <LeagueHeading league={g.league} right={<GroupCount g={g} />} />
-                  {g.matches.map((m) => <ProMatchRow key={m.id} m={m} />)}
-                </section>
-              ))}
-            </div>
+            {(() => {
+              // A competition with most of the block's matches (MLS on a full night) beside two short ones left half the
+              // width empty: it gets the full width with its own matches in two columns, and the others follow.
+              const total = list.reduce((n, g) => n + g.matches.length, 0);
+              const wide = list.length > 1 ? list.filter((g) => g.matches.length >= 8 && g.matches.length * 3 >= total * 2) : [];
+              const narrow = list.filter((g) => !wide.includes(g));
+              return <>
+                {wide.map((g) => (
+                  <section key={g.league.id} className="frame mb-3 overflow-hidden" aria-label={g.league.name}>
+                    <div className="border-b border-field-700"><LeagueHeading league={g.league} right={<GroupCount g={g} />} /></div>
+                    <div className="xl:columns-2 xl:gap-0 [&>*]:break-inside-avoid [&>*]:border-b [&>*]:border-field-700 xl:[&>*]:border-r">{g.matches.map((m) => <ProMatchRow key={m.id} m={m} />)}</div>
+                  </section>
+                ))}
+                <div className={`gap-3 ${narrow.length > 1 && (wide.length || narrow.length > 2) ? 'xl:columns-2' : ''}`}>
+                  {narrow.map((g) => (
+                    <section key={g.league.id} className="frame mb-3 break-inside-avoid divide-y divide-field-700 overflow-hidden" aria-label={g.league.name}>
+                      <LeagueHeading league={g.league} right={<GroupCount g={g} />} />
+                      {g.matches.map((m) => <ProMatchRow key={m.id} m={m} />)}
+                    </section>
+                  ))}
+                </div>
+              </>;
+            })()}
           </section>
         ))}
         {rest.length > 0 && (

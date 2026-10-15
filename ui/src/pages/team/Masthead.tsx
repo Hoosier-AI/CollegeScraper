@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
 import { fmt, resultOf, useAdmin } from '../../lib/api';
 import { todayEastern } from '../../lib/dates';
 import { genderLabel, divisionLabel, useHref } from '../../lib/filters';
-import { Badge, Figure, FormPips, ResultBadge, TeamLogo, VerifiedMark, type VerifyState } from '../../components/primitives';
+import { Badge, FormPips, HeroStat, ResultBadge, TeamLogo, VerifiedMark, type VerifyState } from '../../components/primitives';
 import { PageActions } from '../../components/PageActions';
 
 export function sideOf(g: any, id: string) {
@@ -44,9 +44,9 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
   const move = usc?.previous_rank != null ? usc.previous_rank - usc.rank : null;
   return (
     <header className="card overflow-hidden">
-      <div className="flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
         <div className="flex min-w-0 items-start gap-4">
-          <TeamLogo src={school?.logo_svg_url} seo={p.school_seo} name={p.name} size={72} />
+          <span className="shrink-0 [&>*]:!h-14 [&>*]:!w-14 sm:[&>*]:!h-[72px] sm:[&>*]:!w-[72px]"><TeamLogo src={school?.logo_svg_url} seo={p.school_seo} name={p.name} size={72} /></span>
           <div className="min-w-0">
             <h1 className="display text-3xl leading-none text-chalk-100 sm:text-4xl">{p.name}</h1>
             <p className="mt-2 text-sm text-chalk-300">{genderLabel(p.gender)} soccer, {conf ? `${conf}, ` : ''}{divisionLabel(t.season?.division)}, {season}</p>
@@ -63,11 +63,20 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
           </div>
         </div>
         {s ? (
-          <div className="flex shrink-0 flex-wrap items-end gap-x-8 gap-y-4 lg:justify-end">
-            <Figure big label="Record" value={fmt.rec(s.w, s.l, s.t)} sub={`${fmt.rec(s.conf_w, s.conf_l, s.conf_t)} in conference`} />
-            <div>
+          // The season in six numbers fills the header's width (it was a separate strip under it, and this side held only
+          // the record), with the form under them.
+          <div className="min-w-0 space-y-3 lg:max-w-[46rem] lg:flex-1">
+            <dl className="grid grid-cols-3 gap-x-5 gap-y-3 sm:grid-cols-6">
+              <HeroStat label="Record" value={fmt.rec(s.w, s.l, s.t)} sub={`${fmt.rec(s.conf_w, s.conf_l, s.conf_t)} conf`} accent />
+              <HeroStat label="Goals for" value={s.gf ?? '–'} sub={`${fmt.num(s.gf_pg, 2)} a game`} />
+              <HeroStat label="Against" value={s.ga ?? '–'} sub={`${fmt.num(s.ga_pg, 2)} a game`} />
+              <HeroStat label="Goal diff" value={s.gd == null ? '–' : s.gd > 0 ? `+${s.gd}` : String(s.gd)} />
+              <HeroStat label="Points a game" value={fmt.num(s.ppg, 2)} sub={s.div_rank_ppg ? `${fmt.ordinal(s.div_rank_ppg)} in div.` : undefined} />
+              <HeroStat label="Clean sheets" value={s.clean_sheets ?? '–'} sub={`${fmt.num(s.shots_pg, 1)} shots a game`} />
+            </dl>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <FormPips form={[...(s.form_last5 ?? '')].reverse().join('')} label="Last five, latest on the right" />
-              <div className="mt-1 text-xs text-chalk-500">Last five, latest on the right{s.streak ? `; ${streakWords(s.streak)}` : ''}</div>
+              <span className="text-xs text-chalk-500">Last five, latest on the right{s.streak ? `; ${streakWords(s.streak)}` : ''}</span>
             </div>
           </div>
         ) : <p className="text-sm text-chalk-500">No results stored for this season yet.</p>}

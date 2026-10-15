@@ -1,12 +1,13 @@
 // One college player. Tabs in the order every area uses: Overview (career figures, splits, national ranks, honors),
 // Stats (season by season), Matches (game log), Career (transfers, the pro career), News.
+import { PlayerRail } from '../components/player/PlayerRail';
 import { GameForm, type FormGame } from '../components/player/GameForm';
 import { SeasonBars } from '../components/pro/Charts';
 import { PageActions } from '../components/PageActions';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { NewsFeed } from '../components/news/News';
 import { Crumbs } from '../components/shell';
-import { KeyFacts } from '../components/player/KeyFacts';
+import { positionWord } from '../components/player/KeyFacts';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ExternalLink, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
@@ -14,7 +15,7 @@ import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
 import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
-import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TabsNav, TeamLogo } from '../components/primitives';
+import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TabsNav, TeamLogo, PageWithRail, HeroStat } from '../components/primitives';
 
 type Tab = 'overview' | 'stats' | 'matches' | 'career' | 'news';
 
@@ -89,37 +90,45 @@ export default function Player() {
   return (
     <div className="space-y-5">
       <Crumbs items={[{ label: p.display_name }]} />
-      <header className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-start sm:p-6">
-        <PlayerAvatar src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} />
-        <div className="min-w-0 flex-1">
+      <header className="card flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+        <div className="flex min-w-0 items-start gap-4">
+        <span className="shrink-0 [&>*]:!h-16 [&>*]:!w-16 sm:[&>*]:!h-[88px] sm:[&>*]:!w-[88px]"><PlayerAvatar src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} /></span>
+        <div className="min-w-0">
           <h1 className="display text-3xl leading-none sm:text-4xl">{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</h1>
-          {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
+          {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{positionWord(latest.position ?? latest.position_raw) ? `, ${positionWord(latest.position ?? latest.position_raw)!.toLowerCase()}` : ''}{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
           <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, (latest?.high_school ?? p.high_school) ? `${latest?.high_school ?? p.high_school}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null, latest?.major ? `studying ${latest.major}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
           <p className="mt-1 flex flex-wrap gap-x-4 text-xs">{bioUrl && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={bioUrl} target="_blank" rel="noreferrer">School bio <ExternalLink size={12} aria-hidden /></a>}<Link className="text-pitch-400 hover:text-pitch-300" to={`/compare?a=${p.id}`}>Compare with another player</Link></p>
           <PageActions className="mt-3" title={p.display_name}
             follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
           {pro.data?.pro && <p className="mt-2"><Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2 py-1 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link></p>}
         </div>
-        {st && (
-          <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-3 sm:justify-end">
-            {isGk ? <>
-              <Figure big label={`${latest.season} save %`} value={fmt.pct(st.save_pct)} sub={`${st.saves ?? 0} saves`} />
-              <Figure label="Goals against avg" value={n(st.gaa, 2)} sub={`${st.ga ?? 0} conceded in ${n(st.gk_minutes)} min`} />
-              <Figure label="Shutouts" value={st.shutouts ?? 0} />
-            </> : <>
-              <Figure big label={`${latest.season} goals`} value={st.goals ?? 0} sub={`${st.assists ?? 0} assists`} />
-              <Figure label="Games" value={`${st.gp ?? 0}`} sub={`${st.gs ?? 0} starts, ${n(st.minutes)} min`} />
-              <Figure label="Goals per 90" value={n(st.goals_p90, 2)} sub={st.pct_goals_p90 != null ? `${fmt.pctile(st.pct_goals_p90)} percentile in the division` : undefined} />
-            </>}
-          </div>
-        )}
+        </div>
+        {st && (() => {
+          const avg = (pts: number | null | undefined, k: number | null | undefined) => (pts != null && k && k >= 5 ? (pts / k).toFixed(2) : '–');
+          return (
+            <dl className="grid min-w-0 grid-cols-3 gap-x-5 gap-y-3 sm:grid-cols-6 lg:max-w-[44rem] lg:flex-1">
+              {isGk ? <>
+                <HeroStat label={`${latest.season} save %`} value={fmt.pct(st.save_pct)} sub={`${st.saves ?? 0} saves`} accent />
+                <HeroStat label="Goals against avg" value={n(st.gaa, 2)} sub={`${st.ga ?? 0} conceded`} />
+                <HeroStat label="Shutouts" value={st.shutouts ?? 0} />
+                <HeroStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
+              </> : <>
+                <HeroStat label={`${latest.season} goals`} value={st.goals ?? 0} sub={st.pct_goals_p90 != null ? `${fmt.pctile(st.pct_goals_p90)} pctl per 90` : undefined} accent />
+                <HeroStat label="Assists" value={st.assists ?? 0} sub={`${st.points ?? 0} points`} />
+                <HeroStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
+                <HeroStat label="Minutes" value={n(st.minutes)} sub={st.goals_p90 != null ? `${n(st.goals_p90, 2)} goals per 90` : undefined} />
+              </>}
+              <HeroStat label="Points a game" value={avg(st.res_pts, st.res_apps)} sub={`${st.res_apps ?? 0} games`} />
+              <HeroStat label="Points a start" value={avg(st.pps_pts, st.pps_starts)} sub={`${st.pps_starts ?? 0} starts of 45+`} />
+            </dl>
+          );
+        })()}
       </header>
-      <KeyFacts position={latest?.position ?? latest?.position_raw} season={latest?.season} apps={st?.res_apps} pts={st?.res_pts} starts={st?.pps_starts} startPts={st?.pps_pts}
-        other={{ label: 'Class', value: latest?.class_raw ?? '–', sub: latest?.season ? `${latest.season} roster` : undefined }} />
       <TabsNav label="Player sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'overview' ? null : x })} />
+      <PageWithRail label={`${p.display_name} at a glance`} rail={<PlayerRail id={p.id} latest={latest} gameLog={gameLog} keeper={isGk} own={own} href={href} news={tab !== 'news'} />}>
       {tab === 'overview' && <div className="space-y-6">
       {hasCharts && (
-        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+        <div className={`grid grid-cols-1 items-start gap-3 ${bySeason.length > 1 ? 'xl:grid-cols-2' : ''}`}>
           <GameForm games={form} caption={`Last ${form.length} games, ${latest?.season}`} />
           {bySeason.length > 1 && <SeasonBars rows={bySeason} a="Goals" b="Assists" caption="Goals and assists by season" />}
         </div>
@@ -145,7 +154,6 @@ export default function Player() {
           </table></div>
         </Section>
       )}
-      {latest?.ranks?.length > 0 && <Section title={`National ranks, ${latest.season}`}><ul className="flex flex-wrap gap-1.5">{latest.ranks.map((r: any) => <li key={r.category} className="chip"><span className="text-chalk-100 tnum">{fmt.ordinal(r.rank)}</span>{r.category}<span className="text-chalk-500 tnum">{n(r.value, Number(r.value) % 1 ? 2 : 0)}</span></li>)}</ul></Section>}
       {honors.length > 0 && <Section title="Honors"><ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any) => <li key={h.id} className="flex items-center gap-2 px-3 py-2"><span>{h.text}</span>{h.source_url && <a className="ml-auto inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={h.source_url} target="_blank" rel="noreferrer">source <ExternalLink size={11} aria-hidden /></a>}</li>)}</ul></Section>}
       {!hasOverview && <EmptyState title="Nothing more to show yet" body="Splits, national ranks and honors appear as the season's box scores and bios are collected." />}
       </div>}
@@ -163,6 +171,7 @@ export default function Player() {
       {tab === 'matches' && <Section title="Game log">
         <DataTable rows={gameLog} columns={logCols} rowKey={(r) => `${r.game.id}-${r.source}`} caption="Game by game" rowHref={(r) => href(`/matches/${r.game.id}`)} dense defaultSort={{ key: 'date', dir: 'desc' }} empty={<EmptyState title="No box scores yet" body="Game-by-game lines appear once box scores are collected." />} />
       </Section>}
+      </PageWithRail>
       {admin && <JsonViewer title="Identity row" value={p} />}
     </div>
   );

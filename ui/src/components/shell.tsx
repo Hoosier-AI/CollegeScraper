@@ -261,7 +261,7 @@ export function Footer() {
   const pro = isProPath(pathname);
   const home = pathname === '/';
   return (
-    <footer className="mx-auto mt-12 max-w-page border-t border-field-700 px-4 py-6 text-xs text-chalk-500 sm:px-6">
+    <footer className="mx-auto mt-12 w-full max-w-page border-t border-field-700 px-4 py-6 text-xs text-chalk-500 sm:px-6">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {home
           ? <span>College: each school's athletics site, NCAA.com, conference sites and United Soccer Coaches, checked against each other. Pro: API-Football (api-sports.io) with scraped and open sources first. International: international_results (CC0), the Fjelstul World Cup Database (CC BY-SA 4.0), openfootball (CC0) and Wikipedia caps; Plaibook Elo is our own.</span>

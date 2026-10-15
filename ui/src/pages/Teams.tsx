@@ -72,7 +72,7 @@ export default function Teams() {
       </PageHeader>
       {list.error && <ErrorBox error={list.error} retry={() => list.refetch()} />}
       <DataTable rows={rows} columns={cols} rowKey={(p) => p.id} caption={`Programs, ${scope}`} rowHref={(p) => href(`/teams/${p.id}`)} sort={sort} onSort={setSort}
-        loading={list.isPending} dense
+        loading={list.isPending} dense pageSize={100} noun="programs"
         empty={<EmptyState title={term ? `No programs match “${search.value}”` : 'No programs for this season yet'} body={term ? 'Try the school name without "University" or "State".' : admin ? 'Run discover-teams from the Jobs page.' : undefined} action={term ? <button className="btn-ghost btn-sm" onClick={search.clear}>Clear search</button> : undefined} />} />
     </div>
   );

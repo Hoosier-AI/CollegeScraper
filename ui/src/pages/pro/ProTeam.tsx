@@ -3,7 +3,7 @@
 // results, streaks, clean sheets, penalties, cards by minute), transfers in and out, results and fixtures. A national team (its page is International's) has its history instead of
 // transfers.
 import { PageActions } from '../../components/PageActions';
-import { NewsFeed, NewsSection } from '../../components/news/News';
+import { NewsFeed, NewsSection, RailNews } from '../../components/news/News';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Ambulance } from 'lucide-react';
@@ -14,7 +14,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { ProForm } from '../../components/pro/LeagueTable';
 import { Flag, GoalsByPeriod, TransfersList, type TransferLine } from '../../components/pro/People';
-import { EmptyState, ErrorBox, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, PlayerAvatar, Section, Select, Skeleton, TabsNav, TeamLogo, PageWithRail, RailCard, RailRow } from '../../components/primitives';
 import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
 import { PointsLine, ResultStrip } from '../../components/pro/Charts';
 import { Credit, TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
@@ -81,8 +81,8 @@ export default function ProTeam() {
     { key: 'goals', label: 'G', title: 'Goals', num: true, value: (r) => r.goals },
     { key: 'assists', label: 'A', title: 'Assists', num: true, value: (r) => r.assists },
     { key: 'rating', label: 'Rating', title: 'Average match rating', num: true, decimals: 2, priority: 2, value: (r) => r.rating },
-    { key: 'clean_sheets', label: 'CS', title: 'Clean sheets (keepers)', num: true, priority: 3, value: (r) => r.clean_sheets },
-    { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 3, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
+    { key: 'clean_sheets', label: 'CS', title: 'Clean sheets (keepers)', num: true, priority: 2, value: (r) => r.clean_sheets },
+    { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 2, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
   ];
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'squad', label: 'Squad', count: d.squad.length }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'stats', label: 'Stats' }, { id: 'news', label: 'News' },
@@ -104,6 +104,7 @@ export default function ProTeam() {
   const periodGoals = d.goals_by_period.reduce((n, r) => n + r.for + r.against, 0);
   const periodShown = d.goals_by_period_source === 'provider' || (periodGoals > 0 && periodGoals >= 0.6 * (total.gf + total.ga));
   // Results oldest first, from this club's side.
+  const scorers = [...d.squad].filter((r) => r.goals > 0 || r.assists > 0).sort((a, b) => (b.goals - a.goals) || (b.assists - a.assists)).slice(0, 5);
   const formItems = [...d.results].filter((m) => m.status === 'final').reverse().map((m) => {
     const home = m.home.id === t.id; const us = (home ? m.home.score : m.away.score) ?? 0, them = (home ? m.away.score : m.home.score) ?? 0;
     const opp = home ? m.away : m.home;
@@ -134,6 +135,7 @@ export default function ProTeam() {
             <StatTile label={`${d.season} record`} value={`${total.w}-${total.d}-${total.l}`} sub="won, drawn, lost" />
             <StatTile label="Goals" value={`${total.gf}:${total.ga}`} sub={`${total.p} matches · ${(total.gf / total.p).toFixed(2)} a match`} />
             {d.standings.slice(0, 2).map((s) => s.league && <StatTile key={`${s.league.id}-${s.group}`} accent label={s.group || s.league.name} value={s.rank ? fmt.ordinal(s.rank) : '–'} sub={<span className="inline-flex items-center gap-2">{s.points ?? 0} pts <ProForm form={s.form} /></span>} />)}
+            {d.standings.filter((s) => s.league).length < 2 && scorers[0] && <StatTile label="Top scorer" text value={scorers[0].player.name} sub={`${scorers[0].goals} goals, ${scorers[0].assists} assists`} />}
           </div>
         )}
       </ProHero>
@@ -145,21 +147,30 @@ export default function ProTeam() {
       )}
       <TabsNav label="Team sections" tabs={tabs} value={tab as Tab} hrefFor={hrefFor} />
       {tab === 'squad' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          {/* Positions two by two on wide screens: the whole squad in about one screen. */}
-          <div className="grid grid-cols-1 content-start gap-4 xl:grid-cols-2">
-            {GROUPS.map(([pos, label]) => {
-              const rows = d.squad.filter((r) => (pos ? r.player.position === pos : !GROUPS.slice(0, 4).some(([p]) => p === r.player.position)));
-              return rows.length ? <Section key={label} title={label}><DataTable rows={rows} columns={cols} rowKey={(r) => String(r.player.id)} caption={`${t.name} ${label.toLowerCase()}`} rowHref={(r) => proPath.player(r.player.slug)} dense /></Section> : null;
-            })}
-            {!d.squad.length && <EmptyState title="No squad yet" body="The squad arrives as the crawl reaches this club." />}
-          </div>
-          <aside className="space-y-4">
-            <NewsSection title="Latest news" q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} max={4} dense right={<Link to={hrefFor('news')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>} />
-            {t.venue && <Section title="Ground"><GroundCard ground={t.venue} /></Section>}
-            {d.fixtures.length > 0 && <Section title="Next matches"><div className="frame divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></Section>}
-          </aside>
-        </div>
+        <PageWithRail label={`${t.name} at a glance`} rail={<>
+          {formItems.length > 0 && <RailCard title="Form" to={hrefFor('matches')} toLabel="Matches" flush><ResultStrip items={formItems.slice(-9)} caption={`Last ${Math.min(9, formItems.length)} results`} /></RailCard>}
+          {scorers.length > 0 && (
+            <RailCard title="Top scorers" to={hrefFor('stats')} toLabel="Stats">
+              <ol className="space-y-0.5">
+                {scorers.map((r, i) => (
+                  <RailRow key={r.player.id} to={proPath.player(r.player.slug)}
+                    left={<><span className="w-3 text-2xs text-chalk-500 tnum">{i + 1}</span><PlayerAvatar src={r.player.photo} name={r.player.name} size={20} /><span className="truncate">{r.player.name}</span></>}
+                    right={<span title={`${r.goals} goals, ${r.assists} assists`}>{r.goals}<span className="text-chalk-500">G</span> {r.assists}<span className="text-chalk-500">A</span></span>} />
+                ))}
+              </ol>
+            </RailCard>
+          )}
+          {d.fixtures.length > 0 && <RailCard title="Next matches" to={hrefFor('matches')} flush><div className="divide-y divide-field-700">{d.fixtures.slice(0, 5).map((m) => <ProMatchRow key={m.id} m={m} showDate compact />)}</div></RailCard>}
+          {t.venue && <RailCard title="Ground" flush><GroundCard ground={t.venue} /></RailCard>}
+          <RailNews q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} to={hrefFor('news')} />
+        </>}>
+          {/* One table a position, each the main column's full width: no gaps beside a short group, every column shown. */}
+          {GROUPS.map(([pos, label]) => {
+            const rows = d.squad.filter((r) => (pos ? r.player.position === pos : !GROUPS.slice(0, 4).some(([p]) => p === r.player.position)));
+            return rows.length ? <Section key={label} title={label}><DataTable rows={rows} columns={cols} rowKey={(r) => String(r.player.id)} caption={`${t.name} ${label.toLowerCase()}`} rowHref={(r) => proPath.player(r.player.slug)} dense /></Section> : null;
+          })}
+          {!d.squad.length && <EmptyState title="No squad yet" body="The squad arrives as the crawl reaches this club." />}
+        </PageWithRail>
       )}
       {tab === 'matches' && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

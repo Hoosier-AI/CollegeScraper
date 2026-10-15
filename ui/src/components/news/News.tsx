@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight, Newspaper } from 'lucide-react';
 import { fmt } from '../../lib/api';
 import { KIND_LABEL, TEAM_NEWS_KINDS, useNews, type NewsKind, type NewsQuery, type Story } from '../../lib/news';
-import { Badge, EmptyState, ErrorBox, Skeleton } from '../primitives';
+import { Badge, EmptyState, ErrorBox, Skeleton, RailCard } from '../primitives';
 
 const KIND_TONE: Record<NewsKind, 'red' | 'blue' | 'green' | 'amber' | 'teal' | 'gray'> = {
   injury: 'red', suspension: 'red', transfer: 'blue', loan: 'blue', contract: 'blue', commitment: 'green', coaching: 'amber',
@@ -70,6 +70,15 @@ export function NewsFeed({ q, hide, dense, empty, max }: { q: NewsQuery; hide?: 
       )}
     </div>
   );
+}
+
+/** A rail's news card: the latest three stories, and no card at all when there are none (an empty news box beside a
+ *  page's numbers is just noise). */
+export function RailNews({ q, hide, to, max = 3 }: { q: NewsQuery; hide?: string; to?: string; max?: number }) {
+  const news = useNews(q);
+  const stories = news.data?.pages.flatMap((p) => p.stories).slice(0, max) ?? [];
+  if (news.isPending || news.isError || !stories.length) return null;
+  return <RailCard title="News" to={to} flush><NewsList stories={stories} hide={hide} dense /></RailCard>;
 }
 
 /**

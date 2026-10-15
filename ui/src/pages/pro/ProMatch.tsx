@@ -8,7 +8,7 @@ import { api, ApiError } from '../../lib/api';
 import { kickoffLong, proMinute, proPath, type ProMatch as Match } from '../../lib/pro';
 import { EventTimeline, LineupList, ProPitch, TeamStatsCompare, type ProEvent, type ProSideDetail } from '../../components/pro/MatchParts';
 import { ProMatchRow } from '../../components/pro/ProMatchRow';
-import { EmptyState, ErrorBox, Section, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
+import { EmptyState, ErrorBox, Section, Skeleton, TabsNav, TeamLogo, PageWithRail, RailCard } from '../../components/primitives';
 import { Crumbs } from '../../components/shell';
 import { useUrlState } from '../../lib/urlState';
 
@@ -75,25 +75,41 @@ export default function ProMatch() {
   const defaultTab: Tab = tabs[0]?.id ?? 'summary';
   const tab: Tab = tabs.some((t) => t.id === tabParam) ? (tabParam as Tab) : defaultTab;
   const hasShotsWide = hasShots && !hasStats;
+  // Beside the summary and the preview: Plaibook Elo's chances, the key numbers and American Soccer Analysis' facts
+  // (they sat in a centred stack above the tabs, with the page's width empty either side).
+  const rail = (
+    <>
+      {intl && <EloMatchCard slug={slug} />}
+      {!intl && d.elo && <WinChances elo={d.elo} home={m.home.name} away={m.away.name} rankingsHref="/pro/rankings?scope=world" />}
+      {played && hasStats && (
+        <RailCard title="Match stats" to={`${pathname}?tab=stats`} toLabel="All stats" flush>
+          <TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} />
+        </RailCard>
+      )}
+      {d.advanced && <RailCard title="From American Soccer Analysis"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></RailCard>}
+    </>
+  );
   return (
     <div className="space-y-4">
       <Crumbs items={[{ label: m.league.name, to: proPath.league(m.league.slug) }, { label: `${m.home.name} vs ${m.away.name}` }]} />
       <h1 className="sr-only">{m.home.name} vs {m.away.name}, {m.league.name}</h1>
       <Scoreline m={m} />
-      <p className="text-center text-xs text-chalk-400">
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs text-chalk-400">
+        <p>
         {d.advanced && d.advanced.xg[0] != null && <span className="mr-2 font-medium text-chalk-200 tnum" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}.</span>}
         {kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}
-      </p>
-      <div className="flex justify-center"><ShareButton title={`${m.home.name} vs ${m.away.name}, ${m.league.name}`} /></div>
-      {d.advanced && <div className="flex justify-center"><MatchAdvancedFacts a={d.advanced} hasVenue={!!m.venue} hasReferee={!!m.referee} /></div>}
-      {/* International: Plaibook Elo's chances before kickoff, each side's rating move once played. */}
-      {intl && <EloMatchCard slug={slug} />}
-      {!intl && d.elo && <WinChances elo={d.elo} home={m.home.name} away={m.away.name} rankingsHref="/pro/rankings?scope=world" />}
+        </p>
+        <ShareButton title={`${m.home.name} vs ${m.away.name}, ${m.league.name}`} />
+      </div>
       {tabs.length > 1 && <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => `${pathname}${x === defaultTab ? '' : `?tab=${x}`}`} />}
-      {tab === 'summary' && (d.events.length
-        ? <Section title="Events" className="mx-auto w-full max-w-4xl"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>
-        : <EmptyState title={m.status === 'live' ? 'No events yet' : 'No events recorded'} body={m.status === 'final' && !m.detail ? 'Lineups and match stats arrive shortly after full time.' : undefined} />)}
-      {tab === 'preview' && d.preview && <MatchPreview m={m} p={d.preview} h2h={d.h2h} />}
+      {tab === 'summary' && (
+        <PageWithRail label="Match in numbers" rail={rail}>
+          {d.events.length
+            ? <Section title="Events"><EventTimeline events={d.events} homeName={m.home.name} awayName={m.away.name} /></Section>
+            : <EmptyState title={m.status === 'live' ? 'No events yet' : 'No events recorded'} body={m.status === 'final' && !m.detail ? 'Lineups and match stats arrive shortly after full time.' : undefined} />}
+        </PageWithRail>
+      )}
+      {tab === 'preview' && d.preview && <PageWithRail label="Match in numbers" rail={rail}><MatchPreview m={m} p={d.preview} h2h={d.h2h} /></PageWithRail>}
       {tab === 'lineups' && hasLineups && (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
           <Section title="Formations"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>

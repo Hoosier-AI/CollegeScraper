@@ -250,6 +250,50 @@ export function VerifiedMark({ state, details, compact }: { state: VerifyState; 
   );
 }
 
+/** A detail page's body: the main content, and beside it on wide screens a 20rem rail of related numbers (below it on
+ *  narrower ones). The rail is where a page puts what would otherwise be empty width. */
+export function PageWithRail({ children, rail, label = 'More about this' }: { children: ReactNode; rail: ReactNode; label?: string }) {
+  return (
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="min-w-0 space-y-5">{children}</div>
+      <aside aria-label={label} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">{rail}</aside>
+    </div>
+  );
+}
+
+/** One module of a rail: a small title, an optional link to everything, a compact body. */
+/** flush: the body has no padding and inner frames lose their borders (a list that brings its own rows). */
+export function RailCard({ title, to, toLabel = 'All', children, className = '', flush }: { title: ReactNode; to?: string; toLabel?: string; children: ReactNode; className?: string; flush?: boolean }) {
+  return (
+    <section className={`frame min-w-0 bg-field-900/60 ${className}`}>
+      <header className="flex items-center justify-between gap-2 border-b border-field-700/70 px-3 py-2">
+        <h2 className="text-sm font-semibold text-chalk-100">{title}</h2>
+        {to && <Link to={to} className="text-xs font-medium text-pitch-400 hover:text-pitch-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pitch-400">{toLabel}</Link>}
+      </header>
+      <div className={flush ? 'text-sm [&_.frame]:rounded-none [&_.frame]:border-0' : 'px-3 py-2.5 text-sm'}>{children}</div>
+    </section>
+  );
+}
+
+/** A rail list row: label on the left, value on the right, the whole row a link when it goes somewhere. */
+export function RailRow({ to, left, right, title }: { to?: string; left: ReactNode; right?: ReactNode; title?: string }) {
+  const body = <><span className="flex min-w-0 items-center gap-2 truncate">{left}</span>{right != null && <span className="shrink-0 tnum text-chalk-300">{right}</span>}</>;
+  return to
+    ? <li><Link to={to} title={title} className="-mx-1.5 flex min-h-8 items-center justify-between gap-3 rounded px-1.5 text-chalk-200 hover:bg-field-800 hover:text-chalk-100">{body}</Link></li>
+    : <li title={title} className="flex min-h-8 items-center justify-between gap-3 text-chalk-200">{body}</li>;
+}
+
+/** A header number: big enough to read at a glance, small enough for six in a row. */
+export function HeroStat({ label, value, sub, accent }: { label: string; value: ReactNode; sub?: string; accent?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-2xs text-chalk-500">{label}</dt>
+      <dd className={`display tnum text-2xl leading-tight sm:text-[1.75rem] ${accent ? 'text-pitch-300' : 'text-chalk-100'}`}>{value}</dd>
+      {sub && <dd className="truncate text-2xs text-chalk-400">{sub}</dd>}
+    </div>
+  );
+}
+
 /** A number with its label, for mastheads and summary strips. */
 export function Figure({ label, value, sub, big }: { label: string; value: ReactNode; sub?: ReactNode; big?: boolean }) {
   return (

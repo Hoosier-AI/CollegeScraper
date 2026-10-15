@@ -83,7 +83,7 @@ export async function program(db: Db, id: string, season: number) {
     selectAll<any>(db, 'college_standings_checks', '*', (q) => q.eq('program_id', id).eq('season', season)),
   ]);
   // Conference table for the position badge (rank within the conference).
-  const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(id,name,gender)', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).eq('college_programs.gender', p.gender).order('rank')) : [];
+  const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(id,name,gender,college_schools(logo_svg_url))', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).eq('college_programs.gender', p.gender).order('rank')) : [];
   const usc = rankings.filter((r) => r.poll === 'usc' && !String(r.label ?? '').includes('(RV)')).sort((a, b) => String(b.week_of).localeCompare(String(a.week_of)));
   const categories = teamCategories(rankings);
   return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, standingsChecks: checks, conferenceTable: confRows, rankings, usc: usc[0] ?? null, uscHistory: usc, categories, runs, seasons: seasonsAvail.map((s) => s.season) };
@@ -746,7 +746,7 @@ export async function conferences(db: Db, o: { season: number; gender?: string; 
   const [confs, seasons, top] = await Promise.all([
     selectAll<any>(db, 'college_conferences', 'id,ncaa_seo,name,short_name,division,site_host'),
     selectAll<any>(db, 'college_program_seasons', 'program_id,conference_id,division,college_programs!inner(gender)', (q) => { q = q.eq('season', o.season).eq('ncaa_member', true).not('conference_id', 'is', null); if (o.gender) q = q.eq('college_programs.gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; }),
-    selectAll<any>(db, 'college_standings', 'conference_id,program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(name,gender,school_seo,college_schools(logo_svg_url))', (q) => { q = q.eq('season', o.season).lte('rank', 3); if (o.gender) q = q.eq('college_programs.gender', o.gender); return q; }),
+    selectAll<any>(db, 'college_standings', 'conference_id,program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(name,gender,school_seo,college_schools(logo_svg_url))', (q) => { q = q.eq('season', o.season).lte('rank', 5); if (o.gender) q = q.eq('college_programs.gender', o.gender); return q; }),
   ]);
   const members = new Map<string, { m: number; w: number; divisions: Set<string> }>();
   for (const s of seasons) { const e = members.get(s.conference_id) ?? { m: 0, w: 0, divisions: new Set<string>() }; e[s.college_programs.gender as 'm' | 'w'] += 1; e.divisions.add(s.division); members.set(s.conference_id, e); }
@@ -756,7 +756,7 @@ export async function conferences(db: Db, o: { season: number; gender?: string; 
     const rows = leaders.get(k) ?? [];
     const pods = [...new Set(rows.map((r) => r.pod ?? ''))].sort();
     const pod = pods.includes('') ? '' : pods[0] ?? '';
-    return rows.filter((r) => (r.pod ?? '') === pod).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).slice(0, 3).map((r) => ({ program_id: r.program_id, name: r.college_programs.name, seo: r.college_programs.school_seo, logo: r.college_programs.college_schools?.logo_svg_url ?? null, rank: r.rank, conf_w: r.conf_w, conf_l: r.conf_l, conf_t: r.conf_t, conf_pts: r.conf_pts }));
+    return rows.filter((r) => (r.pod ?? '') === pod).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).slice(0, 5).map((r) => ({ program_id: r.program_id, name: r.college_programs.name, seo: r.college_programs.school_seo, logo: r.college_programs.college_schools?.logo_svg_url ?? null, rank: r.rank, conf_w: r.conf_w, conf_l: r.conf_l, conf_t: r.conf_t, conf_pts: r.conf_pts }));
   };
   const out = confs.filter((c) => members.has(c.id)).map((c) => {
     const m = members.get(c.id)!;

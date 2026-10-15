@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { fmt } from '../lib/api';
 import type { Sort } from '../lib/urlState';
-import { EmptyState } from './primitives';
+import { EmptyState, Pager } from './primitives';
 
 export interface Column<T> {
   key: string;
@@ -31,7 +31,7 @@ export interface Column<T> {
 
 export interface Preset { id: string; label: string; columns: string[] }
 
-export function DataTable<T>({ rows, columns, rowKey, caption, rowHref, sort, onSort, defaultSort, mode = 'client', loading, skeletonRows = 8, empty, presets, preset, onPreset, allColumns, onAllColumns, dense, maxHeight, highlightRow, rowClassName, footer }: {
+export function DataTable<T>({ rows, columns, rowKey, caption, rowHref, sort, onSort, defaultSort, mode = 'client', loading, skeletonRows = 8, empty, presets, preset, onPreset, allColumns, onAllColumns, dense, maxHeight, pageSize, noun = 'rows', highlightRow, rowClassName, footer }: {
   rows: T[]; columns: Column<T>[]; rowKey: (r: T) => string; caption: string;
   rowHref?: (r: T) => string | null | undefined;
   sort?: Sort | null; onSort?: (s: Sort | null) => void; defaultSort?: Sort;
@@ -43,6 +43,8 @@ export function DataTable<T>({ rows, columns, rowKey, caption, rowHref, sort, on
   dense?: boolean; maxHeight?: string;
   highlightRow?: (r: T) => boolean; rowClassName?: (r: T) => string;
   footer?: ReactNode;
+  /** Client tables only: show this many rows at a time, after sorting, with a pager under the table. */
+  pageSize?: number; noun?: string;
 }) {
   const [innerSort, setInnerSort] = useState<Sort | null>(defaultSort ?? null);
   const [innerAll, setInnerAll] = useState(false);
@@ -75,6 +77,11 @@ export function DataTable<T>({ rows, columns, rowKey, caption, rowHref, sort, on
       return activeSort.dir === 'asc' ? c : -c;
     });
   }, [rows, activeSort, columns, mode]);
+
+  // Paging (pageSize): back to the first page whenever the rows or the order change.
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [rows, activeSort]);
+  const shown = pageSize && mode !== 'server' ? sorted.slice(page * pageSize, (page + 1) * pageSize) : sorted;
 
   const toggle = (c: Column<T>) => {
     if (activeSort?.key === c.key) setSort({ key: c.key, dir: activeSort.dir === 'asc' ? 'desc' : 'asc' });
@@ -138,7 +145,7 @@ export function DataTable<T>({ rows, columns, rowKey, caption, rowHref, sort, on
               {!loading && sorted.length === 0 && (
                 <tr><td className="p-0" colSpan={active.length}>{typeof empty === 'string' || empty == null ? <EmptyState title={empty ?? 'Nothing to show'} /> : empty}</td></tr>
               )}
-              {!loading && sorted.map((r, i) => {
+              {!loading && shown.map((r, i) => {
                 const href = rowHref?.(r);
                 const hl = highlightRow?.(r);
                 return (
@@ -161,6 +168,7 @@ export function DataTable<T>({ rows, columns, rowKey, caption, rowHref, sort, on
         </div>
         {hasPrimary && <span aria-hidden className={`pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-field-950/70 to-transparent transition-opacity duration-150 ${edges.end ? 'opacity-100' : 'opacity-0'}`} />}
       </div>
+      {pageSize && !loading && sorted.length > pageSize && <Pager page={page} pageSize={pageSize} total={sorted.length} onPage={(n) => { setPage(n); scroller.current?.closest('.space-y-2')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} noun={noun} />}
       {footer}
     </div>
   );

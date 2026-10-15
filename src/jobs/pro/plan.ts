@@ -219,6 +219,8 @@ async function playersIn(db: Db, leagues: LeagueInfo[]): Promise<number[]> {
 
 export async function proPlan(ctx: JobContext): Promise<void> {
   const db = ctx.db;
+  const full = ctx.params.full === true || new Date().getUTCHours() % 6 === 0;
+  ctx.note('mode', full ? 'full' : 'light (no top or world league players)');
   const leagues = await leagueIndex(db);
   const enabled = new Set([...leagues.values()].filter((l) => l.enabled).map((l) => l.id));
   const seasonRows = await selectAll<{ league_id: number; season: number; coverage: { standings?: boolean; players?: boolean; injuries?: boolean; fixtures?: { statistics_players?: boolean }; source?: string } | null }>(db, 'pro_seasons', 'league_id,season,coverage');
@@ -242,8 +244,11 @@ export async function proPlan(ctx: JobContext): Promise<void> {
     .filter((r) => r.season < (leagues.get(r.league_id)?.current_season ?? 9999)).map((r) => `${r.league_id}|${r.season}`));
   const seeds = planTasks({
     leagues, seasons, leagueTeams,
-    topPlayers: await playersIn(db, live.filter((l) => tierOf(l) === 2)),
-    worldPlayers: await playersIn(db, live.filter((l) => tierOf(l) >= 3)),
+    // The top and world leagues' players (trophies and injuries, every 90-180 days) are most of the ~600k tasks:
+    // planned in full every six hours, left out of the hourly runs in between. Building all of them every hour, with
+    // two more copies for the insert, ran the 512 MB instance out of heap (2026-10-15, two restarts and 502s).
+    topPlayers: full ? await playersIn(db, live.filter((l) => tierOf(l) === 2)) : [],
+    worldPlayers: full ? await playersIn(db, live.filter((l) => tierOf(l) >= 3)) : [],
     usPlayers: await playersIn(db, live.filter((l) => tierOf(l) === 1)),
     usCoaches: [...new Set([...careers.map((r) => r.coach_id), ...current.map((r) => r.id)])],
     countries: countries.map((c) => c.name),

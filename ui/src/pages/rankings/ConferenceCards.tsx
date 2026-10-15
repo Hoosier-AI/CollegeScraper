@@ -36,19 +36,19 @@ export function ConferenceCards() {
           const t = c.table?.[f.gender] ?? { top: [], source: 'none' };
           return (
             <li key={c.id}>
-              <Link to={href(`/conferences/${c.ncaa_seo ?? c.id}`)} className="group card flex h-full flex-col p-4 transition-colors duration-150 hover:border-field-600 hover:bg-field-800/60">
+              <Link to={href(`/conferences/${c.ncaa_seo ?? c.id}`)} className="group card flex h-full flex-col p-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-pitch-400 duration-150 hover:border-field-600 hover:bg-field-800/60">
                 <div className="flex items-start justify-between gap-2">
                   <div><div className="display text-lg">{c.name}</div><div className="text-xs text-chalk-500">{c.members[f.gender]} {genderLabel(f.gender)} teams{c.short_name && c.short_name !== c.name ? `, ${c.short_name}` : ''}</div></div>
                   {t.source === 'conference' ? <Badge tone="teal">Official table</Badge> : t.source === 'computed' ? <Badge>Computed</Badge> : null}
                 </div>
                 {t.top.length ? (
-                  <ol className="mt-3 space-y-1.5">
+                  <ol className="mt-3 space-y-1">
                     {t.top.map((r: any) => <li key={r.program_id} className="flex items-center gap-2 text-sm"><span className="w-4 text-right text-xs text-chalk-500 tnum">{r.rank}</span><TeamLogo src={r.logo} seo={r.seo} name={r.name} size={18} /><span className="min-w-0 flex-1 truncate text-chalk-100">{r.name}</span><span className="text-xs text-chalk-400 tnum">{r.conf_w}-{r.conf_l}-{r.conf_t}</span><span className="w-8 text-right text-xs text-chalk-500 tnum">{r.conf_pts ?? ''}</span></li>)}
                   </ol>
                 ) : <p className="mt-3 text-sm text-chalk-500">Conference play has not started.</p>}
                 <span className="mt-auto flex items-center justify-between gap-2 pt-3">
                   <span className="text-xs text-chalk-500">{Math.max(0, (c.members[f.gender] ?? 0) - t.top.length) ? `+${(c.members[f.gender] ?? 0) - t.top.length} more teams` : ''}</span>
-                  <span className="inline-flex min-h-9 items-center gap-1 rounded-md border border-field-600 px-3 text-sm font-medium text-pitch-300 transition-colors duration-150 group-hover:border-pitch-400 group-hover:bg-pitch-400/10">Full table and stats <ChevronRight size={14} aria-hidden /></span>
+                  <span className="inline-flex items-center gap-0.5 text-xs font-medium text-pitch-400 group-hover:text-pitch-300">Table and stats<ChevronRight size={14} aria-hidden /></span>
                 </span>
               </Link>
             </li>

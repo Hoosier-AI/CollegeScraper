@@ -44,7 +44,7 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'pro-predictions', label: 'Pro: match predictions', cadence: 'every 3 hours at :35 (matches in the next three days)', due: (c) => c.m === 35 && c.h % 3 === 0, gate: async () => proEnabled() },
   { job: 'pro-standings', label: 'Pro: league tables', cadence: 'every 3 hours at :25', due: (c) => c.m === 25 && c.h % 3 === 0, gate: async () => proEnabled() },
   // The bulk crawl (every club, player, squad, total, detail...): planned every 6 h, worked every 10 minutes.
-  { job: 'pro-plan', label: 'Pro: plan the crawl', cadence: 'every hour at :20 (clubs found by new fixtures get their squad tasks within the hour)', due: (c) => c.m === 20, gate: async () => proEnabled() },
+  { job: 'pro-plan', label: 'Pro: plan the crawl', cadence: 'every hour at :20 (clubs found by new fixtures get their squad tasks within the hour); the top and world leagues\' players in full every six hours', due: (c) => c.m === 20, gate: async () => proEnabled() },
   { job: 'pro-crawl', label: 'Pro: crawl', cadence: 'every 10 minutes at :05, until the backfill quota floor', due: (c) => c.m % 10 === 5, gate: async () => proEnabled() },
   { job: 'pro-leaders', label: 'Pro: leader lists', cadence: 'every hour at :32', due: (c) => c.m === 32, gate: async () => proEnabled() },
   { job: 'pro-rank', label: 'Pro: player ranks', cadence: 'daily 07:10 UTC', due: (c) => c.h === 7 && c.m === 10 },

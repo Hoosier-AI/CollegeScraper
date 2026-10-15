@@ -218,9 +218,14 @@ export interface TaskSeed { kind: string; key: string; priority: number; every_d
  * are sent, so an existing task keeps its due date, page and counters (pro_reschedule_tasks then brings due dates in
  * line with a changed interval).
  */
+/** Rows are built a thousand at a time: a full plan is ~600k tasks, and a second full copy of them was too much heap. */
 export async function insertTasks(db: Db, seeds: TaskSeed[]): Promise<number> {
-  const rows = seeds.map((s) => ({ kind: s.kind, key: s.key, priority: s.priority, every_days: s.every_days, tier: s.tier ?? 0 }));
-  return rows.length ? upsertChunked(db, 'pro_crawl_tasks', rows, { onConflict: 'kind,key', chunk: 1000 }) : 0;
+  let n = 0;
+  for (let i = 0; i < seeds.length; i += 1000) {
+    const rows = seeds.slice(i, i + 1000).map((s) => ({ kind: s.kind, key: s.key, priority: s.priority, every_days: s.every_days, tier: s.tier ?? 0 }));
+    n += await upsertChunked(db, 'pro_crawl_tasks', rows, { onConflict: 'kind,key', chunk: 1000 });
+  }
+  return n;
 }
 
 export async function rescheduleTasks(db: Db): Promise<number> {
