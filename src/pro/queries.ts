@@ -1,7 +1,9 @@
 // Reads for Plaibook Stats Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
+import { WIKI_TARGETS } from '../jobs/sources/wikipedia.js';
 import { coverageOf } from '../jobs/pro/coverage.js';
 import { sourcesOff } from './sources.js';
+import { isMinor } from './minor.js';
 import type { Db } from '../db/client.js';
 import { kvGet, kvSet, selectAll, selectIn } from '../db/client.js';
 import { eloChances } from '../ui/elo.js';
@@ -162,10 +164,12 @@ const HISTORY_CREDIT: Record<string, { name: string; url: string | null; license
  * Credits for a season's results and table when they are not API-Football's: the results' source for a history
  * season, and the table's (Wikipedia's official one, or one worked out from the results).
  */
-function historyCredits(source: string | null, hasResults: boolean, tableSource: string | null, namedGroups = false) {
+function historyCredits(source: string | null, hasResults: boolean, tableSource: string | null, namedGroups = false, league?: number, season?: number | null) {
   const out: { what: string; name: string; url: string | null; license: string | null }[] = [];
   if (source && hasResults) out.push({ what: 'Results', ...HISTORY_CREDIT[source]! });
-  if (tableSource === 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia! });
+  // CC BY-SA asks for a link to the work itself: the season article the table came from.
+  const article = league != null && season != null ? WIKI_TARGETS.find((t) => t.league === league) : undefined;
+  if (tableSource === 'wikipedia') out.push({ what: 'Table', ...HISTORY_CREDIT.wikipedia!, ...(article ? { name: `Wikipedia, ${decodeURIComponent(article.title(season!)).replace(/_/g, ' ')}`, url: `https://en.wikipedia.org/wiki/${article.title(season!)}` } : {}) });
   else if (tableSource === 'results') out.push({ what: 'Table', name: 'worked out from the results', url: null, license: namedGroups ? 'division names from Wikipedia, CC BY-SA 4.0' : 'groups are the clubs that played each other' });
   else if (source && !hasResults) out.push({ what: 'Table', ...HISTORY_CREDIT[source]! });
   return out.length ? out : null;
@@ -278,7 +282,7 @@ export async function league(db: Db, slug: string, season?: number | null) {
     // A season API-Football does not have: where its results and table came from (credited on the page).
     history_sources: historyCredits(seasons.find((x) => x.season === s)?.coverage?.source ?? null, ((results.data ?? []) as any[]).length > 0,
       ((await db.from('pro_standings').select('source').eq('league_id', lg.id).eq('season', s).limit(1)).data?.[0] as { source?: string } | undefined)?.source ?? null,
-      standings.length > 0 && !standings.some((g) => /from results/i.test(g.name))),
+      standings.length > 0 && !standings.some((g) => /from results/i.test(g.name)), lg.id, s ?? null),
   };
 }
 
@@ -471,11 +475,21 @@ async function teamPayroll(db: Db, teamId: number, season: number) {
   return { season, release_date: release, players: now.length, total: now.reduce((n, r) => n + Number(r.guaranteed_comp ?? 0), 0), top, source: 'MLS Players Association via American Soccer Analysis' };
 }
 
+/** A player under 18: the short record the page shows instead of a profile (src/pro/minor.ts). */
+export interface ProMinorPage { minor: true; player: { id: number; name: string; slug: string; nationality: string | null; position: string | null; gender: string | null; noindex: true; indexable: false }; team: { id: number; name: string; slug: string; logo: string | null } | null }
+
 export async function player(db: Db, slug: string) {
   const { data: p, error } = await db.from('pro_players').select('*').eq('slug', slug).maybeSingle();
   if (error) throw new Error(error.message);
   if (!p) return null;
   const pl = p as any;
+  // Under 18: no profile, only who he is and where he plays (src/pro/minor.ts).
+  if (isMinor(pl.birth_date)) {
+    const club = pl.current_team_id ? (await teamsById(db, [pl.current_team_id])).get(pl.current_team_id) : null;
+    const page: ProMinorPage = { minor: true, player: { id: pl.id, name: pl.display_name, slug: pl.slug, nationality: pl.nationality ?? null, position: pl.position ?? null, gender: pl.gender ?? null, noindex: true, indexable: false },
+      team: club && !club.national ? { id: club.id, name: club.name, slug: club.slug, logo: club.logo ?? null } : null };
+    return page;
+  }
   const recentInjury = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
   const [allSeasons, recent, links, moves, trophies, hurt, spells, missed, implausible] = await Promise.all([
     selectAll<any>(db, 'pro_player_season_stats', '*', (q) => q.eq('player_id', pl.id).order('season', { ascending: false })),
@@ -692,7 +706,10 @@ export async function search(db: Db, q: string, limit = 8, scope: Scope = 'club'
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as { kind: string; id: number; name: string; slug: string; sub: string | null; logo: string | null }[];
   const pick = (k: string) => rows.filter((r) => r.kind === k).map(({ kind: _k, ...r }) => r);
-  return { leagues: pick('league'), teams: pick('team'), players: pick('player') };
+  // Players under 18 are not listed (src/pro/minor.ts).
+  const found = pick('player');
+  const born = new Map((found.length ? await selectIn<any>(db, 'pro_players', 'id,birth_date', 'id', found.map((r) => r.id)) : []).map((r) => [r.id, r.birth_date]));
+  return { leagues: pick('league'), teams: pick('team'), players: found.filter((r) => !isMinor(born.get(r.id))) };
 }
 
 export type ProKind = 'league' | 'team' | 'player' | 'match';

@@ -1,6 +1,7 @@
 // JSON behind the /pro pages of the site. Public reads, rate-limited by the same /api hook as the college routes
 // (registerUiApi). Not part of /v1: API-Football's terms allow showing its data on our pages, not passing the raw
 // data on, so pro data has no public API.
+import { isMinor } from '../pro/minor.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getDb, kvGet, selectAll } from '../db/client.js';
 import { loadConfig } from '../config.js';
@@ -71,9 +72,10 @@ export function registerProApi(app: FastifyInstance): void {
     // Someone opening a player we have little on: fetch their transfers, honours and seasons first (capped, see
     // playerRefresh.ts). Bots never trigger it.
     if (!isBot(req.headers['user-agent'])) {
-      const { data: hit } = await db.from('pro_players').select('id,current_team_id').eq('slug', req.params.slug).maybeSingle();
-      const pl = hit as { id?: number; current_team_id?: number | null } | null;
-      if (pl?.id != null) {
+      const { data: hit } = await db.from('pro_players').select('id,current_team_id,birth_date').eq('slug', req.params.slug).maybeSingle();
+      const pl = hit as { id?: number; current_team_id?: number | null; birth_date?: string | null } | null;
+      // Nothing to fetch for a player under 18: the page is a short notice (src/pro/minor.ts).
+      if (pl?.id != null && !isMinor(pl.birth_date)) {
         // His club too (its match detail is his match log): the squad's club, else his latest club season.
         let club = pl.current_team_id ?? null;
         if (club == null) {

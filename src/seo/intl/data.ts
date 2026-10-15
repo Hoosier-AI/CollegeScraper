@@ -16,7 +16,8 @@ export interface IntlSeoData {
   leaders(): ReturnType<typeof Q.leaders>;
   /** A nation's history by its International address (a national team's slug, or a nation's key). */
   history(slug: string): Promise<Awaited<ReturnType<typeof I.nationHistory>>>;
-  player(slug: string): Promise<{ player: NonNullable<Awaited<ReturnType<typeof Q.player>>>; intl: Awaited<ReturnType<typeof I.playerInternational>> } | null>;
+  /** `intl` is null for a player under 18 (no profile, src/pro/minor.ts). */
+  player(slug: string): Promise<{ player: NonNullable<Awaited<ReturnType<typeof Q.player>>>; intl: Awaited<ReturnType<typeof I.playerInternational>> | null } | null>;
   sitemap(): Promise<SitemapEntry[]>;
 }
 
@@ -34,7 +35,8 @@ export class DbIntlSeoData implements IntlSeoData {
   }
   async player(slug: string) {
     const p = await Q.player(this.db, slug);
-    return p ? { player: p, intl: await I.playerInternational(this.db, p.player.id) } : null;
+    if (!p) return null;
+    return { player: p, intl: 'minor' in p ? null : await I.playerInternational(this.db, p.player.id) };
   }
   /** The section's pages, every tournament, every senior national team, and the nations without a provider side. */
   async sitemap(): Promise<SitemapEntry[]> {

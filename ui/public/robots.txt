@@ -1,6 +1,24 @@
-# Plaibook Stats: the stats pages (and the /api reads they render from) are public; the admin console,
-# the job routes and the bulk API are not for crawlers. AI training crawlers are not welcome.
+# Plaibook Stats. The pages are public. The /api reads behind them are for the site itself (search engines
+# that render pages may read them); the admin console, job routes and the bulk API are not for crawlers.
+# AI training crawlers are not welcome. Rules for bots and automated access: /data-use
 User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /console
+Disallow: /jobs
+Disallow: /quality
+Disallow: /v1
+Disallow: /api/console
+Disallow: /api/quality
+Disallow: /api/runs
+Disallow: /api/jobs
+Disallow: /api/
+
+User-agent: Googlebot
+User-agent: Bingbot
+User-agent: Applebot
+User-agent: DuckDuckBot
+User-agent: YandexBot
 Allow: /
 Allow: /api/
 Disallow: /admin
@@ -37,4 +55,4 @@ User-agent: CCBot
 User-agent: Bytespider
 Disallow: /
 
-Sitemap: https://plaibook-college-scraper.onrender.com/sitemap.xml
+Sitemap: https://www.plaibook.live/sitemap.xml

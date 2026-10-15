@@ -79,7 +79,7 @@ function useColumnCount() {
 }
 
 function Flag({ src }: { src: string | null | undefined }) {
-  return src ? <img src={src} alt="" width={20} height={14} loading="lazy" className="h-3.5 w-5 shrink-0 rounded-sm object-cover" /> : <span aria-hidden className="h-3.5 w-5 shrink-0 rounded-sm bg-field-700" />;
+  return src ? <img referrerPolicy="no-referrer" src={src} alt="" width={20} height={14} loading="lazy" className="h-3.5 w-5 shrink-0 rounded-sm object-cover" /> : <span aria-hidden className="h-3.5 w-5 shrink-0 rounded-sm bg-field-700" />;
 }
 const CupTag = () => <span className="ml-auto shrink-0 rounded bg-field-800 px-1.5 text-2xs text-chalk-400">Cup</span>;
 

@@ -16,7 +16,7 @@ import { robotsTxt } from './robots.js';
 import { Sitemaps } from './sitemaps.js';
 import { genderFromSegment, genderSegment, matchPath, parseSeason, playerPath, SLUG, trimBase, UUID } from './util.js';
 import type { ProSeoData } from './pro/data.js';
-import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proTodayBlock, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
+import { proCollegeBody, proCollegeHead, proCountriesBody, proCountriesHead, proCountryBody, proCountryHead, proDirectoryBody, proDirectoryHead, proTransfersBody, proTransfersHead, proAbroadBody, proAbroadHead, proTodayBlock, proMatchesBody, proMatchesHead, proLeagueBody, proLeagueHead, proLeaguesBody, proLeaguesHead, proMatchBody, proMatchHead, proPaths, proPlayerBody, proPlayerHead, proMinorHead, proMinorBody, proTeamBody, proTeamHead, proSourcesBody, proSourcesHead } from './pro/pages.js';
 import type { IntlSeoData } from './intl/data.js';
 import { intlHistoryBody, intlHistoryHead, intlHistorySection, intlTodayBlock, intlLeadersBody, intlLeadersHead, intlMatchesBody, intlMatchesHead, intlPlayerBody, intlPlayerHead, intlRankingsBody, intlRankingsHead, intlTeamsBody, intlTeamsHead, intlTournamentsBody, intlTournamentsHead } from './intl/pages.js';
 import { eastern } from '../jobs/seasons.js';
@@ -272,7 +272,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     const matchPage = proPage('match', (s) => pro.match(s), (p) => ({ head: proMatchHead(p, ctx()), body: proMatchBody(p) }), (s) => proPaths.match(s), matchHome);
     app.get('/pro/leagues/:slug', leaguePage);
     app.get('/pro/teams/:slug', proPage('team', (s, req) => pro.team(s, seasonParam(req)), (p) => ({ head: proTeamHead(p, ctx()), body: proTeamBody(p) }), (s) => proPaths.team(s), teamHome));
-    app.get('/pro/players/:slug', proPage('player', (s) => pro.player(s), (p) => ({ head: proPlayerHead(p, ctx()), body: proPlayerBody(p) }), (s) => proPaths.player(s)));
+    app.get('/pro/players/:slug', proPage('player', (s) => pro.player(s), (p) => ('minor' in p ? { head: proMinorHead(p, ctx()), body: proMinorBody(p) } : { head: proPlayerHead(p, ctx()), body: proPlayerBody(p) }), (s) => proPaths.player(s)));
     app.get('/pro/matches/:slug', matchPage);
 
     // ---------- International (national teams) ----------
@@ -312,7 +312,9 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
         if (!s) return { shell: true };
         if (!SLUG.test(s)) return null;
         const p = await intl.player(s);
-        if (p) return { head: intlPlayerHead(p, ctx()), body: intlPlayerBody(p) };
+        const pl = p?.player;
+        if (pl && 'minor' in pl) return { head: proMinorHead(pl, ctx(), `/intl/players/${pl.player.slug}`), body: proMinorBody(pl, `/intl/players/${pl.player.slug}`) };
+        if (pl && p.intl) return { head: intlPlayerHead({ player: pl, intl: p.intl }, ctx()), body: intlPlayerBody({ player: pl, intl: p.intl }) };
         const moved = await pro.renamedSlug('player', s);
         return moved ? { redirect: `/intl/players/${enc(moved)}` } : null;
       }));

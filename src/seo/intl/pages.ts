@@ -7,7 +7,7 @@ import type * as Q from '../../pro/queries.js';
 import { abs, breadcrumbs, ld, NOINDEX, ogImage, SUFFIX, type HeadContext, type HeadMeta } from '../head.js';
 import { a, n, table, tr, wrapBody } from '../body.js';
 import { clip, esc, longDate, SITE_NAME } from '../util.js';
-import { proIsFinal, proPaths, proScoreLine } from '../pro/pages.js';
+import { proIsFinal, proPaths, proScoreLine, type ProPlayerPage } from '../pro/pages.js';
 
 export type IntlHomePage = Awaited<ReturnType<typeof I.home>>;
 export type IntlTournamentsPage = Awaited<ReturnType<typeof I.tournaments>>;
@@ -113,7 +113,7 @@ export function intlHistoryBody(h: IntlHistoryPage): string {
 }
 
 // ---------- a player's international career ----------
-export function intlPlayerHead(p: { player: NonNullable<Awaited<ReturnType<typeof Q.player>>>; intl: Awaited<ReturnType<typeof I.playerInternational>> }, ctx: HeadContext): HeadMeta {
+export function intlPlayerHead(p: { player: ProPlayerPage; intl: Awaited<ReturnType<typeof I.playerInternational>> }, ctx: HeadContext): HeadMeta {
   const pl = p.player.player;
   const caps = p.intl.caps[0];
   const path = `/intl/players/${pl.slug}`;
@@ -121,7 +121,7 @@ export function intlPlayerHead(p: { player: NonNullable<Awaited<ReturnType<typeo
     `${pl.name}'s international career${caps?.nation ? ` with ${caps.nation.name}` : ''}${caps?.caps != null ? `: ${caps.caps} caps, ${caps.goals ?? 0} goals` : ''}${p.intl.world_cups.length ? `, ${p.intl.world_cups.length} World Cup${p.intl.world_cups.length > 1 ? 's' : ''}` : ''}.`,
     [...home, { name: 'Players', path: '/intl/players' }, { name: pl.name, path }], pl.noindex || (!p.intl.caps.length && !p.intl.world_cups.length && !p.player.seasons.some((s) => s.team?.national)) ? NOINDEX : null);
 }
-export function intlPlayerBody(p: { player: NonNullable<Awaited<ReturnType<typeof Q.player>>>; intl: Awaited<ReturnType<typeof I.playerInternational>> }): string {
+export function intlPlayerBody(p: { player: ProPlayerPage; intl: Awaited<ReturnType<typeof I.playerInternational>> }): string {
   const pl = p.player.player;
   const caps = p.intl.caps.map((c) => tr([c.nation ? a(`/intl/teams/${c.nation.slug}`, c.nation.name) : '', n(c.caps), n(c.goals), esc(`${c.first_year ?? ''}-${c.last_year ?? ''}`)]));
   const seasons = p.player.seasons.filter((s) => s.team?.national).map((s) => tr([esc(s.season), s.league ? a(proPaths.league(s.league.slug), s.league.name) : '', s.team ? a(proPaths.team(s.team.slug), s.team.name) : '', n(s.apps), n(s.goals), n(s.assists)]));

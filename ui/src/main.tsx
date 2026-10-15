@@ -2,6 +2,11 @@ import React, { lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, Navigate, RouterProvider, useLocation, useParams } from 'react-router-dom';
+// Fonts are served from this site (no request to Google's servers): Archivo with its width axis, IBM Plex Sans.
+import '@fontsource-variable/archivo/wdth.css';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
 import './index.css';
 import App from './App';
 import { NotFound, RouteError } from './components/shell';

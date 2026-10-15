@@ -50,6 +50,23 @@ interface MatchLine {
   match: ProMatch; team_id: number; starter: boolean; minutes: N; goals: N; assists: N; yellow: N; red: N; rating: N; saves?: N; conceded?: N; pos?: string | null;
   shots?: N; shots_on?: N; key_passes?: N; passes?: N; pass_accuracy?: N; tackles?: N; interceptions?: N; duels?: N; duels_won?: N; dribbles?: N; dribbles_won?: N; fouls_drawn?: N; fouls_committed?: N;
 }
+/** A player under 18: no profile (the server's src/pro/minor.ts). */
+interface MinorData { minor: true; player: { id: number; name: string; slug: string; nationality: string | null; position: string | null }; team: ProTeamRef | null }
+
+function MinorNotice({ d }: { d: MinorData }) {
+  return (
+    <div className="mx-auto max-w-2xl space-y-4">
+      <Crumbs items={[...(d.team ? [{ label: d.team.name, to: proPath.team(d.team.slug) }] : []), { label: d.player.name }]} />
+      <h1 className="display text-3xl text-chalk-100">{d.player.name}</h1>
+      {d.team && <p className="flex items-center gap-2 text-chalk-300"><TeamLogo src={d.team.logo} name={d.team.name} size={20} /><Link to={proPath.team(d.team.slug)} className="hover:text-pitch-300">{d.team.name}</Link></p>}
+      <div className="frame px-4 py-4 text-[15px] leading-relaxed text-chalk-300">
+        <p className="font-semibold text-chalk-100">Player profiles are not shown for players under 18.</p>
+        <p className="mt-1">Their appearances still show in match lineups. See our <Link to="/privacy#athletes" className="text-pitch-300 underline underline-offset-2 hover:text-pitch-200">privacy policy</Link>.</p>
+      </div>
+    </div>
+  );
+}
+
 export interface PlayerData {
   player: { id: number; name: string; slug: string; short_name: string; birth_date: string | null; birth_place: string | null; birth_country: string | null; nationality: string | null; height_cm: number | null; weight_kg: number | null; position: string | null; photo: string | null; gender: 'm' | 'w' | null; number: number | null };
   team: ProTeamRef | null; seasons: SeasonRow[];
@@ -134,11 +151,12 @@ export default function ProPlayer() {
   const [group, setGroup] = useState<Group>('overview');
   const [tab] = useUrlState('tab', 'overview', { allow: ['overview', 'stats', 'matches', 'career', 'news'] });
   const onIntl = useSection() === 'intl';
-  const q = useQuery({ queryKey: ['pro-player', slug], queryFn: () => api<PlayerData>(`/api/pro/players/${slug}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
+  const q = useQuery({ queryKey: ['pro-player', slug], queryFn: () => api<PlayerData | MinorData>(`/api/pro/players/${slug}`), retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   const career = useQuery({ queryKey: ['intl-player', slug], queryFn: () => api<IntlCareer>(`/api/intl/players/${slug}`), enabled: onIntl, staleTime: 300_000 });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="player" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
+  if ('minor' in q.data!) return <MinorNotice d={q.data} />;
   const d = q.data!;
   const p = d.player;
   const isGk = /goal/i.test(p.position ?? '') || d.seasons.some((s) => (s.saves ?? 0) > 0 && /goal/i.test(s.position ?? ''));

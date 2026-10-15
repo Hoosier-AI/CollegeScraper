@@ -84,7 +84,7 @@ export function playerBody(p: PlayerPage): string {
     latest?.class_label ? esc(latest.class_label) : null,
     team ? `${a(teamPath(team), teamTitle(team))}${latest?.jersey != null ? `, No. ${esc(latest.jersey)}` : ''}` : null,
   ].filter(Boolean).join(', ');
-  const from = [p.hometown ? `From ${esc(p.hometown)}` : null, p.high_school ? esc(p.high_school) : null].filter(Boolean).join('; ');
+  const from = p.hometown ? `From ${esc(p.hometown)}` : '';
   const cols = ['Season', 'Team', 'GP', 'GS', 'Min', 'G', 'A', 'Pts', 'Sh', 'SOG', ...(isGk ? ['Saves', 'GA', 'GAA', 'Save %', 'SHO'] : [])];
   const rows = p.seasons.map((s) => tr([esc(s.season), a(teamPath(s.team), s.team.name), n(s.gp), n(s.gs), n(s.minutes), n(s.goals), n(s.assists), n(s.points), n(s.shots), n(s.sog), ...(isGk ? [n(s.saves), n(s.ga), n(s.gaa, 2), pct(s.save_pct), n(s.shutouts)] : [])]));
   const honors = p.honors.length ? `<h2>Honors</h2><ul>${p.honors.slice(0, 20).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : '';

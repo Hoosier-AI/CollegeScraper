@@ -101,9 +101,9 @@ export class DbSeoData implements SeoData {
   // ---------- player ----------
   async player(slug: string): Promise<PlayerPage | null> {
     const db = this.db;
-    const p = await one<any>(db.from('college_players').select('id,slug,display_name,noindex,suppress,headshot_url,hometown_city,hometown_region,hometown_country,high_school,updated_at').eq('slug', slug).maybeSingle(), 'player');
+    const p = await one<any>(db.from('college_players').select('id,slug,display_name,noindex,suppress,headshot_url,hometown_city,hometown_region,hometown_country,updated_at').eq('slug', slug).maybeSingle(), 'player');
     if (!p || p.suppress) return null;
-    const seasons = await selectAll<any>(db, 'college_player_seasons', 'id,season,jersey,position,class_raw,class_year,is_redshirt,hometown_raw,high_school,college_programs(name,gender,school_seo)', (q) => q.eq('player_id', p.id).order('season', { ascending: false }));
+    const seasons = await selectAll<any>(db, 'college_player_seasons', 'id,season,jersey,position,class_raw,class_year,is_redshirt,hometown_raw,college_programs(name,gender,school_seo)', (q) => q.eq('player_id', p.id).order('season', { ascending: false }));
     const ids = seasons.map((s) => s.id);
     const [stats, honors] = await Promise.all([
       selectIn<any>(db, 'college_player_season_stats', 'player_season_id,gp,gs,minutes,goals,assists,points,shots,sog,saves,ga,gaa,save_pct,shutouts', 'player_season_id', ids),
@@ -118,7 +118,7 @@ export class DbSeoData implements SeoData {
     const hometown = latest?.hometown_raw || [p.hometown_city, p.hometown_region, p.hometown_country].filter(Boolean).join(', ') || null;
     return {
       id: p.id, slug: p.slug, name: displayName(p.display_name), noindex: !!p.noindex,
-      headshot_url: p.headshot_url ?? null, hometown, high_school: latest?.high_school ?? p.high_school ?? null,
+      headshot_url: p.headshot_url ?? null, hometown,
       seasons: seasons.filter((s) => teamRef(s.college_programs)).map((s) => {
         const x = st.get(s.id);
         return { season: s.season, team: teamRef(s.college_programs)!, jersey: num(s.jersey), position: s.position ?? null, class_label: classLabel(s.class_raw, s.class_year, s.is_redshirt),

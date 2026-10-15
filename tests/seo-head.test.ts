@@ -124,7 +124,7 @@ describe('template', () => {
   it('ui/index.html carries both markers and an absolute og:image', () => {
     expect(shell).toContain('<!--ssr-head-->');
     expect(shell).toContain('<!--ssr-body-->');
-    expect(shell).toContain('<meta property="og:image" content="https://plaibook-college-scraper.onrender.com/brand/og.png" />');
+    expect(shell).toContain('<meta property="og:image" content="https://www.plaibook.live/brand/og.png" />');
   });
   it('replaces the generic tags so each appears once, and puts #ssr after #root', () => {
     const html = injectPage(shell, renderHead(teamHead(teamFixture(), ctx)), teamBody(teamFixture(), ctx));

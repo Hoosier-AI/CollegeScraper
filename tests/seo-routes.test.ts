@@ -149,7 +149,7 @@ describe('seo routes', () => {
     expect((await app.inject({ url: '/sitemaps/players-2026-9.xml' })).statusCode).toBe(404);
     const robots = await app.inject({ url: '/robots.txt' });
     expect(robots.headers['content-type']).toContain('text/plain');
-    expect(robots.body).toContain('Allow: /api/');
+    expect(robots.body).toContain('Disallow: /api/');
     expect(robots.body).toContain(`Sitemap: ${BASE}/sitemap.xml`);
     expect((await app.inject({ url: '/google0123abcd.html' })).body).toBe('google-site-verification: google0123abcd.html');
     expect((await app.inject({ url: '/abcdef0123456789.txt' })).body).toBe('abcdef0123456789');

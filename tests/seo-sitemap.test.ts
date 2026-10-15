@@ -54,11 +54,14 @@ describe('Sitemaps', () => {
 describe('robots.txt', () => {
   const txt = robotsTxt(BASE);
   const group = (agent: string) => { const i = txt.indexOf(`User-agent: ${agent}\n`); return txt.slice(i, txt.indexOf('\n\n', i)); };
-  it('lets crawlers read /api (pages render from it) and keeps the admin surfaces and /v1 out', () => {
+  it('keeps /api for search engines that render pages, off for other crawlers, and the admin surfaces and /v1 out', () => {
     const star = group('*');
-    expect(star).toContain('Allow: /api/');
-    expect(star).not.toContain('Disallow: /api/\n');
+    expect(star).toMatch(/^Disallow: \/api\/$/m);
     for (const p of ['/admin', '/jobs', '/quality', '/console', '/v1']) expect(star).toContain(`Disallow: ${p}\n`);
+    const g = group('Googlebot');
+    expect(txt).toContain('User-agent: Googlebot\nUser-agent: Bingbot');
+    expect(txt.slice(txt.indexOf('User-agent: Googlebot'))).toMatch(/Allow: \/api\//);
+    expect(g).toBeTruthy();
   });
   it('blocks AI training crawlers everywhere and allows AI answer crawlers', () => {
     for (const bot of ['GPTBot', 'ClaudeBot', 'Google-Extended', 'CCBot', 'Bytespider']) expect(group(bot)).toMatch(/^Disallow: \/$/m);
@@ -70,6 +73,6 @@ describe('robots.txt', () => {
     expect(txt).toContain(`Sitemap: ${BASE}/sitemap.xml`);
   });
   it('ui/public/robots.txt is the same file for the production host', () => {
-    expect(readFileSync(new URL('../ui/public/robots.txt', import.meta.url), 'utf8')).toBe(txt);
+    expect(readFileSync(new URL('../ui/public/robots.txt', import.meta.url), 'utf8')).toBe(robotsTxt('https://www.plaibook.live'));
   });
 });

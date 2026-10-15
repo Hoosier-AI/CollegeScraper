@@ -11,7 +11,7 @@ export type ProHomePage = Awaited<ReturnType<typeof Q.home>>;
 export type ProLeaguesPage = Awaited<ReturnType<typeof Q.leagues>>;
 export type ProLeaguePage = NonNullable<Awaited<ReturnType<typeof Q.league>>>;
 export type ProTeamPage = NonNullable<Awaited<ReturnType<typeof Q.team>>>;
-export type ProPlayerPage = NonNullable<Awaited<ReturnType<typeof Q.player>>>;
+export type ProPlayerPage = Exclude<NonNullable<Awaited<ReturnType<typeof Q.player>>>, Q.ProMinorPage>;
 export type ProMatchPage = NonNullable<Awaited<ReturnType<typeof Q.match>>>;
 
 const PRO = `${SITE_NAME} Pro`;
@@ -192,6 +192,15 @@ export function proPlayerHead(p: ProPlayerPage, ctx: HeadContext): HeadMeta {
       breadcrumbs(ctx, [...crumbsHome, ...(p.team ? [{ name: p.team.name, path: proPaths.team(p.team.slug) }] : []), { name: pl.name, path: proPaths.player(pl.slug) }]),
     ],
   };
+}
+
+/** Under 18: no profile, kept out of search engines (src/pro/minor.ts). */
+export function proMinorHead(p: Q.ProMinorPage, ctx: HeadContext, path = proPaths.player(p.player.slug)): HeadMeta {
+  return { title: `${p.player.name}${SUFFIX}`, description: 'Player profiles are not shown for players under 18.', canonical: abs(ctx, path), robots: NOINDEX, ogType: 'website', image: ogImage(ctx), jsonLd: [] };
+}
+export function proMinorBody(p: Q.ProMinorPage, path = proPaths.player(p.player.slug)): string {
+  const inner = `<h1>${esc(p.player.name)}</h1>${p.team ? `<p>Club: ${a(proPaths.team(p.team.slug), p.team.name)}.</p>` : ''}<p>Player profiles are not shown for players under 18. Their appearances still show in match lineups. See our ${a('/privacy#athletes', 'privacy policy')}.</p>`;
+  return wrapBody('pro', [...crumbsHome, { name: p.player.name, path }], inner);
 }
 
 export function proPlayerBody(p: ProPlayerPage): string {

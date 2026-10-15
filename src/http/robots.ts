@@ -1,18 +1,30 @@
-// Minimal robots.txt reader: fetches once per host, honours Disallow for "*" and our UA token.
+// Minimal robots.txt reader: fetches once per host, honours Disallow / Allow and Crawl-delay for "*" and our UA token.
+// As RFC 9309 asks: a missing robots.txt (4xx) allows everything; one that cannot be reached (5xx, timeout, network
+// error) disallows the whole site for a while, then is read again.
 import type { RobotsPolicy } from './client.js';
 import { fetch as undiciFetch } from 'undici';
 
-interface Rules { disallow: string[]; allow: string[] }
+interface Rules { disallow: string[]; allow: string[]; delayMs?: number; until?: number }
+
+/** Longest Crawl-delay we honour (a site asking for more gets this). */
+export const MAX_CRAWL_DELAY_MS = 10_000;
+/** How long an unreachable robots.txt keeps a site off-limits before we try it again. */
+export const UNREACHABLE_RETRY_MS = 30 * 60_000;
 
 export class RobotsCache implements RobotsPolicy {
   private rules = new Map<string, Promise<Rules>>();
-  constructor(private userAgent: string, private fetchImpl: typeof undiciFetch = undiciFetch) {}
+  private loaded = new Map<string, Rules>();
+  constructor(private userAgent: string, private fetchImpl: typeof undiciFetch = undiciFetch, private now: () => number = Date.now) {}
 
   async allowed(url: string): Promise<boolean> {
     const u = new URL(url);
     const key = u.origin;
     let p = this.rules.get(key);
-    if (!p) { p = this.load(u.origin); this.rules.set(key, p); }
+    const seen = this.loaded.get(key);
+    if (!p || (seen?.until != null && this.now() > seen.until)) {
+      p = this.load(u.origin).then((r) => { this.loaded.set(key, r); return r; });
+      this.rules.set(key, p);
+    }
     const r = await p;
     const path = u.pathname + u.search;
     const match = (list: string[]) => list.filter((d) => d && ruleMatches(d, path)).sort((a, b) => b.length - a.length)[0] ?? null;
@@ -22,13 +34,19 @@ export class RobotsCache implements RobotsPolicy {
     return !!allow && allow.length >= dis.length;
   }
 
+  crawlDelayMs(url: string): number | undefined {
+    return this.loaded.get(new URL(url).origin)?.delayMs;
+  }
+
   private async load(origin: string): Promise<Rules> {
+    const offLimits = (): Rules => ({ disallow: ['/'], allow: [], until: this.now() + UNREACHABLE_RETRY_MS });
     try {
       const res = await this.fetchImpl(`${origin}/robots.txt`, { headers: { 'user-agent': this.userAgent }, signal: AbortSignal.timeout(10_000) });
+      if (res.status >= 500) return offLimits();
       if (!res.ok) return { disallow: [], allow: [] };
       return parseRobots(await res.text(), this.userAgent);
     } catch {
-      return { disallow: [], allow: [] };
+      return offLimits();
     }
   }
 }
@@ -48,8 +66,8 @@ export function ruleMatches(rule: string, path: string): boolean {
 export function parseRobots(text: string, userAgent: string): Rules {
   // Our identifier is the last product token ("PlaibookCollege/1.0"), not the browser-compatible prefix.
   const token = (userAgent.match(/plaibook[a-z]*/i)?.[0] ?? userAgent.split('/')[0] ?? '').toLowerCase();
-  const groups: { agents: string[]; disallow: string[]; allow: string[] }[] = [];
-  let current: { agents: string[]; disallow: string[]; allow: string[] } | null = null;
+  const groups: { agents: string[]; disallow: string[]; allow: string[]; delay?: number }[] = [];
+  let current: { agents: string[]; disallow: string[]; allow: string[]; delay?: number } | null = null;
   let lastWasAgent = false;
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/#.*$/, '').trim();
@@ -68,9 +86,11 @@ export function parseRobots(text: string, userAgent: string): Rules {
     if (!current) continue;
     if (field === 'disallow') current.disallow.push(value);
     else if (field === 'allow') current.allow.push(value);
+    else if (field === 'crawl-delay' && Number(value) > 0) current.delay = Number(value);
   }
   const specific = groups.find((g) => g.agents.some((a) => a !== '*' && token.includes(a)));
   const star = groups.find((g) => g.agents.includes('*'));
   const g = specific ?? star;
-  return g ? { disallow: g.disallow, allow: g.allow } : { disallow: [], allow: [] };
+  if (!g) return { disallow: [], allow: [] };
+  return { disallow: g.disallow, allow: g.allow, ...(g.delay ? { delayMs: Math.min(MAX_CRAWL_DELAY_MS, Math.round(g.delay * 1000)) } : {}) };
 }

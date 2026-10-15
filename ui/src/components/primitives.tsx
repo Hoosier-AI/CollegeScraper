@@ -63,7 +63,7 @@ export function TeamLogo({ src, name, seo, size = 24, chip = true }: { src?: str
   return (
     <span className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded ${chip && ready ? 'bg-white' : ''}`} style={{ width: size, height: size, padding: chip && ready ? Math.max(1, Math.round(size / 12)) : 0 }}>
       {!ready && <span className="absolute inset-0">{tile}</span>}
-      <img src={url} alt="" width={size} height={size} className={`h-full w-full object-contain ${ready ? '' : 'opacity-0'}`} loading="lazy"
+      <img referrerPolicy="no-referrer" src={url} alt="" width={size} height={size} className={`h-full w-full object-contain ${ready ? '' : 'opacity-0'}`} loading="lazy"
         onError={() => setBroken(url)} onLoad={(e) => (e.currentTarget.naturalWidth < 8 ? setBroken(url) : setLoaded(url))} />
     </span>
   );
@@ -79,7 +79,7 @@ export function PlayerAvatar({ src, name, size = 24, crest, crestSeo, ring }: { 
   const [broken, setBroken] = useState(false);
   const usable = hotlinkable(src) && !broken;
   const ringCls = ring === 'past' ? 'outline outline-2 outline-dashed outline-note/80 outline-offset-1' : '';
-  if (usable) return <img src={src!} alt="" width={size} height={size} className={`shrink-0 rounded-full bg-field-800 object-cover ${ringCls}`} style={{ width: size, height: size }} onError={() => setBroken(true)} loading="lazy" />;
+  if (usable) return <img referrerPolicy="no-referrer" src={src!} alt="" width={size} height={size} className={`shrink-0 rounded-full bg-field-800 object-cover ${ringCls}`} style={{ width: size, height: size }} onError={() => setBroken(true)} loading="lazy" />;
   if (crest || crestSeo) return <span className={`relative inline-flex shrink-0 rounded ${ringCls}`} style={{ width: size, height: size }}><TeamLogo src={crest} seo={crestSeo} name={name} size={size} /></span>;
   const initials = (name ?? '').split(/\s+/).filter(Boolean).map((w) => w[0]!.toUpperCase()).slice(0, 2).join('') || '?';
   return <span aria-hidden className={`inline-flex shrink-0 items-center justify-center rounded-full bg-field-800 font-medium text-chalk-400 ${ringCls}`} style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size / 2.6)) }}>{initials}</span>;

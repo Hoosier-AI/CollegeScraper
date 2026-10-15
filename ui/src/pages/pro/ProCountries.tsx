@@ -26,7 +26,7 @@ export function ProCountries() {
         {rows.map((c) => (
           <li key={c.name}>
             <Link to={proPaths2.country(c.slug)} className="card flex items-center gap-2 px-3 py-2 text-sm hover:bg-field-800">
-              {c.flag ? <img src={c.flag} alt="" width={22} height={16} className="h-4 w-[22px] rounded-[2px] object-cover" loading="lazy" /> : <span className="h-4 w-[22px]" />}
+              {c.flag ? <img referrerPolicy="no-referrer" src={c.flag} alt="" width={22} height={16} className="h-4 w-[22px] rounded-[2px] object-cover" loading="lazy" /> : <span className="h-4 w-[22px]" />}
               <span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{c.name}</span>
               {c.leagues > 0 && <span className="text-2xs tnum text-chalk-500">{c.leagues} comps</span>}
             </Link>
@@ -50,7 +50,7 @@ export function ProCountry() {
   const c = d.country;
   return (
     <div className="space-y-5">
-      <PageHeader title={<span className="flex items-center gap-3">{c.flag && <img src={c.flag} alt="" width={44} height={32} className="h-8 w-11 rounded object-cover" />}{c.name}</span>}
+      <PageHeader title={<span className="flex items-center gap-3">{c.flag && <img referrerPolicy="no-referrer" src={c.flag} alt="" width={44} height={32} className="h-8 w-11 rounded object-cover" />}{c.name}</span>}
         meta={`${d.leagues.length} ${gender === 'w' ? "women's" : "men's"} competitions, ${d.clubs.length} clubs we follow`}>
         <Link to={`${proPaths2.players}?nationality=${encodeURIComponent(c.name)}`} className="btn-ghost btn-sm">All {c.name} players</Link>
       </PageHeader>

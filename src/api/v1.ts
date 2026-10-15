@@ -240,8 +240,8 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     if (!found) return reply.code(404).send({ error: 'not_found' });
     const r = redactGame(found);
     if (found.game.status === 'live') reply.header('Cache-Control', `${cacheScope(req)}, max-age=15`);
-    if (!(str(req.query.include) ?? '').split(',').includes('raw')) return { ...r, raw: undefined };
-    return r;
+    // Source payloads are never part of the public API (they are other sites' data, not ours to pass on).
+    return { ...r, raw: undefined };
   });
 
   app.get<{ Querystring: Record<string, string> }>('/v1/leaders', async (req, reply) => {

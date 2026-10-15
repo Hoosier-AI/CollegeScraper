@@ -211,7 +211,7 @@ export async function cardFor(path: string, data: SeoData, pro: ProSeoData | nul
   }
   if (pro && (a === 'pro' || a === 'intl') && b && c && seg.length === 3) {
     if (b === 'teams') { const t = await pro.team(c, null); return t ? proTeamCard(t, await imageData(t.team.logo, fetcher)) : null; }
-    if (b === 'players') { const p = await pro.player(c); return p ? proPlayerCard(p, await imageData(p.player.photo, fetcher)) : null; }
+    if (b === 'players') { const p = await pro.player(c); return p && !('minor' in p) ? proPlayerCard(p, await imageData(p.player.photo, fetcher)) : null; }
     if (b === 'matches') { const m = await pro.match(c); if (!m) return null; const [hl, al] = await Promise.all([imageData(m.match.home.logo, fetcher), imageData(m.match.away.logo, fetcher)]); return proMatchCard(m, [hl, al]); }
   }
   return null;

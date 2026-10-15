@@ -8,16 +8,25 @@ export const AI_TRAINING_BOTS = ['GPTBot', 'ClaudeBot', 'Google-Extended', 'CCBo
 export const AI_ANSWER_BOTS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User'];
 export const DISALLOWED = ['/admin', '/console', '/jobs', '/quality', '/v1', '/api/console', '/api/quality', '/api/runs', '/api/jobs'];
 
+/** Search engines that render pages with JavaScript, which reads the site's own /api: they may read it. */
+export const SEARCH_ENGINES = ['Googlebot', 'Bingbot', 'Applebot', 'DuckDuckBot', 'YandexBot'];
+
 export function robotsTxt(baseUrl: string): string {
-  const rules = ['Allow: /', 'Allow: /api/', ...DISALLOWED.map((p) => `Disallow: ${p}`)];
+  const pages = ['Allow: /', ...DISALLOWED.map((p) => `Disallow: ${p}`)];
+  const withApi = ['Allow: /', 'Allow: /api/', ...DISALLOWED.map((p) => `Disallow: ${p}`)];
   return [
-    '# Plaibook Stats: the stats pages (and the /api reads they render from) are public; the admin console,',
-    '# the job routes and the bulk API are not for crawlers. AI training crawlers are not welcome.',
+    '# Plaibook Stats. The pages are public. The /api reads behind them are for the site itself (search engines',
+    '# that render pages may read them); the admin console, job routes and the bulk API are not for crawlers.',
+    '# AI training crawlers are not welcome. Rules for bots and automated access: /data-use',
     'User-agent: *',
-    ...rules,
+    ...pages,
+    'Disallow: /api/',
+    '',
+    ...SEARCH_ENGINES.map((b) => `User-agent: ${b}`),
+    ...withApi,
     '',
     ...AI_ANSWER_BOTS.map((b) => `User-agent: ${b}`),
-    ...rules,
+    ...withApi,
     '',
     ...AI_TRAINING_BOTS.map((b) => `User-agent: ${b}`),
     'Disallow: /',

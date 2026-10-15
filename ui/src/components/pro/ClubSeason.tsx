@@ -95,7 +95,7 @@ export function ClubSeasonDetail({ rows }: { rows: ClubSeasonRow[] }) {
 export function GroundCard({ ground }: { ground: Ground }) {
   return (
     <figure className="frame overflow-hidden">
-      {ground.image && <img src={ground.image} alt={ground.name} className="aspect-[16/9] w-full object-cover" loading="lazy" />}
+      {ground.image && <img referrerPolicy="no-referrer" src={ground.image} alt={ground.name} className="aspect-[16/9] w-full object-cover" loading="lazy" />}
       <figcaption className="space-y-0.5 px-3 py-2 text-sm">
         <span className="block font-medium text-chalk-100">{ground.name}</span>
         {(ground.address || ground.city) && <span className="flex items-center gap-1 text-xs text-chalk-400"><MapPin size={12} aria-hidden />{[ground.address, ground.city].filter(Boolean).join(', ')}</span>}

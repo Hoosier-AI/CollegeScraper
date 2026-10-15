@@ -20,7 +20,7 @@ export default {
       },
       fontFamily: {
         sans: ['"IBM Plex Sans"', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
-        display: ['Archivo', '"IBM Plex Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Archivo Variable"', 'Archivo', '"IBM Plex Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['0.75rem', { lineHeight: '1rem' }],

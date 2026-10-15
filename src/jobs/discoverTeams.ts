@@ -125,6 +125,8 @@ export async function discoverTeams(ctx: JobContext): Promise<void> {
       if (await ctx.cancelled()) return;
       const url = ncaaLogoUrl(s.seo)!;
       if (await imageServed(url)) { await upsertSchools(db, [{ seo: s.seo, name: s.name, logo_svg_url: url }]); crests += 1; }
+      // One check a second, the same pace as every other request to a host.
+      await new Promise((r) => setTimeout(r, 1000));
     }
     ctx.inc('crests_from_ncaa_address', crests);
   }

@@ -11,7 +11,7 @@ export function Flag({ country, size = 14 }: { country: string | null | undefine
   const { flag } = useCountries();
   const src = flag(country);
   if (!src) return null;
-  return <img src={src} alt="" title={country ?? ''} width={Math.round(size * 1.4)} height={size} className="inline-block shrink-0 rounded-[2px] object-cover" style={{ width: Math.round(size * 1.4), height: size }} loading="lazy" />;
+  return <img referrerPolicy="no-referrer" src={src} alt="" title={country ?? ''} width={Math.round(size * 1.4)} height={size} className="inline-block shrink-0 rounded-[2px] object-cover" style={{ width: Math.round(size * 1.4), height: size }} loading="lazy" />;
 }
 
 const PCT_LABEL: Record<string, string> = {

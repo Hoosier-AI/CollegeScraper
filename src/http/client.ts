@@ -32,6 +32,8 @@ export class MemoryFetchCache implements FetchCacheStore {
 
 export interface RobotsPolicy {
   allowed(url: string): Promise<boolean>;
+  /** The site's Crawl-delay in ms (capped), once its robots.txt has been read; undefined when none. */
+  crawlDelayMs?(url: string): number | undefined;
 }
 
 export interface HttpClientOptions {
@@ -86,10 +88,11 @@ export class HttpClient implements Fetcher {
     this.global = new PQueue({ concurrency: this.opts.globalConcurrency });
   }
 
-  private queueFor(host: string): PQueue {
+  private queueFor(host: string, delayMs = 0): PQueue {
     let q = this.hostQueues.get(host);
     if (!q) {
-      q = new PQueue({ concurrency: 1, interval: Math.ceil(1000 / this.opts.perHostRps), intervalCap: 1 });
+      // One request at a time per host, no faster than perHostRps, and slower when the site's robots.txt asks.
+      q = new PQueue({ concurrency: 1, interval: Math.max(Math.ceil(1000 / this.opts.perHostRps), delayMs), intervalCap: 1 });
       this.hostQueues.set(host, q);
     }
     return q;
@@ -113,7 +116,8 @@ export class HttpClient implements Fetcher {
       throw new HttpError(999, url, `robots.txt disallows ${url}`);
     }
     const priority = o.priority ?? 0;
-    return this.global.add(() => this.queueFor(host).add(() => this.fetchWithRetry(url, host, o.accept, cached ?? null, o.attempts, o.noStore, o.userAgent), { priority }), { priority }) as Promise<HttpResponseLike>;
+    const delayMs = o.documentedApi ? 0 : this.opts.robots?.crawlDelayMs?.(url) ?? 0;
+    return this.global.add(() => this.queueFor(host, delayMs).add(() => this.fetchWithRetry(url, host, o.accept, cached ?? null, o.attempts, o.noStore, o.userAgent), { priority }), { priority }) as Promise<HttpResponseLike>;
   }
 
   private async fetchWithRetry(url: string, host: string, accept: string | undefined, cached: { record: FetchRecord; body: string | null } | null, maxAttempts = this.opts.maxAttempts, noStore = false, userAgent?: string): Promise<HttpResponseLike> {

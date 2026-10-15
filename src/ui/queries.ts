@@ -89,6 +89,15 @@ export async function program(db: Db, id: string, season: number) {
   return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, standingsChecks: checks, conferenceTable: confRows, rankings, usc: usc[0] ?? null, uscHistory: usc, categories, runs, seasons: seasonsAvail.map((s) => s.season) };
 }
 
+/** Roster details we keep but do not publish (privacy policy): weight, major, high school. */
+const HIDDEN_BIO = ['weight_lb', 'major', 'high_school'] as const;
+export function publicBio<T extends Record<string, any> | null | undefined>(r: T): T {
+  if (!r) return r;
+  const out: Record<string, any> = { ...r };
+  for (const k of HIDDEN_BIO) delete out[k];
+  return out as T;
+}
+
 export async function roster(db: Db, id: string, season: number) {
   const rows = await selectAll<any>(db, 'college_player_seasons', '*,college_players(id,first_name,last_name,display_name,hometown_city,hometown_region,hometown_country,headshot_url,bio_url,suppress)', (q) => q.eq('program_id', id).eq('season', season));
   const ids = rows.map((r) => r.id);
@@ -102,7 +111,7 @@ export async function roster(db: Db, id: string, season: number) {
   const a = new Map(agg.map((x) => [x.player_season_id, x])); const s = new Map(site.map((x) => [x.player_season_id, x]));
   const h = new Map<string, string[]>(); for (const x of honors) h.set(x.player_season_id, [...(h.get(x.player_season_id) ?? []), x.text]);
   const sp = new Map<string, Record<string, any>>(); for (const x of splits) { const m = sp.get(x.player_season_id) ?? {}; m[x.split] = x; sp.set(x.player_season_id, m); }
-  return rows.map((r) => ({ ...r, player: r.college_players, college_players: undefined, stats: a.get(r.id) ?? null, site: s.get(r.id) ?? null, honors: h.get(r.id) ?? [], splits: sp.get(r.id) ?? {} }))
+  return rows.map((r) => publicBio({ ...r, player: r.college_players, college_players: undefined, stats: a.get(r.id) ?? null, site: s.get(r.id) ?? null, honors: h.get(r.id) ?? [], splits: sp.get(r.id) ?? {} }))
     .sort((x, y) => (x.jersey ?? 999) - (y.jersey ?? 999));
 }
 
@@ -169,7 +178,7 @@ export async function player(db: Db, id: string) {
   // The same honor is re-extracted from the bio every season: keep one row per text (latest season first).
   const seen = new Set<string>();
   const honorsDedup = honors.sort((a, b) => (seasons.findIndex((s) => s.id === a.player_season_id)) - (seasons.findIndex((s) => s.id === b.player_season_id))).filter((h) => { const k = h.text.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  return { player: p, seasons: seasons.map((s) => ({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers: transfersNamed, gameLog: truthLog };
+  return { player: publicBio(p), seasons: seasons.map((s) => publicBio({ ...s, program: s.college_programs, college_programs: undefined, stats: agg.find((a) => a.player_season_id === s.id) ?? null, site: site.find((a) => a.player_season_id === s.id) ?? null, splits: splits.filter((x) => x.player_season_id === s.id), ranks: ranks.filter((x) => x.player_season_id === s.id).map((x) => ({ category: x.label ?? x.poll, rank: x.rank, value: x.value, week_of: x.week_of })) })), honors: honorsDedup, career: career.data, transfers: transfersNamed, gameLog: truthLog };
 }
 
 /** The college transfer feed (/transfers): players found at a new school in `season`, the newest finds first, with

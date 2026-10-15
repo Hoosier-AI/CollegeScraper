@@ -75,7 +75,7 @@ export default function Player() {
     { key: 'fouls', label: 'Fouls', num: true, priority: 2 }, { key: 'yellow_cards', label: 'YC', num: true, priority: 2 }, { key: 'red_cards', label: 'RC', num: true, priority: 2 },
     ...(isGk ? [{ key: 'goals_allowed', label: 'GA', num: true, render: (r: any) => r.is_goalie ? n(r.goals_allowed) : '' }, { key: 'saves', label: 'Saves', num: true, render: (r: any) => r.is_goalie ? n(r.saves) : '' }] as Column<any>[] : []),
   ];
-  const bioLine = latest ? [latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null, latest.weight_lb ? `${latest.weight_lb} lb` : null].filter(Boolean).join(', ') : '';
+  const bioLine = latest ? [latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null].filter(Boolean).join(', ') : '';
   const bioUrl = latest?.bio_url ?? p.bio_url;
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats', count: seasons.length || undefined }, { id: 'matches', label: 'Matches', count: gameLog.length || undefined },
@@ -101,7 +101,7 @@ export default function Player() {
         <div className="min-w-0">
           <h1 className="display text-3xl leading-none sm:text-4xl">{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</h1>
           {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{positionWord(latest.position ?? latest.position_raw) ? `, ${positionWord(latest.position ?? latest.position_raw)!.toLowerCase()}` : ''}{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
-          <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, (latest?.high_school ?? p.high_school) ? `${latest?.high_school ?? p.high_school}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null, latest?.major ? `studying ${latest.major}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
+          <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
           <p className="mt-1 flex flex-wrap gap-x-4 text-xs">{bioUrl && <a className="inline-flex items-center gap-1 text-pitch-400 hover:text-pitch-300" href={bioUrl} target="_blank" rel="noreferrer">School bio <ExternalLink size={12} aria-hidden /></a>}<Link className="text-pitch-400 hover:text-pitch-300" to={`/compare?a=${p.id}`}>Compare with another player</Link></p>
           <PageActions className="mt-3" title={p.display_name}
             follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />

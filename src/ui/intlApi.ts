@@ -1,6 +1,7 @@
 // JSON behind the International pages (/intl): national-team football. The lists differ from Pro's (tournaments by
 // confederation, nations, the international scoreboard and leaders); a tournament, nation, player or match page reads
 // the same /api/pro/:kind/:slug routes as Pro. Same terms as Pro: shown on our pages, no public API (/v1 stays college).
+import { isMinor } from '../pro/minor.js';
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/client.js';
 import * as pro from '../pro/queries.js';
@@ -97,8 +98,9 @@ export function registerIntlApi(app: FastifyInstance): void {
   app.get<{ Params: { slug: string } }>('/api/intl/players/:slug', async (req, reply) => {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const db = getDb();
-    const { data } = await db.from('pro_players').select('id').eq('slug', req.params.slug).maybeSingle();
-    const id = (data as { id?: number } | null)?.id;
+    const { data } = await db.from('pro_players').select('id,birth_date').eq('slug', req.params.slug).maybeSingle();
+    // Under 18: no international career page either (src/pro/minor.ts).
+    const id = isMinor((data as { birth_date?: string | null } | null)?.birth_date) ? undefined : (data as { id?: number } | null)?.id;
     return id == null ? reply.code(404).send({ error: 'not found' }) : reply.header('Cache-Control', 'public, max-age=600').send(await intl.playerInternational(db, id));
   });
 

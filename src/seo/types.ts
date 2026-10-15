@@ -51,7 +51,7 @@ export interface PlayerPage {
   id: string; slug: string; name: string;
   /** Kept out of search engines on request (college_players.noindex). */
   noindex: boolean;
-  headshot_url: string | null; hometown: string | null; high_school: string | null;
+  headshot_url: string | null; hometown: string | null;
   /** Newest first. */
   seasons: PlayerSeason[];
   honors: string[];
