@@ -259,7 +259,7 @@ export function Crumbs({ items }: { items: { label: ReactNode; to?: string }[] }
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: 'College', links: [['/matches', 'Matches'], ['/conferences', 'Conferences'], ['/rankings', 'Rankings'], ['/team-of-the-week', 'Team of the week'], ['/tournament', 'NCAA tournament odds'], ['/tv', 'On TV']] },
   { title: 'Pro and International', links: [['/pro/matches', 'Pro matches'], ['/pro/leagues', 'Leagues'], ['/pro/abroad', 'Americans abroad'], ['/intl/matches', 'International matches'], ['/intl/tournaments', 'Tournaments'], ['/intl/rankings', 'World rankings']] },
-  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Data sources and credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API']] },
+  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Data sources and credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API'], ['/contact#who', 'Advertise with us']] },
   { title: 'Legal', links: [['/terms', 'Terms of use'], ['/privacy', 'Privacy'], ['/privacy#browser', 'Cookies and storage'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility']] },
 ];
 
@@ -300,7 +300,7 @@ export function Footer() {
           <p className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-chalk-400">
             <span>© {year} Plaibook Technologies, Inc.</span>
             <span>Stats are provided as-is. <Link to="/corrections" className="text-chalk-300 hover:text-pitch-300">See an error? Report it.</Link></span>
-            <span>No cookies, no ad tracking, and we never sell your data.</span>
+            <span>We don't sell your data. See <Link to="/privacy" className="text-chalk-300 hover:text-pitch-300">Privacy</Link>.</span>
           </p>
         </div>
       </div>

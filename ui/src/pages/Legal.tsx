@@ -1,8 +1,8 @@
 // The policy and information pages (/about, /contact, /terms, /privacy, /sources, /data-use, /copyright, /corrections,
 // /accessibility). One component: the text comes from the server (src/legal/content.ts via /api/legal/:slug), the same
 // text the server renders for search engines. /corrections adds the request form.
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2 } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
@@ -44,6 +44,9 @@ function BlockView({ b }: { b: Block }) {
 
 export default function Legal({ slug }: { slug: string }) {
   const q = useQuery({ queryKey: ['legal', slug], queryFn: () => api<Page>(`/api/legal/${slug}`), staleTime: 3600_000 });
+  // A link to a section (/privacy#athletes, /contact#who): scroll there once the text has loaded.
+  const { hash } = useLocation();
+  useEffect(() => { if (q.data && hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView(); }, [q.data, hash]);
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (q.isPending) return <div className="mx-auto max-w-3xl space-y-3"><Skeleton className="h-10" /><Skeleton className="h-96" /></div>;
   const p = q.data!;

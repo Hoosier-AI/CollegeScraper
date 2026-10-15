@@ -23,7 +23,7 @@ const mail = (subject: string) => `[${CONTACT}](mailto:${CONTACT}?subject=${enco
 const ABOUT: LegalPage = {
   slug: 'about', path: '/about', nav: 'About', title: 'About Plaibook Stats',
   description: 'Plaibook Stats is a free soccer statistics site for NCAA college soccer, professional leagues and international football, run by Plaibook Technologies, Inc.',
-  intro: `${SITE_NAME} is a free soccer statistics site covering NCAA college soccer (Divisions I, II and III, men's and women's), professional leagues around the world and international football. It is run by ${COMPANY}, the company behind Plaibook, the coaching platform at plaibook.soccer.`,
+  intro: `${SITE_NAME} is a free soccer statistics site covering NCAA college soccer (Divisions I, II and III, men's and women's), professional leagues around the world and international football. It is run by ${COMPANY}, the company behind Plaibook, the coaching platform at plaibook.soccer. The Site is free to use; it is supported by advertising, sponsorships and paid data access.`,
   sections: [
     { id: 'what', heading: 'What you will find here', blocks: [B([
       'Scores, schedules, box scores, lineups and live games for every NCAA soccer program we can find, with team and player pages, conference tables, rankings, transfers and TV listings.',
@@ -54,6 +54,7 @@ const CONTACT_PAGE: LegalPage = {
       ['Copyright', 'Email (see [Copyright](/copyright))', 'Copyright notice'],
       ['Our crawler visiting your site', 'Email (see [Data use and bots](/data-use))', 'Crawler'],
       ['Data access, the API, partnerships', 'Email', 'Data access'],
+      ['Advertising and sponsorships', 'Email', 'Advertising'],
       ['Press', 'Email', 'Press'],
     ])] },
     { id: 'company', heading: 'Company', blocks: [`${SITE_NAME} is operated by ${COMPANY}. Email: ${CONTACT}.`] },
@@ -92,8 +93,11 @@ const TERMS: LegalPage = {
     { id: 'third', heading: 'Links and third-party content', blocks: [
       'News headlines, pictures, watch links and other links lead to sites we do not control; their owners are responsible for them. We show a headline, the publisher and a link, and the picture a publisher supplies in its own feed, loaded from the publisher.',
     ] },
+    { id: 'ads', heading: 'Advertising, sponsorships and paid features', blocks: [
+      'The Site may show advertising and sponsored content, which we label as such. Advertisers are responsible for their ads and for the products and offers in them; an ad on the Site is not our endorsement. We may also offer paid features or paid API access, on terms shown when you sign up or buy. Ads are never aimed at players or based on information about them.',
+    ] },
     { id: 'api', heading: 'The public API', blocks: [
-      'Our college API at /v1 is offered for building apps and research. Requests without a key are limited (about 60 a minute); keys with higher limits are available on request. Professional and licensed data is not available through the API. You may not resell API data or present it as your own, and you must credit Plaibook Stats. We may change or withdraw the API or revoke a key at any time.',
+      'Our college API at /v1 is offered for building apps and research. Requests without a key are limited (about 60 a minute); free and paid keys with higher limits are available (email us with the subject "Data access"). Professional and licensed data is not available through the API. You may not resell API data or present it as your own, and you must credit Plaibook Stats. We may change or withdraw the API or revoke a key at any time.',
     ] },
     { id: 'warranty', heading: 'Disclaimer of warranties', blocks: [
       'THE SITE AND ITS DATA ARE PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ACCURACY, COMPLETENESS, MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT, TO THE FULLEST EXTENT THE LAW ALLOWS.',
@@ -118,8 +122,8 @@ const TERMS: LegalPage = {
 
 const PRIVACY: LegalPage = {
   slug: 'privacy', path: '/privacy', nav: 'Privacy', title: 'Privacy Policy',
-  description: 'What Plaibook Stats collects (very little), what stays in your browser, no cookies, no ad tracking, and the rights you have.',
-  intro: `${SITE_NAME} has no accounts, no advertising and no cookies. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}.`,
+  description: 'What Plaibook Stats collects (very little), what stays in your browser, how advertising would work, and the rights you have.',
+  intro: `${SITE_NAME} has no accounts, and today it shows no advertising and sets no cookies. We may add advertising or sponsorships to keep the Site free; if that ever involves cookies or tracking, we will update this policy first and ask for your consent where the law requires it. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}.`,
   sections: [
     { id: 'collect', heading: 'What we collect when you visit', blocks: [
       T(['What', 'Why', 'How long'], [
@@ -132,13 +136,15 @@ const PRIVACY: LegalPage = {
       'We do not collect names, emails or anything else unless you send it to us.',
     ] },
     { id: 'browser', heading: 'Cookies and what stays in your browser', blocks: [
-      'We do not use cookies, tracking pixels, fingerprinting or third-party analytics. A few preferences are kept in your browser\'s local storage, on your device only, and are never sent to us: the teams and players you follow, and whether you are looking at men\'s or women\'s soccer. Clearing your browser\'s site data removes them.',
+      'Today we do not use cookies, tracking pixels, fingerprinting or third-party analytics. A few preferences are kept in your browser\'s local storage, on your device only, and are never sent to us: the teams and players you follow, and whether you are looking at men\'s or women\'s soccer. Clearing your browser\'s site data removes them.',
+      'Advertising: if we add ads, sponsor ads we serve ourselves will not use cookies or track you. If we work with an advertising partner that uses cookies or similar technology, we will name the partner here, ask for your consent where the law requires it (for example in the EU and UK) and give you a way to say no.',
       'Some pages show pictures and logos loaded from other sites (publishers\' news pictures, team logos, player photos on school sites). Your browser fetches them directly; we ask it not to tell those sites which page you were on.',
     ] },
     { id: 'use', heading: 'How we use it, and who else sees it', blocks: [
-      'We use this information only to run, secure and improve the Site. We do not sell or share personal information, we do not run ads or ad tracking, and we do not build profiles of visitors.',
+      'We use this information only to run, secure and improve the Site. We do not sell personal information, today we show no ads and run no ad tracking, and we do not build profiles of visitors.',
       'Service providers that host the Site and its database process data for us under contract: Render (hosting) and Supabase (database), both in the United States. We may disclose information if the law requires it or to protect the Site and its users.',
-      'Browser "Do Not Track" and Global Privacy Control signals: we do not track you across sites or sell data, so there is nothing to switch off; we honour both anyway.',
+      'If we later show ads from a partner that uses cookies or similar technology, sharing data with that partner for ads may count as a "sale" or "sharing" under some US state laws. Before that starts, we will add a "Your privacy choices" link that lets you opt out, and treat a Global Privacy Control signal from your browser as that opt-out.',
+      'Browser "Do Not Track" and Global Privacy Control signals: we honour both.',
     ] },
     { id: 'athletes', heading: 'Information about athletes and coaches', blocks: [
       'The Site shows public athletic records: rosters, positions, class years, heights, hometowns, previous schools, game statistics and results, as published by schools, conferences, competitions and data providers. We do not show weights, majors or high schools, we do not collect college players\' birth dates, and we do not publish profiles of players under 18 in youth international competitions.',

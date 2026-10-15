@@ -8,7 +8,9 @@ const pitch = { 300: '#5EEAD4', 400: '#2DD4BF', 500: '#14B8A6', 600: '#0F9F8F' }
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
-    screens: { sm: '640px', md: '768px', lg: '1024px', xl: '1280px', '2xl': '1536px' },
+    // `rails`: wide screens get a 160px column on each side of the page for advertising (components/AdRail.tsx).
+    // From 1600px the stats column still has about 1184px, close to a 1280px laptop's.
+    screens: { sm: '640px', md: '768px', lg: '1024px', xl: '1280px', '2xl': '1536px', rails: '1600px' },
     extend: {
       colors: {
         field, chalk, pitch,

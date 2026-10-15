@@ -34,6 +34,12 @@ describe('policy pages', () => {
       expect(legalHead(s, { baseUrl: 'https://www.plaibook.live', currentSeason: 2026 }).canonical).toBe(`https://www.plaibook.live/${s}`);
     }
   });
+  it('leaves room for advertising: no page promises there will never be ads', () => {
+    const all = JSON.stringify(LEGAL_SLUGS.map((s) => LEGAL[s]));
+    expect(all).not.toMatch(/no advertising and no cookies|we do not run ads|no cookies, no ad tracking/i);
+    expect(JSON.stringify(LEGAL.terms)).toContain('Advertising, sponsorships and paid features');
+    expect(JSON.stringify(LEGAL.privacy)).toContain('Your privacy choices');
+  });
   it('splits inline links', () => {
     expect(inlineParts('See [Terms](/terms) now')).toEqual([{ text: 'See ' }, { text: 'Terms', href: '/terms' }, { text: ' now' }]);
   });
