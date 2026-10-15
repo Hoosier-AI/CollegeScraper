@@ -227,4 +227,4 @@ export function limiter(n: number) {
     try { return await fn(); } finally { active -= 1; queue.shift()?.(); }
   };
 }
-export const ogCache = () => new LruCache<Buffer>(300, 6 * 3600_000);
+export const ogCache = () => new LruCache<Buffer>(800, 6 * 3600_000);

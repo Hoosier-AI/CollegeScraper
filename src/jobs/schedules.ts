@@ -36,7 +36,7 @@ registerJob('nightly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
   await step(ctx, 'fetch-games-ncaa', { season, recent_days: 2, refetch: true });
-  await step(ctx, 'sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'], concurrency: 4 });
+  await step(ctx, 'sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'], concurrency: 6 });
   await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season });
   await step(ctx, 'compute-aggregates', { season, transfers: true });
@@ -68,7 +68,7 @@ registerJob('weekly', async (ctx) => {
   // Every program's schedule and box scores once a week, whatever NCAA.com listed: games NCAA.com never carried
   // (UT Tyler's conference games in September) only reach us through the school's own schedule, and the nightly
   // sync is limited to programs NCAA.com saw play in the last two days.
-  await step(ctx, 'sync-site', { season, stages: ['schedule', 'boxscores'], concurrency: 4 });
+  await step(ctx, 'sync-site', { season, stages: ['schedule', 'boxscores'], concurrency: 6 });
   await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
   await step(ctx, 'resolve-orphans', { season });
   await step(ctx, 'reconcile-games', { season, all: true });

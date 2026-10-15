@@ -74,7 +74,8 @@ const wantsHtml = (req: FastifyRequest) => { const a = String(req.headers.accept
 export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   const { data, template } = opts;
   const baseUrl = trimBase(opts.baseUrl);
-  const cache = opts.cache ?? new LruCache<CachedPage>(500, 5 * 60_000);
+  // 1,500 rendered pages (about 60 MB) since the 2 GB instance; was 500 on 512 MB.
+  const cache = opts.cache ?? new LruCache<CachedPage>(1500, 5 * 60_000);
   const sitemaps = opts.sitemaps ?? new Sitemaps(data, baseUrl, {}, opts.pro ?? null, opts.intl ?? null, opts.extra?.sitemapCoaches ?? null);
   const warn = (obj: unknown, msg: string) => opts.log?.warn(obj, msg);
   const ctx = (): HeadContext => ({ baseUrl, currentSeason: data.currentSeason() });

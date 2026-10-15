@@ -211,6 +211,9 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
   // A third lane for short side jobs (weather) so they never wait hours behind the nightly crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail', 'weather'], idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
+  // A second worker for finished college matches' box scores (since the 2 GB instance, 2026-10-15): a busy night's
+  // finals no longer queue for hours behind one worker. Each run claims its own games.
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail'], idleMs: 15_000, lane: 'aux-b' }).catch((err) => { log.error({ err: String(err) }, 'aux-b worker crashed'); process.exit(1); });
   // A fourth for Plaibook Stats Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
   // A fifth for the pro bulk crawl (minutes per run): never behind the college crawl, never in front of live pro scores.
