@@ -46,15 +46,17 @@ export default function Home() {
 
   return (
     <div className="space-y-8 pb-4">
-      <section className="pt-2 sm:pt-6">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-          <div className="max-w-3xl">
-            <h1 className="display text-4xl leading-[0.92] text-chalk-100 sm:text-6xl">Soccer stats from college to the World Cup</h1>
-            <p className="mt-3 max-w-2xl text-base text-chalk-300">Every NCAA program, MLS, the NWSL and the pro leagues abroad, and national teams back to 1872.</p>
-          </div>
-          <SegmentedControl label="Men's or women's" value={gender} onChange={setGender} options={[{ value: 'm', label: 'Men' }, { value: 'w', label: 'Women' }]} />
+      {/* Title on the left, search and the men's/women's switch on the right: on a wide screen the right half was empty
+          and the matches started a screen down. */}
+      <section className="grid grid-cols-1 items-end gap-x-10 gap-y-5 pt-2 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)]">
+        <div className="min-w-0">
+          <h1 className="display text-4xl leading-[0.92] text-chalk-100 sm:text-5xl xl:text-6xl">Soccer stats from college to the World Cup</h1>
+          <p className="mt-3 max-w-2xl text-base text-chalk-300">Every NCAA program, MLS, the NWSL and the pro leagues abroad, and national teams back to 1872.</p>
         </div>
-        <div className="mt-5 max-w-2xl"><UniversalSearch examples={[...EXAMPLES[gender]]} /></div>
+        <div className="min-w-0 space-y-3">
+          <div className="flex justify-end"><SegmentedControl label="Men's or women's" value={gender} onChange={setGender} options={[{ value: 'm', label: 'Men' }, { value: 'w', label: 'Women' }]} /></div>
+          <UniversalSearch examples={[...EXAMPLES[gender]]} />
+        </div>
       </section>
 
       <FollowingPanel />

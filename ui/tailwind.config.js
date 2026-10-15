@@ -34,8 +34,8 @@ export default {
         '3xl': ['2.25rem', { lineHeight: '2.5rem' }],
         '4xl': ['2.75rem', { lineHeight: '3rem' }],
       },
-      // Wide enough for a table beside a side column on a 1440px screen.
-      maxWidth: { page: '88rem' },
+      // The page's width: a 1920px screen is filled (88rem left 250px empty on each side of it, 2026-10-15).
+      maxWidth: { page: '120rem' },
       keyframes: { shimmer: { '0%': { opacity: '0.5' }, '50%': { opacity: '1' }, '100%': { opacity: '0.5' } } },
       animation: { shimmer: 'shimmer 1.6s ease-in-out infinite' },
     },

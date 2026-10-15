@@ -24,7 +24,10 @@ import * as ex from './extra.js';
 import { cardFor, limiter, ogCache, renderCard } from './og.js';
 import type { ExtraSeo } from './extra.js';
 
-export const PAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
+// A minute in the browser, no stale-while-revalidate: with it a browser kept showing a page (and the app build it names)
+// for up to a day after a deploy, so changes looked like they had not shipped (2026-10-15). The server's own render
+// cache (500 pages, five minutes) is what keeps this cheap.
+export const PAGE_CACHE_CONTROL = 'public, max-age=60, s-maxage=600';
 const REDIRECT_CACHE_CONTROL = 'public, max-age=3600';
 const NOT_FOUND_CACHE_CONTROL = 'public, max-age=60';
 const SCHOOL = /^[a-z0-9][a-z0-9._-]{0,80}$/i;

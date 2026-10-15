@@ -254,7 +254,7 @@ export function VerifiedMark({ state, details, compact }: { state: VerifyState; 
  *  narrower ones). The rail is where a page puts what would otherwise be empty width. */
 export function PageWithRail({ children, rail, label = 'More about this' }: { children: ReactNode; rail: ReactNode; label?: string }) {
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]">
       <div className="min-w-0 space-y-5">{children}</div>
       <aside aria-label={label} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">{rail}</aside>
     </div>
