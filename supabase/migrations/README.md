@@ -91,7 +91,7 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 194_stats_traffic_intl.sql | `stats_traffic` section_days splits International from Pro (an `intl` column) for the hub's Traffic tab | yes (2026-10-15) |
 | 195_college_rate_recent_scope.sql | `college_rate_recent` picks games that went final or were re-fetched recently (its `updated_at` test matched every final, ~28k games) | yes (2026-10-15) |
 | 196_pro_crawl_matrix_json.sql | `pro_crawl_matrix_json()`: the Crawling console's matrix in one call (it was paged three at a time, each page the whole 15-30 s function) | yes (2026-10-16) |
-| 197_stats_money.sql | `stats_requests`: advertising, sponsorship and data-access kinds plus `company`, for the /advertise form (leads go to the hub's Deals page) | no |
+| 197_stats_money.sql | `stats_requests`: advertising, sponsorship and data-access kinds plus `company`, for the /advertise form (leads go to the hub's Deals page) | yes (2026-10-16) |
 
 Two files share the number 171 (`171_pro_leaders_fast.sql` and `171_pro_more_player_stats.sql`); both are applied, fast first.
 
