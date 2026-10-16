@@ -5,7 +5,7 @@ import { kvGet, selectAll, type Db } from '../db/client.js';
 import { jobNames, type WorkerHeartbeat } from '../jobs/runner.js';
 import { JOB_META, metaFor, SOURCE_JOBS } from '../jobs/catalogue.js';
 import { SCHEDULE, nextFire, type SchedulerState } from '../jobs/scheduler.js';
-import { KV, liveSettings, schedulerOverrides, schedulerPaused, crawlPaused, cachedKv } from './settings.js';
+import { KV, liveSettings, schedulerOverrides, schedulerPaused, crawlPaused, cachedKv, adsSettings, sponsorSettings } from './settings.js';
 import { evaluateHealth, type Health } from './health.js';
 import { getFetcherStats } from '../jobs/fetcher.js';
 import { currentSeason } from '../jobs/seasons.js';
@@ -180,9 +180,9 @@ export async function crawlHealth(db: Db) {
 
 export async function settings(db: Db) {
   const [live, paused, crawl, overrides, contact, sources] = await Promise.all([liveSettings(db), schedulerPaused(db), crawlPaused(db), schedulerOverrides(db), cachedKv<string | null>(db, KV.contactEmail, null), cachedKv<boolean>(db, KV.proSourcesVisible, false)]);
-  const off = await cachedKv<string[]>(db, KV.proSourcesOff, []);
+  const [off, ads, sponsors] = await Promise.all([cachedKv<string[]>(db, KV.proSourcesOff, []), adsSettings(db), sponsorSettings(db)]);
   const { data: feeds } = await db.from('news_sources').select('id,kind,name,url,scope,gender,enabled,show_images,terms_url,last_ok_at,last_error,fails,items').in('kind', ['publisher', 'gdelt', 'guardian']).order('kind').order('name');
-  return { live, scheduler_paused: paused, crawl_paused: crawl, overrides, contact_email: contact ?? loadConfig().contactEmail, pro_sources_visible: !!sources, pro_sources_off: Array.isArray(off) ? off : [], news_feeds: feeds ?? [], guardian_key_set: !!loadConfig().GUARDIAN_API_KEY, jobs: Object.keys(JOB_META) };
+  return { live, scheduler_paused: paused, crawl_paused: crawl, overrides, contact_email: contact ?? loadConfig().contactEmail, pro_sources_visible: !!sources, pro_sources_off: Array.isArray(off) ? off : [], news_feeds: feeds ?? [], guardian_key_set: !!loadConfig().GUARDIAN_API_KEY, ads, sponsors, jobs: Object.keys(JOB_META) };
 }
 
 /** College crawl progress for the hub: every stage's programs synced (by division), box-score coverage, quality, recent runs. */

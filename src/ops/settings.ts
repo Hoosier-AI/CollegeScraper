@@ -1,6 +1,7 @@
 // Runtime settings and flags the console edits without a redeploy. Stored in college_kv, read with a short
 // in-process cache so hot paths (scheduler tick, worker claim, live job) cost one round trip every few seconds.
 import { kvGet, kvSet, type Db } from '../db/client.js';
+import { normalizeAds, normalizeSponsors, type AdsSettings, type Sponsor } from '../money/config.js';
 
 export interface LiveSettings {
   /** Minutes between scoreboard reads while games are pending (1 = every scheduler minute). */
@@ -29,6 +30,10 @@ export const KV = {
   proSourcesVisible: 'settings:pro_sources_visible',
   /** Scraped sources switched off in the hub (shown first otherwise): ['asa', 'wikipedia', ...]. */
   proSourcesOff: 'settings:pro_sources_off',
+  /** Display ads (Google AdSense): { enabled, client, slots }. Off until the hub switches them on. */
+  ads: 'settings:ads',
+  /** Sponsors shown as "Presented by ..." on their section: [{ placement, name, url, tagline, starts_on, ends_on }]. */
+  sponsors: 'settings:sponsors',
   /** One key per lane per host, so a laptop running the service never masks a dead lane on Render. */
   heartbeat: (lane: string, host: string) => `worker:heartbeat:${lane}@${host}`,
   heartbeatPrefix: 'worker:heartbeat:',
@@ -68,5 +73,7 @@ export function normalizeLive(raw: Partial<LiveSettings> | null | undefined): Li
 
 export async function liveSettings(db: Db): Promise<LiveSettings> { return normalizeLive(await cachedKv<Partial<LiveSettings> | null>(db, KV.live, null)); }
 export const schedulerPaused = (db: Db) => cachedKv<boolean>(db, KV.schedulerPaused, false);
+export const adsSettings = async (db: Db): Promise<AdsSettings> => normalizeAds(await cachedKv<unknown>(db, KV.ads, null));
+export const sponsorSettings = async (db: Db): Promise<Sponsor[]> => normalizeSponsors(await cachedKv<unknown>(db, KV.sponsors, []));
 export const crawlPaused = (db: Db) => cachedKv<boolean>(db, KV.crawlPaused, false);
 export const schedulerOverrides = (db: Db) => cachedKv<SchedulerOverrides>(db, KV.schedulerOverrides, {});

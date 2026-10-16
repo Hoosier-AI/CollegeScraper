@@ -259,8 +259,8 @@ export function Crumbs({ items }: { items: { label: ReactNode; to?: string }[] }
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: 'College', links: [['/matches', 'Matches'], ['/conferences', 'Conferences'], ['/rankings', 'Rankings'], ['/team-of-the-week', 'Team of the week'], ['/tournament', 'NCAA tournament odds'], ['/tv', 'On TV']] },
   { title: 'Pro and International', links: [['/pro/matches', 'Pro matches'], ['/pro/leagues', 'Leagues'], ['/pro/abroad', 'Americans abroad'], ['/intl/matches', 'International matches'], ['/intl/tournaments', 'Tournaments'], ['/intl/rankings', 'World rankings']] },
-  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API'], ['/contact#who', 'Advertise with us']] },
-  { title: 'Legal', links: [['/terms', 'Terms of use'], ['/privacy', 'Privacy'], ['/privacy#browser', 'Cookies and storage'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility']] },
+  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Credits'], ['/data-use', 'Data use and bots'], ['/v1/openapi.json', 'Public API'], ['/advertise', 'Advertise with us']] },
+  { title: 'Legal', links: [['/terms', 'Terms of use'], ['/privacy', 'Privacy'], ['/privacy#browser', 'Cookies and storage'], ['/privacy-choices', 'Your privacy choices'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility']] },
 ];
 
 export function Footer() {

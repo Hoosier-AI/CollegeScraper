@@ -6,6 +6,8 @@ import { FiltersProvider } from './lib/filters';
 import { BottomBar, Footer, TopBar, useFocusMain } from './components/shell';
 import { Skeleton } from './components/primitives';
 import { AdRail } from './components/AdRail';
+import { AdSlot } from './components/AdSlot';
+import { SponsorLine } from './components/SponsorLine';
 import { removeServerSummary } from './lib/entity';
 import { trackView } from './lib/track';
 import { setLinkSection } from './lib/section';
@@ -29,7 +31,8 @@ export default function App() {
       <a href="#main" className="sr-only-focusable">Skip to content</a>
       <div className="flex min-h-[100dvh] flex-col">
         <TopBar />
-        {/* From 1600px wide: a 160px rail on each side, kept for advertising (components/AdRail.tsx). */}
+        <SponsorLine />
+        {/* From 1600px wide: a 160px rail on each side for advertising (components/AdRail.tsx). */}
         <div className="mx-auto w-full max-w-page flex-1 px-4 sm:px-6 rails:grid rails:grid-cols-[160px_minmax(0,1fr)_160px] rails:gap-6">
           <AdRail side="left" />
           <main id="main" tabIndex={-1} className="min-w-0 pb-24 pt-5 outline-none md:pb-6">
@@ -39,6 +42,8 @@ export default function App() {
           </main>
           <AdRail side="right" />
         </div>
+        {/* One ad above the footer on every screen size while ads are on; a new unit for each page. */}
+        <AdSlot key={pathname} slot="inline" className="mx-auto mt-10 w-full max-w-page px-4 sm:px-6" />
         <Footer />
         <BottomBar />
       </div>

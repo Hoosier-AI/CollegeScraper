@@ -1,15 +1,17 @@
 // The policy and information pages (/about, /contact, /terms, /privacy, /sources, /data-use, /copyright, /corrections,
-// /accessibility). One component: the text comes from the server (src/legal/content.ts via /api/legal/:slug), the same
-// text the server renders for search engines. /corrections adds the request form.
+// /accessibility, /advertise, /privacy-choices). One component: the text comes from the server (src/legal/content.ts via
+// /api/legal/:slug), the same text the server renders for search engines. /corrections adds the request form, /advertise
+// the business enquiry form and /privacy-choices the personalised-ads switch.
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2 } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
+import { gpcOn, setPersonalisedOff, useStoredChoice } from '../lib/money';
 import { ErrorBox, Skeleton } from '../components/primitives';
 
 type Block = string | { bullets: string[] } | { table: { head: string[]; rows: string[][] } };
-interface Page { slug: string; path: string; title: string; description: string; intro: string; updated: string; sections: { id: string; heading: string; blocks: Block[] }[]; form?: 'request' }
+interface Page { slug: string; path: string; title: string; description: string; intro: string; updated: string; sections: { id: string; heading: string; blocks: Block[] }[]; form?: 'request' | 'advertise' | 'privacy-choices' }
 
 /** Paragraph text with [text](url) links: our paths open in the app, everything else in a new tab. */
 function Inline({ text }: { text: string }) {
@@ -59,6 +61,8 @@ export default function Legal({ slug }: { slug: string }) {
         <p className="text-[15px] leading-relaxed text-chalk-200"><Inline text={p.intro} /></p>
       </header>
       {p.form === 'request' && <RequestForm />}
+      {p.form === 'advertise' && <AdvertiseForm />}
+      {p.form === 'privacy-choices' && <PrivacyChoices />}
       {toc && (
         <nav aria-label="On this page" className="frame px-4 py-3 text-sm">
           <p className="mb-1.5 text-xs font-medium text-chalk-400">On this page</p>
@@ -138,5 +142,82 @@ function RequestForm() {
         <p className="text-xs text-chalk-500">We use your email only to answer this request. See <Link to="/privacy" className="text-pitch-300 hover:text-pitch-200">Privacy</Link>.</p>
       </div>
     </form>
+  );
+}
+
+const BUSINESS_KINDS = [
+  { value: 'sponsorship', label: 'Sponsor a section or the whole Site' },
+  { value: 'advertising', label: 'A display ad campaign' },
+  { value: 'data_access', label: 'Data or API access' },
+];
+
+/** The advertise and data access form: the same endpoint and limits as the request form, a company required. */
+function AdvertiseForm() {
+  const [f, setF] = useState({ kind: 'sponsorship', name: '', company: '', email: '', details: '', website: '' });
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setState('sending'); setError(null);
+    try {
+      await api('/api/requests', { method: 'POST', body: JSON.stringify(f) });
+      setState('sent');
+    } catch (err) {
+      setState('idle');
+      setError(err instanceof ApiError ? err.message : 'Could not send. Please try again, or email us.');
+    }
+  }
+  if (state === 'sent') return (
+    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 px-4 py-4 ring-1 ring-inset ring-pitch-400/30">
+      <CheckCircle2 size={20} aria-hidden className="mt-0.5 shrink-0 text-pitch-300" />
+      <div><p className="font-semibold text-chalk-100">Thanks, we have it</p><p className="mt-1 text-sm text-chalk-300">We will reply to {f.email} within 2 business days.</p></div>
+    </div>
+  );
+  const label = 'mb-1 block text-xs font-medium text-chalk-300';
+  return (
+    <form onSubmit={submit} className="frame space-y-3 px-4 py-4" aria-labelledby="adv-title">
+      <h2 id="adv-title" className="text-base font-semibold text-chalk-100">Get in touch</h2>
+      <div>
+        <label htmlFor="adv-kind" className={label}>What are you interested in?</label>
+        <select id="adv-kind" className="input w-full" value={f.kind} onChange={set('kind')}>{BUSINESS_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><label htmlFor="adv-company" className={label}>Company or organisation</label><input id="adv-company" required autoComplete="organization" className="input w-full" value={f.company} onChange={set('company')} /></div>
+        <div><label htmlFor="adv-name" className={label}>Your name (optional)</label><input id="adv-name" autoComplete="name" className="input w-full" value={f.name} onChange={set('name')} /></div>
+      </div>
+      <div><label htmlFor="adv-email" className={label}>Work email</label><input id="adv-email" type="email" required autoComplete="email" className="input w-full" value={f.email} onChange={set('email')} /></div>
+      <div>
+        <label htmlFor="adv-details" className={label}>Details</label>
+        <textarea id="adv-details" required minLength={10} rows={5} className="input h-auto min-h-[8rem] w-full py-2" placeholder="What you would like to do, which sections or data, your dates and budget if you know them." value={f.details} onChange={set('details')} />
+      </div>
+      {/* A field people never see: bots fill it in. */}
+      <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden"><label htmlFor="adv-website">Website</label><input id="adv-website" tabIndex={-1} autoComplete="off" value={f.website} onChange={set('website')} /></div>
+      {error && <p role="alert" className="text-sm text-loss">{error}</p>}
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" className="btn-primary" disabled={state === 'sending'}>{state === 'sending' ? 'Sending…' : 'Send'}</button>
+        <p className="text-xs text-chalk-500">We use your details only to reply. See <Link to="/privacy" className="text-pitch-300 hover:text-pitch-200">Privacy</Link>.</p>
+      </div>
+    </form>
+  );
+}
+
+/** The personalised-ads switch, kept in this browser. Global Privacy Control turns personalised ads off regardless. */
+function PrivacyChoices() {
+  const off = useStoredChoice();
+  const gpc = gpcOn();
+  const effectiveOff = gpc || off;
+  return (
+    <section className="frame space-y-3 px-4 py-4" aria-labelledby="choice-title">
+      <h2 id="choice-title" className="text-base font-semibold text-chalk-100">Personalised ads</h2>
+      <label className="flex items-start gap-3 text-sm text-chalk-200">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-pitch-400" checked={!effectiveOff} disabled={gpc} onChange={(e) => setPersonalisedOff(!e.target.checked)} />
+        <span>Allow personalised ads on this Site<span className="mt-0.5 block text-xs text-chalk-400">Off means we ask Google for ads that are not based on your visits to other sites (opting out of the "sale" or "sharing" of personal information).</span></span>
+      </label>
+      <p role="status" className="text-sm text-chalk-300">
+        {gpc ? 'Your browser sends Global Privacy Control, so personalised ads are off here.' : effectiveOff ? 'Personalised ads are off in this browser.' : 'Personalised ads are allowed in this browser.'}
+        {' '}New ads follow your choice straight away; reload the page for ads already showing.
+      </p>
+    </section>
   );
 }

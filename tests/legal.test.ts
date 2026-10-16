@@ -15,6 +15,12 @@ describe('request form', () => {
     expect(checkRequest({ kind: 'other', email: 'a@b.co', details: 'long enough text', page_url: 'javascript:alert(1)' })).toMatchObject({ ok: false });
     expect(checkRequest({ kind: 'other', email: 'a@b.co', details: 'long enough text', website: 'http://spam' })).toEqual({ ok: false, error: 'spam', spam: true });
   });
+  it('takes advertising, sponsorship and data-access enquiries with a company', () => {
+    const r = checkRequest({ kind: 'sponsorship', email: 'deals@brand.com', company: '  Brand  Co ', details: 'We would like to sponsor the college section.' });
+    expect(r).toMatchObject({ ok: true, row: { kind: 'sponsorship', company: 'Brand Co' } });
+    expect(checkRequest({ kind: 'data_access', email: 'a@b.co', details: 'We want API access for our app.' })).toMatchObject({ ok: false, error: 'Enter your company or organisation.' });
+    expect(checkRequest({ kind: 'correction', email: 'a@b.co', details: 'The score was 2-1, not 2-0.' })).toMatchObject({ ok: true, row: { company: null } });
+  });
   it('hashes the IP one way, stable per salt', () => {
     expect(ipHash('1.2.3.4', 's')).toBe(ipHash('1.2.3.4', 's'));
     expect(ipHash('1.2.3.4', 's')).not.toContain('1.2.3.4');

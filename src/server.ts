@@ -1,5 +1,7 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
 import { registerLegalApi } from './legal/routes.js';
+import { adsTxt, ADS_OFF, buildCsp } from './money/config.js';
+import { adsSettings } from './ops/settings.js';
 import { makeExtraSeo } from './seo/extra.js';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
@@ -62,11 +64,21 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
 };
+// The page's Content-Security-Policy: our own scripts only, plus Google's ad hosts while ads are on (src/money/config.ts).
+// A failed settings read keeps the strict policy.
+const adsOn = async () => { try { return (await adsSettings(getDb())).enabled; } catch { return false; } };
 app.addHook('onSend', async (_req, reply, payload) => {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) if (!reply.hasHeader(k)) reply.header(k, v);
+  if (!reply.hasHeader('Content-Security-Policy')) reply.header('Content-Security-Policy', buildCsp(await adsOn()));
   return payload;
+});
+
+// ads.txt: names the site's one ad seller (Google AdSense) once a publisher id is set; 404 until then.
+app.get('/ads.txt', async (_req, reply) => {
+  const body = adsTxt(await adsSettings(getDb()).catch(() => ADS_OFF));
+  if (!body) return reply.code(404).type('text/plain').send('not found');
+  return reply.header('cache-control', 'public, max-age=3600').type('text/plain; charset=utf-8').send(body);
 });
 
 // Errors: logged with the route; a visitor sees a plain message, never a database error or a stack.

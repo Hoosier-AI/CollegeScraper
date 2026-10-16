@@ -41,7 +41,7 @@ const TeamOfWeek = lazy(() => import('./pages/TeamOfWeek'));
 const Tournament = lazy(() => import('./pages/Tournament'));
 const Records = lazy(() => import('./pages/Records'));
 const Legal = lazy(() => import('./pages/Legal'));
-const LEGAL_PAGES = ['about', 'contact', 'terms', 'privacy', 'sources', 'data-use', 'copyright', 'corrections', 'accessibility'];
+const LEGAL_PAGES = ['about', 'contact', 'terms', 'privacy', 'sources', 'data-use', 'copyright', 'corrections', 'accessibility', 'advertise', 'privacy-choices'];
 const Referee = lazy(() => import('./pages/Referee'));
 const ProReferees = lazy(() => import('./pages/pro/ProReferees'));
 const ProReferee = lazy(() => import('./pages/pro/ProReferee'));

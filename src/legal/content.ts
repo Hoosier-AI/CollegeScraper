@@ -1,5 +1,5 @@
 // The policy and information pages of Plaibook Stats (/about, /contact, /terms, /privacy, /sources, /data-use,
-// /copyright, /corrections, /accessibility). Pure data, one copy: the server renders it for search engines and
+// /copyright, /corrections, /accessibility, /advertise, /privacy-choices). Pure data, one copy: the server renders it for search engines and
 // no-JavaScript readers (src/seo/legal.ts) and the app fetches it from /api/legal/:slug, so the two never differ.
 // A block is a paragraph (string; [text](url) makes a link), { bullets }, or { table: { head, rows } }.
 // Written for the free stats site; the paid Plaibook app (plaibook.soccer) has its own policies.
@@ -9,12 +9,12 @@ export const SITE_NAME = 'Plaibook Stats';
 export const SITE = 'www.plaibook.live';
 /** The one address on every page. Change it here only. */
 export const CONTACT = 'support@plaibook.soccer';
-export const UPDATED = 'October 15, 2026';
+export const UPDATED = 'October 16, 2026';
 
 export type Block = string | { bullets: string[] } | { table: { head: string[]; rows: string[][] } };
 export interface Section { id: string; heading: string; blocks: Block[] }
-export interface LegalPage { slug: LegalSlug; path: string; title: string; nav: string; description: string; intro: string; sections: Section[]; form?: 'request' }
-export type LegalSlug = 'about' | 'contact' | 'terms' | 'privacy' | 'sources' | 'data-use' | 'copyright' | 'corrections' | 'accessibility';
+export interface LegalPage { slug: LegalSlug; path: string; title: string; nav: string; description: string; intro: string; sections: Section[]; form?: 'request' | 'advertise' | 'privacy-choices' }
+export type LegalSlug = 'about' | 'contact' | 'terms' | 'privacy' | 'sources' | 'data-use' | 'copyright' | 'corrections' | 'accessibility' | 'advertise' | 'privacy-choices';
 
 const B = (bullets: string[]): Block => ({ bullets });
 const T = (head: string[], rows: string[][]): Block => ({ table: { head, rows } });
@@ -53,8 +53,8 @@ const CONTACT_PAGE: LegalPage = {
       ['Your personal information (privacy)', 'Email', 'Privacy request'],
       ['Copyright', 'Email (see [Copyright](/copyright))', 'Copyright notice'],
       ['Our crawler visiting your site', 'Email (see [Data use and bots](/data-use))', 'Crawler'],
-      ['Data access, the API, partnerships', 'Email', 'Data access'],
-      ['Advertising and sponsorships', 'Email', 'Advertising'],
+      ['Data access, the API, partnerships', 'The [advertise form](/advertise) or email', 'Data access'],
+      ['Advertising and sponsorships', 'The [advertise form](/advertise) or email', 'Advertising'],
       ['Press', 'Email', 'Press'],
     ])] },
     { id: 'company', heading: 'Company', blocks: [`${SITE_NAME} is operated by ${COMPANY}. Email: ${CONTACT}.`] },
@@ -94,10 +94,10 @@ const TERMS: LegalPage = {
       'News headlines, pictures, watch links and other links lead to sites we do not control; their owners are responsible for them. We show a headline, the publisher and a link, and the picture a publisher supplies in its own feed, loaded from the publisher.',
     ] },
     { id: 'ads', heading: 'Advertising, sponsorships and paid features', blocks: [
-      'The Site may show advertising and sponsored content, which we label as such. Advertisers are responsible for their ads and for the products and offers in them; an ad on the Site is not our endorsement. We may also offer paid features or paid API access, on terms shown when you sign up or buy. Ads are never aimed at players or based on information about them.',
+      'The Site may show advertising and sponsored content, which we label as such ("Advertisement", "Presented by" or "Sponsored"). Advertisers are responsible for their ads and for the products and offers in them; an ad on the Site is not our endorsement. We may also offer paid features or paid API access, on terms shown when you sign up or buy. Ads are never aimed at players or based on information about them.',
     ] },
     { id: 'api', heading: 'The public API', blocks: [
-      'Our college API at /v1 is offered for building apps and research. Requests without a key are limited (about 60 a minute); free and paid keys with higher limits are available (email us with the subject "Data access"). Professional and licensed data is not available through the API. You may not resell API data or present it as your own, and you must credit Plaibook Stats. We may change or withdraw the API or revoke a key at any time.',
+      'Our college API at /v1 is offered for building apps and research. Requests without a key are limited (about 60 a minute); free and paid keys with higher limits are available (use the [advertise and data access form](/advertise) or email us with the subject "Data access"). Professional and licensed data is not available through the API. You may not resell API data or present it as your own, and you must credit Plaibook Stats. We may change or withdraw the API or revoke a key at any time.',
     ] },
     { id: 'warranty', heading: 'Disclaimer of warranties', blocks: [
       'THE SITE AND ITS DATA ARE PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ACCURACY, COMPLETENESS, MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT, TO THE FULLEST EXTENT THE LAW ALLOWS.',
@@ -122,8 +122,8 @@ const TERMS: LegalPage = {
 
 const PRIVACY: LegalPage = {
   slug: 'privacy', path: '/privacy', nav: 'Privacy', title: 'Privacy Policy',
-  description: 'What Plaibook Stats collects (very little), what stays in your browser, how advertising would work, and the rights you have.',
-  intro: `${SITE_NAME} has no accounts, and today it shows no advertising and sets no cookies. We may add advertising or sponsorships to keep the Site free; if that ever involves cookies or tracking, we will update this policy first and ask for your consent where the law requires it. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}.`,
+  description: 'What Plaibook Stats collects (very little), what stays in your browser, how advertising works, and the rights you have.',
+  intro: `${SITE_NAME} has no accounts and sets no cookies of its own. To stay free it shows sponsors, which we serve ourselves without cookies or tracking, and it may show display ads from Google AdSense, which do use cookies; the section on cookies below explains how, and [Your privacy choices](/privacy-choices) lets you turn off personalised ads. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}.`,
   sections: [
     { id: 'collect', heading: 'What we collect when you visit', blocks: [
       T(['What', 'Why', 'How long'], [
@@ -136,14 +136,15 @@ const PRIVACY: LegalPage = {
       'We do not collect names, emails or anything else unless you send it to us.',
     ] },
     { id: 'browser', heading: 'Cookies and what stays in your browser', blocks: [
-      'Today we do not use cookies, tracking pixels, fingerprinting or third-party analytics. A few preferences are kept in your browser\'s local storage, on your device only, and are never sent to us: the teams and players you follow, and whether you are looking at men\'s or women\'s soccer. Clearing your browser\'s site data removes them.',
-      'Advertising: if we add ads, sponsor ads we serve ourselves will not use cookies or track you. If we work with an advertising partner that uses cookies or similar technology, we will name the partner here, ask for your consent where the law requires it (for example in the EU and UK) and give you a way to say no.',
+      'We set no cookies of our own and use no tracking pixels, fingerprinting or third-party analytics. A few preferences are kept in your browser\'s local storage, on your device only, and are never sent to us: the teams and players you follow, whether you are looking at men\'s or women\'s soccer, and your choice on [Your privacy choices](/privacy-choices). Clearing your browser\'s site data removes them.',
+      'Sponsors: a "Presented by" line is a plain link we serve ourselves. It sets no cookies and does not track you.',
+      'Display ads: when they are switched on, ads (labelled "Advertisement") come from our advertising partner, Google AdSense. Google and its partners use cookies and similar technology to show and measure ads and to prevent fraud, and, if you allow it, to personalise ads based on your visits to this and other sites. Google explains this in [how Google uses information from sites that use its services](https://policies.google.com/technologies/partner-sites). In the EU, the UK and Switzerland, Google\'s consent message (a consent tool certified under the IAB Transparency and Consent Framework) asks you first and no ad cookies are used without your consent. Everywhere, you can turn off personalised ads on [Your privacy choices](/privacy-choices) or in [Google\'s ad settings](https://adssettings.google.com). Ads are never aimed at players or based on information about them.',
       'Some pages show pictures and logos loaded from other sites (publishers\' news pictures, team logos, player photos on school sites). Your browser fetches them directly; we ask it not to tell those sites which page you were on.',
     ] },
     { id: 'use', heading: 'How we use it, and who else sees it', blocks: [
-      'We use this information only to run, secure and improve the Site. We do not sell personal information, today we show no ads and run no ad tracking, and we do not build profiles of visitors.',
-      'Service providers that host the Site and its database process data for us under contract: Render (hosting) and Supabase (database), both in the United States. We may disclose information if the law requires it or to protect the Site and its users.',
-      'If we later show ads from a partner that uses cookies or similar technology, sharing data with that partner for ads may count as a "sale" or "sharing" under some US state laws. Before that starts, we will add a "Your privacy choices" link that lets you opt out, and treat a Global Privacy Control signal from your browser as that opt-out.',
+      'We use this information only to run, secure and improve the Site. We do not sell personal information for money and we do not build profiles of visitors.',
+      'Service providers that host the Site and its database process data for us under contract: Render (hosting) and Supabase (database), both in the United States. When display ads are on, Google receives what any ad needs (your IP address, browser, the page you are on) directly from your browser. We may disclose information if the law requires it or to protect the Site and its users.',
+      'Under some US state laws (California and others), letting an ad partner use this information for personalised ads may count as a "sale" or "sharing". You can opt out on [Your privacy choices](/privacy-choices), linked at the bottom of every page; we treat a Global Privacy Control signal from your browser as the same opt-out. After you opt out, the ads you see here are not personalised.',
       'Browser "Do Not Track" and Global Privacy Control signals: we honour both.',
     ] },
     { id: 'athletes', heading: 'Information about athletes and coaches', blocks: [
@@ -152,7 +153,7 @@ const PRIVACY: LegalPage = {
     ] },
     { id: 'rights', heading: 'Your rights', blocks: [
       'Wherever you live, you can ask us what personal information we hold about you, and ask us to correct or delete it. Residents of California and other US states with privacy laws, and of the EU and UK, have these rights by law; we extend them to everyone. Email us with the subject "Privacy request"; we answer within 30 days and will not treat you differently for asking.',
-      'For visitors in the EU and UK: we rely on our legitimate interest in running and securing the Site for server logs and visit counts. Data is processed in the United States.',
+      'For visitors in the EU and UK: we rely on our legitimate interest in running and securing the Site for server logs and visit counts, and on your consent (given in Google\'s consent message, and changeable at any time) for ad cookies. Data is processed in the United States.',
     ] },
     { id: 'children', heading: 'Children', blocks: [
       'The Site is for a general audience and is not directed at children under 13. We do not knowingly collect personal information from children; if you believe a child has sent us information, contact us and we will delete it.',
@@ -290,9 +291,53 @@ const ACCESSIBILITY: LegalPage = {
   ],
 };
 
+const ADVERTISE: LegalPage = {
+  slug: 'advertise', path: '/advertise', nav: 'Advertise', title: 'Advertise and data access',
+  description: 'Sponsor a section of Plaibook Stats, advertise to college, pro and international soccer fans, or ask about data and API access.',
+  intro: `${SITE_NAME} is read by players, parents, coaches and fans following college, professional and international soccer, with an American focus. Sponsorships, advertising and data access keep the Site free. Tell us what you have in mind with the form below and we will reply within 2 business days.`,
+  form: 'advertise',
+  sections: [
+    { id: 'sponsor', heading: 'Sponsorships', blocks: [
+      'Put your name on a section of the Site: a "Presented by" line on college, pro, international or news pages, or across the whole Site, for a set period. Sponsor lines are plain links we serve ourselves, with no tracking, so they load fast and are seen by every visitor, including people who block ads.',
+    ] },
+    { id: 'ads', heading: 'Display advertising', blocks: [
+      'Display ads on the Site are served by Google AdSense. For a direct campaign (a fixed placement for a set period, or a custom unit for a tournament or the season), tell us your dates and audience.',
+    ] },
+    { id: 'data', heading: 'Data and API access', blocks: [
+      'Our college soccer API at /v1 ([description](/v1/openapi.json)) has free and paid keys with higher limits, for apps, media and research. Some data on the Site comes from licensed providers and is shown on our pages only; it is not available through the API or for resale. Tell us what you need and we will say what we can offer.',
+    ] },
+    { id: 'standards', heading: 'Our standards', blocks: [B([
+      'Every sponsor and direct advertiser is reviewed before anything goes live, and paid placements are always labelled.',
+      'No ads aimed at players or based on information about them.',
+      'Sponsorship does not change the numbers: ratings, rankings and statistics are never for sale.',
+    ])] },
+  ],
+};
+
+const PRIVACY_CHOICES: LegalPage = {
+  slug: 'privacy-choices', path: '/privacy-choices', nav: 'Your privacy choices', title: 'Your privacy choices',
+  description: 'Turn off personalised ads on Plaibook Stats, and how Global Privacy Control and consent work here.',
+  intro: 'Choose whether the ads on this Site may be personalised. Your choice is kept in this browser only; set it again on each browser or device you use. It applies whenever display ads are switched on.',
+  form: 'privacy-choices',
+  sections: [
+    { id: 'what', heading: 'What the choice changes', blocks: [
+      'With personalised ads off, we ask our ad partner, Google AdSense, for ads that are not based on your visits to this or other sites (under some US state laws, this is opting out of the "sale" or "sharing" of personal information). Ads still appear, chosen from the page you are on, and Google may still use cookies to limit how often you see an ad and to stop fraud. Sponsor lines never track you either way.',
+    ] },
+    { id: 'gpc', heading: 'Global Privacy Control', blocks: [
+      'If your browser sends a Global Privacy Control signal, we treat it as this opt-out automatically, whatever the switch below says.',
+    ] },
+    { id: 'consent', heading: 'In the EU, the UK and Switzerland', blocks: [
+      'Google\'s consent message asks before any ad cookies are used. To change what you chose there, use the privacy and cookie settings link that Google\'s message shows at the bottom of the page.',
+    ] },
+    { id: 'more', heading: 'More', blocks: [
+      'You can also manage ads from Google across sites in [Google\'s ad settings](https://adssettings.google.com). Everything we collect is described in our [Privacy Policy](/privacy). Questions: ' + mail('Privacy request') + '.',
+    ] },
+  ],
+};
+
 export const LEGAL: Record<LegalSlug, LegalPage> = {
   about: ABOUT, contact: CONTACT_PAGE, terms: TERMS, privacy: PRIVACY, sources: SOURCES, 'data-use': DATA_USE,
-  copyright: COPYRIGHT, corrections: CORRECTIONS, accessibility: ACCESSIBILITY,
+  copyright: COPYRIGHT, corrections: CORRECTIONS, accessibility: ACCESSIBILITY, advertise: ADVERTISE, 'privacy-choices': PRIVACY_CHOICES,
 };
 export const LEGAL_SLUGS = Object.keys(LEGAL) as LegalSlug[];
 

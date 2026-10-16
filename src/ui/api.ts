@@ -10,6 +10,8 @@ import { isBot } from '../pro/onView.js';
 import { memo, memoKey } from '../pro/memo.js';
 import { eastern } from '../jobs/seasons.js';
 import { registerProApi } from './proApi.js';
+import { adsSettings, sponsorSettings } from '../ops/settings.js';
+import { currentSponsors } from '../money/config.js';
 import { registerIntlApi } from './intlApi.js';
 import { registerNewsApi } from '../news/queries.js';
 import { follows, parseFollows } from './follows.js';
@@ -60,10 +62,20 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   // the shared entries out).
   const shared = <T>(req: FastifyRequest, name: string, args: unknown, fresh: number, load: () => Promise<T>): Promise<T> =>
     authorized(req.headers.authorization) ? load() : memo(memoKey(`college:${name}`, args), load, { fresh, stale: fresh * 4 });
+  // What the page needs to show ads and sponsors: the ad ids only while ads are on, and the sponsors running today.
+  const money = async () => {
+    const db = getDb();
+    const [ads, sponsors] = await Promise.all([adsSettings(db), sponsorSettings(db)]);
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      ads: ads.enabled ? ads : { enabled: false, client: null, slots: { rail: null, inline: null } },
+      sponsors: currentSponsors(sponsors, today).map(({ placement, name, url, tagline }) => ({ placement, name, url, tagline })),
+    };
+  };
   const meta = () => memo('college:meta', () => q.meta(getDb()), { fresh: 5 * 60_000, stale: 30 * 60_000 });
   const cache = (reply: FastifyReply, seconds: number) => reply.header('Cache-Control', `public, max-age=${seconds}`);
 
-  app.get('/api/meta', async (_req, reply) => { cache(reply, 300); return { ...(await meta()), jobs: jobNames() }; });
+  app.get('/api/meta', async (_req, reply) => { cache(reply, 300); return { ...(await meta()), ...(await money()), jobs: jobNames() }; });
 
   // Plaibook Stats Pro (/pro pages) and International (/intl pages).
   registerProApi(app);

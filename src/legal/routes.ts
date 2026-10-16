@@ -1,21 +1,24 @@
 // Policy pages and the corrections / removal request form.
 //   GET  /api/legal/:slug               the page text (src/legal/content.ts), for the app
-//   POST /api/requests                  the public form on /corrections: 5 an hour per visitor, a hidden honeypot field,
-//                                       the IP kept only as a salted hash (migration 192)
-//   GET  /api/console/requests          open (or all) requests, admin only (the /api/console prefix is admin-gated)
+//   POST /api/requests                  the public forms on /corrections and /advertise: 5 an hour per visitor, a hidden
+//                                       honeypot field, the IP kept only as a salted hash (migrations 192, 197)
+//   GET  /api/console/requests          open (or all) requests, admin only (the /api/console prefix is admin-gated);
+//                                       ?kind=advertising,sponsorship,data_access for the hub's Deals page
 //   PUT  /api/console/requests/:id      close a request with a note, admin only
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/client.js';
 import { LEGAL, UPDATED, type LegalSlug } from './content.js';
 
-const KINDS = ['correction', 'removal', 'privacy', 'copyright', 'other'] as const;
+const KINDS = ['correction', 'removal', 'privacy', 'copyright', 'other', 'advertising', 'sponsorship', 'data_access'] as const;
+/** The /advertise form's kinds: a business enquiry (company asked for), not a request about a player. */
+export const BUSINESS_KINDS = ['advertising', 'sponsorship', 'data_access'] as const;
 const STATUSES = ['open', 'done', 'declined', 'spam'] as const;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const HOURLY_LIMIT = 5;
 
-export interface RequestInput { kind?: unknown; name?: unknown; email?: unknown; relation?: unknown; page_url?: unknown; details?: unknown; website?: unknown }
-export type Checked = { ok: true; row: { kind: string; name: string | null; email: string; relation: string | null; page_url: string | null; details: string } } | { ok: false; error: string; spam?: boolean };
+export interface RequestInput { kind?: unknown; name?: unknown; company?: unknown; email?: unknown; relation?: unknown; page_url?: unknown; details?: unknown; website?: unknown }
+export type Checked = { ok: true; row: { kind: string; name: string | null; company: string | null; email: string; relation: string | null; page_url: string | null; details: string } } | { ok: false; error: string; spam?: boolean };
 
 const clip = (v: unknown, n: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
@@ -30,7 +33,9 @@ export function checkRequest(b: RequestInput): Checked {
   if (details.length < 10) return { ok: false, error: 'Tell us a little more (at least a sentence).' };
   const page = clip(b.page_url, 500);
   if (page && !/^https?:\/\/|^\//.test(page)) return { ok: false, error: 'The page should be a link to this site (or leave it empty).' };
-  return { ok: true, row: { kind, name: clip(b.name, 120) || null, email, relation: clip(b.relation, 60) || null, page_url: page || null, details } };
+  const company = clip(b.company, 120);
+  if ((BUSINESS_KINDS as readonly string[]).includes(kind) && !company) return { ok: false, error: 'Enter your company or organisation.' };
+  return { ok: true, row: { kind, name: clip(b.name, 120) || null, company: company || null, email, relation: clip(b.relation, 60) || null, page_url: page || null, details } };
 }
 
 /** The visitor's IP as a one-way code (for the hourly limit only). */
@@ -57,8 +62,10 @@ export function registerLegalApi(app: FastifyInstance, o: { salt: string }) {
     return reply.code(201).send({ ok: true });
   });
 
-  app.get<{ Querystring: { status?: string } }>('/api/console/requests', async (req) => {
-    let q = getDb().from('stats_requests').select('id,kind,name,email,relation,page_url,details,status,note,created_at,closed_at').order('created_at', { ascending: false }).limit(200);
+  app.get<{ Querystring: { status?: string; kind?: string } }>('/api/console/requests', async (req) => {
+    let q = getDb().from('stats_requests').select('id,kind,name,company,email,relation,page_url,details,status,note,created_at,closed_at').order('created_at', { ascending: false }).limit(200);
+    const kinds = String(req.query.kind ?? '').split(',').filter((k) => (KINDS as readonly string[]).includes(k));
+    if (kinds.length) q = q.in('kind', kinds);
     if (req.query.status !== 'all') q = q.eq('status', (STATUSES as readonly string[]).includes(req.query.status ?? '') ? req.query.status! : 'open');
     const { data, error } = await q;
     if (error) throw new Error(error.message);
