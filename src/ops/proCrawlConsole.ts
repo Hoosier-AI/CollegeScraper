@@ -2,6 +2,7 @@
 // seasons done of the seasons it should have, rows, agreement with API-Football, what is running), every league
 // season with the source that supplies each kind of data, and what is running right now.
 import { kvGet, kvSet, selectAll, type Db } from '../db/client.js';
+import { swr } from './swr.js';
 import { cachedKv, KV } from './settings.js';
 import { CRAWL_SITES, CHECK_JOBS, expectedSeasons, siteOfJob } from '../pro/crawlSites.js';
 import { tierOf } from '../jobs/pro/plan.js';
@@ -15,9 +16,20 @@ const day = (offset = 0) => new Date(Date.now() - offset * 86400_000).toISOStrin
 const sum = (rows: Record<string, number>, keep: (k: string) => boolean) => Object.entries(rows).reduce((n, [k, v]) => n + (keep(k) ? Number(v) : 0), 0);
 const isApi = (k: string) => k === 'api-football' || k === 'provider';
 
-/** Every row of pro_crawl_matrix(): PostgREST caps an answer at 1,000 rows, so it is read a page at a time, three pages
- *  at once (each page runs the whole function, ~1.7 s; one after another they took the hub past its 8 s limit). */
-async function matrixRows(db: Db): Promise<MatrixRow[]> {
+/** Every row of pro_crawl_matrix(), built at most once every 10 minutes and shared by every console read (the full Pro
+ *  console and each leagues view used to build it on their own). One call to pro_crawl_matrix_json (migration 196):
+ *  the old way paged it 1,000 rows at a time, three pages at once, and each page ran the whole 15-30 s function, which
+ *  with the Crawling page open helped run the database out of memory (2026-10-15). */
+function matrixRows(db: Db): Promise<MatrixRow[]> {
+  return swr('crawl-matrix', 10 * 60_000, async () => {
+    const { data, error } = await db.rpc('pro_crawl_matrix_json');
+    if (!error) return (data ?? []) as MatrixRow[];
+    if (!/pro_crawl_matrix_json|does not exist|schema cache/i.test(error.message)) throw new Error(`crawl matrix: ${error.message}`);
+    return matrixRowsPaged(db); // migration 196 not applied
+  });
+}
+
+async function matrixRowsPaged(db: Db): Promise<MatrixRow[]> {
   const out: MatrixRow[] = [];
   const page = async (from: number) => {
     const { data, error } = await db.rpc('pro_crawl_matrix').range(from, from + 999);
@@ -42,13 +54,13 @@ let worldRefresh: Promise<void> | null = null;
 const WORLD_KEY = 'pro:world_coverage';
 /** How much of the pro football world the crawl has (pro_world_coverage, migration 149). The count takes ~9 s on the
  *  full tables, so the page never waits for it: the last result answers at once (kept in college_kv, so a restart
- *  still has one) and a refresh runs in the background when it is over 5 minutes old. */
+ *  still has one) and a refresh runs in the background when it is over 15 minutes old (it took 13-36 s by 2026-10-15). */
 export async function worldCoverage(db: Db): Promise<WorldCoverage | null> {
   if (!world) {
     const saved = await kvGet<WorldCoverage>(db, WORLD_KEY).catch(() => null);
     if (saved) world = { at: Date.parse(saved.at) || 0, data: saved };
   }
-  if ((!world || Date.now() - world.at > 300_000) && !worldRefresh) {
+  if ((!world || Date.now() - world.at > 15 * 60_000) && !worldRefresh) {
     worldRefresh = (async () => {
       const { data, error } = await db.rpc('pro_world_coverage');
       if (error || !data) return;
