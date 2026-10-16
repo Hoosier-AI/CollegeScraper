@@ -41,10 +41,12 @@ const SRC_COLS = 'id,kind,name,url,scope,gender,program_id,pro_team_id,link_labe
 /** Publisher, GDELT and Guardian sources exist (a new one starts in its default state; the hub's switch decides after). */
 async function seedSources(db: Db): Promise<void> {
   const rows = [
-    ...PUBLISHER_FEEDS.map((f) => ({ id: f.id, kind: 'publisher', name: f.name, url: f.url, scope: f.scope, gender: f.gender ?? null, enabled: f.on, terms_url: f.termsUrl })),
+    ...PUBLISHER_FEEDS.map((f) => ({ id: f.id, kind: 'publisher', name: f.name, url: f.url, scope: f.scope, gender: f.gender ?? null, enabled: f.on, show_images: true, terms_url: f.termsUrl })),
     ...GDELT_QUERIES.map((q) => ({ id: q.id, kind: 'gdelt', name: `GDELT: ${q.name}`, url: gdeltUrl(q.query), scope: q.scope, gender: q.gender ?? null, enabled: true, show_images: false, terms_url: 'https://www.gdeltproject.org/about.html#termsofuse' })),
-    { id: 'guardian:football', kind: 'guardian', name: 'The Guardian', url: 'https://content.guardianapis.com/search?section=football', scope: 'pro', gender: null, enabled: false, terms_url: 'https://www.theguardian.com/open-platform/terms-and-conditions' },
+    { id: 'guardian:football', kind: 'guardian', name: 'The Guardian', url: 'https://content.guardianapis.com/search?section=football', scope: 'pro', gender: null, enabled: false, show_images: true, terms_url: 'https://www.theguardian.com/open-platform/terms-and-conditions' },
   ];
+  // Every row names every column: an upsert of rows with different keys sends the missing ones as null, and
+  // show_images is NOT NULL (GDELT alone carrying it failed every news run from 2026-10-15 15:11 to 23:55).
   const { error } = await db.from('news_sources').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
   if (error) throw new Error(`news sources: ${error.message}`);
   // Names and URLs follow the code (a feed that moved), never the switch.
