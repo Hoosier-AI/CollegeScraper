@@ -4,8 +4,10 @@
 // league season ASA has is used, except one whose matched scores clearly disagree with API-Football's (under 90% of 30
 // or more games: the club or game matching went wrong), and none while ASA is switched off in the hub. ASA's totals
 // replace ours worked out from match lines (it has every match); API-Football's own totals stay (they carry starts,
-// cards and ratings ASA does not publish). Players API-Football does not know are created from ASA's profile (negative
-// ids, source 'asa') and kept in the id map.
+// cards and ratings ASA does not publish). A profile the id map cannot place is first matched to a player who played for
+// the same club that season, born the same day, with the same surname (API-Football often holds the full legal name:
+// "Pep Biel" is "Josep Biel Mas Jaume"); only a profile nobody matches is created (negative id, source 'asa'). Every
+// run starts by folding any such twins into their real player (pro_merge_asa_twins, migration 199).
 import { registerJob, type JobContext } from '../runner.js';
 import { selectAll, upsertChunked } from '../../db/client.js';
 import { sourceIdMap } from '../../db/sourceRepo.js';
@@ -21,6 +23,19 @@ const BROKEN = 0.9;
 export const POSITION: Record<string, string> = { GK: 'Goalkeeper', CB: 'Defender', FB: 'Defender', DM: 'Midfielder', CM: 'Midfielder', AM: 'Midfielder', W: 'Attacker', ST: 'Attacker' };
 
 export interface AsaSeasonInput { minutes: number | null; games: number | null; goals: number | null; assists: number | null; shots: number | null; shots_on: number | null; key_passes: number | null; passes: number | null; pass_pct: number | null; position: string | null; gk_saves: number | null; gk_goals_conceded: number | null }
+
+const surname = (name: string | null | undefined) => String(name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().split(/\s+/).pop() ?? '';
+
+export interface KnownPlayer { id: number; birth_date: string | null; display_name: string | null; last_name: string | null; name: string | null }
+/** The one real player an ASA profile is: same birth date and surname among the club's players that season, or null. */
+export function pickKnown(profile: { name: string; birth_date: string | null }, known: KnownPlayer[]): number | null {
+  const born = String(profile.birth_date ?? '').slice(0, 10); const sur = surname(profile.name);
+  if (!born || !sur) return null;
+  const same = known.filter((k) => String(k.birth_date ?? '').slice(0, 10) === born
+    && (surname(k.display_name) === sur || [k.last_name, k.name].some((x) => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(sur))));
+  const ids = [...new Set(same.map((k) => k.id))];
+  return ids.length === 1 ? ids[0]! : null;
+}
 
 /** One ASA row as a season line: what ASA counts, nothing it does not (starts, cards, rating stay empty). */
 export function seasonRowFromAsa(r: AsaSeasonInput, player: number, team: number, league: number, season: number, at = new Date().toISOString()) {
@@ -45,6 +60,10 @@ export async function asaFill(ctx: JobContext): Promise<void> {
   for (const k of broken) ctx.note(`skipped_${k.replace('|', '_')}`, 'scores disagree with API-Football: check the matching');
   if (!trusted.size) { ctx.note('idle', 'no league season synced yet'); return; }
 
+  // Twins an earlier run created: folded into their real player first.
+  const merged = await db.rpc('pro_merge_asa_twins');
+  if (merged.error) ctx.note('merge_twins', merged.error.message); else ctx.inc('twins_merged', Number(merged.data) || 0);
+
   const teams = await sourceIdMap(db, SOURCE, 'team');
   const players = await sourceIdMap(db, SOURCE, 'player');
   const leagueGender = new Map((await selectAll<{ id: number; gender: string }>(db, 'pro_leagues', 'id,gender', (q) => q.in('id', ASA_LEAGUES.map((l) => l.league)))).map((l) => [l.id, l.gender]));
@@ -59,12 +78,29 @@ export async function asaFill(ctx: JobContext): Promise<void> {
     if (missing.length) {
       const prof: { ext_id: string; name: string; birth_date: string | null; height_cm: number | null; weight_kg: number | null; nationality: string | null; position: string | null }[] = [];
       for (let i = 0; i < missing.length; i += 300) prof.push(...await selectAll<(typeof prof)[number]>(db, 'pro_src_players', 'ext_id,name,birth_date,height_cm,weight_kg,nationality,position', (q) => q.eq('source', SOURCE).in('ext_id', missing.slice(i, i + 300))));
-      const created = prof.map((p) => ({ id: negativeId(`player|${SOURCE}|${p.ext_id}`), name: p.name, display_name: p.name, birth_date: p.birth_date, height_cm: p.height_cm, weight_kg: p.weight_kg, nationality: p.nationality,
+      // The same person under a fuller name: the club's real players that season, by birth date and surname.
+      const extTeams = new Map(rows.filter((r) => missing.includes(r.player_ext)).map((r) => [r.player_ext as string, teams.get(r.team_ext)!]));
+      const clubIds = [...new Set(extTeams.values())].filter((t) => t > 0);
+      const lines = clubIds.length ? await selectAll<{ player_id: number; team_id: number }>(db, 'pro_player_season_stats', 'player_id,team_id', (q) => q.in('team_id', clubIds).eq('season', season).gt('player_id', 0)) : [];
+      const knownIds = [...new Set(lines.map((l) => l.player_id))];
+      const known: KnownPlayer[] = [];
+      for (let i = 0; i < knownIds.length; i += 300) known.push(...await selectAll<KnownPlayer>(db, 'pro_players', 'id,birth_date,display_name,last_name,name', (q) => q.in('id', knownIds.slice(i, i + 300))));
+      const byClub = new Map<number, KnownPlayer[]>();
+      const knownById = new Map(known.map((k) => [k.id, k]));
+      for (const l of lines) { const k = knownById.get(l.player_id); if (k) byClub.set(l.team_id, [...(byClub.get(l.team_id) ?? []), k]); }
+      const placed = prof.map((p) => ({ p, id: pickKnown(p, byClub.get(extTeams.get(p.ext_id) ?? 0) ?? []) })).filter((x) => x.id != null);
+      if (placed.length) {
+        await upsertChunked(db, 'pro_source_ids', placed.map((x) => ({ source: SOURCE, kind: 'player', ext_id: x.p.ext_id, pro_id: x.id, method: 'club+birth', confidence: 0.95, updated_at: at })), { onConflict: 'source,kind,ext_id' });
+        for (const x of placed) players.set(x.p.ext_id, x.id!);
+        ctx.inc('players_matched', placed.length);
+      }
+      const unplaced = prof.filter((p) => !players.has(p.ext_id));
+      const created = unplaced.map((p) => ({ id: negativeId(`player|${SOURCE}|${p.ext_id}`), name: p.name, display_name: p.name, birth_date: p.birth_date, height_cm: p.height_cm, weight_kg: p.weight_kg, nationality: p.nationality,
         position: p.position ? POSITION[p.position] ?? null : null, gender: leagueGender.get(league) ?? 'm', appeared: true, source: SOURCE, updated_at: at }));
       if (created.length) {
         await upsertChunked(db, 'pro_players', created, { onConflict: 'id' });
-        await upsertChunked(db, 'pro_source_ids', prof.map((p) => ({ source: SOURCE, kind: 'player', ext_id: p.ext_id, pro_id: negativeId(`player|${SOURCE}|${p.ext_id}`), method: 'created', confidence: 1, updated_at: at })), { onConflict: 'source,kind,ext_id' });
-        for (const p of prof) players.set(p.ext_id, negativeId(`player|${SOURCE}|${p.ext_id}`));
+        await upsertChunked(db, 'pro_source_ids', unplaced.map((p) => ({ source: SOURCE, kind: 'player', ext_id: p.ext_id, pro_id: negativeId(`player|${SOURCE}|${p.ext_id}`), method: 'created', confidence: 1, updated_at: at })), { onConflict: 'source,kind,ext_id' });
+        for (const p of unplaced) players.set(p.ext_id, negativeId(`player|${SOURCE}|${p.ext_id}`));
         ctx.inc('players_created', created.length);
       }
     }

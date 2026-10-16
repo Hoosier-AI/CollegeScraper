@@ -118,11 +118,28 @@ describe('checks against API-Football', () => {
   });
 });
 
-import { seasonRowFromAsa } from '../../src/jobs/sources/asaFill.js';
+import { seasonRowFromAsa, pickKnown } from '../../src/jobs/sources/asaFill.js';
 describe('ASA season totals where API-Football has none', () => {
   it('what ASA counts goes in; starts, cards and rating stay empty; keepers keep their saves', () => {
     const r = seasonRowFromAsa({ minutes: 1634, games: 23, goals: 3, assists: 2, shots: 12, shots_on: 5, key_passes: 8, passes: 793, pass_pct: 0.8235, position: 'FB', gk_saves: null, gk_goals_conceded: null }, 9, 1595, 489, 2026, 't');
     expect(r).toMatchObject({ player_id: 9, team_id: 1595, league_id: 489, season: 2026, apps: 23, starts: null, minutes: 1634, goals: 3, assists: 2, pass_accuracy: 82, yellow: null, red: null, position: 'Defender', source: 'asa', saves: null });
     expect(seasonRowFromAsa({ minutes: 900, games: 10, goals: 0, assists: 0, shots: 0, shots_on: 0, key_passes: 0, passes: 300, pass_pct: 0.7, position: 'GK', gk_saves: 31, gk_goals_conceded: 12 }, 1, 2, 489, 2026)).toMatchObject({ position: 'Goalkeeper', saves: 31, conceded: 12 });
+  });
+});
+
+describe('pickKnown: an ASA profile is the real player when club, birth date and surname agree', () => {
+  const known = [
+    { id: 47058, birth_date: '1996-09-05', display_name: 'Pep Biel', last_name: 'Biel Mas Jaume', name: 'Josep Biel Mas Jaume' },
+    { id: 50905, birth_date: '1995-06-20', display_name: 'Brandt Bronico', last_name: 'Bronico', name: 'Brandt Bronico' },
+    { id: 1, birth_date: '1995-06-20', display_name: 'Someone Else', last_name: 'Else', name: 'Someone Else' },
+  ];
+  it('matches a shorter name to the full legal name', () => {
+    expect(pickKnown({ name: 'Pep Biel', birth_date: '1996-09-05' }, known)).toBe(47058);
+    expect(pickKnown({ name: 'Brandt Bronico', birth_date: '1995-06-20' }, known)).toBe(50905);
+  });
+  it('never guesses: no birth date, another surname, or two candidates', () => {
+    expect(pickKnown({ name: 'Pep Biel', birth_date: null }, known)).toBeNull();
+    expect(pickKnown({ name: 'Pep Biel', birth_date: '1996-09-06' }, known)).toBeNull();
+    expect(pickKnown({ name: 'B. Bronico', birth_date: '1995-06-20' }, [...known, { ...known[1]!, id: 2 }])).toBeNull();
   });
 });
