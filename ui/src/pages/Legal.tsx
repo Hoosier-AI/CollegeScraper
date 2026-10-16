@@ -22,7 +22,7 @@ function Inline({ text }: { text: string }) {
     if (m.index > last) parts.push(text.slice(last, m.index));
     const [, label, href] = m;
     const cls = 'text-pitch-300 underline decoration-pitch-400/40 underline-offset-2 hover:text-pitch-200';
-    parts.push(href!.startsWith('/') && !href!.startsWith('/v1/') && !href!.endsWith('.txt')
+    parts.push(href!.startsWith('/') && !href!.endsWith('.txt')
       ? <Link key={k++} to={href!} className={cls}>{label}</Link>
       : <a key={k++} href={href} className={cls} {...(href!.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{label}</a>);
     last = m.index + m[0].length;
@@ -148,7 +148,7 @@ function RequestForm() {
 const BUSINESS_KINDS = [
   { value: 'sponsorship', label: 'Sponsor a section or the whole Site' },
   { value: 'advertising', label: 'A display ad campaign' },
-  { value: 'data_access', label: 'Data or API access' },
+  { value: 'data_access', label: 'Data licensing and partnerships' },
 ];
 
 /** The advertise and data access form: the same endpoint and limits as the request form, a company required. */

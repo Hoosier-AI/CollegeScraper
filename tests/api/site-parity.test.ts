@@ -78,7 +78,7 @@ describe('/v1/site mirror', () => {
     registerUiApi(app, { authorized: () => false, limitAnonymous: (_req, reply) => { reply.code(429).send({ error: 'rate_limited' }); return false; }, internal: (req) => mirror?.internal(req) ?? false });
     registerPublicApi(app, {
       authenticate: makeAuthenticator({ adminSecret: 'adm', keys: parseApiKeys(`plaibook:${key}`) }),
-      limiter: new RateLimiter(100), anonLimiter: new RateLimiter(100), corsOrigins: [],
+      limiter: new RateLimiter(100),
     });
     mirror = registerSiteMirror(app, routes);
     await app.ready();

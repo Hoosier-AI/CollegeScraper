@@ -13,7 +13,6 @@ import * as cq from '../ops/consoleQueries.js';
 import { fixFor } from '../ops/qualityFixes.js';
 import { KV, forgetKv, normalizeLive, setKv, schedulerOverrides, type LiveSettings } from '../ops/settings.js';
 import { RenderClient, maskEnv, mergeEnv } from '../ops/render.js';
-import type { KeyStore } from '../api/keys.js';
 import type { UsageMeter } from '../api/usage.js';
 import type { AnalyticsMeter } from '../api/analytics.js';
 import { insights } from '../ops/insights.js';
@@ -21,12 +20,11 @@ import { forgetSwr } from '../ops/swr.js';
 import { normalizeAds, normalizeSponsors } from '../money/config.js';
 
 export interface ConsoleOptions {
-  keyStore: KeyStore | null;
   usage: UsageMeter;
   analytics?: AnalyticsMeter;
+  /** The key names in COLLEGE_API_KEYS (the API's only keys since 2026-10-16). */
   envKeys: string[];
-  corsOrigins: string[];
-  limits: { key: number; anon: number; site: number };
+  limits: { key: number; site: number };
   startedAt: number;
 }
 
@@ -110,7 +108,6 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
 
   app.get('/api/console/api', async () => {
     const db = getDb();
-    const stored = o.keyStore ? await o.keyStore.list() : [];
     const usage = await cq.usageStored(db, 7);
     const pending = todayUsage();
     const plaibookName = ['plaibook', ...o.envKeys].find((n) => n === 'plaibook') ?? o.envKeys[0] ?? null;
@@ -118,27 +115,12 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
     return {
       keys: [
         ...o.envKeys.map((name) => ({ id: null, name, source: 'env', prefix: null, note: 'From COLLEGE_API_KEYS on the service', created_at: null, revoked_at: null, last_used_at: lastSeen(name) })),
-        ...stored.map((k) => ({ ...k, source: 'db', key_hash: undefined })),
       ],
       usage, pending,
-      limits: o.limits, cors_origins: o.corsOrigins, public_url: cfg.PUBLIC_URL ?? null,
+      limits: o.limits, public_url: cfg.PUBLIC_URL ?? null,
       plaibook: plaibookName ? { name: plaibookName, last_seen_at: lastSeen(plaibookName), today: (usage.find((u) => u.principal === plaibookName && u.day === new Date().toISOString().slice(0, 10))?.requests ?? 0) + (pending.find((u) => u.principal === plaibookName)?.requests ?? 0) } : null,
       generated_at: new Date().toISOString(),
     };
-  });
-  app.post<{ Body: { name?: string; note?: string } | null }>('/api/console/api/keys', async (req, reply) => {
-    if (!o.keyStore) return reply.code(501).send({ error: 'no database' });
-    const name = String(req.body?.name ?? '').trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9_-]{1,39}$/.test(name)) return reply.code(400).send({ error: 'name: 2–40 characters, letters, digits, - or _' });
-    if (o.envKeys.includes(name)) return reply.code(409).send({ error: 'that name is used by an env key' });
-    try { return reply.code(201).send(await o.keyStore.create(name, req.body?.note?.trim() || null)); }
-    catch (err) { return reply.code(409).send({ error: err instanceof Error ? err.message : String(err) }); }
-  });
-  app.post<{ Params: { id: string } }>('/api/console/api/keys/:id/revoke', async (req, reply) => {
-    if (!o.keyStore) return reply.code(501).send({ error: 'no database' });
-    if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
-    await o.keyStore.revoke(req.params.id);
-    return { ok: true };
   });
 
   app.get('/api/console/deploy', async () => {

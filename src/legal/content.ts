@@ -44,7 +44,7 @@ const ABOUT: LegalPage = {
 
 const CONTACT_PAGE: LegalPage = {
   slug: 'contact', path: '/contact', nav: 'Contact', title: 'Contact',
-  description: 'How to reach Plaibook Stats about corrections, removal requests, privacy, copyright, press and data access.',
+  description: 'How to reach Plaibook Stats about corrections, removal requests, privacy, copyright, press and data licensing.',
   intro: `The quickest way to reach us is the request form on [Corrections and removal](/corrections), which goes straight to the people who keep the data. You can also email ${CONTACT}; please use the subject line below so your message reaches the right place.`,
   sections: [
     { id: 'who', heading: 'Who to contact about what', blocks: [T(['About', 'Use', 'Subject line'], [
@@ -53,7 +53,7 @@ const CONTACT_PAGE: LegalPage = {
       ['Your personal information (privacy)', 'Email', 'Privacy request'],
       ['Copyright', 'Email (see [Copyright](/copyright))', 'Copyright notice'],
       ['Our crawler visiting your site', 'Email (see [Data use and bots](/data-use))', 'Crawler'],
-      ['Data access, the API, partnerships', 'The [advertise form](/advertise) or email', 'Data access'],
+      ['Data licensing and partnerships', 'The [advertise form](/advertise) or email', 'Data licensing'],
       ['Advertising and sponsorships', 'The [advertise form](/advertise) or email', 'Advertising'],
       ['Press', 'Email', 'Press'],
     ])] },
@@ -64,7 +64,7 @@ const CONTACT_PAGE: LegalPage = {
 const TERMS: LegalPage = {
   slug: 'terms', path: '/terms', nav: 'Terms of use', title: 'Terms of Use',
   description: 'The terms that apply when you use Plaibook Stats, including acceptable use, automated access, attribution and disclaimers.',
-  intro: `These Terms of Use govern your use of ${SITE_NAME} at ${SITE}, its pages, its data and its public API (together, the "Site"), provided by ${COMPANY} ("we", "us"). By using the Site you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Site.`,
+  intro: `These Terms of Use govern your use of ${SITE_NAME} at ${SITE}, its pages and its data (together, the "Site"), provided by ${COMPANY} ("we", "us"). By using the Site you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Site.`,
   sections: [
     { id: 'use', heading: 'Using the Site', blocks: [
       'The Site is free and needs no account. You may use it for personal, non-commercial purposes, and teachers, students, journalists, coaches and researchers may use and quote it in their work with attribution (see below). You must be at least 13 years old to use the Site.',
@@ -73,7 +73,7 @@ const TERMS: LegalPage = {
     { id: 'acceptable', heading: 'Acceptable use', blocks: [
       'You agree not to:',
       B([
-        'access the Site with automated means (scripts, bots, scrapers, crawlers) in a way that harms its performance, or above about 20 page requests a minute; use the [public API](/data-use) for automated access instead, within its limits;',
+        'access the Site with automated means (scripts, bots, scrapers, crawlers) in a way that harms its performance, or above about 20 page requests a minute;',
         'mirror, frame or republish the Site or substantial parts of its data, or use it to build a database or service that competes with the Site;',
         'use the Site or its data to train, fine-tune or evaluate artificial-intelligence models, except as our [robots.txt](/robots.txt) allows for search and answer engines;',
         'get around any rate limit, block or access control, or disguise automated access as a person;',
@@ -94,10 +94,10 @@ const TERMS: LegalPage = {
       'News headlines, pictures, watch links and other links lead to sites we do not control; their owners are responsible for them. We show a headline, the publisher and a link, and the picture a publisher supplies in its own feed, loaded from the publisher.',
     ] },
     { id: 'ads', heading: 'Advertising, sponsorships and paid features', blocks: [
-      'The Site may show advertising and sponsored content, which we label as such ("Advertisement", "Presented by" or "Sponsored"). Advertisers are responsible for their ads and for the products and offers in them; an ad on the Site is not our endorsement. We may also offer paid features or paid API access, on terms shown when you sign up or buy. Ads are never aimed at players or based on information about them.',
+      'The Site may show advertising and sponsored content, which we label as such ("Advertisement", "Presented by" or "Sponsored"). Advertisers are responsible for their ads and for the products and offers in them; an ad on the Site is not our endorsement. We may also offer paid features, on terms shown when you sign up or buy. Ads are never aimed at players or based on information about them.',
     ] },
-    { id: 'api', heading: 'The public API', blocks: [
-      'Our college API at /v1 is offered for building apps and research. Requests without a key are limited (about 60 a minute); free and paid keys with higher limits are available (use the [advertise and data access form](/advertise) or email us with the subject "Data access"). Professional and licensed data is not available through the API. You may not resell API data or present it as your own, and you must credit Plaibook Stats. We may change or withdraw the API or revoke a key at any time.',
+    { id: 'api', heading: 'No public API', blocks: [
+      'The Site has no public API: its data is served to our own Plaibook app only and is not offered for automated access, bulk download or resale. For data licensing or partnerships, use the [advertise form](/advertise) or email us with the subject "Data licensing"; we will say what we can offer.',
     ] },
     { id: 'warranty', heading: 'Disclaimer of warranties', blocks: [
       'THE SITE AND ITS DATA ARE PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ACCURACY, COMPLETENESS, MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT, TO THE FULLEST EXTENT THE LAW ALLOWS.',
@@ -189,7 +189,7 @@ const SOURCES: LegalPage = {
 
 const DATA_USE: LegalPage = {
   slug: 'data-use', path: '/data-use', nav: 'Data use and bots', title: 'Data use, our crawler and bots',
-  description: 'How Plaibook Stats collects data from other sites, the limits for bots and automated access, the public API and AI crawlers.',
+  description: 'How Plaibook Stats collects data from other sites, the limits for bots and automated access, and AI crawlers.',
   intro: 'This page explains how our own crawler behaves when it visits other sites, and the rules for anyone reading this Site automatically.',
   sections: [
     { id: 'crawler', heading: 'Our crawler', blocks: [
@@ -206,10 +206,10 @@ const DATA_USE: LegalPage = {
     ] },
     { id: 'bots', heading: 'Reading this Site automatically', blocks: [
       'Search engines are welcome within our robots.txt. Other automated access must stay under about 20 page requests a minute and identify itself honestly; anything faster is limited or blocked. Please do not scrape the Site\'s internal /api/ endpoints, which are for the Site\'s own pages and are not a public interface.',
-      'For data in bulk, use the public API (below) or ask us.',
+      'There is no public API or bulk download (see below); for data in bulk, ask us.',
     ] },
-    { id: 'api', heading: 'The public API', blocks: [
-      'The college API at /v1 returns programs, rosters, games, box scores, standings, rankings and leaders as JSON ([description](/v1/openapi.json)). Without a key it allows about 60 requests a minute; keys with higher limits are free for apps and research on request. Professional and licensed data is not available through the API. Credit Plaibook Stats wherever you use the data.',
+    { id: 'api', heading: 'No public API', blocks: [
+      'Plaibook Stats has no public API. Its data feeds our own Plaibook app through a private interface that is not open to others. Some data comes from licensed providers and is shown on our pages only. Credit Plaibook Stats wherever you quote the data.',
     ] },
     { id: 'ai', heading: 'AI crawlers', blocks: [
       'Our robots.txt allows answer engines and AI search tools to read the Site so they can cite it with a link, and asks AI-training crawlers (such as GPTBot, ClaudeBot, Google-Extended, CCBot and Bytespider) not to use it for training. Using the Site\'s data to train AI models is not allowed under our [Terms of Use](/terms).',
@@ -292,9 +292,9 @@ const ACCESSIBILITY: LegalPage = {
 };
 
 const ADVERTISE: LegalPage = {
-  slug: 'advertise', path: '/advertise', nav: 'Advertise', title: 'Advertise and data access',
-  description: 'Sponsor a section of Plaibook Stats, advertise to college, pro and international soccer fans, or ask about data and API access.',
-  intro: `${SITE_NAME} is read by players, parents, coaches and fans following college, professional and international soccer, with an American focus. Sponsorships, advertising and data access keep the Site free. Tell us what you have in mind with the form below and we will reply within 2 business days.`,
+  slug: 'advertise', path: '/advertise', nav: 'Advertise', title: 'Advertise and data licensing',
+  description: 'Sponsor a section of Plaibook Stats, advertise to college, pro and international soccer fans, or ask about data licensing.',
+  intro: `${SITE_NAME} is read by players, parents, coaches and fans following college, professional and international soccer, with an American focus. Sponsorships, advertising and data licensing keep the Site free. Tell us what you have in mind with the form below and we will reply within 2 business days.`,
   form: 'advertise',
   sections: [
     { id: 'sponsor', heading: 'Sponsorships', blocks: [
@@ -303,8 +303,8 @@ const ADVERTISE: LegalPage = {
     { id: 'ads', heading: 'Display advertising', blocks: [
       'Display ads on the Site are served by Google AdSense. For a direct campaign (a fixed placement for a set period, or a custom unit for a tournament or the season), tell us your dates and audience.',
     ] },
-    { id: 'data', heading: 'Data and API access', blocks: [
-      'Our college soccer API at /v1 ([description](/v1/openapi.json)) has free and paid keys with higher limits, for apps, media and research. Some data on the Site comes from licensed providers and is shown on our pages only; it is not available through the API or for resale. Tell us what you need and we will say what we can offer.',
+    { id: 'data', heading: 'Data licensing', blocks: [
+      'There is no public API or bulk download. Some data on the Site comes from licensed providers and is shown on our pages only; it is not available for resale. Plaibook\'s own ratings and rankings may be licensable: tell us what you need and we will say what we can offer.',
     ] },
     { id: 'standards', heading: 'Our standards', blocks: [B([
       'Every sponsor and direct advertiser is reviewed before anything goes live, and paid placements are always labelled.',

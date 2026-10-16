@@ -14,13 +14,12 @@ const schema = z.object({
   SCHEDULER_ENABLED: z.string().default('0'),
   // '0' serves pages and the API only: a laptop pointed at the production database must not claim its jobs.
   WORKERS_ENABLED: z.string().default('1'),
-  // Public read API (/v1): "name:key,name:key" (keys ≥ 16 chars), browser origins allowed to call it, per-key
-  // requests per minute, and the base URL advertised in /v1/openapi.json.
+  // Plaibook's API (/v1, no keyless tier since 2026-10-16): "name:key,name:key" (keys ≥ 16 chars; plaibook = the app,
+  // hub = the operator console) and requests per minute per key.
   COLLEGE_API_KEYS: z.string().default(''),
-  CORS_ORIGINS: z.string().default(''),
-  API_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(600),
-  // The free tier: /v1 answers without any key, limited per client IP.
-  API_ANON_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
+  API_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(2400),
+  // The site's own reads (/api), per visitor address: several calls per page view, and an office shares one address.
+  SITE_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(300),
   PUBLIC_URL: z.string().url().optional(),
   // The console's Deploy tab (status, deploy, restart, env editing) — only when both are set on the service.
   RENDER_API_KEY: z.string().min(1).optional(),
@@ -66,9 +65,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     SCHEDULER_ENABLED: env.SCHEDULER_ENABLED,
     WORKERS_ENABLED: env.WORKERS_ENABLED,
     COLLEGE_API_KEYS: env.COLLEGE_API_KEYS,
-    CORS_ORIGINS: env.CORS_ORIGINS,
     API_RATE_LIMIT_PER_MIN: env.API_RATE_LIMIT_PER_MIN,
-    API_ANON_RATE_LIMIT_PER_MIN: env.API_ANON_RATE_LIMIT_PER_MIN,
+    SITE_RATE_LIMIT_PER_MIN: env.SITE_RATE_LIMIT_PER_MIN,
     PUBLIC_URL: env.PUBLIC_URL || undefined,
     RENDER_API_KEY: env.RENDER_API_KEY || undefined,
     RENDER_SERVICE_ID: env.RENDER_SERVICE_ID || undefined,

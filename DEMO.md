@@ -9,7 +9,7 @@ without a key, and an admin console to inspect every stat before it goes into Pl
 
 ## Suggested 10-minute tour
 
-0. **Home** — live coverage counts and a search box over every program and player, straight from `/v1`.
+0. **Home** — live coverage counts and a search box over every program and player (`/api/meta`, `/api/search`).
 1. **Teams** — every program for 2026 with division, conference, record and goals. Search "Duke". Signed in as
    admin the table also shows the crawl columns and a **Sync** button: any team can be pulled on demand in about a minute.
 2. **Duke (team page)** — record and splits, goals / shots / corners per game, clean sheets, attendance, form.

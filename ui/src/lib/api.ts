@@ -29,8 +29,8 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
   const token = getToken();
   const send = (bearer: string) => fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}), ...(init.headers ?? {}) } });
   let res = await send(token);
-  // A stored secret that the server no longer accepts would otherwise break the public pages too, because
-  // /v1 rejects a wrong key where it would have served an anonymous caller. Drop it and try again as a visitor.
+  // A stored admin secret the server no longer accepts: drop it and try again as a visitor, so the public pages keep
+  // working (the console then asks for the secret again).
   if (res.status === 401 && token) { clearToken(); res = await send(''); }
   if (res.status === 401) { throw new ApiError(401, 'unauthorized'); }
   const text = await res.text();

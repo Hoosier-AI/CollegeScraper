@@ -1,36 +1,22 @@
 # Plaibook Stats
 
 Every NCAA soccer program — Division I, II and III, men's and women's — with rosters, box scores, season
-stats, official conference standings and the United Soccer Coaches polls. It is a public website and a
-read API over the same data.
+stats, official conference standings and the United Soccer Coaches polls, plus professional and international
+soccer. It is a public website (https://www.plaibook.live) and Plaibook's private read API over the same data.
 
-**Site:** https://plaibook-college-scraper.onrender.com  ·  **API docs:** `/docs`  ·  **Spec:** `/v1/openapi.json`
+## The API is Plaibook's
 
-## Use the API
-
-No key, no signup:
+There is no public API (since 2026-10-16). `/v1` answers named keys from `COLLEGE_API_KEYS` only (`plaibook` for
+the app, `hub` for the operator console): the 17 college routes the app's sync and Tekki use, and `/v1/site/<path>`,
+which returns any read the site itself makes (college, pro, international, news). Contract, routes and the webhook:
+[docs/PLAIBOOK_API.md](docs/PLAIBOOK_API.md). Client: [docs/plaibook-client.mjs](docs/plaibook-client.mjs), copied into
+Plaibook as `api/_lib/collegeApi.mjs`.
 
 ```bash
-curl "https://plaibook-college-scraper.onrender.com/v1/search?q=duke&gender=m"
-curl "https://plaibook-college-scraper.onrender.com/v1/standings?season=2026&gender=m&division=d1"
-curl "https://plaibook-college-scraper.onrender.com/v1/leaders?season=2026&gender=w&stat=goals&limit=10"
+curl -H "X-Api-Key: $KEY" "https://www.plaibook.live/v1/search?q=duke&gender=m"
+curl -H "X-Api-Key: $KEY" "https://www.plaibook.live/v1/site/pro/rankings"
+STATS_URL=https://www.plaibook.live STATS_KEY=$KEY node scripts/site-contract.mjs   # every site read, checked
 ```
-
-Anonymous callers get 60 requests a minute per IP and may call from any origin. A named key raises that to
-600 — ask for one at the address in `GET /v1/meta`. Full reference: [docs/API.md](docs/API.md), or `/docs`
-in the browser, which renders the routes from the live spec and lets you run them.
-
-| Route | What it returns |
-|---|---|
-| `/v1/search` | Programs and players by name |
-| `/v1/programs`, `/v1/programs/{id}` | The team list, and one team with roster, games, standing and rankings |
-| `/v1/players/{id}` | Career, per-season stats, splits, ranks, honors, game log |
-| `/v1/games/{id}` | Box score from both sources, player lines, events |
-| `/v1/leaders` | Player or team leaderboards over ~50 stats |
-| `/v1/standings`, `/v1/rankings` | Official conference tables with verification, and every poll of the season |
-| `/v1/meta`, `/v1/status` | Seasons, conferences, the stat dictionary, limits; crawl health and counts |
-
-`/v1` is stable: fields get added, never renamed or removed.
 
 ## Where the data comes from
 

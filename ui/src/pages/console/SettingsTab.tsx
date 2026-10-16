@@ -41,7 +41,7 @@ export default function SettingsTab() {
 
       <Section title="Contact">
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Contact email" hint="shown in /v1/meta for people who need a higher limit (the crawler's From: header comes from the service env)">{(id) => <input id={id} type="email" className="input w-80" value={contact} onChange={(e) => setContact(e.target.value)} />}</Field>
+          <Field label="Contact email" hint="kept for reference (the crawler's From: header comes from CONTACT_EMAIL on the service)">{(id) => <input id={id} type="email" className="input w-80" value={contact} onChange={(e) => setContact(e.target.value)} />}</Field>
           <button className="btn-ghost btn-sm" disabled={save.isPending || contact === d.contact_email} onClick={() => save.mutate({ contact_email: contact })}>Save</button>
         </div>
       </Section>

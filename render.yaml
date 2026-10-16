@@ -26,14 +26,12 @@ services:
         sync: false
       - key: COLLEGE_API_KEYS
         sync: false
-      - key: CORS_ORIGINS
-        value: https://www.plaibook.soccer,https://plaibook.soccer
       # Per key: Plaibook's syncs, Tekki and every coach's page reads share the one "plaibook" key (/v1 and /v1/site).
       - key: API_RATE_LIMIT_PER_MIN
         value: "2400"
-      # The keyless free tier, per client IP.
-      - key: API_ANON_RATE_LIMIT_PER_MIN
-        value: "60"
+      # The site's own reads (/api), per visitor address.
+      - key: SITE_RATE_LIMIT_PER_MIN
+        value: "300"
       - key: PUBLIC_URL
         value: https://www.plaibook.live
       # Search Console HTML-file verification (the file name, e.g. google1234abcd.html) and the IndexNow key.

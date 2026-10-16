@@ -1,7 +1,7 @@
-// Authentication for the public read API. Three kinds of caller:
-//   - admin: the trigger secret (COLLEGE_TRIGGER_SECRET), used by the viewer's own job routes;
-//   - key:   a named key from COLLEGE_API_KEYS ("plaibook:xxxx,partner:yyyy"), for heavy consumers;
-//   - anon:  no credentials at all — the free tier, bucketed by client IP.
+// Authentication for Plaibook's API (/v1). Two kinds of caller since the keyless tier went (2026-10-16):
+//   - admin: the trigger secret (COLLEGE_TRIGGER_SECRET), used by the console and scripts;
+//   - key:   a named key from COLLEGE_API_KEYS ("plaibook:xxxx,hub:yyyy").
+// 'anon' remains the site's own per-visitor bucket (src/server.ts siteLimiter), never an API caller.
 // Every comparison is constant-time. A small in-memory sliding-window limiter caps requests per principal.
 import { createHash, timingSafeEqual } from 'node:crypto';
 
@@ -33,7 +33,7 @@ export function bearerOf(headers: { authorization?: string | string[]; 'x-api-ke
   return x ? String(x).trim() : null;
 }
 
-/** `lookup` is the database key store (console-created keys), consulted after the env keys. */
+/** `lookup`: an extra key source consulted after the env keys (none in use). */
 export function makeAuthenticator(opts: { adminSecret?: string | null; keys: ApiKey[]; lookup?: (token: string) => string | null }): (token: string | null) => ApiPrincipal | null {
   return (token) => {
     if (!token) return null;
@@ -45,7 +45,7 @@ export function makeAuthenticator(opts: { adminSecret?: string | null; keys: Api
   };
 }
 
-/** The anonymous free tier: one bucket per client IP. */
+/** A site visitor's rate-limit bucket: one per client IP. */
 export function anonPrincipal(ip: string | undefined | null): ApiPrincipal {
   return { kind: 'anon', name: `ip:${ip || 'unknown'}` };
 }

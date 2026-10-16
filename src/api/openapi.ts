@@ -1,4 +1,4 @@
-// OpenAPI 3.1 description of the public read API (served at /v1/openapi.json).
+// OpenAPI 3.1 description of Plaibook's private read API (served at /v1/openapi.json to key holders only).
 import { PLAYER_STATS, TEAM_STATS } from '../ui/queries.js';
 
 const uuid = { type: 'string', format: 'uuid' };
@@ -14,25 +14,24 @@ export function openapiSpec(serverUrl: string): Record<string, unknown> {
     info: {
       title: 'Plaibook Stats API',
       version: '1.0.0',
-      description: 'Read-only NCAA soccer data (D1/D2/D3, men and women): programs, rosters, players, games, season stats, standings and rankings.\n\n**No API key is required.** Every route answers anonymous requests at the free-tier limit (per client IP, see `limits` in /v1/meta), and keyless responses are readable from any origin. A named key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` — raises the limit and is restricted to the origins configured on the service.',
+      description: 'Private to Plaibook (no public access since 2026-10-16). Read-only NCAA soccer data (D1/D2/D3, men and women) on the /v1 college routes, and every read the Plaibook Stats site makes (college, pro, international, news) under /v1/site. Every request needs a named key (X-Api-Key or Authorization: Bearer).',
     },
     servers: [{ url: serverUrl }],
     components: {
       securitySchemes: {
-        apiKey: { type: 'http', scheme: 'bearer', description: 'Optional: a named key raises the rate limit.' },
-        apiKeyHeader: { type: 'apiKey', in: 'header', name: 'X-Api-Key', description: 'Optional: same key, sent as a header.' },
+        apiKey: { type: 'http', scheme: 'bearer', description: 'A named key from COLLEGE_API_KEYS.' },
+        apiKeyHeader: { type: 'apiKey', in: 'header', name: 'X-Api-Key', description: 'The same key, sent as a header.' },
       },
       responses: {
         BadRequest: { description: 'A parameter is missing or malformed.' },
-        Unauthorized: { description: 'A key was sent and it is not valid. Sending no key at all uses the free tier.' },
+        Unauthorized: { description: 'No key, or a key that is not valid.' },
         RateLimited: { description: 'Request limit exceeded; see Retry-After and X-RateLimit-* headers.' },
       },
     },
-    // {} first: no credentials is a supported way to call every route.
-    security: [{}, { apiKey: [] }, { apiKeyHeader: [] }],
+    security: [{ apiKey: [] }, { apiKeyHeader: [] }],
     paths: {
       '/v1/meta': { get: { summary: 'Seasons, conferences and data freshness', responses: ok('Seasons, current season, divisions, conferences and last successful crawl runs.') } },
-      '/v1/status': { get: { summary: 'Crawl health', responses: ok('Recent crawl runs, record-check counts, member programs and games/finals stored.') } },
+      '/v1/status': { get: { summary: 'Crawl health', parameters: [{ ...season, required: false, description: 'Fall season year (default: the current one).' }], responses: ok('Recent crawl runs, record-check counts, member programs and games/finals stored.') } },
       '/v1/search': { get: { summary: 'Search programs and players by name', parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string', minLength: 2, maxLength: 60 } }, gender, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 50 } }], responses: ok('{ q, programs[], players[] } ordered by similarity.') } },
       '/v1/programs': { get: { summary: 'Programs for a season', parameters: [season, gender, division, conference, { name: 'q', in: 'query', schema: { type: 'string' } }, { name: 'members', in: 'query', schema: { type: 'string', enum: ['all'] }, description: 'Include non-NCAA opponents (default: NCAA members only).' }], responses: ok('One row per program with school, conference, membership, computed and official records, sync timestamps and game counts.') } },
       '/v1/programs/{id}': { get: { summary: 'One program with roster, games, standing and rankings', parameters: [{ name: 'id', in: 'path', required: true, schema: uuid }, { ...season, required: false }, { name: 'include', in: 'query', schema: { type: 'string' }, description: 'Comma list of roster,games (default both).' }], responses: ok('program, school, season row, coaches, team stats, standing, conference table, USC poll history, NCAA category ranks, roster (with season stats, school-table stats, splits, honors) and games with team stats.') } },
@@ -47,7 +46,8 @@ export function openapiSpec(serverUrl: string): Record<string, unknown> {
       '/v1/matches/{id}/preview': { get: { summary: 'Match preview and review: head-to-head, form, standing, poll rank, key players, lineups', parameters: [{ name: 'id', in: 'path', required: true, schema: uuid }], responses: ok('{ game, head_to_head { played, home_wins, away_wins, ties, home_goals, away_goals, avg_goals, home_clean_sheets, away_clean_sheets, at_home, at_away, at_neutral { w, l, t }, biggest_home_win, biggest_away_win { id, game_date, score, margin }, streak { side, kind: won|unbeaten|drawn, count }, first_season, last_meeting, games[] (every earlier meeting, newest first, each with result W/L/T for the current home team and scorers[] { program_id, name, minute }) } — all from the current home team\'s side, sides { home, away } } — each side: stats (team season stats; form.last5 oldest→newest, streak), standing (rank, pod, conf record, points, of = table size), poll { rank, week_of }, leaders { scorers[], assists[], keeper }, lineup_status (match: this match\'s box score names starters · no_starters: its box score only lists who played · past: no box score yet · none), lineup { source, starters[], subs[], dnp[], keeper } for this match only (null until its box score exists), last_lineup { …, game_id, game_date, opponent } the side\'s latest lineup with starters when lineup is null; each line carries headshot_url where the school publishes a hotlinkable photo. Suppressed players are withheld (numbers stay, names and ids go).') } },
       '/v1/conferences': { get: { summary: 'Conferences with member counts and the top of each table', parameters: [season, gender, division], responses: ok('{ season, conferences: [{ id, ncaa_seo, name, short_name, division, site_host, members { m, w }, table { m|w: { top: [{ program_id, name, seo, logo, rank, conf_w, conf_l, conf_t, conf_pts }], source: conference|computed|none } } }] } sorted by name.') } },
       '/v1/conferences/{id}': { get: { summary: 'One conference: table, members, this week\'s matches, leaders, ranked members', parameters: [{ name: 'id', in: 'path', required: true, schema: uuid }, season, { ...gender, description: 'm (default) or w' }], responses: ok('{ conference, season, gender, standings (as /v1/standings for one conference), members[] (with season stats, form and poll rank), this_week (as /v1/matches, Monday to Sunday Eastern), leaders { points[], goals[], assists[], save_pct[] }, ranked[] }.') } },
-      '/v1/openapi.json': { get: { summary: 'This document', security: [], responses: { 200: { description: 'OpenAPI 3.1' } } } },
+      '/v1/site/{path}': { get: { summary: 'Any read the Plaibook Stats site makes', description: 'Runs the site\'s own GET /api/{path} (college, pro, international, news) and returns its answer unchanged. The routes Plaibook may call are SITE_ROUTES in docs/plaibook-client.mjs; admin routes answer 404.', parameters: [{ name: 'path', in: 'path', required: true, schema: { type: 'string' }, description: 'e.g. programs/{id}/elo, pro/players/{slug}, intl/rankings, news' }], responses: { 200: { description: 'The site route\'s answer (JSON, or text/calendar for a .ics feed).' }, 401: { $ref: '#/components/responses/Unauthorized' }, 404: { description: 'Not a site data route.' }, 429: { $ref: '#/components/responses/RateLimited' } } } },
+      '/v1/openapi.json': { get: { summary: 'This document', responses: { 200: { description: 'OpenAPI 3.1' }, 401: { $ref: '#/components/responses/Unauthorized' } } } },
     },
   };
 }

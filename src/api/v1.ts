@@ -1,34 +1,30 @@
-// Public read API: /v1/* is open to anyone. Callers with no credentials get the free tier, limited per client IP
-// and callable from any origin; a named key from COLLEGE_API_KEYS raises the limit and is restricted to the
-// configured browser origins. Every route maps onto the same query helpers the viewer uses.
+// Plaibook's read API (2026-10-16: no longer public). Every /v1 call needs a named key from COLLEGE_API_KEYS
+// ("plaibook" for the app, "hub" for the operator console) or the admin secret; there is no keyless tier and no browser
+// access (server-to-server only, so no CORS). The college routes below map onto the same query helpers the site uses;
+// everything else the site shows is under /v1/site (src/api/siteMirror.ts).
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb, selectAll } from '../db/client.js';
 import * as q from '../ui/queries.js';
 import { openapiSpec } from './openapi.js';
-import { anonPrincipal, bearerOf, type ApiPrincipal, type RateLimiter } from './auth.js';
+import { bearerOf, type ApiPrincipal, type RateLimiter } from './auth.js';
 import { eastern } from '../jobs/seasons.js';
 import { jobNames } from '../jobs/runner.js';
 import { memo, memoKey } from '../pro/memo.js';
 import { redactConference, redactGame, redactPreview, visibleRankings, visibleRoster } from './redact.js';
 
-/** Live responses are cached for 15 s; the scope follows the caller as the default header does. */
-const cacheScope = (req: FastifyRequest) => { const p = (req as FastifyRequest & { principal?: ApiPrincipal }).principal; return p && p.kind !== 'anon' ? 'private' : 'public'; };
+/** Every answer is for one key: never cached by a shared proxy. */
+const cacheScope = (_req: FastifyRequest) => 'private';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface PublicApiOptions {
   authenticate: (token: string | null) => ApiPrincipal | null;
-  /** Limiter for admin and named keys. */
+  /** Limiter for admin and named keys (one bucket per key name). */
   limiter: RateLimiter;
-  /** Limiter for the keyless free tier, bucketed per client IP. */
-  anonLimiter: RateLimiter;
-  corsOrigins: string[];
   /** Base URL advertised in the OpenAPI document. */
   publicUrl?: string;
-  /** Address published in /v1/meta for people who need a higher limit. */
-  contact?: string;
-  /** Called once per authenticated-or-anonymous request, after the rate limit decision (usage metering). */
+  /** Called once per authenticated request, after the rate limit decision (usage metering). */
   onRequest?: (principal: ApiPrincipal, limited: boolean) => void;
 }
 
@@ -51,61 +47,25 @@ export function withSchoolNames<T extends { school_seo?: string | null }>(progra
 }
 
 export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions): void {
-  const origins = new Set(opts.corsOrigins.map((o) => o.replace(/\/+$/, '')));
-  // Keyless responses are public data, so any origin may read them. A request that carries a key is only
-  // answered for the configured origins, so a leaked key cannot be replayed from someone else's page.
-  const cors = (req: FastifyRequest, reply: FastifyReply, credentialed: boolean) => {
-    const origin = String(req.headers.origin ?? '').replace(/\/+$/, '');
-    if (!origin) return;
-    const allow = !credentialed || origins.has('*') ? '*' : origins.has(origin) ? origin : null;
-    if (!allow) return;
-    reply.header('Access-Control-Allow-Origin', allow);
-    reply.header('Vary', 'Origin');
-    reply.header('Access-Control-Allow-Headers', 'Authorization, X-Api-Key, Content-Type');
-    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    reply.header('Access-Control-Max-Age', '600');
-  };
-
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/v1/')) return;
+    // Server-to-server only: a browser preflight is refused (no CORS headers are ever sent).
+    if (req.method === 'OPTIONS') return reply.code(405).send({ error: 'method_not_allowed' });
     const token = bearerOf(req.headers as never);
-    // A preflight never carries the key itself, so ask whether the real request intends to send one.
-    const credentialed = req.method === 'OPTIONS'
-      ? /authorization|x-api-key/i.test(String(req.headers['access-control-request-headers'] ?? ''))
-      : !!token;
-    cors(req, reply, credentialed);
-    if (req.method === 'OPTIONS') return reply.code(204).send();
-    if (req.url.startsWith('/v1/openapi.json')) return;
-    let principal: ApiPrincipal;
-    if (token) {
-      const named = opts.authenticate(token);
-      if (!named) return reply.code(401).send({ error: 'unauthorized', message: 'That API key is not valid. Send no key at all to use the free tier.' });
-      principal = named;
-    } else {
-      principal = anonPrincipal(req.ip);
-    }
-    const limiter = principal.kind === 'anon' ? opts.anonLimiter : opts.limiter;
-    const r = limiter.take(principal.name);
-    reply.header('X-RateLimit-Limit', String(limiter.max));
+    const principal = token ? opts.authenticate(token) : null;
+    if (!principal) return reply.code(401).send({ error: 'unauthorized', message: token ? 'That API key is not valid.' : 'An API key is required.' });
+    const r = opts.limiter.take(principal.name);
+    reply.header('X-RateLimit-Limit', String(opts.limiter.max));
     reply.header('X-RateLimit-Remaining', String(r.remaining));
     opts.onRequest?.(principal, !r.ok);
     if (!r.ok) {
       reply.header('Retry-After', String(Math.ceil(r.resetMs / 1000)));
-      return reply.code(429).send({
-        error: 'rate_limited',
-        message: principal.kind === 'anon'
-          ? `The free tier allows ${limiter.max} requests per minute per IP. An API key raises the limit.`
-          : 'Too many requests for this key.',
-        retry_after_seconds: Math.ceil(r.resetMs / 1000),
-      });
+      return reply.code(429).send({ error: 'rate_limited', message: 'Too many requests for this key.', retry_after_seconds: Math.ceil(r.resetMs / 1000) });
     }
     (req as FastifyRequest & { principal?: ApiPrincipal }).principal = principal;
   });
   app.addHook('onSend', async (req, reply, payload) => {
-    if (req.url.startsWith('/v1/') && req.method === 'GET' && reply.statusCode === 200 && !reply.getHeader('Cache-Control')) {
-      const principal = (req as FastifyRequest & { principal?: ApiPrincipal }).principal;
-      reply.header('Cache-Control', principal && principal.kind !== 'anon' ? 'private, max-age=60' : 'public, max-age=60');
-    }
+    if (req.url.startsWith('/v1/') && req.method === 'GET' && reply.statusCode === 200 && !reply.getHeader('Cache-Control')) reply.header('Cache-Control', 'private, max-age=60');
     return payload;
   });
 
@@ -117,11 +77,9 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     return {
       ...meta,
       last_completed_runs: last,
-      // The docs page reads its stat dictionary and limits from here so there is only one copy of either.
       player_stats: q.PLAYER_STATS,
       team_stats: q.TEAM_STATS,
-      limits: { anon_per_min: opts.anonLimiter.max, key_per_min: opts.limiter.max },
-      contact: opts.contact ?? null,
+      limits: { key_per_min: opts.limiter.max },
       generated_at: new Date().toISOString(),
     };
   });

@@ -1,6 +1,6 @@
 # Internals
 
-How the data is actually collected. Read `../README.md` first for what the service is, and `API.md` for the
+How the data is actually collected. Read `../README.md` first for what the service is, and `PLAIBOOK_API.md` for the
 public interface.
 
 ## Where the data comes from
@@ -34,7 +34,7 @@ src/server.ts            Render web service: /health, /jobs/enqueue, /jobs/runs,
 src/cli.ts               same jobs from the command line + `smoke`
 fixtures/                recorded real payloads used by the tests
 scripts/sanity.sql       post-crawl data checks
-src/api/                 public read API (/v1): routes, auth + rate limits, OpenAPI document
+src/api/                 Plaibook's read API (/v1, /v1/site mirror): routes, keys + rate limits, redaction, OpenAPI document
 src/ui/                  the site's own JSON API (/api) and the shared query layer both APIs call
 src/seo/                 server-rendered head + summary for search engines, slug redirects, sitemaps, robots.txt, 404s
 ui/                      Vite + React + Tailwind front end, built into ui/dist
@@ -145,7 +145,7 @@ text summary in `<section id="ssr">` at `<!--ssr-body-->`, which the app removes
 
 ## Plaibook Stats Pro (/pro)
 
-Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaibook's existing Pro plan: 7,500 requests a day, shared with the Plaibook app. Its terms allow showing the data on a website, not reselling the raw feed, so pro data is in no public API (`/v1` stays college-only). Scraping FBref, FotMob, ESPN, Transfermarkt, Sofascore, WhoScored or mlssoccer.com is off the table: their terms forbid it.
+Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaibook's existing Pro plan: 7,500 requests a day, shared with the Plaibook app. Its terms allow showing the data on our own pages, not reselling the raw feed: it reaches only this site and the Plaibook app (through the private `/v1/site` mirror; there is no public API). Scraping FBref, FotMob, ESPN, Transfermarkt, Sofascore, WhoScored or mlssoccer.com is off the table: their terms forbid it.
 
 - **Source:** `src/sources/apiFootball/`
   - `client.ts` is its own small client: an API-key header, the provider's quota headers, no fetch cache.

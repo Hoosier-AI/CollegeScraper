@@ -1,5 +1,8 @@
 # Connecting Plaibook to the College Soccer API
 
+> History (2026-09): how Plaibook first moved onto `/v1`. The current contract, including `/v1/site` (everything the
+> site shows) and the signed webhook, is [PLAIBOOK_API.md](PLAIBOOK_API.md).
+
 Everything Plaibook needs is served by this service; Plaibook never touches the college database. Work on the
 Plaibook side is a small, mechanical swap because its college data layer already exists as op-style calls.
 

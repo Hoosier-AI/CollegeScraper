@@ -1,19 +1,15 @@
-// The public API from the operator's side: keys (env and console-made), who is calling and how much, the
-// limits and origins in force, and the Plaibook connection.
+// Plaibook's API from the operator's side (no public tier since 2026-10-16): the keys in COLLEGE_API_KEYS, who is
+// calling and how much, the limits in force, and the Plaibook connection. Keys are set on the Render service only.
 import { useState } from 'react';
 import { api, fmt } from '../../lib/api';
 import { agoShort, useNow } from '../../lib/hooks';
-import { useConsole, useConsoleAction, type ApiData } from '../../lib/console';
-import { Badge, ErrorBox, Field, Note, Section, Skeleton } from '../../components/primitives';
-import { ConfirmDialog, CopyField, StatTile } from './parts';
+import { useConsole, type ApiData } from '../../lib/console';
+import { ErrorBox, Note, Section, Skeleton } from '../../components/primitives';
+import { CopyField, StatTile } from './parts';
 
 export default function ApiTab() {
   const q = useConsole<ApiData>('/api', { every: 30_000 });
   const now = useNow(15_000);
-  const create = useConsoleAction<{ name: string; note: string }>((v) => ({ path: '/api/keys', body: v }), ['/api', '/overview']);
-  const revoke = useConsoleAction<string>((id) => ({ path: `/api/keys/${id}/revoke` }), ['/api']);
-  const [name, setName] = useState(''); const [note, setNote] = useState('');
-  const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   if (q.isPending) return <div className="space-y-3" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-64" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
@@ -31,60 +27,40 @@ export default function ApiTab() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile label="Named key limit" value={`${fmt.num(d.limits.key)}/min`} sub="per key" />
-        <StatTile label="Free tier" value={`${fmt.num(d.limits.anon)}/min`} sub="per IP, no key" />
-        <StatTile label="Site reads" value={`${fmt.num(d.limits.site)}/min`} sub="the viewer's own /api calls, per IP" />
+        <StatTile label="Keys" value={fmt.num(d.keys.length)} sub="COLLEGE_API_KEYS on the service" />
+        <StatTile label="Per key" value={`${fmt.num(d.limits.key)}/min`} sub="Plaibook's syncs, Tekki and pages share it" />
+        <StatTile label="Site reads" value={`${fmt.num(d.limits.site)}/min`} sub="this site's own /api calls, per visitor" />
       </div>
 
       <Section title="Plaibook connection">
         {d.plaibook ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatTile label="Key in use" value={d.plaibook.name} sub={d.keys.find((k) => k.name === d.plaibook!.name)?.source === 'env' ? 'from COLLEGE_API_KEYS on the service' : 'created in this console'} />
+            <StatTile label="Key in use" value={d.plaibook.name} sub="from COLLEGE_API_KEYS on the service" />
             <StatTile label="Last request" value={d.plaibook.last_seen_at ? agoShort(d.plaibook.last_seen_at, now) : 'never'} tone={d.plaibook.last_seen_at && now - Date.parse(d.plaibook.last_seen_at) < 86400_000 ? 'ok' : 'warn'} />
             <StatTile label="Requests today" value={fmt.num(d.plaibook.today)} />
           </div>
-        ) : <Note tone="warn">No key named <code>plaibook</code>: create one below or set it in COLLEGE_API_KEYS on the service.</Note>}
+        ) : <Note tone="warn">No key named <code>plaibook</code>: add <code>plaibook:&lt;key&gt;</code> to COLLEGE_API_KEYS on the service and give the same key to the app (COLLEGE_API_KEY).</Note>}
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button className="btn-ghost btn-sm" onClick={testCall}>Test the API from here</button>
           {test && <span className={`text-sm ${test.ok ? 'text-win' : 'text-loss'}`} role="status">{test.text}</span>}
-          <a className="text-sm text-pitch-400 hover:text-pitch-300" href="/v1/openapi.json" target="_blank" rel="noreferrer">OpenAPI</a>
         </div>
         <div className="mt-3 space-y-1">
-          <p className="text-xs text-chalk-500">Plaibook's server calls this service with the key as a bearer token (client: <code>docs/plaibook-client.mjs</code> in this repo):</p>
-          <CopyField label="Example request" value={`curl -H "Authorization: Bearer <plaibook key>" ${d.public_url ?? window.location.origin}/v1/matches?gender=m`} />
+          <p className="text-xs text-chalk-500">Plaibook's server calls the 17 college routes under /v1 and every site read through /v1/site (client: <code>docs/plaibook-client.mjs</code>, contract: <code>docs/PLAIBOOK_API.md</code>):</p>
+          <CopyField label="Example request" value={`curl -H "X-Api-Key: <plaibook key>" ${d.public_url ?? window.location.origin}/v1/site/pro/rankings`} />
         </div>
-        {d.cors_origins.length > 0 && <p className="mt-2 text-xs text-chalk-500">Browser origins allowed to send a key: {d.cors_origins.join(', ')}.</p>}
       </Section>
 
       <Section title="Keys">
         <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">API keys</caption>
-          <thead><tr><th scope="col" className="th">Name</th><th scope="col" className="th">Source</th><th scope="col" className="th">Prefix</th><th scope="col" className="th">Created</th><th scope="col" className="th">Last used</th><th scope="col" className="th"></th></tr></thead>
+          <thead><tr><th scope="col" className="th">Name</th><th scope="col" className="th">Last used</th></tr></thead>
           <tbody>{d.keys.map((k) => (
-            <tr key={k.id ?? `env-${k.name}`} className={k.revoked_at ? 'opacity-50' : ''}>
-              <th scope="row" className="td text-left font-medium text-chalk-100">{k.name}{k.revoked_at && <Badge className="ml-2">revoked</Badge>}{k.note && <span className="ml-2 text-xs font-normal text-chalk-500">{k.note}</span>}</th>
-              <td className="td text-chalk-400">{k.source === 'env' ? 'service env' : 'console'}</td>
-              <td className="td font-mono text-xs text-chalk-400">{k.prefix ?? '—'}</td>
-              <td className="td text-chalk-400">{k.created_at ? fmt.date(k.created_at) : '—'}</td>
+            <tr key={k.name}>
+              <th scope="row" className="td text-left font-medium text-chalk-100">{k.name}</th>
               <td className="td text-chalk-300">{k.last_used_at ? agoShort(k.last_used_at, now) : 'never'}</td>
-              <td className="td text-right">{k.source === 'db' && !k.revoked_at && <button className="btn-ghost btn-sm" onClick={() => setRevoking({ id: k.id!, name: k.name })}>Revoke</button>}</td>
             </tr>
           ))}</tbody>
         </table></div>
-        <div className="mt-4 space-y-2">
-          <h3 className="text-sm font-semibold text-chalk-100">Create a key</h3>
-          <div className="flex flex-wrap items-end gap-3">
-            <Field label="Name" hint="letters, digits, - or _">{(id) => <input id={id} className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="partner" />}</Field>
-            <Field label="Note (optional)">{(id) => <input id={id} className="input w-64" value={note} onChange={(e) => setNote(e.target.value)} placeholder="who has it" />}</Field>
-            <button className="btn-primary" disabled={create.isPending || !name.trim()} onClick={() => create.mutate({ name: name.trim(), note }, { onSuccess: () => { setName(''); setNote(''); } })}>Create key</button>
-          </div>
-          {create.error ? <p role="alert" className="text-sm text-loss">{create.error instanceof Error ? create.error.message : String(create.error)}</p> : null}
-          {create.data?.key && (
-            <div className="rounded-md border border-note/40 bg-note/10 p-3">
-              <p className="mb-2 text-sm text-chalk-100">Copy this key now; it is not shown again.</p>
-              <CopyField label="New API key" value={create.data.key} />
-            </div>
-          )}
-        </div>
+        <Note>Keys are set in COLLEGE_API_KEYS on the Render service (name:key, comma-separated): plaibook for the app, hub for the operator console.</Note>
       </Section>
 
       <Section title="Usage, last 7 days">
@@ -96,10 +72,8 @@ export default function ApiTab() {
             ))}</tbody>
           </table></div>
         )}
-        <Note>anon = keyless /v1 calls; site = the stats site's own reads; admin = this console and scripts using the trigger secret.</Note>
+        <Note>site = this site's own reads; admin = this console and scripts using the trigger secret; anon only appears in history from before the keyless tier was removed.</Note>
       </Section>
-
-      <ConfirmDialog open={!!revoking} title={`Revoke ${revoking?.name}?`} body="Requests with this key start failing immediately with 401." confirmLabel="Revoke" danger busy={revoke.isPending} onConfirm={() => revoking && revoke.mutate(revoking.id, { onSuccess: () => setRevoking(null) })} onClose={() => setRevoking(null)} />
     </div>
   );
 }

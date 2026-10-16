@@ -16,7 +16,6 @@ import { registerUiApi } from './ui/api.js';
 import { registerPublicApi } from './api/v1.js';
 import { collectSiteRoutes, registerSiteMirror } from './api/siteMirror.js';
 import { anonPrincipal, makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
-import { KeyStore } from './api/keys.js';
 import { UsageMeter } from './api/usage.js';
 import { AnalyticsMeter } from './api/analytics.js';
 import { isBot } from './pro/onView.js';
@@ -112,13 +111,10 @@ function authorized(header: string | undefined): boolean {
   return timingSafeEqual(Buffer.from(got), Buffer.from(expected));
 }
 
-// One limiter for the keyless free tier (per client IP), one for named keys and the admin secret, and a
-// roomier one for the site's own reads: a single page view costs several /api calls and a whole office can
-// share one address, so browsing must not run into the API's budget. It is still metered, so /api cannot be
-// used to sidestep the /v1 limit.
-const anonLimiter = new RateLimiter(cfg.API_ANON_RATE_LIMIT_PER_MIN);
+// One limiter for the API's keys and the admin secret (per key name), and one for the site's own reads (per visitor
+// address): a single page view costs several /api calls and a whole office can share one address. Both are metered.
 const keyLimiter = new RateLimiter(cfg.API_RATE_LIMIT_PER_MIN);
-const siteLimiter = new RateLimiter(cfg.API_ANON_RATE_LIMIT_PER_MIN * 5);
+const siteLimiter = new RateLimiter(cfg.SITE_RATE_LIMIT_PER_MIN);
 // Googlebot and Bingbot, proven by reverse + forward DNS, are not held to the site limit (sitemap crawls).
 const bots = new BotVerifier();
 const limitSite = async (req: FastifyRequest, reply: FastifyReply): Promise<boolean> => {
@@ -157,27 +153,21 @@ app.post('/api/t', async (req, reply) => {
   return reply.code(204).send();
 });
 
-// Public read API: open to anyone at the free-tier limit, higher for named keys (env list + keys made in the console).
+// Plaibook's API (/v1): the named keys in COLLEGE_API_KEYS and the admin secret only; no keyless tier, no browser access.
 const apiKeys = parseApiKeys(cfg.COLLEGE_API_KEYS);
-const keyStore = cfg.SUPABASE_URL ? new KeyStore(getDb()) : null;
-if (keyStore) { void keyStore.load(); keyStore.start(); }
-const corsOrigins = cfg.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
 registerPublicApi(app, {
-  authenticate: makeAuthenticator({ adminSecret: cfg.COLLEGE_TRIGGER_SECRET ?? null, keys: apiKeys, lookup: keyStore ? (t) => keyStore.lookup(t) : undefined }),
+  authenticate: makeAuthenticator({ adminSecret: cfg.COLLEGE_TRIGGER_SECRET ?? null, keys: apiKeys }),
   limiter: keyLimiter,
-  anonLimiter,
-  corsOrigins,
   publicUrl: cfg.PUBLIC_URL,
-  contact: cfg.contactEmail,
-  onRequest: (principal, limited) => usage.hit(principal.kind === 'anon' ? 'anon' : principal.name, limited),
+  onRequest: (principal, limited) => usage.hit(principal.name, limited),
 });
-log.info({ keys: apiKeys.map((k) => k.name), anonPerMin: cfg.API_ANON_RATE_LIMIT_PER_MIN }, 'public api keys loaded');
+log.info({ keys: apiKeys.map((k) => k.name), perMin: cfg.API_RATE_LIMIT_PER_MIN }, 'api keys loaded');
 // Plaibook's mirror of every site read (/v1/site/*): behind /v1's key check and limit.
 siteMirror = registerSiteMirror(app, siteRoutes);
 
 // The owner's console: everything behind the trigger secret.
 const startedAt = Date.now();
-registerConsoleApi(app, { keyStore, usage, analytics, envKeys: apiKeys.map((k) => k.name), corsOrigins, limits: { key: cfg.API_RATE_LIMIT_PER_MIN, anon: cfg.API_ANON_RATE_LIMIT_PER_MIN, site: cfg.API_ANON_RATE_LIMIT_PER_MIN * 5 }, startedAt });
+registerConsoleApi(app, { usage, analytics, envKeys: apiKeys.map((k) => k.name), limits: { key: cfg.API_RATE_LIMIT_PER_MIN, site: cfg.SITE_RATE_LIMIT_PER_MIN }, startedAt });
 
 // Server-rendered public pages (titles, canonicals, JSON-LD, a text summary), slug redirects, sitemaps, robots.txt
 // and real 404s. Registered before the static files so its specific routes win over the static wildcard.
