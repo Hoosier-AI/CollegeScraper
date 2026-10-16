@@ -14,6 +14,7 @@ import { flushRequests, startRequestFlush } from './ops/sourceRequests.js';
 import { CHECK_JOBS } from './pro/crawlSites.js';
 import { registerUiApi } from './ui/api.js';
 import { registerPublicApi } from './api/v1.js';
+import { collectSiteRoutes, registerSiteMirror } from './api/siteMirror.js';
 import { anonPrincipal, makeAuthenticator, parseApiKeys, RateLimiter } from './api/auth.js';
 import { KeyStore } from './api/keys.js';
 import { UsageMeter } from './api/usage.js';
@@ -46,6 +47,8 @@ registerAllJobs();
 // trustProxy: Render terminates TLS in front of us, so without it req.ip is the proxy for every caller and
 // the whole free tier would share one rate-limit bucket. A request gets 60 s (the slowest console reads take 25).
 const app = Fastify({ logger: false, trustProxy: true, requestTimeout: 60_000, bodyLimit: 256 * 1024 });
+// Every GET /api route, as registered below, for Plaibook's mirror of the site (/v1/site, src/api/siteMirror.ts).
+const siteRoutes = collectSiteRoutes(app);
 
 // The visitor's real address. Every request reaches us through Render's Cloudflare edge, which sets
 // CF-Connecting-IP and refuses a request that brings its own (403, checked 2026-10-15). X-Forwarded-For alone is not
@@ -132,7 +135,9 @@ const limitSite = async (req: FastifyRequest, reply: FastifyReply): Promise<bool
 // Usage per principal (keys, admin, anon, site) for the console; flushed to the database once a minute.
 const usage = new UsageMeter(cfg.SUPABASE_URL ? getDb() : null);
 usage.start();
-registerUiApi(app, { authorized, limitAnonymous: limitSite });
+// The mirror is registered after /v1's key check (below); its inner requests skip the per-visitor limit.
+let siteMirror: ReturnType<typeof registerSiteMirror> | null = null;
+registerUiApi(app, { authorized, limitAnonymous: limitSite, internal: (req) => siteMirror?.internal(req) ?? false });
 // Policy pages and the corrections / removal form (src/legal).
 registerLegalApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 'plaibook-stats' });
 
@@ -167,6 +172,8 @@ registerPublicApi(app, {
   onRequest: (principal, limited) => usage.hit(principal.kind === 'anon' ? 'anon' : principal.name, limited),
 });
 log.info({ keys: apiKeys.map((k) => k.name), anonPerMin: cfg.API_ANON_RATE_LIMIT_PER_MIN }, 'public api keys loaded');
+// Plaibook's mirror of every site read (/v1/site/*): behind /v1's key check and limit.
+siteMirror = registerSiteMirror(app, siteRoutes);
 
 // The owner's console: everything behind the trigger secret.
 const startedAt = Date.now();

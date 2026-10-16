@@ -7,10 +7,12 @@ import type { ProHome } from './data';
 import type { IntlHome } from '../../lib/intl';
 import { AREA_NAV } from '../../lib/nav';
 
-interface Status { programs: number; games: number; finals: number }
+interface Coverage { programs: number; games: number; finals: number }
 
 export function Explore({ pro, intl }: { pro: ProHome | undefined; intl: IntlHome | undefined }) {
-  const status = useQuery({ queryKey: ['v1status'], queryFn: () => api<Status>('/v1/status') });
+  // /api/meta's counts (the same query the filters use, so usually already loaded).
+  const meta = useQuery({ queryKey: ['meta'], queryFn: () => api<{ coverage?: Coverage | null }>('/api/meta') });
+  const status = { data: meta.data?.coverage ?? undefined };
   const areas = [
     { id: 'college', title: 'College', what: 'Every NCAA program in Divisions I, II and III: rosters, schedules, box scores, standings and the coaches\' poll.',
       facts: status.data ? [`${fmt.num(status.data.programs)} programs`, `${fmt.num(status.data.games)} games this season`] : [] },

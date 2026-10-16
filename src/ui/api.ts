@@ -1,5 +1,7 @@
 // JSON API behind the stats viewer. Reads are public (this is what the site itself renders); enqueueing work,
 // cancelling runs and the crawl-health pages need the trigger secret. Queries run with the service role.
+// Every read except the admin viewer's leaves out players under a takedown request (src/api/redact.ts). Plaibook reads
+// these same routes through /v1/site (src/api/siteMirror.ts), which skips the per-visitor limit.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
@@ -23,6 +25,7 @@ import { icsCalendar } from '../calendar/ics.js';
 import { collegeRecords } from '../college/records.js';
 import { collegeTeamCompare, proTeamCompare } from '../compare/teams.js';
 import { COLLEGE_REF_SORTS, collegeGameReferee, collegeReferee, collegeRefereeList } from '../referees.js';
+import { redactConference, redactGame, redactPreview, visibleRankings, visibleRoster } from '../api/redact.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -34,10 +37,12 @@ export interface UiApiOptions {
    * Returning false means the reply has already been sent.
    */
   limitAnonymous?: (req: FastifyRequest, reply: FastifyReply) => boolean | Promise<boolean>;
+  /** True for a request the server made to itself for Plaibook (/v1/site): already authenticated and limited there. */
+  internal?: (req: FastifyRequest) => boolean;
 }
 
 export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: string | undefined) => boolean)): void {
-  const { authorized, limitAnonymous } = typeof opts === 'function' ? { authorized: opts, limitAnonymous: undefined } : opts;
+  const { authorized, limitAnonymous, internal } = typeof opts === 'function' ? { authorized: opts, limitAnonymous: undefined, internal: undefined } : opts;
   // Admin-only paths: anything that starts work or cancels it, plus the crawl-health surfaces.
   const adminOnly = (req: FastifyRequest): boolean =>
     req.method !== 'GET' || req.url.startsWith('/api/quality') || req.url.startsWith('/api/console') || /^\/api\/runs(\/|\?|$)/.test(req.url);
@@ -52,6 +57,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
       return;
     }
     if (authorized(req.headers.authorization)) return;
+    if (internal?.(req)) return;
     if (limitAnonymous && !(await limitAnonymous(req, reply))) return reply;
   });
   const season = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 1990 && n < 2100 ? n : null; };
@@ -74,8 +80,32 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   };
   const meta = () => memo('college:meta', () => q.meta(getDb()), { fresh: 5 * 60_000, stale: 30 * 60_000 });
   const cache = (reply: FastifyReply, seconds: number) => reply.header('Cache-Control', `public, max-age=${seconds}`);
+  const admin = (req: FastifyRequest) => authorized(req.headers.authorization);
+  // A conference filter must be an id: anything else was a 500 from Postgres's uuid cast.
+  const badConference = (v: unknown) => v != null && v !== '' && !UUID.test(String(v));
+  // The home page's Explore counts (programs this season, games, finals), five minutes old at most.
+  const coverage = () => memo('college:coverage', async () => {
+    const db = getDb(); const s = (await meta()).currentSeason;
+    const count = async (table: string, apply: (x: any) => any) => { const { count: n, error } = await apply(db.from(table).select('*', { count: 'exact', head: true })); if (error) throw new Error(error.message); return n ?? 0; };
+    const [programs, games, finals] = await Promise.all([
+      count('college_program_seasons', (x) => x.eq('season', s).eq('ncaa_member', true)),
+      count('college_games', (x) => x.eq('season', s)),
+      count('college_games', (x) => x.eq('season', s).eq('status', 'final')),
+    ]);
+    return { season: s, programs, games, finals };
+  }, { fresh: 5 * 60_000, stale: 30 * 60_000 }).catch(() => null);
 
-  app.get('/api/meta', async (_req, reply) => { cache(reply, 300); return { ...(await meta()), ...(await money()), jobs: jobNames() }; });
+  app.get('/api/meta', async (_req, reply) => { cache(reply, 300); return { ...(await meta()), ...(await money()), coverage: await coverage(), jobs: jobNames() }; });
+
+  // Team and player search (the header search, pickers): every program's school, division and conference.
+  app.get<{ Querystring: Record<string, string> }>('/api/search', async (req, reply) => {
+    const query = String(req.query.q ?? '').trim();
+    if (query.length < 2 || query.length > 60) return reply.code(400).send({ error: 'q must be 2-60 characters' });
+    const gender = str(req.query.gender); if (gender && gender !== 'm' && gender !== 'w') return reply.code(400).send({ error: 'gender must be m or w' });
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    cache(reply, 120);
+    return shared(req, 'search', [query.toLowerCase(), gender, limit], 120_000, () => q.search(getDb(), { q: query, gender, limit }));
+  });
 
   // Plaibook Stats Pro (/pro pages) and International (/intl pages).
   registerProApi(app);
@@ -85,6 +115,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
 
   app.get<{ Querystring: Record<string, string> }>('/api/programs', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
+    if (badConference(req.query.conference)) return reply.code(400).send({ error: 'conference must be a uuid' });
     const f = { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), q: str(req.query.q), members: req.query.members !== 'all' };
     cache(reply, 120);
     return shared(req, 'programs', f, 120_000, () => q.programs(getDb(), f));
@@ -97,7 +128,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/roster', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
-    return cache(reply, 300).send(await q.roster(getDb(), req.params.id, s));
+    const rows = await q.roster(getDb(), req.params.id, s);
+    return cache(reply, 300).send(admin(req) ? rows : visibleRoster(rows));
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/programs/:id/games', async (req, reply) => {
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
@@ -156,8 +188,10 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
 
   app.get<{ Params: { id: string } }>('/api/games/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
-    const r = await q.game(getDb(), req.params.id);
-    return r ?? reply.code(404).send({ error: 'not found' });
+    // The stored source payloads are other sites' data: only the admin viewer's Raw tab reads them.
+    const r = await q.game(getDb(), req.params.id, { raw: admin(req) });
+    if (!r) return reply.code(404).send({ error: 'not found' });
+    return admin(req) ? r : { ...redactGame(r), raw: undefined };
   });
   // Win probability, attack momentum (src/match/flow.ts).
   app.get<{ Params: { id: string } }>('/api/games/:id/flow', async (req, reply) => {
@@ -283,11 +317,13 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Params: { id: string } }>('/api/players/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const r = await q.player(getDb(), req.params.id);
-    return r ? cache(reply, 300).send(r) : reply.code(404).send({ error: 'not found' });
+    if (!r || (r.player?.suppress && !admin(req))) return reply.code(404).send({ error: 'not found' });
+    return cache(reply, 300).send(r);
   });
 
   app.get<{ Querystring: Record<string, string> }>('/api/leaders', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
+    if (badConference(req.query.conference)) return reply.code(400).send({ error: 'conference must be a uuid' });
     cache(reply, 300);
     const page = await shared(req, 'leaders', req.query, 300_000, () => q.leaders(getDb(), { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference), kind: str(req.query.kind), stat: str(req.query.stat), min_minutes: req.query.min_minutes, limit: req.query.limit, offset: req.query.offset, q: str(req.query.q), members: req.query.members !== 'all', position: str(req.query.position), class_year: req.query.class_year }));
     return { stats: req.query.kind === 'team' ? q.TEAM_STATS : q.PLAYER_STATS, ...page };
@@ -306,7 +342,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
   app.get<{ Params: { id: string } }>('/api/matches/:id/preview', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
     const r = await q.matchPreview(getDb(), req.params.id, { queue: !isBot(req.headers['user-agent']) });
-    return r ?? reply.code(404).send({ error: 'not found' });
+    if (!r) return reply.code(404).send({ error: 'not found' });
+    return admin(req) ? r : redactPreview(r);
   });
   app.get<{ Querystring: Record<string, string> }>('/api/conferences', async (req, reply) => {
     const s = season(req.query.season) ?? (await meta()).currentSeason;
@@ -319,10 +356,11 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season) ?? (await meta()).currentSeason;
     const f = { season: s, gender: req.query.gender === 'w' ? 'w' as const : 'm' as const };
     const r = await shared(req, 'conference', [req.params.id, f], 120_000, () => q.conference(getDb(), req.params.id, f));
-    return r ? cache(reply, 120).send(r) : reply.code(404).send({ error: 'not found' });
+    return r ? cache(reply, 120).send(admin(req) ? r : redactConference(r)) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/standings', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
+    if (badConference(req.query.conference)) return reply.code(400).send({ error: 'conference must be a uuid' });
     const f = { season: s, gender: str(req.query.gender), division: str(req.query.division), conference: str(req.query.conference) };
     cache(reply, 120);
     return shared(req, 'standings', f, 120_000, () => q.standings(getDb(), f));
@@ -331,7 +369,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });
     const f = { season: s, gender: str(req.query.gender), division: str(req.query.division), poll: str(req.query.poll), week_of: str(req.query.week_of) };
     cache(reply, 300);
-    return shared(req, 'rankings', f, 300_000, () => q.rankings(getDb(), f));
+    const r = await shared(req, 'rankings', f, 300_000, () => q.rankings(getDb(), f));
+    return admin(req) ? r : { ...r, rows: visibleRankings(r.rows ?? []) };
   });
   app.get<{ Querystring: Record<string, string> }>('/api/quality', async (req, reply) => {
     const s = season(req.query.season); if (!s) return reply.code(400).send({ error: 'season required' });

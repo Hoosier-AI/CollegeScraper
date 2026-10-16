@@ -7,6 +7,7 @@
 import type { Db } from '../db/client.js';
 import { kvGet, selectAll } from '../db/client.js';
 import { RPI_LAST_KEY } from './rpi.js';
+import { OUTBOX_KEY as PLAIBOOK_OUTBOX_KEY } from './finalDetail.js';
 import { registerJob, enqueue, type JobContext } from './runner.js';
 import { makeFetcher, withPriority } from './fetcher.js';
 import { makeTransport } from './fetchGamesNcaa.js';
@@ -155,6 +156,9 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
       .not('ncaa_contest_id', 'is', null).gte('game_date', yesterdayOf(et.date)).lte('game_date', et.date).limit(40);
     const lateIds = ((late ?? []) as { ncaa_contest_id: number }[]).map((g) => String(g.ncaa_contest_id)).filter((id) => !wentFinal.includes(id)).sort();
     if (lateIds.length) { await enqueue(db, 'final-detail', { season, contest_ids: lateIds }); ctx.inc('late_finals_requeued', lateIds.length); }
+    // Notices Plaibook did not take (it was down): sent again from the side lane.
+    const box = await kvGet<{ games?: unknown[] }>(db, PLAIBOOK_OUTBOX_KEY).catch(() => null);
+    if (box?.games?.length && !lateIds.length && !wentFinal.length) { await enqueue(db, 'final-detail', { season, contest_ids: [], outbox: true }); ctx.inc('plaibook_outbox_queued'); }
   }
 
   // Phase 2: live stats. Time-boxed so the next scoreboard tick is never late; the stalest games go first.

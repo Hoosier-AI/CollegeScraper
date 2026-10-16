@@ -1,4 +1,4 @@
-// One search over the whole site: college teams and players (/v1/search), pro competitions, clubs and players
+// One search over the whole site: college teams and players (/api/search), pro competitions, clubs and players
 // (/api/pro/search) and international tournaments, national teams and players (/api/intl/search), asked side by side
 // and grouped by area. Same combobox behaviour as the area searches (arrow keys, Enter, Escape).
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -29,7 +29,7 @@ export function UniversalSearch({ examples, size = 'lg', autoFocus }: { examples
   const on = debounced.length >= 2;
   const [college, pro, intl] = useQueries({
     queries: [
-      { queryKey: ['search', debounced], queryFn: () => api<CollegeHits>(`/v1/search${qs({ q: debounced, limit: 4 })}`), enabled: on },
+      { queryKey: ['search', debounced], queryFn: () => api<CollegeHits>(`/api/search${qs({ q: debounced, limit: 4 })}`), enabled: on },
       { queryKey: ['pro-search', 'pro', debounced], queryFn: () => api<{ leagues: ProHit[]; teams: ProHit[]; players: ProHit[] }>(`/api/pro/search${qs({ q: debounced, limit: 4 })}`), enabled: on },
       { queryKey: ['pro-search', 'intl', debounced], queryFn: () => api<{ leagues: ProHit[]; teams: ProHit[]; players: ProHit[] }>(`/api/intl/search${qs({ q: debounced, limit: 3 })}`), enabled: on },
     ],

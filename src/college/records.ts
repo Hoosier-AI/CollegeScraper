@@ -3,7 +3,7 @@
 // season's best single games (goals, points, saves, rating), for a gender and division. From finished games and
 // the box-score lines (college_player_ratings, migration 189).
 import type { Db } from '../db/client.js';
-import { selectAll } from '../db/client.js';
+import { selectAll, selectIn } from '../db/client.js';
 import { memo } from '../pro/memo.js';
 import { titleCase } from './teamOfWeek.js';
 
@@ -50,6 +50,10 @@ export async function collegeRecords(db: Db, o: { season: number; gender: 'm' | 
     // September is not one to follow).
     const recent = new Date(Date.now() - 21 * 86400_000).toISOString().slice(0, 10);
     for (const k of Object.keys(r.player)) r.player[k] = (r.player[k] as any[]).filter((p) => String(p.last).slice(0, 10) >= recent);
+    // A player under a takedown request is left out of the runs and the best games (src/api/redact.ts).
+    const named = [...new Set([...Object.values(r.player), ...Object.values(r.games)].flatMap((list: any) => (list as any[]).map((x) => x.player_id)).filter(Boolean))] as string[];
+    const hidden = new Set(named.length ? (await selectIn<any>(db, 'college_players', 'id,suppress', 'id', named)).filter((p) => p.suppress).map((p) => p.id) : []);
+    if (hidden.size) for (const part of [r.player, r.games]) for (const k of Object.keys(part)) part[k] = (part[k] as any[]).filter((x) => !hidden.has(x.player_id));
     const ids = new Set<string>();
     for (const list of Object.values(r.team) as any[][]) for (const t of list) ids.add(t.program_id);
     for (const list of Object.values(r.player) as any[][]) for (const p of list) { if (p.program_id) ids.add(p.program_id); p.name = titleCase(String(p.name ?? '')); }

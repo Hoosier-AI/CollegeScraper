@@ -21,7 +21,7 @@ export function ProgramPicker({ label, gender, onPick }: { label: string; gender
   const [term, setTerm] = useState('');
   const [deb, setDeb] = useState('');
   useEffect(() => { const t = setTimeout(() => setDeb(term.trim()), 250); return () => clearTimeout(t); }, [term]);
-  const q = useQuery({ queryKey: ['search', deb, 'programs'], queryFn: () => api<{ programs: { program_id: string; name: string; gender: 'm' | 'w'; conference_name?: string | null; logo_svg_url?: string | null }[] }>(`/v1/search${qs({ q: deb, limit: 10 })}`), enabled: deb.length >= 2 });
+  const q = useQuery({ queryKey: ['search', deb, 'programs'], queryFn: () => api<{ programs: { program_id: string; name: string; gender: 'm' | 'w'; conference?: { id: string; name: string } | null; division?: string | null; logo_svg_url?: string | null }[] }>(`/api/search${qs({ q: deb, limit: 10 })}`), enabled: deb.length >= 2 });
   const hits = (q.data?.programs ?? []).filter((p) => p.gender === gender);
   const id = `pick-${label.replace(/\W+/g, '-')}`;
   return (
@@ -32,7 +32,7 @@ export function ProgramPicker({ label, gender, onPick }: { label: string; gender
         <ul className="mt-1 max-h-72 overflow-auto rounded-lg border border-field-700 bg-field-900 p-1">
           {q.isPending && <li className="px-3 py-2 text-sm text-chalk-400">Searching…</li>}
           {q.data && !hits.length && <li className="px-3 py-2 text-sm text-chalk-400">No {genderLabel(gender)} team matches “{deb}”.</li>}
-          {hits.map((h) => <li key={h.program_id}><button type="button" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-field-800" onClick={() => onPick(h.program_id)}><TeamLogo src={h.logo_svg_url} name={h.name} size={18} /><span className="font-medium text-chalk-100">{h.name}</span><span className="ml-auto truncate text-xs text-chalk-500">{h.conference_name}</span></button></li>)}
+          {hits.map((h) => <li key={h.program_id}><button type="button" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-field-800" onClick={() => onPick(h.program_id)}><TeamLogo src={h.logo_svg_url} name={h.name} size={18} /><span className="font-medium text-chalk-100">{h.name}</span><span className="ml-auto truncate text-xs text-chalk-500">{h.conference?.name}</span></button></li>)}
         </ul>
       )}
     </div>

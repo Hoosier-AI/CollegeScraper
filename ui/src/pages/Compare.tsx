@@ -27,7 +27,7 @@ function Picker({ label, onPick }: { label: string; onPick: (id: string) => void
   const [term, setTerm] = useState('');
   const [deb, setDeb] = useState('');
   useEffect(() => { const t = setTimeout(() => setDeb(term.trim()), 250); return () => clearTimeout(t); }, [term]);
-  const q = useQuery({ queryKey: ['search', deb], queryFn: () => api<{ players: Hit[] }>(`/v1/search${qs({ q: deb, limit: 8 })}`), enabled: deb.length >= 2 });
+  const q = useQuery({ queryKey: ['search', deb], queryFn: () => api<{ players: Hit[] }>(`/api/search${qs({ q: deb, limit: 8 })}`), enabled: deb.length >= 2 });
   return (
     <div className="w-full max-w-sm">
       <label className="mb-1 block text-xs text-chalk-400" htmlFor={`pick-${label}`}>{label}</label>

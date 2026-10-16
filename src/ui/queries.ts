@@ -78,7 +78,7 @@ export async function program(db: Db, id: string, season: number) {
     selectAll<any>(db, 'college_coach_seasons', 'title,is_head,college_coaches(id,name,headshot_url)', (q) => q.eq('program_id', id).eq('season', season)),
     db.from('college_team_season_stats').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
     db.from('college_standings').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
-    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes,player_season_id,subject_name', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false }).limit(400)),
+    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes,player_season_id,subject_name', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false })),
     selectAll<any>(db, 'college_crawl_runs', 'id,job,status,started_at,finished_at,counters,error,params', (q) => q.contains('params', { program: p.school_seo }).order('created_at', { ascending: false }).limit(5)),
     selectAll<any>(db, 'college_program_seasons', 'season', (q) => q.eq('program_id', id).order('season', { ascending: false })),
     selectAll<any>(db, 'college_standings_checks', '*', (q) => q.eq('program_id', id).eq('season', season)),
@@ -123,7 +123,8 @@ export async function programGames(db: Db, id: string, season: number) {
   return games.map((g) => ({ ...g, team_stats: team.filter((t) => t.game_id === g.id) }));
 }
 
-export async function game(db: Db, id: string) {
+/** `raw`: also read the stored source payloads (the admin viewer's Raw tab). Never served to anyone else. */
+export async function game(db: Db, id: string, opts: { raw?: boolean } = {}) {
   const { data: g, error } = await db.from('college_v_schedule').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!g) return null;
@@ -132,7 +133,7 @@ export async function game(db: Db, id: string) {
     selectAll<any>(db, 'college_game_team_stats', '*', (q) => q.eq('game_id', id)),
     selectAll<any>(db, 'college_game_player_stats', '*,college_player_seasons(player_id,headshot_url,college_players(suppress))', (q) => q.eq('game_id', id).order('program_id').order('jersey')),
     selectAll<any>(db, 'college_game_events', '*', (q) => q.eq('game_id', id).order('period').order('seq')),
-    selectAll<any>(db, 'college_game_raw', 'source,payload,fetched_at', (q) => q.eq('game_id', id)),
+    opts.raw ? selectAll<any>(db, 'college_game_raw', 'source,payload,fetched_at', (q) => q.eq('game_id', id)) : Promise.resolve([] as any[]),
     // Match ratings (migration 189), on the lines of the box score we trust for the game.
     selectAll<{ program_id: string; line_key: string; rating: number }>(db, 'college_player_ratings', 'program_id,line_key,rating', (q) => q.eq('game_id', id)).catch(() => []),
   ]);
@@ -356,7 +357,7 @@ export async function standings(db: Db, o: { season: number; gender?: string; di
 }
 
 export async function rankings(db: Db, o: { season: number; gender?: string; division?: string; poll?: string; week_of?: string }) {
-  const polls = await selectAll<any>(db, 'college_rankings', 'poll,week_of,label', (q) => { q = q.eq('season', o.season); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; });
+  const polls = await rankingWeeks(db, o);
   const pollNames = [...new Set(polls.map((p) => p.poll))].sort((a, b) => (a === 'usc' ? -1 : b === 'usc' ? 1 : a.localeCompare(b)));
   const labelOf = (poll: string) => poll === 'usc' ? "Coaches' poll" : (polls.find((p) => p.poll === poll)?.label ?? poll);
   const poll = o.poll && pollNames.includes(o.poll) ? o.poll : (pollNames.includes('usc') ? 'usc' : pollNames[0]);
@@ -366,6 +367,52 @@ export async function rankings(db: Db, o: { season: number; gender?: string; div
   const rows = poll && week ? await selectAll<any>(db, 'college_rankings', '*,college_programs(id,name,school_seo,college_schools(logo_svg_url)),college_player_seasons(id,player_id,college_players(display_name,suppress))', (q) => { q = q.eq('season', o.season).eq('poll', poll).eq('week_of', week).order('rank'); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; }) : [];
   const [uscUnresolved, uscCheck] = await Promise.all([kvGet<any>(db, `usc:unresolved:${o.season}`), kvGet<any>(db, `usc:ncaa_check:${o.season}`)]);
   return { polls: pollNames.map((p) => ({ poll: p, label: labelOf(p) })), poll, weeks, week, rows, unresolved: uscUnresolved?.by_list ?? {}, ncaaCheck: uscCheck?.lists ?? {} };
+}
+
+/** Every (poll, week, label) of a season: migration 198's DISTINCT function, or the full scan before it is applied. */
+async function rankingWeeks(db: Db, o: { season: number; gender?: string; division?: string }): Promise<Array<{ poll: string; week_of: string; label: string | null }>> {
+  const { data, error } = await db.rpc('college_ranking_weeks', { p_season: o.season, p_gender: o.gender ?? null, p_division: o.division ?? null });
+  if (!error && Array.isArray(data)) return data as any[];
+  return selectAll<any>(db, 'college_rankings', 'poll,week_of,label', (q) => { q = q.eq('season', o.season); if (o.gender) q = q.eq('gender', o.gender); if (o.division) q = q.eq('division', o.division); return q; });
+}
+
+/** Each job's most recent finished run (one small read per job, in parallel): the minute-ly live runs no longer push
+ *  the nightly, hourly and weekly ones out of a "last 40 runs" window. */
+export async function lastRuns(db: Db, jobs: string[]): Promise<Record<string, string>> {
+  const rows = await Promise.all(jobs.map(async (job) => {
+    const { data } = await db.from('college_crawl_runs').select('finished_at').eq('job', job).eq('status', 'done').order('finished_at', { ascending: false }).limit(1).maybeSingle();
+    return [job, (data as any)?.finished_at ?? null] as const;
+  }));
+  return Object.fromEntries(rows.filter(([, at]) => at));
+}
+
+/** Team and player search (the search RPCs, migrations 125/130), with each program's school name, division and
+ *  conference (its latest season) so a picker can say which team it is. Shared by /api/search and /v1/search. */
+export async function search(db: Db, o: { q: string; gender?: string | null; limit: number }) {
+  const [programs, players] = await Promise.all([
+    db.rpc('college_search_programs', { q: o.q, p_gender: o.gender ?? null, p_limit: o.limit }),
+    db.rpc('college_search_players', { q: o.q, p_gender: o.gender ?? null, p_limit: o.limit }),
+  ]);
+  if (programs.error) throw new Error(programs.error.message);
+  if (players.error) throw new Error(players.error.message);
+  const found = (programs.data ?? []) as any[];
+  const seos = [...new Set(found.map((p) => p.school_seo).filter(Boolean))] as string[];
+  const ids = found.map((p) => p.program_id).filter(Boolean) as string[];
+  const [schools, seasons] = await Promise.all([
+    seos.length ? selectIn<any>(db, 'college_schools', 'seo,name,long_name', 'seo', seos) : [],
+    ids.length ? selectIn<any>(db, 'college_program_seasons', 'program_id,season,division,college_conferences(id,name)', 'program_id', ids) : [],
+  ]);
+  const latest = new Map<string, any>();
+  for (const s of seasons) { const have = latest.get(s.program_id); if (!have || s.season > have.season) latest.set(s.program_id, s); }
+  const bySeo = new Map(schools.map((s) => [s.seo, s]));
+  return {
+    q: o.q,
+    programs: found.map((p) => {
+      const s = p.school_seo ? bySeo.get(p.school_seo) : undefined; const ps = latest.get(p.program_id);
+      return { ...p, school_name: s?.name ?? null, school_long_name: s?.long_name ?? s?.name ?? null, division: ps?.division ?? null, conference: ps?.college_conferences ? { id: ps.college_conferences.id, name: ps.college_conferences.name } : null };
+    }),
+    players: (players.data ?? []) as any[],
+  };
 }
 
 export async function runs(db: Db, limit = 50) {
@@ -652,13 +699,16 @@ export async function matchPreview(db: Db, id: string, opts: { queue?: boolean }
   const scorersByGame = new Map<string, MeetingScorer[]>();
   if (h2hGames.length) {
     const truth = new Map(h2hRows.map((r) => [r.id as string, r.source_of_truth as string | null]));
-    const ev = await selectAll<any>(db, 'college_game_events', 'game_id,source,program_id,period,clock,seq,player_name_raw', (q) => q.in('game_id', h2hGames.map((m) => m.id)).eq('event_type', 'goal').order('period').order('seq'));
+    const ev = await selectAll<any>(db, 'college_game_events', 'game_id,source,program_id,period,clock,seq,player_name_raw,player_season_id', (q) => q.in('game_id', h2hGames.map((m) => m.id)).eq('event_type', 'goal').order('period').order('seq'));
+    // A suppressed player (a takedown request) scored: the goal stays, the name goes.
+    const scorerSeasons = [...new Set(ev.map((e) => e.player_season_id).filter(Boolean))] as string[];
+    const hidden = new Set(scorerSeasons.length ? (await selectIn<any>(db, 'college_player_seasons', 'id,college_players!inner(suppress)', 'id', scorerSeasons)).filter((r) => r.college_players?.suppress).map((r) => r.id) : []);
     const bySource = new Map<string, any[]>();
     for (const e of ev) { const k = `${e.game_id}|${e.source}`; bySource.set(k, [...(bySource.get(k) ?? []), e]); }
     for (const m of h2hGames) {
       const t = truth.get(m.id);
       const rows = (t ? bySource.get(`${m.id}|${t}`) : undefined) ?? bySource.get(`${m.id}|site`) ?? bySource.get(`${m.id}|ncaa`) ?? [];
-      scorersByGame.set(m.id, rows.map((e) => ({ program_id: e.program_id ?? null, name: firstLast(e.player_name_raw), minute: goalMinute(e.clock, e.period) })));
+      scorersByGame.set(m.id, rows.map((e) => ({ program_id: e.program_id ?? null, name: hidden.has(e.player_season_id) ? null : firstLast(e.player_name_raw), minute: goalMinute(e.clock, e.period) })));
     }
   }
   // Earlier meetings stored as results only (the 2024/2025 backfill) have no scorers: fetch their NCAA.com box

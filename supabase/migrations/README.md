@@ -92,7 +92,8 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 195_college_rate_recent_scope.sql | `college_rate_recent` picks games that went final or were re-fetched recently (its `updated_at` test matched every final, ~28k games) | yes (2026-10-15) |
 | 196_pro_crawl_matrix_json.sql | `pro_crawl_matrix_json()`: the Crawling console's matrix in one call (it was paged three at a time, each page the whole 15-30 s function) | yes (2026-10-16) |
 | 197_stats_money.sql | `stats_requests`: advertising, sponsorship and data-access kinds plus `company`, for the /advertise form (leads go to the hub's Deals page) | yes (2026-10-16) |
+| 198_api_reads.sql | GIN index on `college_crawl_runs.params` (a program page's last runs, `params @>`; CONCURRENTLY, its own statement) and `college_ranking_weeks()` (a season's distinct poll / week / label for the rankings page instead of every ranking row) | yes (2026-10-16) |
 
 Two files share the number 171 (`171_pro_leaders_fast.sql` and `171_pro_more_player_stats.sql`); both are applied, fast first.
 
-After a change: `npm test`, then from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
+After a change: `npm test`, then `STATS_URL=https://www.plaibook.live STATS_KEY=<plaibook key> node scripts/site-contract.mjs` (every site read Plaibook can make) and from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
