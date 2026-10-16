@@ -44,7 +44,8 @@ export const US_SCENE = new Set([772, 16, 885, 1136, 15, 1186]);
 export const isUsScene = (id: number, country: string | null | undefined): boolean => country === 'USA' || US_SCENE.has(id);
 
 export function leagueGender(id: number, name: string): Gender {
-  return GENDER_OVERRIDE[id] ?? (WOMEN.test(name) || /\sW$/.test(name) ? 'w' : 'm');
+  // A standalone W marks a women's competition: "USL W League", "CONCACAF W Champions Cup", "... W".
+  return GENDER_OVERRIDE[id] ?? (WOMEN.test(name) || /(^|\s)W(\s|$)/.test(name) ? 'w' : 'm');
 }
 
 export function leagueKind(id: number, name: string): LeagueKind {

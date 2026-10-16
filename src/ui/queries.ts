@@ -253,7 +253,7 @@ export async function coach(db: Db, id: string) {
   });
   const head = seasons.filter((s) => s.is_head && s.record);
   const career = head.reduce((a, s) => ({ w: a.w + (s.record!.w ?? 0), l: a.l + (s.record!.l ?? 0), t: a.t + (s.record!.t ?? 0) }), { w: 0, l: 0, t: 0 });
-  return { coach: { id: c.id, name: c.name, headshot: c.headshot_url ? cleanHeadshotUrl(c.headshot_url) : null }, seasons, head_record: head.length ? { ...career, seasons: head.length } : null };
+  return { coach: { id: c.id, name: c.name, headshot: c.headshot_url ? cleanHeadshotUrl(c.headshot_url) : null }, seasons, head_record: head.length ? { ...career, seasons: head.length, win_share: career.w + career.l + career.t ? (career.w + career.t / 2) / (career.w + career.l + career.t) : null } : null };
 }
 
 export const PERIODS = ['0-15', '16-30', '31-45', '46-60', '61-75', '76-90', 'ET'] as const;

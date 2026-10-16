@@ -25,7 +25,8 @@
  *   'none'               the route has no side, or only reaches one through an id already checked elsewhere
  *   'query'              it takes ?gender=m|w (college: always the club's; pro/intl: the club's unless asked)
  *   'path:<param>'       the side is a path parameter
- *   'program:<param>'    a college program id (path parameter or query key) whose side must be the club's
+ *   'program:<a,b>'      college program ids (path parameters or query keys); every one's side must be the club's
+ *   'game:<param>'       a college game id whose side must be the club's
  *   'result:<a.b|c.d>'   the answer says its side at the first of these paths that has one
  */
 export const SITE_ROUTES = [
@@ -45,8 +46,8 @@ export const SITE_ROUTES = [
   { path: '/api/teams/:id/calendar.ics', area: 'college', gender: 'program:id' },
   { path: '/api/players/:id', area: 'college', gender: 'result:player.gender|seasons.0.program.gender' },
   { path: '/api/games/:id', area: 'college', gender: 'result:game.gender' },
-  { path: '/api/games/:id/flow', area: 'college', gender: 'none' },
-  { path: '/api/games/:id/referee', area: 'college', gender: 'none' },
+  { path: '/api/games/:id/flow', area: 'college', gender: 'game:id' },
+  { path: '/api/games/:id/referee', area: 'college', gender: 'game:id' },
   { path: '/api/matches', area: 'college', gender: 'query' },
   { path: '/api/matches/:id/preview', area: 'college', gender: 'result:game.gender' },
   { path: '/api/leaders', area: 'college', gender: 'query' },
@@ -63,15 +64,15 @@ export const SITE_ROUTES = [
   { path: '/api/team-of-the-week', area: 'college', gender: 'query' },
   { path: '/api/transfers', area: 'college', gender: 'query' },
   { path: '/api/referees', area: 'college', gender: 'query' },
-  { path: '/api/referees/:slug', area: 'college', gender: 'none' },
-  { path: '/api/coaches/:id', area: 'college', gender: 'none' },
-  { path: '/api/h2h', area: 'college', gender: 'program:a' },
-  { path: '/api/compare/teams', area: 'college', gender: 'program:a' },
+  { path: '/api/referees/:slug', area: 'college', gender: 'query' },
+  { path: '/api/coaches/:id', area: 'college', gender: 'query' },
+  { path: '/api/h2h', area: 'college', gender: 'program:a,b' },
+  { path: '/api/compare/teams', area: 'college', gender: 'program:a,b' },
   // News (all three areas; ?scope=college|pro|international)
   { path: '/api/news', area: 'news', gender: 'query' },
   // Pro
-  { path: '/api/pro/home', area: 'pro', gender: 'none' },
-  { path: '/api/pro/matches', area: 'pro', gender: 'none' },
+  { path: '/api/pro/home', area: 'pro', gender: 'query' },
+  { path: '/api/pro/matches', area: 'pro', gender: 'query' },
   { path: '/api/pro/matches/:slug', area: 'pro', gender: 'none' },
   { path: '/api/pro/fixtures/:id/flow', area: 'pro', gender: 'none' },
   { path: '/api/pro/fixtures/:id/referee', area: 'pro', gender: 'none' },
@@ -87,11 +88,11 @@ export const SITE_ROUTES = [
   { path: '/api/pro/leaders', area: 'pro', gender: 'query' },
   { path: '/api/pro/team-leaders', area: 'pro', gender: 'query' },
   { path: '/api/pro/rankings', area: 'pro', gender: 'query' },
-  { path: '/api/pro/search', area: 'pro', gender: 'none' },
+  { path: '/api/pro/search', area: 'pro', gender: 'query' },
   { path: '/api/pro/compare', area: 'pro', gender: 'none' },
   { path: '/api/pro/compare/teams', area: 'pro', gender: 'none' },
   { path: '/api/pro/h2h', area: 'pro', gender: 'none' },
-  { path: '/api/pro/transfers', area: 'pro', gender: 'none' },
+  { path: '/api/pro/transfers', area: 'pro', gender: 'query' },
   { path: '/api/pro/americans-abroad', area: 'pro', gender: 'query' },
   { path: '/api/pro/college', area: 'pro', gender: 'query' },
   { path: '/api/pro/college/:school/:gender', area: 'pro', gender: 'path:gender' },
@@ -102,12 +103,12 @@ export const SITE_ROUTES = [
   { path: '/api/pro/referees/:slug', area: 'pro', gender: 'none' },
   { path: '/api/pro/coaches/:id', area: 'pro', gender: 'none' },
   // International (a tournament, nation, player or match page also reads the /api/pro routes above)
-  { path: '/api/intl/home', area: 'intl', gender: 'none' },
-  { path: '/api/intl/matches', area: 'intl', gender: 'none' },
+  { path: '/api/intl/home', area: 'intl', gender: 'query' },
+  { path: '/api/intl/matches', area: 'intl', gender: 'query' },
   { path: '/api/intl/around', area: 'intl', gender: 'query' },
   { path: '/api/intl/tournaments', area: 'intl', gender: 'none' },
   { path: '/api/intl/nations', area: 'intl', gender: 'none' },
-  { path: '/api/intl/search', area: 'intl', gender: 'none' },
+  { path: '/api/intl/search', area: 'intl', gender: 'query' },
   { path: '/api/intl/leaders', area: 'intl', gender: 'query' },
   { path: '/api/intl/team-leaders', area: 'intl', gender: 'query' },
   { path: '/api/intl/rankings', area: 'intl', gender: 'query' },

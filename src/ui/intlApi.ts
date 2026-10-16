@@ -1,6 +1,7 @@
 // JSON behind the International pages (/intl): national-team football. The lists differ from Pro's (tournaments by
 // confederation, nations, the international scoreboard and leaders); a tournament, nation, player or match page reads
 // the same /api/pro/:kind/:slug routes as Pro. Same terms as Pro: shown on our pages, no public API (/v1 stays college).
+import { intlHomeOnSide, matchesOnSide, sideOf } from './side.js';
 import { isMinor } from '../pro/minor.js';
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/client.js';
@@ -20,14 +21,14 @@ const level = (v: unknown) => (v === 'youth' || v === 'senior' ? v : null);
 export function registerIntlApi(app: FastifyInstance): void {
   app.get<{ Querystring: Record<string, string> }>('/api/intl/home', async (req, reply) => {
     const date = req.query.date && DATE.test(req.query.date) ? req.query.date : eastern().date;
-    return reply.header('Cache-Control', CACHE).send(await intl.home(getDb(), date));
+    return reply.header('Cache-Control', CACHE).send(intlHomeOnSide(await intl.home(getDb(), date), sideOf(req.query.gender)));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/intl/matches', async (req, reply) => {
     const date = req.query.date ?? eastern().date;
     if (!DATE.test(date)) return reply.code(400).send({ error: 'date must be YYYY-MM-DD' });
     if (req.query.status && !['scheduled', 'live', 'final', 'postponed', 'cancelled', 'abandoned'].includes(req.query.status)) return reply.code(400).send({ error: 'bad status' });
     const league = int(req.query.league);
-    return reply.header('Cache-Control', CACHE).send(await pro.matchesByDate(getDb(), { date, league, status: req.query.status ?? null, featured: req.query.featured === '1', scope: 'intl' }));
+    return reply.header('Cache-Control', CACHE).send(matchesOnSide(await pro.matchesByDate(getDb(), { date, league, status: req.query.status ?? null, featured: req.query.featured === '1', scope: 'intl' }), sideOf(req.query.gender)));
   });
   // An empty day's neighbours: the next match day and the last one, as scoreboards (one game: ?gender=m|w).
   app.get<{ Querystring: Record<string, string> }>('/api/intl/around', async (req, reply) => {
@@ -41,7 +42,7 @@ export function registerIntlApi(app: FastifyInstance): void {
   app.get('/api/intl/tournaments', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=300').send(await intl.tournaments(getDb())));
   app.get('/api/intl/nations', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=600').send(await intl.nations(getDb())));
   app.get<{ Querystring: Record<string, string> }>('/api/intl/search', async (req, reply) =>
-    reply.header('Cache-Control', 'public, max-age=60').send(await pro.search(getDb(), String(req.query.q ?? ''), Math.min(20, Number(req.query.limit) || 8), 'intl')));
+    reply.header('Cache-Control', 'public, max-age=60').send(await pro.search(getDb(), String(req.query.q ?? ''), Math.min(20, Number(req.query.limit) || 8), 'intl', sideOf(req.query.gender))));
   // International leaders and the player directory: pro_leaders over national-team competitions.
   app.get<{ Querystring: Record<string, string> }>('/api/intl/team-leaders', async (req, reply) => {
     const q = req.query;

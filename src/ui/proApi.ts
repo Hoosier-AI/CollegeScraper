@@ -1,6 +1,7 @@
 // JSON behind the /pro pages of the site. Public reads, rate-limited by the same /api hook as the college routes
 // (registerUiApi). Not part of /v1: API-Football's terms allow showing its data on our pages, not passing the raw
 // data on, so pro data has no public API.
+import { matchesOnSide, proHomeOnSide, sideOf, transfersOnSide } from './side.js';
 import { isMinor } from '../pro/minor.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getDb, kvGet, selectAll } from '../db/client.js';
@@ -38,14 +39,14 @@ export function registerProApi(app: FastifyInstance): void {
 
   app.get<{ Querystring: Record<string, string> }>('/api/pro/home', async (req, reply) => {
     const date = req.query.date && DATE.test(req.query.date) ? req.query.date : eastern().date;
-    return reply.header('Cache-Control', CACHE).send(await pro.home(getDb(), date));
+    return reply.header('Cache-Control', CACHE).send(proHomeOnSide(await pro.home(getDb(), date), sideOf(req.query.gender)));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/matches', async (req, reply) => {
     const date = req.query.date ?? eastern().date;
     if (!DATE.test(date)) return reply.code(400).send({ error: 'date must be YYYY-MM-DD' });
     if (req.query.status && !['scheduled', 'live', 'final', 'postponed', 'cancelled', 'abandoned'].includes(req.query.status)) return reply.code(400).send({ error: 'bad status' });
     const league = req.query.league ? Number(req.query.league) : null;
-    return reply.header('Cache-Control', CACHE).send(await pro.matchesByDate(getDb(), { date, league: Number.isInteger(league) ? league : null, status: req.query.status ?? null, featured: req.query.featured === '1' }));
+    return reply.header('Cache-Control', CACHE).send(matchesOnSide(await pro.matchesByDate(getDb(), { date, league: Number.isInteger(league) ? league : null, status: req.query.status ?? null, featured: req.query.featured === '1' }), sideOf(req.query.gender)));
   });
   app.get('/api/pro/leagues', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=300').send(await pro.leagues(getDb())));
   app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>('/api/pro/leagues/:slug', async (req, reply) => {
@@ -189,7 +190,7 @@ export function registerProApi(app: FastifyInstance): void {
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/search', async (req, reply) => {
     const q = String(req.query.q ?? '');
-    return reply.header('Cache-Control', 'public, max-age=60').send(await pro.search(getDb(), q, Math.min(20, Number(req.query.limit) || 8)));
+    return reply.header('Cache-Control', 'public, max-age=60').send(await pro.search(getDb(), q, Math.min(20, Number(req.query.limit) || 8), 'club', sideOf(req.query.gender)));
   });
   // Leaders and the player directory share one query (pro_leaders).
   const int = (v: unknown) => { const n = Number(v); return v != null && v !== '' && Number.isInteger(n) ? n : null; };
@@ -247,7 +248,7 @@ export function registerProApi(app: FastifyInstance): void {
     return r ? reply.header('Cache-Control', CACHE).send(r) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/pro/transfers', async (req, reply) =>
-    reply.header('Cache-Control', 'public, max-age=600').send(await pro.transfersFeed(getDb(), { limit: int(req.query.limit) ?? 50, offset: int(req.query.offset) ?? 0, team: int(req.query.team), us: req.query.scope !== 'world' })));
+    reply.header('Cache-Control', 'public, max-age=600').send(transfersOnSide(await pro.transfersFeed(getDb(), { limit: int(req.query.limit) ?? 50, offset: int(req.query.offset) ?? 0, team: int(req.query.team), us: req.query.scope !== 'world' }), sideOf(req.query.gender))));
   app.get<{ Querystring: Record<string, string> }>('/api/pro/americans-abroad', async (req, reply) => {
     const o = { gender: (req.query.gender === 'w' || req.query.gender === 'm' ? req.query.gender : null) as 'm' | 'w' | null, stat: (pro.LEADER_STATS as readonly string[]).includes(req.query.stat ?? '') ? req.query.stat! : 'goals', leaderboard: true };
     return reply.header('Cache-Control', 'public, max-age=300').send(await memo(memoKey('abroad', o), () => pro.americansAbroad(getDb(), o), { fresh: 5 * 60_000 }));

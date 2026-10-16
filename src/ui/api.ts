@@ -2,6 +2,7 @@
 // cancelling runs and the crawl-health pages need the trigger secret. Queries run with the service role.
 // Every read except the admin viewer's leaves out players under a takedown request (src/api/redact.ts). Plaibook reads
 // these same routes through /v1/site (src/api/siteMirror.ts), which skips the per-visitor limit.
+import { coachOnSide, refereeOnSide, sideOf } from './side.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
@@ -151,10 +152,10 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season); if (!s || !UUID.test(req.params.id)) return reply.code(400).send({ error: 'season + id required' });
     return reply.header('Cache-Control', 'public, max-age=60').send({ rpi: await programRpi(getDb(), req.params.id, s) });
   });
-  app.get<{ Params: { id: string } }>('/api/coaches/:id', async (req, reply) => {
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/coaches/:id', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'id required' });
     const r = await q.coach(getDb(), req.params.id);
-    return r ? reply.header('Cache-Control', 'public, max-age=600').send(r) : reply.code(404).send({ error: 'not found' });
+    return r ? reply.header('Cache-Control', 'public, max-age=600').send(coachOnSide(r, sideOf(req.query.gender))) : reply.code(404).send({ error: 'not found' });
   });
   app.get<{ Querystring: Record<string, string> }>('/api/h2h', async (req, reply) => {
     const a = str(req.query.a), b = str(req.query.b);
@@ -296,10 +297,10 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     };
     return reply.header('Cache-Control', 'public, max-age=300').send(await collegeRefereeList(getDb(), f));
   });
-  app.get<{ Params: { slug: string } }>('/api/referees/:slug', async (req, reply) => {
+  app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>('/api/referees/:slug', async (req, reply) => {
     if (!/^[a-z0-9-]{2,120}$/.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const r = await collegeReferee(getDb(), req.params.slug);
-    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'not found' });
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(refereeOnSide(r, sideOf(req.query.gender))) : reply.code(404).send({ error: 'not found' });
   });
   app.post<{ Params: { id: string } }>('/api/games/:id/refetch', async (req, reply) => {
     if (!UUID.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });

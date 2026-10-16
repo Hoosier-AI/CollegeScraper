@@ -699,17 +699,26 @@ async function matchPreview(db: Db, fx: { id: number; league_id: number; season:
 }
 
 // ---------- search and slugs ----------
-export async function search(db: Db, q: string, limit = 8, scope: Scope = 'club') {
+/** Name search. Every hit says its side (gender); with `gender` only that side is returned (asked for three times
+ *  the hits first, so a side's list is not cut short by the other's). */
+export async function search(db: Db, q: string, limit = 8, scope: Scope = 'club', gender: 'm' | 'w' | null = null) {
   const term = q.trim().slice(0, 80);
   if (term.length < 2) return { leagues: [], teams: [], players: [] };
-  const { data, error } = await db.rpc('pro_search', { p_q: term, p_limit: limit, p_scope: scope });
+  const { data, error } = await db.rpc('pro_search', { p_q: term, p_limit: gender ? Math.min(60, limit * 3) : limit, p_scope: scope });
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as { kind: string; id: number; name: string; slug: string; sub: string | null; logo: string | null }[];
-  const pick = (k: string) => rows.filter((r) => r.kind === k).map(({ kind: _k, ...r }) => r);
+  const ids = (k: string) => rows.filter((r) => r.kind === k).map((r) => r.id);
   // Players under 18 are not listed (src/pro/minor.ts).
-  const found = pick('player');
-  const born = new Map((found.length ? await selectIn<any>(db, 'pro_players', 'id,birth_date', 'id', found.map((r) => r.id)) : []).map((r) => [r.id, r.birth_date]));
-  return { leagues: pick('league'), teams: pick('team'), players: found.filter((r) => !isMinor(born.get(r.id))) };
+  const [lg, tm, pl] = await Promise.all([
+    ids('league').length ? selectIn<any>(db, 'pro_leagues', 'id,gender', 'id', ids('league')) : [],
+    ids('team').length ? selectIn<any>(db, 'pro_teams', 'id,gender', 'id', ids('team')) : [],
+    ids('player').length ? selectIn<any>(db, 'pro_players', 'id,gender,birth_date', 'id', ids('player')) : [],
+  ]);
+  const side = { league: new Map(lg.map((r: any) => [r.id, r.gender])), team: new Map(tm.map((r: any) => [r.id, r.gender])), player: new Map(pl.map((r: any) => [r.id, r.gender])) } as Record<string, Map<number, string | null>>;
+  const born = new Map(pl.map((r: any) => [r.id, r.birth_date]));
+  const pick = (k: string) => rows.filter((r) => r.kind === k).map(({ kind: _k, ...r }) => ({ ...r, gender: (side[k]?.get(r.id) ?? null) as 'm' | 'w' | null }))
+    .filter((r) => !gender || !r.gender || r.gender === gender).slice(0, limit);
+  return { leagues: pick('league'), teams: pick('team'), players: pick('player').filter((r) => !isMinor(born.get(r.id))) };
 }
 
 export type ProKind = 'league' | 'team' | 'player' | 'match';
@@ -902,7 +911,7 @@ export async function transfersFeed(db: Db, o: { limit?: number; offset?: number
   return rows.map((r) => {
     const p = ppl.get(r.player_id);
     return { date: r.date, type: r.type, player: { id: r.player_id, name: p?.display_name ?? r.player_name, slug: p?.slug ?? null, photo: p?.photo ?? null, nationality: p?.nationality ?? null, position: p?.position ?? null },
-      from: { id: r.from_team_id, name: r.from_name, logo: r.from_logo, slug: teamSlugs.get(r.from_team_id)?.slug ?? null }, to: { id: r.to_team_id, name: r.to_name, logo: r.to_logo, slug: teamSlugs.get(r.to_team_id)?.slug ?? null } };
+      from: { id: r.from_team_id, name: r.from_name, logo: r.from_logo, slug: teamSlugs.get(r.from_team_id)?.slug ?? null, gender: teamSlugs.get(r.from_team_id)?.gender ?? null }, to: { id: r.to_team_id, name: r.to_name, logo: r.to_logo, slug: teamSlugs.get(r.to_team_id)?.slug ?? null, gender: teamSlugs.get(r.to_team_id)?.gender ?? null } };
   });
 }
 

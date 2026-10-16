@@ -48,7 +48,7 @@ describe('site parity: every site read reaches Plaibook', () => {
   it('gives every route an area and a gender rule', () => {
     for (const r of SITE_ROUTES as Array<{ path: string; area: string; gender: string }>) {
       expect(['college', 'pro', 'intl', 'news']).toContain(r.area);
-      expect(r.gender).toMatch(/^(none|query|path:[a-z]+|program:[a-z]+|result:[a-z0-9_.|]+)$/);
+      expect(r.gender).toMatch(/^(none|query|path:[a-z]+|program:[a-z]+(,[a-z]+)*|game:[a-z]+|result:[a-z0-9_.|]+)$/);
       if (r.gender.startsWith('path:')) expect(r.path).toContain(`:${r.gender.slice(5)}`);
     }
   });

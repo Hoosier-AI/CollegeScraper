@@ -11,6 +11,8 @@ describe('league classification', () => {
     expect(leagueGender(1130, 'USL Super League')).toBe('w');
     expect(leagueGender(44, 'FA WSL')).toBe('w');
     expect(leagueGender(64, 'Feminine Division 1')).toBe('w');
+    expect(leagueGender(1136, 'CONCACAF W Champions Cup')).toBe('w');
+    expect(leagueGender(1, 'World Cup')).toBe('m');
     expect(leagueGender(82, 'Frauen Bundesliga')).toBe('w');
     expect(leagueGender(39, 'Premier League')).toBe('m');
     expect(leagueGender(253, 'Major League Soccer')).toBe('m');
