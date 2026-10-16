@@ -16,7 +16,7 @@ import PQueue from 'p-queue';
 type Stage = 'roster' | 'schedule' | 'stats' | 'boxscores' | 'bios';
 const ALL_STAGES: Stage[] = ['roster', 'schedule', 'stats', 'boxscores', 'bios'];
 
-/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean, from_cache?: boolean, concurrency?: number, skip_synced_days?: number } */
+/** params: { season?, program? (seo), gender?, division?, stages?: Stage[], only_recent_days?: number, only_pending_boxscores?: number|boolean, only_never_synced?: boolean, force?: boolean, reparse?: boolean, from_cache?: boolean, concurrency?: number, skip_synced_days?: number, skip_synced_since?: string } */
 /** gender_division → first NCAA-listed contest date of the season (written by reconcile-games). */
 let seasonOpeners: Record<string, string> = {};
 
@@ -62,7 +62,9 @@ export async function syncSite(ctx: JobContext): Promise<void> {
 
   // skip_synced_days: a program whose every asked stage was read in the last N days is done (a backfill that was cut
   // off by a deploy carries on where it stopped instead of starting over).
-  const skipSince = Number(ctx.params.skip_synced_days) > 0 ? new Date(Date.now() - Number(ctx.params.skip_synced_days) * 86400_000).toISOString() : null;
+  // skip_synced_since (ISO): the same from a fixed time, for a nightly or weekly resumed after a deploy (see resumable).
+  const skipSince = typeof ctx.params.skip_synced_since === 'string' && !Number.isNaN(Date.parse(ctx.params.skip_synced_since)) ? new Date(ctx.params.skip_synced_since).toISOString()
+    : Number(ctx.params.skip_synced_days) > 0 ? new Date(Date.now() - Number(ctx.params.skip_synced_days) * 86400_000).toISOString() : null;
   const stamp: Record<Stage, string> = { roster: 'roster_synced_at', schedule: 'schedule_synced_at', stats: 'stats_synced_at', boxscores: 'boxscores_synced_at', bios: 'roster_synced_at' };
   const done = (ps: Record<string, unknown>) => !!skipSince && [...stages].every((s) => typeof ps[stamp[s]] === 'string' && (ps[stamp[s]] as string) >= skipSince);
 

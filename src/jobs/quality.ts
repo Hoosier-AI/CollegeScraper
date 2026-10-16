@@ -37,4 +37,6 @@ registerJob('ops-retention', async (ctx: JobContext) => {
   for (const t of ['stats_views_daily', 'stats_referrers_daily', 'stats_devices_daily', 'stats_visitors_daily', 'stats_searches_daily']) await del(t, (q) => q.lt('day', ago(RETENTION.analytics_days).slice(0, 10)), 'analytics_deleted');
   // Render gives every deploy a new host name, so old pods leave heartbeat rows behind.
   await del('college_kv', (q) => q.like('key', `${KV.heartbeatPrefix}%`).lt('updated_at', ago(1)), 'stale_heartbeats_deleted');
+  // A nightly or weekly that failed or was cancelled leaves its resume point (schedules.ts resumable) behind.
+  await del('college_kv', (q) => q.like('key', 'resume:%').lt('updated_at', ago(7)), 'stale_resume_points_deleted');
 });

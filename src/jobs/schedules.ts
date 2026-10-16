@@ -12,6 +12,36 @@ async function step(ctx: JobContext, job: string, params: Record<string, unknown
 }
 
 /**
+ * A long composite (nightly, weekly) is cut off by every deploy, and a worker picks it up again from the top. Without
+ * this, the nightly started 2026-10-13 re-ran its first steps and restarted its school-site pass after each of the day's
+ * ten deploys, and was still "running" three days later: no nightly finished, so standings, polls, quality and
+ * retention stopped too. Now the steps this run finished are skipped, and its site pass skips schools already read
+ * since the run first started. Keyed by the run, so the next run starts fresh; the key goes when the run finishes.
+ */
+async function resumable(ctx: JobContext, name: string) {
+  const key = `resume:${name}:${ctx.runId ?? 'adhoc'}`;
+  const state = (ctx.runId ? await kvGet<{ since: string; done: string[] }>(ctx.db, key) : null) ?? { since: new Date().toISOString(), done: [] };
+  if (ctx.runId) await kvSet(ctx.db, key, state);
+  if (state.done.length) ctx.note('resumed', `after ${state.done.length} finished steps (first started ${state.since})`);
+  let n = 0;
+  return {
+    /** Programs whose every asked stage was read after this, this run has done. */
+    since: state.since,
+    async once(job: string, params: Record<string, unknown>): Promise<void> {
+      const id = `${n++}:${job}`; // by position: the weekly runs sync-site twice
+      if (state.done.includes(id)) { ctx.inc(`${job}.skipped_done`); return; }
+      await step(ctx, job, params);
+      if (!ctx.runId || (await ctx.cancelled())) return;
+      state.done.push(id);
+      await kvSet(ctx.db, key, state);
+    },
+    async finish(): Promise<void> {
+      if (ctx.runId) await ctx.db.from('college_kv').delete().eq('key', key);
+    },
+  };
+}
+
+/**
  * In-season, every 30 minutes: yesterday/today/tomorrow scoreboard → NCAA box scores for new finals → school box
  * scores only for programs whose new finals still lack one → reconcile → aggregates. Schedules for every program and
  * the conference standings pages are refreshed by the nightly job; doing them here made each "hourly" run a
@@ -34,16 +64,18 @@ registerJob('hourly', async (ctx) => {
  */
 registerJob('nightly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
-  await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
-  await step(ctx, 'fetch-games-ncaa', { season, recent_days: 2, refetch: true });
-  await step(ctx, 'sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'], concurrency: 6 });
-  await step(ctx, 'resolve-orphans', { season });
-  await step(ctx, 'reconcile-games', { season });
-  await step(ctx, 'compute-aggregates', { season, transfers: true });
-  await step(ctx, 'compute-standings', { season });
-  await step(ctx, 'refresh-rankings', { season, categories: false });
-  await step(ctx, 'quality', { season });
-  await step(ctx, 'ops-retention', {});
+  const r = await resumable(ctx, 'nightly');
+  await r.once('sweep-scoreboard', { season, days: 'recent' });
+  await r.once('fetch-games-ncaa', { season, recent_days: 2, refetch: true });
+  await r.once('sync-site', { season, only_recent_days: 2, stages: ['roster', 'schedule', 'stats', 'boxscores'], concurrency: 6, skip_synced_since: r.since });
+  await r.once('resolve-orphans', { season });
+  await r.once('reconcile-games', { season });
+  await r.once('compute-aggregates', { season, transfers: true });
+  await r.once('compute-standings', { season });
+  await r.once('refresh-rankings', { season, categories: false });
+  await r.once('quality', { season });
+  await r.once('ops-retention', {});
+  await r.finish();
 });
 
 /** Every three hours in season: re-read the conference standings pages so the verification never trails the games by more than that. */
@@ -61,21 +93,23 @@ registerJob('standings', async (ctx) => {
 /** Weekly: rankings/standings/leaderboards, re-discovery, persisted-query health. */
 registerJob('weekly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
-  await step(ctx, 'discover-teams', { season });
-  await step(ctx, 'verify-membership', { season });
-  await step(ctx, 'detect-sites', { season, only_unknown: true });
-  await step(ctx, 'refresh-rankings', { season });
+  const r = await resumable(ctx, 'weekly');
+  await r.once('discover-teams', { season });
+  await r.once('verify-membership', { season });
+  await r.once('detect-sites', { season, only_unknown: true });
+  await r.once('refresh-rankings', { season });
   // Every program's schedule and box scores once a week, whatever NCAA.com listed: games NCAA.com never carried
   // (UT Tyler's conference games in September) only reach us through the school's own schedule, and the nightly
   // sync is limited to programs NCAA.com saw play in the last two days.
-  await step(ctx, 'sync-site', { season, stages: ['schedule', 'boxscores'], concurrency: 6 });
-  await step(ctx, 'sweep-scoreboard', { season, days: 'all' });
-  await step(ctx, 'resolve-orphans', { season });
-  await step(ctx, 'reconcile-games', { season, all: true });
-  await step(ctx, 'compute-aggregates', { season });
-  await step(ctx, 'compute-standings', { season });
-  await step(ctx, 'sync-site', { season, stages: ['bios'] });
-  await step(ctx, 'pq-health', {});
+  await r.once('sync-site', { season, stages: ['schedule', 'boxscores'], concurrency: 6, skip_synced_since: r.since });
+  await r.once('sweep-scoreboard', { season, days: 'all' });
+  await r.once('resolve-orphans', { season });
+  await r.once('reconcile-games', { season, all: true });
+  await r.once('compute-aggregates', { season });
+  await r.once('compute-standings', { season });
+  await r.once('sync-site', { season, stages: ['bios'], skip_synced_since: r.since });
+  await r.once('pq-health', {});
+  await r.finish();
 });
 
 /** Full backfill of one season, in dependency order. params: { season } */
