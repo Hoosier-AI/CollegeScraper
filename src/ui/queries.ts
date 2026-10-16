@@ -325,8 +325,9 @@ export async function leaders(db: Db, o: LeadersFilter) {
   // 6 goals) came back in a different order on each request: paging 60 rows by 5 returned 46 distinct players, 14
   // twice and 14 never.
   const tiebreak = team ? 'program_id' : 'player_season_id';
-  // PPG and PPS: a tie broken by the bigger sample (more games or starts).
-  const sample = stat === 'ppg' ? 'res_apps' : stat === 'pps' ? 'pps_starts' : null;
+  // PPG and PPS: a tie broken by the bigger sample (more games or starts). Team PPG: more games played (the team view
+  // has no res_apps; asking for it made every team PPG leaderboard a 500).
+  const sample = team ? (stat === 'ppg' ? 'gp' : null) : stat === 'ppg' ? 'res_apps' : stat === 'pps' ? 'pps_starts' : null;
   const ordered = (q: any) => (sample ? q.order(sample, { ascending: false }) : q).order(tiebreak, { ascending: true });
   const { data, error, count } = await ordered(filtered(db.from(view).select('*', { count: 'exact' })).order(stat, { ascending: ASC.has(stat) })).range(offset, offset + limit - 1);
   if (error) {

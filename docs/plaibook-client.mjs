@@ -16,7 +16,7 @@
 // It goes to /v1/site/* (the service runs its own GET /api/<path> and returns the answer). SITE_ROUTES below is every
 // route Plaibook may ask for; the service's tests/api/site-parity.test.ts fails when the site gains a route that is in
 // neither this list nor its SITE_EXCLUDED, and Plaibook's tests/college-client-sync.test.mjs fails until this file is
-// copied again. Answers: { source: 'stats', fetchedAt, route, ...body } (arrays as rows, a calendar or other non-JSON
+// copied again. Answers: { source: 'stats', fetchedAt, route, maxAge, ...body } (arrays as rows, a calendar or other non-JSON
 // body as { text, contentType }); a non-2xx is { unavailable, note, status } (+ moved, a renamed pro/intl slug).
 
 /**
@@ -204,7 +204,9 @@ export function createCollegeApi({ baseUrl, apiKey, fetcher = fetch, timeoutMs =
       let body = null;
       if (/json/i.test(type) || /^\s*[[{]/.test(text)) { try { body = JSON.parse(text); } catch { body = null; } }
       if (!r.ok) return { ...unavailable(body?.message || body?.error || `Stats API ${r.status}`), status: r.status, ...(body?.moved ? { moved: body.moved } : {}) };
-      const stamp = { source: 'stats', fetchedAt: new Date(now()).toISOString(), route: hit.path };
+      // maxAge: how long the service says this answer stays fresh (its Cache-Control), for the caller's own cache.
+      const age = String(r.headers?.get?.('cache-control') ?? '').match(/max-age=(\d+)/);
+      const stamp = { source: 'stats', fetchedAt: new Date(now()).toISOString(), route: hit.path, maxAge: age ? Number(age[1]) : null };
       if (body === null) return text ? { ...stamp, text, contentType: type || 'text/plain' } : unavailable('Stats API returned an empty response.');
       if (typeof body !== 'object') return { ...stamp, value: body };
       return Array.isArray(body) ? { ...stamp, rows: body } : { ...stamp, ...body };
