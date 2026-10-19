@@ -4,6 +4,7 @@ import { RobotsCache } from '../http/robots.js';
 import { DbFetchCache, type Db } from '../db/client.js';
 import type { Fetcher } from '../model.js';
 import { recordRequest } from '../ops/sourceRequests.js';
+import { addDoNotCrawlHost, doNotCrawlReason, loadDoNotCrawl, looksLikePrestoPage } from '../http/doNotCrawl.js';
 
 let shared: HttpClient | null = null;
 
@@ -20,7 +21,13 @@ export function makeFetcher(db: Db, opts: { freshMs?: number } = {}): HttpClient
     robots: new RobotsCache(cfg.userAgent),
     freshMs: opts.freshMs ?? 0,
     onRequest: recordRequest,
+    // Sites we agreed not to crawl (PrestoSports, 2026-10-19): refused before any request; a page that turns out to be
+    // a Presto site puts its host on the list, so it is never asked again.
+    refuse: doNotCrawlReason,
+    onBody: (url, text) => { if (looksLikePrestoPage(text)) addDoNotCrawlHost(new URL(url).host); },
   });
+  void loadDoNotCrawl(db);
+  setInterval(() => { void loadDoNotCrawl(db); }, 3600_000).unref?.();
   return shared;
 }
 

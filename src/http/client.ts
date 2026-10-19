@@ -50,6 +50,10 @@ export interface HttpClientOptions {
   freshMs?: number;
   fetchImpl?: typeof undiciFetch;
   sleep?: (ms: number) => Promise<void>;
+  /** Why a URL must never be fetched (sites we agreed not to crawl, src/http/doNotCrawl.ts), or null. */
+  refuse?: (url: string) => string | null;
+  /** Sees every page that came back 2xx (a Presto page adds its host to the do-not-crawl list). */
+  onBody?: (url: string, text: string) => void;
   /** Called once per network attempt (the pro sources' request counts, src/ops/sourceRequests.ts). */
   onRequest?: (e: { url: string; ok: boolean; status: number; bytes?: number; notModified?: boolean; error?: string | null }) => void;
 }
@@ -68,7 +72,7 @@ export interface HttpStats { requests: number; cacheHits: number; notModified: n
 export class HttpClient implements Fetcher {
   private hostQueues = new Map<string, PQueue>();
   private global: PQueue;
-  private opts: Required<Omit<HttpClientOptions, 'cache' | 'robots' | 'contactEmail' | 'onRequest'>> & Pick<HttpClientOptions, 'cache' | 'robots' | 'contactEmail' | 'onRequest'>;
+  private opts: Required<Omit<HttpClientOptions, 'cache' | 'robots' | 'contactEmail' | 'onRequest' | 'refuse' | 'onBody'>> & Pick<HttpClientOptions, 'cache' | 'robots' | 'contactEmail' | 'onRequest' | 'refuse' | 'onBody'>;
   /** Process-wide counters (one client per process): totals plus a per-host breakdown the console shows. */
   public stats: HttpStats = { requests: 0, cacheHits: 0, notModified: 0, errors: 0, status429: 0, robotsBlocked: 0, byHost: new Map() };
   private hostStat(host: string): HostStats { let h = this.stats.byHost.get(host); if (!h) { h = { requests: 0, errors: 0, status429: 0, lastError: null, lastErrorAt: null }; this.stats.byHost.set(host, h); } return h; }
@@ -103,6 +107,9 @@ export class HttpClient implements Fetcher {
    * tick is never stuck behind a long crawl on the same host. */
   async get(url: string, o: { accept?: string; skipCache?: boolean; attempts?: number; freshMs?: number; priority?: number; noStore?: boolean; documentedApi?: boolean; userAgent?: string } = {}): Promise<HttpResponseLike> {
     const host = new URL(url).host;
+    // Before anything else, the cache included: a site we agreed not to crawl gets no request at all.
+    const refused = this.opts.refuse?.(url);
+    if (refused) throw new HttpError(451, url, `do not crawl: ${refused}`);
     const cached = o.skipCache ? null : await this.opts.cache?.get(url);
     const freshMs = o.freshMs ?? this.opts.freshMs;
     if (cached?.body != null && freshMs > 0 && Date.now() - Date.parse(cached.record.fetchedAt) < freshMs) {
@@ -172,6 +179,7 @@ export class HttpClient implements Fetcher {
       };
       if (!noStore) await this.opts.cache?.put(record, res.ok ? text : null);
       if (!res.ok) throw new HttpError(res.status, url);
+      this.opts.onBody?.(res.url || url, text);
       return { status: res.status, url: res.url || url, text, notModified: false };
     }
     const err = lastErr instanceof Error ? lastErr : new Error(String(lastErr));

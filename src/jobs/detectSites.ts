@@ -1,4 +1,5 @@
 // Classify every school's athletics site and discover the soccer sport on it (slug / sportId / team slug).
+import { DO_NOT_CRAWL_PLATFORMS, addDoNotCrawlHost } from '../http/doNotCrawl.js';
 import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { detectSite, adapterFor } from '../sources/sites/detect.js';
@@ -26,6 +27,8 @@ export async function detectSites(ctx: JobContext): Promise<void> {
     if (!mine.length) continue;
     // only_unknown restricts the set of schools; force only decides whether an already-classified school is re-probed.
     if (ctx.params.only_unknown && s.site_platform !== 'unknown') continue;
+    // A Presto school is never probed again (PrestoSports asked us to stop, 2026-10-19); its programs keep their status.
+    if (DO_NOT_CRAWL_PLATFORMS.has(s.site_platform)) { ctx.inc('skipped_do_not_crawl'); continue; }
     let platform = s.site_platform;
     let baseUrl = `https://${s.athletics_host}`;
     let host = s.athletics_host!;
@@ -35,6 +38,7 @@ export async function detectSites(ctx: JobContext): Promise<void> {
       await upsertSchools(db, [{ seo: s.seo, name: s.name, site_platform: platform, site_detected_at: new Date().toISOString(), athletics_host: host }]);
       ctx.inc(`platform_${platform}`);
     }
+    if (DO_NOT_CRAWL_PLATFORMS.has(platform)) { addDoNotCrawlHost(host); ctx.inc('found_do_not_crawl'); continue; }
     const adapter = adapterFor(platform);
     for (const p of mine) {
       if (!adapter) { await db.from('college_programs').update({ site_status: 'not_found' }).eq('id', p.id); continue; }

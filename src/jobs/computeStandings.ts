@@ -48,7 +48,9 @@ export async function computeStandings(ctx: JobContext): Promise<void> {
     const s = sites.get(c.ncaa_seo);
     if (!s) continue;
     const patch: Record<string, unknown> = {};
-    const host = s.platform === 'sidearm' || s.platform === 'presto' ? (s.host ?? null) : null;
+    // Presto-hosted conference sites are not read any more (PrestoSports asked us to stop, 2026-10-19): their tables
+    // are worked out from our own results, like every conference without a site.
+    const host = s.platform === 'sidearm' ? (s.host ?? null) : null;
     const dflt = (g: 'm' | 'w') => (s.platform === 'presto' ? `/sports/${g === 'w' ? 'wsoc' : 'msoc'}/{season}/standings` : `/standings.aspx?path=${g === 'w' ? 'wsoc' : 'msoc'}`);
     const pm = host ? (s.standings_path_m === null ? null : (s.standings_path_m ?? dflt('m'))) : null;
     const pw = host ? (s.standings_path_w === null ? null : (s.standings_path_w ?? dflt('w'))) : null;

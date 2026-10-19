@@ -1,12 +1,13 @@
 // Classify a school's athletics site and pick the adapter.
 import type { Fetcher, SiteAdapter, SitePlatform } from '../../model.js';
 import { sidearmAdapter, looksLikeSidearm } from './sidearm/index.js';
-import { prestoAdapter, looksLikePresto } from './presto/index.js';
+import { looksLikePresto } from './presto/index.js';
 import { wmtAdapter, looksLikeWmt } from './wmt/index.js';
 
 export function adapterFor(platform: SitePlatform): SiteAdapter | null {
   if (platform === 'sidearm') return sidearmAdapter;
-  if (platform === 'presto') return prestoAdapter;
+  // PrestoSports asked us to stop crawling its sites (2026-10-19): no adapter, so no sync or discovery reaches them.
+  if (platform === 'presto') return null;
   if (platform === 'wmt') return wmtAdapter;
   return null;
 }
