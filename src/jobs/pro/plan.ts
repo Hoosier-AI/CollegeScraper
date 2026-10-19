@@ -386,7 +386,20 @@ export async function proLeaders(ctx: JobContext): Promise<void> {
   const { data, error } = await ctx.db.rpc('pro_refresh_leader_rows');
   if (error) throw new Error(error.message);
   ctx.inc('rows', Number(data) || 0);
+  // Player percentiles (migration 202): ranked here, a league season at a time, never on a page view. Recent match
+  // days first; whatever does not fit the time budget is next hour's.
+  const until = Date.now() + PERCENTILE_BUDGET_MS;
+  const due = await ctx.db.rpc('pro_percentiles_due', { p_limit: 60 });
+  if (due.error) { ctx.note('percentiles', due.error.message); return; }
+  for (const d of (due.data ?? []) as { league_id: number; season: number }[]) {
+    if (Date.now() > until || await ctx.cancelled()) { ctx.inc('percentile_seasons_left'); continue; }
+    const r = await ctx.db.rpc('pro_refresh_percentiles', { p_league: d.league_id, p_season: d.season });
+    if (r.error) ctx.note(`percentiles_${d.league_id}_${d.season}`, r.error.message.slice(0, 160));
+    else { ctx.inc('percentile_seasons'); ctx.inc('percentile_rows', Number(r.data) || 0); }
+    await ctx.heartbeat();
+  }
 }
+const PERCENTILE_BUDGET_MS = 8 * 60_000;
 
 registerJob('pro-plan', proPlan);
 registerJob('pro-leaders', proLeaders);
