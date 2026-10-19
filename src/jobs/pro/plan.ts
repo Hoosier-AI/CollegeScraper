@@ -209,9 +209,13 @@ async function selectIn<T>(db: Db, table: string, columns: string, column: strin
   return out;
 }
 
-/** Players with minutes in these competitions' current or last season. */
+/** Players with minutes in these competitions' current or last season: one query (migration 201); paging with OFFSET
+ *  through 1.4M season lines re-read every earlier page and was a sixth of the database's disk reads. */
 async function playersIn(db: Db, leagues: LeagueInfo[]): Promise<number[]> {
   if (!leagues.length) return [];
+  const minSeason = Math.min(...leagues.map((l) => l.current_season! - 1));
+  const one = await db.rpc('pro_players_in_leagues', { p_leagues: leagues.map((l) => l.id), p_min_season: minSeason });
+  if (!one.error && Array.isArray(one.data)) return one.data as number[];
   const rows = await selectAll<{ player_id: number }>(db, 'pro_player_season_stats', 'player_id',
     (q) => q.in('league_id', leagues.map((l) => l.id)).gte('season', Math.min(...leagues.map((l) => l.current_season! - 1))).gt('minutes', 0));
   return [...new Set(rows.map((r) => r.player_id).filter((id) => id > 0))];
