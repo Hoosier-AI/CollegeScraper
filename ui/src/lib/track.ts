@@ -5,8 +5,26 @@ import { isAdmin } from './api';
 let lastPath = '';
 let landed = false;
 
+// A view is only sent once a person is on the page: a scroll, touch, key or pointer move (automated browsers that
+// crawl the site load pages but never do any of these, and announce themselves through navigator.webdriver). Until
+// then the latest view waits; it goes the moment the visitor shows up.
+let human = false;
+let waiting: Record<string, unknown> | null = null;
+function onHuman(): void {
+  if (human) return;
+  human = true;
+  for (const ev of HUMAN_EVENTS) window.removeEventListener(ev, onHuman, true);
+  if (waiting) { const w = waiting; waiting = null; send(w); }
+}
+const HUMAN_EVENTS = ['pointermove', 'pointerdown', 'scroll', 'wheel', 'keydown', 'touchstart'] as const;
+if (typeof window !== 'undefined' && !(navigator as Navigator & { webdriver?: boolean }).webdriver) {
+  for (const ev of HUMAN_EVENTS) window.addEventListener(ev, onHuman, { capture: true, passive: true });
+}
+
 function send(body: Record<string, unknown>): void {
   if (isAdmin()) return;
+  if (body.t === 'view' && !human) { waiting = body; return; }
+  if (body.t === 'view') body = { ...body, h: 1 };
   try {
     const data = JSON.stringify(body);
     if (!navigator.sendBeacon?.('/api/t', data)) void fetch('/api/t', { method: 'POST', body: data, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});

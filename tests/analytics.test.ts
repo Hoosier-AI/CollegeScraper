@@ -70,7 +70,7 @@ describe('AnalyticsMeter', () => {
     const p = m.pending();
     expect(p.views).toContainEqual({ day: '2026-10-13', path: '/pro/matches', group: 'Pro matches', n: 2 });
     expect(p.views).toContainEqual({ day: '2026-10-13', path: '(other)', group: 'Other', n: 1 });
-    expect(p.visitors).toEqual([{ day: '2026-10-13', uniques: 2, views: 4 }]);
+    expect(p.visitors.map((v) => ({ day: v.day, uniques: v.who.length, views: v.views }))).toEqual([{ day: '2026-10-13', uniques: 2, views: 4 }]);
     expect(p.refs).toEqual([{ day: '2026-10-13', host: 'google', n: 1 }]);
     expect(p.devices).toContainEqual({ day: '2026-10-13', device: 'mobile', n: 2 });
     // Nothing that identifies a visitor leaves the meter.
@@ -80,7 +80,13 @@ describe('AnalyticsMeter', () => {
     const m = new AnalyticsMeter(null);
     m.view({ path: '/', ua: MAC, ip: '3.3.3.3' }, Date.parse('2026-10-13T23:59:00Z'));
     m.view({ path: '/', ua: MAC, ip: '3.3.3.3' }, Date.parse('2026-10-14T00:01:00Z'));
-    expect(m.pending().visitors.map((v) => v.uniques)).toEqual([1, 1]);
+    expect(m.pending().visitors.map((v) => v.who.length)).toEqual([1, 1]);
+  });
+  it('a visitor has the same code across restarts on a day (same secret), a different one the next day', () => {
+    const a = new AnalyticsMeter(null, [], 60_000, 's3cret'); const b = new AnalyticsMeter(null, [], 60_000, 's3cret');
+    expect(a.codeOf('2026-10-20', '4.4.4.4', MAC)).toBe(b.codeOf('2026-10-20', '4.4.4.4', MAC));
+    expect(a.codeOf('2026-10-20', '4.4.4.4', MAC)).not.toBe(a.codeOf('2026-10-21', '4.4.4.4', MAC));
+    expect(a.codeOf('2026-10-20', '4.4.4.4', MAC)).not.toMatch(/4\.4\.4\.4/);
   });
   it('counts searches and the ones that found nothing', () => {
     const m = new AnalyticsMeter(null);

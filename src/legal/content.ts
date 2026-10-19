@@ -129,7 +129,7 @@ const PRIVACY: LegalPage = {
       T(['What', 'Why', 'How long'], [
         ['Server logs: IP address, browser (user agent), page requested, time', 'Running the Site, security, stopping abuse and rate limiting', 'Kept by our host for a short period (days to a few weeks), then deleted'],
         ['Visit counts (cookie-free): pages viewed, section, referring site, device type', 'Knowing which pages people use', 'Kept only as daily totals'],
-        ['Unique-visitor count', 'Counting visitors without tracking them', 'A one-way code made from your IP and browser with a secret that changes every day, held in memory for that day only; never stored with your IP'],
+        ['Unique-visitor count', 'Counting visitors without tracking them', 'A one-way code made from your IP and browser with a secret that changes every day, kept for that day only and deleted the next day; your IP itself is never stored'],
         ['Search terms typed into the Site\'s search', 'Improving search (which searches find nothing)', 'Kept as daily counts of terms, not linked to you'],
         ['What you send us: request-form entries and emails', 'Answering you', 'Until the request is closed and for 12 months after'],
       ]),

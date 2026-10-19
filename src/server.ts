@@ -140,7 +140,7 @@ registerLegalApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 
 // Cookie-free site analytics (src/api/analytics.ts): the viewer's beacon on every page change and settled search.
 // Bots are not counted; the viewer itself skips the owner (an admin token in the browser).
 const ownHosts = ['plaibook.live', 'onrender.com', 'localhost', ...(cfg.PUBLIC_URL ? [new URL(cfg.PUBLIC_URL).hostname.replace(/^www\./, '')] : [])];
-const analytics = new AnalyticsMeter(cfg.SUPABASE_URL ? getDb() : null, ownHosts);
+const analytics = new AnalyticsMeter(cfg.SUPABASE_URL ? getDb() : null, ownHosts, 60_000, cfg.COLLEGE_TRIGGER_SECRET ?? null);
 analytics.start();
 const beaconLimiter = new RateLimiter(120);
 app.post('/api/t', async (req, reply) => {
@@ -148,7 +148,8 @@ app.post('/api/t', async (req, reply) => {
   if (isBot(ua) || !beaconLimiter.take(anonPrincipal(req.ip).name).ok) return reply.code(204).send();
   let b: any = req.body;
   if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = null; } }
-  if (b && b.t === 'view') analytics.view({ path: String(b.path ?? ''), ref: typeof b.ref === 'string' ? b.ref : null, ua, ip: req.ip });
+  // A view counts only when the viewer saw a person on the page (h: 1, sent after a scroll, touch, key or pointer move).
+  if (b && b.t === 'view' && b.h === 1) analytics.view({ path: String(b.path ?? ''), ref: typeof b.ref === 'string' ? b.ref : null, ua, ip: req.ip });
   else if (b && b.t === 'search' && (b.scope === 'pro' || b.scope === 'college' || b.scope === 'all')) analytics.search(b.scope, String(b.q ?? ''), Number(b.n) || 0);
   return reply.code(204).send();
 });

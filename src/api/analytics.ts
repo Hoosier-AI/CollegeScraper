@@ -1,11 +1,14 @@
 // First-party, cookie-free analytics for the Stats site: page views per page, referrer host and device per day, a
 // daily count of distinct visitors, and site searches (with the ones that found nothing). The viewer sends a beacon
-// to /api/t on every page change; bots and the owner (an admin token in the browser) are not counted.
+// to /api/t once a person is on the page (it waits for a scroll, touch, key or pointer move: since 2026-10-16 a
+// crawler driving a real desktop browser sent ~100,000 "visitors" a day, 99.9% desktop with no referrer), so bots,
+// automated browsers and the owner (an admin token in the browser) are not counted.
 //
-// Nothing personal is stored. A visitor is a hash of IP, user agent, the day and a salt that only lives in this
-// process's memory, kept for the day to count distinct visitors; only the count reaches the database. Counted in
-// memory and written once a minute through stats_analytics_add (migration 163), like the API usage meter.
-import { createHash, randomBytes } from 'node:crypto';
+// Nothing personal is stored. A visitor is a one-way code made from IP, user agent and a server secret that differs
+// every day; the code is kept for that day only (stats_visitor_seen, deleted the next day, migration 203) so a restart
+// no longer counts everyone again, and the IP itself is never stored. Counted in memory and written once a minute
+// through stats_analytics_add (migration 163) and stats_visitors_add (203), like the API usage meter.
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { Db } from '../db/client.js';
 import { log } from '../log.js';
 
@@ -112,17 +115,23 @@ export function normalizeQuery(q: string | undefined): string | null {
   return s.length >= 2 ? s : null;
 }
 
-interface Pending { views: Map<string, number>; refs: Map<string, number>; devices: Map<string, number>; visitors: Map<string, { uniques: number; views: number }>; searches: Map<string, { n: number; zero: number }> }
+interface Pending { views: Map<string, number>; refs: Map<string, number>; devices: Map<string, number>; visitors: Map<string, { who: Set<string>; views: number }>; searches: Map<string, { n: number; zero: number }> }
 const empty = (): Pending => ({ views: new Map(), refs: new Map(), devices: new Map(), visitors: new Map(), searches: new Map() });
 const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
 
 export class AnalyticsMeter {
   private p = empty();
-  private seen = new Set<string>();
-  private seenDay = '';
-  private salt = randomBytes(16).toString('hex');
   private timer: NodeJS.Timeout | null = null;
-  constructor(private db: Db | null, private ownHosts: string[] = [], private flushMs = 60_000) {}
+  /** The secret behind the daily codes: the same across restarts (so a visitor counts once a day), different per day. */
+  private secret: string;
+  constructor(private db: Db | null, private ownHosts: string[] = [], private flushMs = 60_000, secret: string | null = null) {
+    this.secret = secret || randomBytes(32).toString('hex');
+  }
+  /** The one-way code of a visitor for a day. */
+  codeOf(day: string, ip: string | undefined, ua: string | undefined): string {
+    const daySalt = createHmac('sha256', this.secret).update(`visitors|${day}`).digest();
+    return createHash('sha256').update(daySalt).update(`|${ip ?? ''}|${ua ?? ''}`).digest('base64url').slice(0, 22);
+  }
 
   /** A page view. Returns false when it was not counted (unknown page, owner page). Bots are filtered by the caller. */
   view(v: { path: string; ref?: string | null; ua?: string; ip?: string }, now = Date.now()): boolean {
@@ -134,11 +143,9 @@ export class AnalyticsMeter {
     const host = referrerHost(v.ref, this.ownHosts);
     if (host) bump(this.p.refs, `${day}|${host}`);
     bump(this.p.devices, `${day}|${deviceOf(v.ua)}`);
-    if (day !== this.seenDay) { this.seen.clear(); this.seenDay = day; this.salt = randomBytes(16).toString('hex'); }
-    const who = createHash('sha256').update(`${this.salt}|${day}|${v.ip ?? ''}|${v.ua ?? ''}`).digest('base64url').slice(0, 22);
-    const vis = this.p.visitors.get(day) ?? { uniques: 0, views: 0 };
+    const vis = this.p.visitors.get(day) ?? { who: new Set<string>(), views: 0 };
     vis.views += 1;
-    if (!this.seen.has(who)) { this.seen.add(who); vis.uniques += 1; }
+    vis.who.add(this.codeOf(day, v.ip, v.ua));
     this.p.visitors.set(day, vis);
     return true;
   }
@@ -162,7 +169,7 @@ export class AnalyticsMeter {
       views: [...this.p.views].map(([k, n]) => { const [day, path, group] = split(k) as [string, string, string]; return { day, path, group, n }; }),
       refs: [...this.p.refs].map(([k, n]) => { const [day, host] = split(k) as [string, string]; return { day, host, n }; }),
       devices: [...this.p.devices].map(([k, n]) => { const [day, device] = split(k) as [string, string]; return { day, device, n }; }),
-      visitors: [...this.p.visitors].map(([day, v]) => ({ day, uniques: v.uniques, views: v.views })),
+      visitors: [...this.p.visitors].map(([day, v]) => ({ day, views: v.views, who: [...v.who] })),
       searches: [...this.p.searches].map(([k, v]) => { const [day, scope, query] = split(k) as [string, string, string]; return { day, scope, query, n: v.n, zero: v.zero }; }),
     };
   }
@@ -178,7 +185,12 @@ export class AnalyticsMeter {
     const body = this.pending();
     if (!body.views.length && !body.searches.length) return;
     this.p = empty();
-    const { error } = await this.db.rpc('stats_analytics_add', { p: body });
+    // Visitors go through stats_visitors_add, which counts each daily code once whatever restarts happened.
+    const { error } = await this.db.rpc('stats_analytics_add', { p: { ...body, visitors: [] } });
     if (error) log.warn({ err: error.message }, 'analytics flush failed');
+    if (body.visitors.length) {
+      const v = await this.db.rpc('stats_visitors_add', { p: body.visitors });
+      if (v.error) log.warn({ err: v.error.message }, 'visitor flush failed');
+    }
   }
 }
