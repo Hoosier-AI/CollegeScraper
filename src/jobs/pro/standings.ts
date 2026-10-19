@@ -14,6 +14,8 @@ export async function fetchStandings(ctx: JobContext, api: ApiFootball, league: 
   // Every team in a table needs a row first (foreign key); the table carries name and crest.
   const teams = new Map<number, { id: number; name: string; display_name: string; logo: string | null; gender: LeagueInfo['gender'] | null }>();
   for (const it of res.response) for (const g of it.league.standings ?? []) for (const r of g) {
+    // The provider sometimes lists a club with no id (Monastir, 2026-10-16): it cannot be stored, so it is left out.
+    if (!Number.isInteger(r.team?.id)) continue;
     teams.set(r.team.id, { id: r.team.id, name: r.team.name, display_name: teamDisplayName(r.team.name), logo: r.team.logo ?? null, gender: leagues.get(league)?.gender ?? null });
   }
   await upsertTeamStubs(ctx.db, [...teams.values()]);
@@ -50,10 +52,15 @@ export async function proStandings(ctx: JobContext): Promise<void> {
       }).map(([k]) => { const [l, s] = k.split('|').map(Number); return { league: l!, season: s! }; })
         .sort((a, b) => (leagues.get(a.league)?.priority ?? 999) - (leagues.get(b.league)?.priority ?? 999));
     }
+    // One league's bad table never stops the others (one glitch held every table back for three days).
     for (const p of pairs) {
       if (await ctx.cancelled()) return;
-      ctx.inc('rows', await fetchStandings(ctx, api, p.league, p.season, leagues));
-      ctx.inc('tables');
+      try {
+        ctx.inc('rows', await fetchStandings(ctx, api, p.league, p.season, leagues));
+        ctx.inc('tables');
+      } catch (err) {
+        ctx.inc('tables_failed'); ctx.note(`league_${p.league}_${p.season}`, String((err as Error)?.message ?? err).slice(0, 200));
+      }
       await ctx.heartbeat();
     }
   });

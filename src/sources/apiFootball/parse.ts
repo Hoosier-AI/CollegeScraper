@@ -259,6 +259,7 @@ export function parseStandings(items: AfStandingsItem[]): StandingRow[] {
     const groups = it.league?.standings ?? [];
     const multi = groups.length > 1;
     for (const rows of groups) for (const r of rows) {
+      if (!Number.isInteger(r.team?.id)) continue;
       out.push({
         league_id: it.league.id, season: it.league.season,
         // Single-table leagues: no group name, so the key does not change when the provider renames the table.

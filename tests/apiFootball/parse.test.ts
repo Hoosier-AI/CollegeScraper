@@ -162,6 +162,11 @@ describe('standings, clubs, people', () => {
     const rows = parseStandings([{ league: { id: 39, season: 2026, standings: [[{ rank: 1, team: { id: 42, name: 'Arsenal' }, points: 3, goalsDiff: 2, group: 'Premier League', all: { played: 1, win: 1, draw: 0, lose: 0, goals: { for: 2, against: 0 } } }]] } }]);
     expect(rows[0]!.group_name).toBe('');
   });
+  it('a table row with no club id is left out (it cannot be stored)', () => {
+    const row = (id: number | null, name: string) => ({ rank: 1, team: { id, name }, points: 3, goalsDiff: 2, all: { played: 1, win: 1, draw: 0, lose: 0, goals: { for: 2, against: 0 } } });
+    const rows = parseStandings([{ league: { id: 202, season: 2026, standings: [[row(null, 'Monastir'), row(984, 'Esperance')]] } }] as any);
+    expect(rows.map((r) => r.team_id)).toEqual([984]);
+  });
   it('profiles: first given name and family name, a name key, numbers from strings', () => {
     const p = parseProfile(load('profile.json').response[0], '2026-10-08T00:00:00Z');
     expect(p).toMatchObject({ id: 68776, display_name: 'Mackenzie Arnold', first_name: 'Mackenzie Elizabeth', last_name: 'Arnold', name_key: 'arnold|mackenzie', birth_date: '1994-02-25', height_cm: 181, weight_kg: 76, nationality: 'Australia' });
