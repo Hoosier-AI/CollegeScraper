@@ -5,23 +5,42 @@ import { isAdmin } from './api';
 let lastPath = '';
 let landed = false;
 
-// A view is only sent once a person is on the page: a scroll, touch, key or pointer move (automated browsers that
-// crawl the site load pages but never do any of these, and announce themselves through navigator.webdriver). Until
-// then the latest view waits; it goes the moment the visitor shows up.
+// A view is only sent once a person is on the page: real input (a pointer move, tap or key press the browser marks as
+// trusted; a scroll does not count, a script scrolling the page fires one too) after the page has been in view for
+// at least three seconds. A crawler driving a real browser passed the first version of this (scroll) for ~90,000
+// "visitors" on 2026-10-20 (it runs 03:00-16:00 UTC, about 100k requests an hour). Automated browsers that say so
+// (navigator.webdriver) never send. Until then the latest view waits; it goes the moment both are true.
 let human = false;
 let waiting: Record<string, unknown> | null = null;
 const loadedAt = typeof performance !== 'undefined' ? performance.now() : 0;
+const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
+const DWELL_MS = 3000;
+let visibleMs = 0; let visibleSince: number | null = null;
+let input: { ev: string; ms: number } | null = null;
 let firstSignal: { ev: string; ms: number } | null = null;
-function onHuman(e?: Event): void {
-  if (human) return;
+const shownFor = () => visibleMs + (visibleSince != null ? now() - visibleSince : 0);
+function check(): void {
+  if (human || !input || shownFor() < DWELL_MS) return;
   human = true;
-  firstSignal = { ev: e?.type ?? '?', ms: Math.round((typeof performance !== 'undefined' ? performance.now() : 0) - loadedAt) };
-  for (const ev of HUMAN_EVENTS) window.removeEventListener(ev, onHuman, true);
+  firstSignal = input;
+  for (const ev of HUMAN_EVENTS) window.removeEventListener(ev, onInput, true);
   if (waiting) { const w = waiting; waiting = null; send(w); }
 }
-const HUMAN_EVENTS = ['pointermove', 'pointerdown', 'scroll', 'wheel', 'keydown', 'touchstart'] as const;
+function onInput(e: Event): void {
+  if (!e.isTrusted || input) return;
+  input = { ev: e.type, ms: Math.round(now() - loadedAt) };
+  check();
+  // Input before three seconds in view: the view goes once the page has been in view long enough.
+  if (!human) setTimeout(check, Math.max(0, DWELL_MS - shownFor()) + 50);
+}
+const HUMAN_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'touchstart'] as const;
 if (typeof window !== 'undefined' && !(navigator as Navigator & { webdriver?: boolean }).webdriver) {
-  for (const ev of HUMAN_EVENTS) window.addEventListener(ev, onHuman, { capture: true, passive: true });
+  if (document.visibilityState === 'visible') visibleSince = now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') visibleSince = now();
+    else if (visibleSince != null) { visibleMs += now() - visibleSince; visibleSince = null; }
+  });
+  for (const ev of HUMAN_EVENTS) window.addEventListener(ev, onInput, { capture: true, passive: true });
 }
 
 /** What kind of browser sent a view (no identity): screen, time zone, languages, cores, touch, the first sign of a person. */
