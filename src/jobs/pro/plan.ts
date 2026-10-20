@@ -123,7 +123,9 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     add('transfers', team, active.has(team) ? 12 : 17, activePro.has(team) ? 7 : 60);
     add('coach', team, 17, activePro.has(team) ? 30 : 90);
   }
-  for (const p of input.usPlayers ?? []) { add('sidelined', p, 18, 60); add('trophies', p, 18, 90); }
+  // Trophies only change when a competition ends: twice a year is enough. Injury history stays every 60 days for the
+  // US scene (the clubs Plaibook serves); a current injury comes from the daily injuries task either way (2026-10-20).
+  for (const p of input.usPlayers ?? []) { add('sidelined', p, 18, 60); add('trophies', p, 18, 180); }
   for (const c of input.usCoaches ?? []) add('coach_trophies', c, 19, 180);
   tierNow = 0;
   for (const id of input.newPlayers) if (id > 0) add('profile', id, 19, null);
@@ -190,10 +192,11 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     add('coach', team, 58, by(tier, 30, 90, 90));
   }
   tierNow = 2;
-  for (const p of input.topPlayers) { add('trophies', p, 400, 90); add('sidelined', p, 410, 90); }
+  for (const p of input.topPlayers) { add('trophies', p, 400, 180); add('sidelined', p, 410, 120); }
   // Everyone else with minutes this or last season, in any league: after all of the above (batched 20 a request).
   tierNow = 3;
-  for (const p of input.worldPlayers ?? []) { add('trophies', p, 420, 180); add('sidelined', p, 430, 180); }
+  // Everyone else: once a year (about 270,000 players; at 180 days this was ~3,000 provider calls a day).
+  for (const p of input.worldPlayers ?? []) { add('trophies', p, 420, 365); add('sidelined', p, 430, 365); }
   tierNow = 0;
   for (const c of input.countries ?? []) if (c !== 'USA') add('venues', c, 100, 180);
   return [...out.values()];

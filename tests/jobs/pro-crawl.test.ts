@@ -116,7 +116,7 @@ describe('crawl plan', () => {
     expect(get('squad', '2')).toMatchObject({ priority: 35, every_days: 30, tier: 3 });
     expect(get('transfers', '2')).toMatchObject({ priority: 55, tier: 3 });
     expect(get('squad', '3')).toBeUndefined();
-    expect(get('trophies', '7')).toMatchObject({ priority: 400, every_days: 90, tier: 2 });
+    expect(get('trophies', '7')).toMatchObject({ priority: 400, every_days: 180, tier: 2 });
     expect(get('sidelined', '7')).toMatchObject({ priority: 410, tier: 2 });
   });
   it('club season stats for every league club, grounds everywhere', () => {
