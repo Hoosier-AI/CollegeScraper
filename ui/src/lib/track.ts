@@ -10,9 +10,12 @@ let landed = false;
 // then the latest view waits; it goes the moment the visitor shows up.
 let human = false;
 let waiting: Record<string, unknown> | null = null;
-function onHuman(): void {
+const loadedAt = typeof performance !== 'undefined' ? performance.now() : 0;
+let firstSignal: { ev: string; ms: number } | null = null;
+function onHuman(e?: Event): void {
   if (human) return;
   human = true;
+  firstSignal = { ev: e?.type ?? '?', ms: Math.round((typeof performance !== 'undefined' ? performance.now() : 0) - loadedAt) };
   for (const ev of HUMAN_EVENTS) window.removeEventListener(ev, onHuman, true);
   if (waiting) { const w = waiting; waiting = null; send(w); }
 }
@@ -21,10 +24,19 @@ if (typeof window !== 'undefined' && !(navigator as Navigator & { webdriver?: bo
   for (const ev of HUMAN_EVENTS) window.addEventListener(ev, onHuman, { capture: true, passive: true });
 }
 
+/** What kind of browser sent a view (no identity): screen, time zone, languages, cores, touch, the first sign of a person. */
+function diag(): Record<string, unknown> {
+  try {
+    return { sw: screen.width, sh: screen.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      langs: (navigator.languages ?? []).slice(0, 3).join(','), cores: navigator.hardwareConcurrency ?? null, touch: navigator.maxTouchPoints ?? null,
+      sig: firstSignal?.ev ?? null, sigms: firstSignal?.ms ?? null, vis: document.visibilityState, focus: document.hasFocus() };
+  } catch { return {}; }
+}
+
 function send(body: Record<string, unknown>): void {
   if (isAdmin()) return;
   if (body.t === 'view' && !human) { waiting = body; return; }
-  if (body.t === 'view') body = { ...body, h: 1 };
+  if (body.t === 'view') body = { ...body, h: 1, d: diag() };
   try {
     const data = JSON.stringify(body);
     if (!navigator.sendBeacon?.('/api/t', data)) void fetch('/api/t', { method: 'POST', body: data, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});

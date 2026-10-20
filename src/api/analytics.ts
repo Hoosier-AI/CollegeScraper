@@ -122,6 +122,11 @@ const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1
 export class AnalyticsMeter {
   private p = empty();
   private timer: NodeJS.Timeout | null = null;
+  /** The latest counted views, in this process's memory only (never stored; cleared on restart), for the owner to see
+   *  what is being counted as a person (/api/console/beacons). */
+  private recent: Record<string, unknown>[] = [];
+  sample(s: Record<string, unknown>): void { this.recent.push({ at: new Date().toISOString(), ...s }); if (this.recent.length > 3000) this.recent.splice(0, this.recent.length - 3000); }
+  samples(): Record<string, unknown>[] { return this.recent; }
   /** The secret behind the daily codes: the same across restarts (so a visitor counts once a day), different per day. */
   private secret: string;
   constructor(private db: Db | null, private ownHosts: string[] = [], private flushMs = 60_000, secret: string | null = null) {

@@ -149,6 +149,11 @@ app.post('/api/t', async (req, reply) => {
   let b: any = req.body;
   if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = null; } }
   // A view counts only when the viewer saw a person on the page (h: 1, sent after a scroll, touch, key or pointer move).
+  if (b && b.t === 'view' && b.h === 1) {
+    const ip = String(req.ip ?? ''); const h = req.headers;
+    analytics.sample({ ua, net: ip.includes(':') ? ip.split(':').slice(0, 3).join(':') : ip.split('.').slice(0, 2).join('.'), country: h['cf-ipcountry'] ?? null,
+      lang: h['accept-language'] ?? null, platform: h['sec-ch-ua-platform'] ?? null, mobile: h['sec-ch-ua-mobile'] ?? null, path: b.path, ref: b.ref ?? null, d: b.d ?? null });
+  }
   if (b && b.t === 'view' && b.h === 1) analytics.view({ path: String(b.path ?? ''), ref: typeof b.ref === 'string' ? b.ref : null, ua, ip: req.ip });
   else if (b && b.t === 'search' && (b.scope === 'pro' || b.scope === 'college' || b.scope === 'all')) analytics.search(b.scope, String(b.q ?? ''), Number(b.n) || 0);
   return reply.code(204).send();
