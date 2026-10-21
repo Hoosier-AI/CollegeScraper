@@ -40,18 +40,56 @@ export async function upsertChunked<T extends Record<string, unknown>>(db: Db, t
 // Reads EVERY matching row, a page at a time. Never bound it with .limit() inside `apply`: .range() sets the
 // offset and a later .limit() only replaces the page length, so the loop keeps paging to the end of the table.
 // For "the newest N rows" use a plain query.
+// A read longer than one page is paged in a stable order (the caller's order first, then the row's key): without
+// one, Postgres gives each page its own order and pages overlap. On a table being written 13,626 international
+// finals came back as 11,786 distinct rows (2026-10-21). A read that fits one page stays unordered (no extra cost).
 export async function selectAll<T>(db: Db, table: string, columns: string, apply?: (q: any) => any, pageSize = 1000): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += pageSize) {
+  const page = async (from: number, order: string[] | null): Promise<T[]> => {
     let q = db.from(table).select(columns).range(from, from + pageSize - 1);
     if (apply) q = apply(q);
+    if (order) for (const c of order) q = q.order(c, { ascending: true });
     const { data, error } = await q;
     if (error) throw new Error(`select ${table} failed: ${error.message}`);
-    out.push(...((data ?? []) as T[]));
-    if (!data || data.length < pageSize) break;
+    return (data ?? []) as T[];
+  };
+  const first = await page(0, null);
+  if (first.length < pageSize) return first;
+  const order = await orderKeys(db, table);
+  const out: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const rows = await page(from, order);
+    out.push(...rows);
+    if (rows.length < pageSize) break;
   }
   return out;
 }
+
+/** Views have no key in the catalog: the column that is unique in each one selectAll reads past a page. */
+const VIEW_KEYS: Record<string, string[]> = { college_v_schedule: ['id'], college_v_player_leaders: ['player_season_id'] };
+let keyMap: Promise<Map<string, string[]>> | null = null;
+const unkeyed = new Set<string>();
+
+/** The columns that identify a row of `table` (migration 205, read once per process), or null: paged unordered as before. */
+export async function orderKeys(db: Db, table: string): Promise<string[] | null> {
+  if (VIEW_KEYS[table]) return VIEW_KEYS[table]!;
+  keyMap ??= (async () => {
+    const { data, error } = await db.rpc('relation_order_keys');
+    if (error) throw new Error(error.message);
+    return new Map(Object.entries((data ?? {}) as Record<string, string[]>));
+  })();
+  let keys: string[] | null = null;
+  try {
+    keys = (await keyMap).get(table) ?? null;
+  } catch (err) {
+    keyMap = null; // try again on the next long read
+    log.warn({ err: String(err) }, 'relation_order_keys failed: paging unordered');
+  }
+  if (!keys && !unkeyed.has(table)) { unkeyed.add(table); log.warn({ table }, 'selectAll: no key to order by, paging unordered'); }
+  return keys;
+}
+
+/** Tests: forget the cached keys. */
+export function resetOrderKeys(): void { keyMap = null; unkeyed.clear(); }
 
 /** selectAll for `column IN (values)`, a few hundred values a request: a long list in one request makes the URL too
  *  long and PostgREST answers "Bad Request" (thousands of player ids, hundreds of school slugs). */

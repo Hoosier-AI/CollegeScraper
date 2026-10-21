@@ -255,9 +255,7 @@ async function intlMatch(ctx: JobContext): Promise<void> {
   const intlLeagues = await selectAll<{ id: number; name: string; level: string }>(db, 'pro_leagues', 'id,name,level', (q) => q.eq('scope', 'intl'));
   const leagueIds = intlLeagues.map((l) => l.id);
   const fixtures: { id: number; league_id: number; kickoff: string; home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; pen_home: number | null; pen_away: number | null; status_short: string | null; round: string | null; venue_city: string | null }[] = [];
-  // Ordered by id: pages read without an order skipped ~1,800 of 13,600 finals (repeating others) while live jobs wrote
-  // the table, and the shrink guard below then refused every run (2026-10-19 to 10-21).
-  for (let i = 0; i < leagueIds.length; i += 40) fixtures.push(...await selectAll<any>(db, 'pro_fixtures', 'id,league_id,kickoff,home_team_id,away_team_id,home_goals,away_goals,pen_home,pen_away,status_short,round,venue_city', (q) => q.in('league_id', leagueIds.slice(i, i + 40)).eq('status', 'final').order('id')));
+  for (let i = 0; i < leagueIds.length; i += 40) fixtures.push(...await selectAll<any>(db, 'pro_fixtures', 'id,league_id,kickoff,home_team_id,away_team_id,home_goals,away_goals,pen_home,pen_away,status_short,round,venue_city', (q) => q.in('league_id', leagueIds.slice(i, i + 40)).eq('status', 'final')));
   const fx = new Map<string, number>();
   let earliest = '9999';
   for (const f of fixtures) {
@@ -269,7 +267,7 @@ async function intlMatch(ctx: JobContext): Promise<void> {
     fx.set(`${h.gender}|${d}|${x}|${y}`, f.id);
   }
   const shift = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
-  const src = earliest === '9999' ? [] : await selectAll<{ source: string; gender: 'm' | 'w'; date: string; home: string; away: string; pro_fixture_id: number | null }>(db, 'intl_src_matches', 'source,gender,date,home,away,pro_fixture_id', (q) => q.gte('date', shift(earliest, -1)).order('source').order('gender').order('date').order('home').order('away'));
+  const src = earliest === '9999' ? [] : await selectAll<{ source: string; gender: 'm' | 'w'; date: string; home: string; away: string; pro_fixture_id: number | null }>(db, 'intl_src_matches', 'source,gender,date,home,away,pro_fixture_id', (q) => q.gte('date', shift(earliest, -1)));
   const links: { source: string; gender: string; date: string; home: string; away: string; fixture: number | null }[] = [];
   for (const m of src) {
     const [x, y] = [m.home, m.away].sort();
