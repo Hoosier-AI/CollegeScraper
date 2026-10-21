@@ -41,11 +41,25 @@ async function changed(ctx: JobContext, name: string, texts: (string | null | un
   return { changed: prev !== h || !!ctx.params.force, save: () => kvSet(ctx.db, key, h) };
 }
 
+/** Whether a download is too small to replace what is stored: it lost more than 5% of the rows we still expect from
+ *  it. Rows whose match another source now has (`moved`) are not expected any more: API-Football's results step leaves
+ *  those out on purpose, and counting them refused every run once martj42 caught up (2026-10-19 to 10-21). */
+export function tooSmall(fresh: number, stored: number, moved = 0): boolean {
+  const expected = Math.max(0, stored - moved);
+  return expected > 0 && fresh < expected * 0.95;
+}
+
 /** A source's results, replacing what it had (a corrected date or side leaves no stale row). A download that lost
- *  more than 5% of the stored rows is refused: a broken file must not delete history. */
-async function replaceMatches(db: Db, source: string, rows: IntlMatchRow[]): Promise<number> {
+ *  more than 5% of the stored rows is refused: a broken file must not delete history. `covered` = fixture ids another
+ *  source now has (only API-Football's own rows carry them in ext_id). */
+async function replaceMatches(db: Db, source: string, rows: IntlMatchRow[], covered?: Set<number>): Promise<number> {
   const { count } = await db.from('intl_src_matches').select('*', { count: 'exact', head: true }).eq('source', source);
-  if (count && rows.length < count * 0.95) throw new Error(`${source}: ${rows.length} results, ${count} stored; not replacing`);
+  let moved = 0;
+  if (count && covered?.size) {
+    const stored = await selectAll<{ ext_id: string | null }>(db, 'intl_src_matches', 'ext_id', (q) => q.eq('source', source));
+    moved = stored.filter((r) => r.ext_id != null && covered.has(Number(r.ext_id))).length;
+  }
+  if (count && tooSmall(rows.length, count, moved)) throw new Error(`${source}: ${rows.length} results, ${count} stored (${moved} now from another source); not replacing`);
   const at = new Date().toISOString();
   const n = await upsertChunked(db, 'intl_src_matches', rows.map((r) => ({ ...r, updated_at: at })), { onConflict: 'source,gender,date,home,away', chunk: 1000 });
   const { error } = await db.from('intl_src_matches').delete().eq('source', source).lt('updated_at', at);
@@ -296,7 +310,7 @@ async function intlMatch(ctx: JobContext): Promise<void> {
   }
   const seenApi = new Set<string>();
   const apiUniq = apiRows.filter((r) => { const k = `${r.gender}|${r.date}|${r.home}|${r.away}`; return !seenApi.has(k) && !!seenApi.add(k); });
-  if (apiUniq.length) ctx.inc('api_results', await replaceMatches(db, 'api-football', apiUniq));
+  if (apiUniq.length) ctx.inc('api_results', await replaceMatches(db, 'api-football', apiUniq, covered));
   // Its own rows are the fixtures themselves: linked so the pages open the match.
   for (const r of apiUniq) links.push({ source: 'api-football', gender: r.gender, date: r.date, home: r.home, away: r.away, fixture: Number(r.ext_id) });
 

@@ -37,7 +37,15 @@ export async function writeStandingsChecks(db: Db, season: number, programIds: s
     const { error } = await db.from('college_standings_checks').delete().eq('season', season).in('program_id', programIds.slice(i, i + 100));
     if (error) throw new Error(`clear standings checks: ${error.message}`);
   }
-  if (mismatches.length) await upsertChunked(db, 'college_standings_checks', mismatches as unknown as Record<string, unknown>[], { onConflict: 'season,program_id,field' });
+  const uniq = uniqueChecks(mismatches);
+  if (uniq.length) await upsertChunked(db, 'college_standings_checks', uniq as unknown as Record<string, unknown>[], { onConflict: 'season,program_id,field' });
+}
+
+/** One check per program and field: the same program twice in a run made the upsert fail with "ON CONFLICT DO UPDATE
+ *  command cannot affect row a second time" (2026-10-15, 2026-10-20). The first one wins, as in upsertStandings. */
+export function uniqueChecks(rows: StandingsCheck[]): StandingsCheck[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => { const k = `${r.season}|${r.program_id}|${r.field}`; return !seen.has(k) && !!seen.add(k); });
 }
 
 export function confPoints(rule: string | null | undefined, w: number | null, l: number | null, t: number | null): number | null {

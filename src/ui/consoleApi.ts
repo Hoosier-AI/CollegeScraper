@@ -38,7 +38,6 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   const render = () => (cfg.RENDER_API_KEY && cfg.RENDER_SERVICE_ID ? new RenderClient(cfg.RENDER_API_KEY, cfg.RENDER_SERVICE_ID) : null);
   const todayUsage = () => { const today = new Date().toISOString().slice(0, 10); return o.usage.pending().filter((u) => u.day === today); };
 
-  app.get('/api/console/beacons', async () => ({ samples: o.analytics?.samples() ?? [] }));
   app.get('/api/console/overview', async () => cq.overview(getDb(), o.startedAt, todayUsage()));
   // The hub's Stats Overview and Traffic: health, what needs attention, site traffic, API use, growth, coverage.
   app.get<{ Querystring: Record<string, string> }>('/api/console/insights', async (req) => insights(getDb(), Number(req.query.days) || 30, o.startedAt));

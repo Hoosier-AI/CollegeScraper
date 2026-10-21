@@ -6,7 +6,7 @@ import { parseWcdbGoals, parseWcdbMatches, parseWcdbSquads, wcdbCodes } from '..
 import { parseWorldCupTxt } from '../../src/sources/intl/worldcupTxt.js';
 import { canonicalNation, isSeniorSide, nationKey } from '../../src/sources/intl/nations.js';
 import { CONFED_SHARE, confederationsFrom, drawModel, expected, goalFactor, kFactor, predict, PROVISIONAL, runElo, worldCupSides } from '../../src/sources/intl/elo.js';
-import { dedupeResults } from '../../src/jobs/sources/intl.js';
+import { dedupeResults, tooSmall } from '../../src/jobs/sources/intl.js';
 
 const RESULTS = `date,home_team,away_team,home_score,away_score,tournament,city,country,neutral
 1872-11-30,Scotland,England,0,0,Friendly,Glasgow,Scotland,FALSE
@@ -204,5 +204,19 @@ describe('Plaibook Elo', () => {
       { source: 'intl-results', date: '2022-12-14', home: 'argentina', away: 'croatia' },
     ]);
     expect(rows.map((r) => r.source)).toEqual(['intl-results', 'worldcup-db']);
+  });
+});
+
+describe('the shrink guard', () => {
+  it('accepts a smaller API-Football download when the missing matches now come from another source', () => {
+    // 2026-10-19: 3538 stored, 415 of them now in martj42's results, 3123 fresh.
+    expect(tooSmall(3123, 3538, 415)).toBe(false);
+  });
+  it('still refuses a download that really lost rows', () => {
+    expect(tooSmall(3123, 3538)).toBe(true);
+    expect(tooSmall(2000, 3538, 415)).toBe(true);
+  });
+  it('accepts anything when nothing is stored', () => {
+    expect(tooSmall(0, 0)).toBe(false);
   });
 });

@@ -4,7 +4,8 @@
 import { registerJob, type JobContext } from './runner.js';
 import { kvGet, kvSet, selectAll, upsertChunked } from '../db/client.js';
 import { COLLEGE_DRAW_KEY, type DrawModel } from '../sources/intl/elo.js';
-import { simulate, type PlayedGame, type SimGame, type SimTeam } from '../college/sim.js';
+import { type PlayedGame, type SimGame, type SimTeam } from '../college/sim.js';
+import { simRunner } from '../college/simThread.js';
 import { currentSeason } from './seasons.js';
 
 export const SIMS_LAST_KEY = 'college:sims:last';
@@ -32,36 +33,43 @@ export async function collegeSims(ctx: JobContext): Promise<void> {
   const rating = new Map(elo.map((e) => [e.program_id, Number(e.rating)]));
   const indep = new Set(confs.filter((c) => /independent/i.test(c.name)).map((c) => c.id));
   const rows: any[] = [];
-  for (const g of ['m', 'w'] as const) {
-    const draw = (await kvGet<DrawModel>(ctx.db, COLLEGE_DRAW_KEY(g))) ?? DEFAULT_DRAW;
-    for (const d of ['d1', 'd2', 'd3'] as const) {
-      const mine = members.filter((m) => m.division === d && gender.get(m.program_id) === g);
-      if (mine.length < 8) continue;
-      const pool = new Set(mine.map((m) => m.program_id));
-      // A team with no rating yet starts a little below the division's middle.
-      const ratings = mine.map((m) => rating.get(m.program_id)).filter((r): r is number => r != null).sort((a, b) => a - b);
-      const fallback = ratings.length ? ratings[Math.floor(ratings.length * 0.4)]! : 1400;
-      const teams: SimTeam[] = mine.map((m) => ({ id: m.program_id, rating: rating.get(m.program_id) ?? fallback, conf: m.conference_id && !indep.has(m.conference_id) ? m.conference_id : null }));
-      const played: PlayedGame[] = finals.filter((x) => pool.has(x.home_program_id) && pool.has(x.away_program_id))
-        .map((x) => ({ home: x.home_program_id, away: x.away_program_id, hs: x.home_score, as: x.away_score, neutral: !!x.neutral_site, conf: !!x.conference_game }));
-      // Regular-season games still to play (postseason games already on the schedule are left to the knockout).
-      const remaining: SimGame[] = upcoming.filter((x) => !x.postseason && pool.has(x.home_program_id) && pool.has(x.away_program_id))
-        .map((x) => ({ home: x.home_program_id, away: x.away_program_id, neutral: !!x.neutral_site, conf: !!x.conference_game }));
-      const size = new Map<string, number>();
-      for (const t of teams) if (t.conf) size.set(t.conf, (size.get(t.conf) ?? 0) + 1);
-      // Conferences of six or more take an automatic bid (the NCAA's requirement).
-      const autoConfs = new Set([...size].filter(([, n]) => n >= 6).map(([c]) => c));
-      const f = FIELD[`${d}:${g}`] ?? null;
-      const odds = simulate({ teams, played, remaining, autoConfs, field: f?.field ?? null, seeds: f?.seeds ?? 0, sims: f ? sims : Math.round(sims / 3), draw, homeEdge: HOME_EDGE });
-      for (const o of odds) rows.push({
-        season, program_id: o.team, gender: g, division: d, conference_id: o.conf, reg_title: o.reg_title, auto_bid: o.auto_bid, bid: o.bid, seed: o.seed, avg_rank: o.avg_rank,
-        avg_points: o.avg_points, points_now: o.points_now, max_points: o.max_points, conf_left: o.left, clinched: o.clinched, eliminated: o.eliminated, magic: o.magic,
-        sims: f ? sims : Math.round(sims / 3), run_at: at,
-      });
-      ctx.inc(`${d}_${g}_teams`, teams.length);
-      await ctx.heartbeat();
+  // On its own thread: inline it froze the site for up to 28 s per division.
+  const sim = simRunner();
+  try {
+    for (const g of ['m', 'w'] as const) {
+      const draw = (await kvGet<DrawModel>(ctx.db, COLLEGE_DRAW_KEY(g))) ?? DEFAULT_DRAW;
+      for (const d of ['d1', 'd2', 'd3'] as const) {
+        const mine = members.filter((m) => m.division === d && gender.get(m.program_id) === g);
+        if (mine.length < 8) continue;
+        const pool = new Set(mine.map((m) => m.program_id));
+        // A team with no rating yet starts a little below the division's middle.
+        const ratings = mine.map((m) => rating.get(m.program_id)).filter((r): r is number => r != null).sort((a, b) => a - b);
+        const fallback = ratings.length ? ratings[Math.floor(ratings.length * 0.4)]! : 1400;
+        const teams: SimTeam[] = mine.map((m) => ({ id: m.program_id, rating: rating.get(m.program_id) ?? fallback, conf: m.conference_id && !indep.has(m.conference_id) ? m.conference_id : null }));
+        const played: PlayedGame[] = finals.filter((x) => pool.has(x.home_program_id) && pool.has(x.away_program_id))
+          .map((x) => ({ home: x.home_program_id, away: x.away_program_id, hs: x.home_score, as: x.away_score, neutral: !!x.neutral_site, conf: !!x.conference_game }));
+        // Regular-season games still to play (postseason games already on the schedule are left to the knockout).
+        const remaining: SimGame[] = upcoming.filter((x) => !x.postseason && pool.has(x.home_program_id) && pool.has(x.away_program_id))
+          .map((x) => ({ home: x.home_program_id, away: x.away_program_id, neutral: !!x.neutral_site, conf: !!x.conference_game }));
+        const size = new Map<string, number>();
+        for (const t of teams) if (t.conf) size.set(t.conf, (size.get(t.conf) ?? 0) + 1);
+        // Conferences of six or more take an automatic bid (the NCAA's requirement).
+        const autoConfs = new Set([...size].filter(([, n]) => n >= 6).map(([c]) => c));
+        const f = FIELD[`${d}:${g}`] ?? null;
+        const odds = await sim.run({ teams, played, remaining, autoConfs, field: f?.field ?? null, seeds: f?.seeds ?? 0, sims: f ? sims : Math.round(sims / 3), draw, homeEdge: HOME_EDGE });
+        for (const o of odds) rows.push({
+          season, program_id: o.team, gender: g, division: d, conference_id: o.conf, reg_title: o.reg_title, auto_bid: o.auto_bid, bid: o.bid, seed: o.seed, avg_rank: o.avg_rank,
+          avg_points: o.avg_points, points_now: o.points_now, max_points: o.max_points, conf_left: o.left, clinched: o.clinched, eliminated: o.eliminated, magic: o.magic,
+          sims: f ? sims : Math.round(sims / 3), run_at: at,
+        });
+        ctx.inc(`${d}_${g}_teams`, teams.length);
+        await ctx.heartbeat();
+      }
     }
+  } finally {
+    await sim.close();
   }
+  ctx.inc('threaded', sim.threaded ? 1 : 0);
   ctx.inc('rows', await upsertChunked(ctx.db, 'college_sim_odds', rows, { onConflict: 'season,program_id' }));
   await ctx.db.from('college_sim_odds').delete().eq('season', season).lt('run_at', at);
   await kvSet(ctx.db, SIMS_LAST_KEY, { at, sims, ms: Date.now() - t0 });

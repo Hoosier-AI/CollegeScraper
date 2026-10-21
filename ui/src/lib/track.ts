@@ -12,23 +12,20 @@ let landed = false;
 // (navigator.webdriver) never send. Until then the latest view waits; it goes the moment both are true.
 let human = false;
 let waiting: Record<string, unknown> | null = null;
-const loadedAt = typeof performance !== 'undefined' ? performance.now() : 0;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 const DWELL_MS = 3000;
 let visibleMs = 0; let visibleSince: number | null = null;
-let input: { ev: string; ms: number } | null = null;
-let firstSignal: { ev: string; ms: number } | null = null;
+let input = false;
 const shownFor = () => visibleMs + (visibleSince != null ? now() - visibleSince : 0);
 function check(): void {
   if (human || !input || shownFor() < DWELL_MS) return;
   human = true;
-  firstSignal = input;
   for (const ev of HUMAN_EVENTS) window.removeEventListener(ev, onInput, true);
   if (waiting) { const w = waiting; waiting = null; send(w); }
 }
 function onInput(e: Event): void {
   if (!e.isTrusted || input) return;
-  input = { ev: e.type, ms: Math.round(now() - loadedAt) };
+  input = true;
   check();
   // Input before three seconds in view: the view goes once the page has been in view long enough.
   if (!human) setTimeout(check, Math.max(0, DWELL_MS - shownFor()) + 50);
@@ -43,19 +40,10 @@ if (typeof window !== 'undefined' && !(navigator as Navigator & { webdriver?: bo
   for (const ev of HUMAN_EVENTS) window.addEventListener(ev, onInput, { capture: true, passive: true });
 }
 
-/** What kind of browser sent a view (no identity): screen, time zone, languages, cores, touch, the first sign of a person. */
-function diag(): Record<string, unknown> {
-  try {
-    return { sw: screen.width, sh: screen.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      langs: (navigator.languages ?? []).slice(0, 3).join(','), cores: navigator.hardwareConcurrency ?? null, touch: navigator.maxTouchPoints ?? null,
-      sig: firstSignal?.ev ?? null, sigms: firstSignal?.ms ?? null, vis: document.visibilityState, focus: document.hasFocus() };
-  } catch { return {}; }
-}
-
 function send(body: Record<string, unknown>): void {
   if (isAdmin()) return;
   if (body.t === 'view' && !human) { waiting = body; return; }
-  if (body.t === 'view') body = { ...body, h: 1, d: diag() };
+  if (body.t === 'view') body = { ...body, h: 1 };
   try {
     const data = JSON.stringify(body);
     if (!navigator.sendBeacon?.('/api/t', data)) void fetch('/api/t', { method: 'POST', body: data, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
