@@ -9,7 +9,7 @@ export const SITE_NAME = 'Plaibook Stats';
 export const SITE = 'www.plaibook.live';
 /** The one address on every page. Change it here only. */
 export const CONTACT = 'support@plaibook.soccer';
-export const UPDATED = 'October 16, 2026';
+export const UPDATED = 'October 23, 2026';
 
 export type Block = string | { bullets: string[] } | { table: { head: string[]; rows: string[][] } };
 export interface Section { id: string; heading: string; blocks: Block[] }
@@ -57,14 +57,14 @@ const CONTACT_PAGE: LegalPage = {
       ['Advertising and sponsorships', 'The [advertise form](/advertise) or email', 'Advertising'],
       ['Press', 'Email', 'Press'],
     ])] },
-    { id: 'company', heading: 'Company', blocks: [`${SITE_NAME} is operated by ${COMPANY}. Email: ${CONTACT}.`] },
+    { id: 'company', heading: 'Company', blocks: [`${SITE_NAME} is operated by ${COMPANY}, a Delaware corporation. Email: ${CONTACT}.`] },
   ],
 };
 
 const TERMS: LegalPage = {
   slug: 'terms', path: '/terms', nav: 'Terms of use', title: 'Terms of Use',
   description: 'The terms that apply when you use Plaibook Stats, including acceptable use, automated access, attribution and disclaimers.',
-  intro: `These Terms of Use govern your use of ${SITE_NAME} at ${SITE}, its pages and its data (together, the "Site"), provided by ${COMPANY} ("we", "us"). By using the Site you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Site.`,
+  intro: `These Terms of Use govern your use of ${SITE_NAME} at ${SITE}, its pages and its data (together, the "Site"), provided by ${COMPANY}, a Delaware corporation ("we", "us"). By using the Site you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Site.`,
   sections: [
     { id: 'use', heading: 'Using the Site', blocks: [
       'The Site is free and needs no account. You may use it for personal, non-commercial purposes, and teachers, students, journalists, coaches and researchers may use and quote it in their work with attribution (see below). You must be at least 13 years old to use the Site.',
@@ -109,7 +109,7 @@ const TERMS: LegalPage = {
       `You will indemnify ${COMPANY} against claims arising from your breach of these Terms or your misuse of the Site or its data.`,
     ] },
     { id: 'law', heading: 'Governing law', blocks: [
-      'These Terms are governed by the laws of the State of Indiana, USA, without regard to its conflict-of-law rules. Any dispute will be heard in the state or federal courts located in Indiana, unless the law where you live gives you the right to a local court.',
+      'These Terms are governed by the laws of the State of Delaware, USA, without regard to its conflict-of-law rules. Any dispute will be heard in the state or federal courts located in Delaware, unless the law where you live gives you the right to a local court.',
     ] },
     { id: 'general', heading: 'General', blocks: [B([
       'If any part of these Terms is unenforceable, the rest stays in effect.',
