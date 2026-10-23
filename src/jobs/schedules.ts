@@ -1,6 +1,6 @@
 // Composite jobs used by the Render cron entries. Each runs a sequence of the atomic jobs.
 import { kvGet, kvSet } from '../db/client.js';
-import { getJob, registerJob, type JobContext } from './runner.js';
+import { getJob, registerJob, runningSteps, type JobContext } from './runner.js';
 import { currentSeason } from './seasons.js';
 
 async function step(ctx: JobContext, job: string, params: Record<string, unknown>): Promise<void> {
@@ -8,7 +8,8 @@ async function step(ctx: JobContext, job: string, params: Record<string, unknown
   if (!fn) throw new Error(`missing job ${job}`);
   const sub: JobContext = { ...ctx, params: { ...ctx.params, ...params }, inc: (k, by = 1) => ctx.inc(`${job}.${k}`, by), note: (k, v) => ctx.note(`${job}.${k}`, v) };
   if (await ctx.cancelled()) return;
-  await fn(sub);
+  if (ctx.runId) runningSteps.set(ctx.runId, job);
+  try { await fn(sub); } finally { if (ctx.runId) runningSteps.delete(ctx.runId); }
 }
 
 /**

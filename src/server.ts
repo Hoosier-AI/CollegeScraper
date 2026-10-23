@@ -23,7 +23,7 @@ import { registerConsoleApi } from './ui/consoleApi.js';
 import { evaluateHealth } from './ops/health.js';
 import { heartbeats, LANES } from './ops/consoleQueries.js';
 import { AUX_JOBS, PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
-import { runningJobs, type WorkerHeartbeat } from './jobs/runner.js';
+import { runningNow, type WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { PerformanceObserver } from 'node:perf_hooks';
@@ -213,7 +213,7 @@ setInterval(() => {
   const now = Date.now(), lag = now - lastTick - 500;
   lastTick = now;
   if (lag < 1000) return;
-  const jobs = Object.fromEntries(runningJobs);
+  const jobs = runningNow();
   stalls.push({ at: now, ms: lag, jobs });
   while (stalls.length > 200 || (stalls[0] && now - stalls[0].at > 3600_000)) stalls.shift();
   log.warn({ lag_ms: lag, jobs }, 'event loop stalled');

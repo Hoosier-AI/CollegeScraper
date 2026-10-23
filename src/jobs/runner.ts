@@ -102,6 +102,17 @@ async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise
 
 /** The job each lane of this process is running now (the event-loop watchdog in server.ts names them on a stall). */
 export const runningJobs = new Map<string, string>();
+/** The run each lane is on, and the step a composite job (nightly, weekly...) is inside, by run id: a stall during
+ *  "nightly" alone could be any of its ten steps. */
+export const laneRuns = new Map<string, string>();
+export const runningSteps = new Map<string, string>();
+/** Lane → "job" or "job > step", for the watchdog. */
+export function runningNow(): Record<string, string> {
+  return Object.fromEntries([...runningJobs].map(([lane, job]) => {
+    const step = runningSteps.get(laneRuns.get(lane) ?? '');
+    return [lane, step ? `${job} > ${step}` : job];
+  }));
+}
 
 export interface WorkerHeartbeat { at: string; pid: number; host: string; run_id: string | null; job: string | null; started_at: string }
 
@@ -134,9 +145,9 @@ export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: Abort
     }
     const ctx = makeContext(db, run.id, run.params ?? {});
     current = { run_id: run.id, job: run.job }; await beat();
-    runningJobs.set(opts.lane ?? 'default', run.job);
+    runningJobs.set(opts.lane ?? 'default', run.job); laneRuns.set(opts.lane ?? 'default', run.id);
     try { await execute(db, ctx, run.job, fn); } catch { /* recorded */ }
-    runningJobs.delete(opts.lane ?? 'default');
+    runningJobs.delete(opts.lane ?? 'default'); laneRuns.delete(opts.lane ?? 'default'); runningSteps.delete(run.id);
     current = null;
   }
   clearInterval(beatTimer);
