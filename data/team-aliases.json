@@ -637,6 +637,16 @@
     {
       "alias": "University of Rochester",
       "seo": "rochester-ny"
+    },
+    {
+      "alias": "UMary (N.D.)",
+      "seo": "mary",
+      "note": "University of Mary (Bismarck, ND), NSIC; the NSIC site prints UMary (2026-10-26)"
+    },
+    {
+      "alias": "UMary",
+      "seo": "mary",
+      "note": "University of Mary (Bismarck, ND), NSIC; the NSIC site prints UMary (2026-10-26)"
     }
   ]
 }
