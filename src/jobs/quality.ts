@@ -34,6 +34,8 @@ registerJob('ops-retention', async (ctx: JobContext) => {
   await del('news_articles', (q) => q.lt('published_at', ago(RETENTION.analytics_days)), 'news_deleted');
   // Corrections and removal requests: kept 12 months after they are closed (the privacy policy says so).
   await del('stats_requests', (q) => q.neq('status', 'open').lt('closed_at', ago(365)), 'requests_deleted');
+  // Player photos declined or taken down (migration 206): their files went at once, the rows after 30 days.
+  await del('player_photo_submissions', (q) => q.in('status', ['declined', 'removed']).lt('reviewed_at', ago(30)), 'photo_submissions_deleted');
   for (const t of ['stats_views_daily', 'stats_referrers_daily', 'stats_devices_daily', 'stats_visitors_daily', 'stats_searches_daily']) await del(t, (q) => q.lt('day', ago(RETENTION.analytics_days).slice(0, 10)), 'analytics_deleted');
   // Render gives every deploy a new host name, so old pods leave heartbeat rows behind.
   await del('college_kv', (q) => q.like('key', `${KV.heartbeatPrefix}%`).lt('updated_at', ago(1)), 'stale_heartbeats_deleted');

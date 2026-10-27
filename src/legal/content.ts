@@ -9,7 +9,7 @@ export const SITE_NAME = 'Plaibook Stats';
 export const SITE = 'www.plaibook.live';
 /** The one address on every page. Change it here only. */
 export const CONTACT = 'support@plaibook.soccer';
-export const UPDATED = 'October 23, 2026';
+export const UPDATED = 'October 27, 2026';
 
 export type Block = string | { bullets: string[] } | { table: { head: string[]; rows: string[][] } };
 export interface Section { id: string; heading: string; blocks: Block[] }
@@ -132,6 +132,7 @@ const PRIVACY: LegalPage = {
         ['Unique-visitor count', 'Counting visitors without tracking them', 'A one-way code made from your IP and browser with a secret that changes every day, kept for that day only and deleted the next day; your IP itself is never stored'],
         ['Search terms typed into the Site\'s search', 'Improving search (which searches find nothing)', 'Kept as daily counts of terms, not linked to you'],
         ['What you send us: request-form entries and emails', 'Answering you', 'Until the request is closed and for 12 months after'],
+        ['A player photo sent on the [photo form](/players): the photo, your name, email, who you are, the credit line and your three confirmations', 'Showing the photo on the player\'s page and in Plaibook\'s social posts once we approve it, credited as you asked', 'While it is used. A photo we decline, or take down on request, is deleted at once, and what you sent about it after 30 days'],
       ]),
       'We do not collect names, emails or anything else unless you send it to us.',
     ] },
@@ -149,6 +150,7 @@ const PRIVACY: LegalPage = {
     ] },
     { id: 'athletes', heading: 'Information about athletes and coaches', blocks: [
       'The Site shows public athletic records: rosters, positions, class years, heights, hometowns, previous schools, game statistics and results, as published by schools, conferences, competitions and data providers. We do not show weights, majors or high schools, we do not collect college players\' birth dates, and we do not publish profiles of players under 18 in youth international competitions.',
+      'Players, their parents or guardians and school staff can send a photo of a player from the player\'s page (Add a photo). We remove the location and camera details from the file, look at every photo before it is used, and credit it as asked. A photo is taken down on request through [Corrections and removal](/corrections).',
       'If you are a player (or a parent or guardian of one) and want information corrected or removed, use [Corrections and removal](/corrections). Official game results and statistics stay, but we remove biographical details and photos on request and act quickly on anything that concerns safety or a minor.',
     ] },
     { id: 'rights', heading: 'Your rights', blocks: [

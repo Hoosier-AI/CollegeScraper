@@ -16,7 +16,7 @@ export async function collegeTeamOfWeek(db: Db, f: TotwFilter) {
     const playerIds = [...new Set(r.xi.map((x) => x.player_id).filter(Boolean))] as string[];
     const progIds = [...new Set(r.xi.flatMap((x) => [x.program_id, x.opponent_id]).filter(Boolean))] as string[];
     const [people, photos, progs] = await Promise.all([
-      playerIds.length ? selectAll<any>(db, 'college_players', 'id,display_name,first_name,last_name,slug,suppress', (q) => q.in('id', playerIds)) : Promise.resolve([]),
+      playerIds.length ? selectAll<any>(db, 'college_players', 'id,display_name,first_name,last_name,slug,suppress,photo_url,photo_credit', (q) => q.in('id', playerIds)) : Promise.resolve([]),
       playerIds.length ? selectAll<any>(db, 'college_player_seasons', 'player_id,headshot_url,position,class_year', (q) => q.in('player_id', playerIds).eq('season', f.season)) : Promise.resolve([]),
       progIds.length ? selectAll<any>(db, 'college_programs', 'id,name,short_name,school_seo,gender,college_schools(logo_svg_url)', (q) => q.in('id', progIds)) : Promise.resolve([]),
     ]);
@@ -33,6 +33,8 @@ export async function collegeTeamOfWeek(db: Db, f: TotwFilter) {
         const c = (col.get(x.pos) ?? 0) + 1; col.set(x.pos, c);
         return {
           ...x, rating: Number(x.rating), name: titleCase(p?.display_name ?? x.name), slug: p?.slug ?? null, photo: x.player_id ? photo.get(x.player_id)?.headshot_url ?? null : null,
+          // A photo the player sent in and a founder approved (migration 206): Plaibook's posts use it.
+          submitted_photo: p?.photo_url ? { url: p.photo_url, credit: p.photo_credit ?? null } : null,
           class_year: x.player_id ? photo.get(x.player_id)?.class_year ?? null : null, grid: `${row[x.pos]}:${c}`, team: prog.get(x.program_id) ?? null, opponent: x.opponent_id ? prog.get(x.opponent_id) ?? null : null,
         };
       });

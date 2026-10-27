@@ -53,6 +53,8 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (req.url === '/api/t') return;
     // The public corrections form (src/legal/routes.ts) keeps its own per-visitor limit.
     if (req.method === 'POST' && req.url === '/api/requests') return;
+    // So does the player photo form (src/legal/photos.ts).
+    if (req.method === 'POST' && req.url === '/api/photo-submissions') return;
     if (adminOnly(req)) {
       if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
       return;

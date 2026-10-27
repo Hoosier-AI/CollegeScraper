@@ -97,14 +97,14 @@ export default function Player() {
       <Crumbs items={[{ label: p.display_name }]} />
       <header className="card flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
         <div className="flex min-w-0 items-start gap-4">
-        <span className="shrink-0 [&>*]:!h-16 [&>*]:!w-16 sm:[&>*]:!h-[88px] sm:[&>*]:!w-[88px]"><PlayerAvatar src={latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} /></span>
+        <span className="shrink-0 [&>*]:!h-16 [&>*]:!w-16 sm:[&>*]:!h-[88px] sm:[&>*]:!w-[88px]"><PlayerAvatar src={p.photo_url ?? latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} /></span>
         <div className="min-w-0">
           <h1 className="display text-3xl leading-none sm:text-4xl">{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</h1>
           {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{positionWord(latest.position ?? latest.position_raw) ? `, ${positionWord(latest.position ?? latest.position_raw)!.toLowerCase()}` : ''}{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
           <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
-          <p className="mt-1 flex flex-wrap gap-x-4 text-xs"><Link className="text-pitch-400 hover:text-pitch-300" to={`/compare?a=${p.id}`}>Compare with another player</Link></p>
+          <p className="mt-1 flex flex-wrap gap-x-4 text-xs"><Link className="text-pitch-400 hover:text-pitch-300" to={`/compare?a=${p.id}`}>Compare with another player</Link><Link className="text-pitch-400 hover:text-pitch-300" to={`/photo?player=${p.slug ?? p.id}`}>{p.photo_url ? 'Send a new photo' : 'Add a photo'}</Link></p>
           <PageActions className="mt-3" title={p.display_name}
-            follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
+            follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: p.photo_url ?? latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
           {pro.data?.pro && <p className="mt-2"><Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2 py-1 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link></p>}
         </div>
         </div>

@@ -32,3 +32,8 @@ export async function memo<T>(key: string, load: () => Promise<T>, o: { fresh?: 
 }
 
 export const memoKey = (name: string, args: unknown) => `${name}:${JSON.stringify(args)}`;
+
+/** Drops every cached answer whose key starts with `prefix` (after an edit the next read loads afresh). */
+export function forgetMemo(prefix: string): void {
+  for (const k of [...entries.keys()]) if (k.startsWith(prefix)) entries.delete(k);
+}

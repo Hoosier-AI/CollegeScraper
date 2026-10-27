@@ -1,5 +1,6 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
 import { registerLegalApi } from './legal/routes.js';
+import { registerPhotoApi } from './legal/photos.js';
 import { adsTxt, ADS_OFF, buildCsp } from './money/config.js';
 import { adsSettings } from './ops/settings.js';
 import { makeExtraSeo } from './seo/extra.js';
@@ -136,6 +137,8 @@ let siteMirror: ReturnType<typeof registerSiteMirror> | null = null;
 registerUiApi(app, { authorized, limitAnonymous: limitSite, internal: (req) => siteMirror?.internal(req) ?? false });
 // Policy pages and the corrections / removal form (src/legal).
 registerLegalApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 'plaibook-stats' });
+// Player photos sent in on /photo, reviewed in the hub (src/legal/photos.ts).
+registerPhotoApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 'plaibook-stats' });
 
 // Cookie-free site analytics (src/api/analytics.ts): the viewer's beacon on every page change and settled search.
 // Bots are not counted; the viewer itself skips the owner (an admin token in the browser).

@@ -41,6 +41,7 @@ const TeamOfWeek = lazy(() => import('./pages/TeamOfWeek'));
 const Tournament = lazy(() => import('./pages/Tournament'));
 const Records = lazy(() => import('./pages/Records'));
 const Legal = lazy(() => import('./pages/Legal'));
+const Photo = lazy(() => import('./pages/Photo'));
 const LEGAL_PAGES = ['about', 'contact', 'terms', 'privacy', 'sources', 'data-use', 'copyright', 'corrections', 'accessibility', 'advertise', 'privacy-choices'];
 const Referee = lazy(() => import('./pages/Referee'));
 const ProReferees = lazy(() => import('./pages/pro/ProReferees'));
@@ -119,6 +120,7 @@ const router = createBrowserRouter([
           { path: 'leaders', element: <Leaders /> },
           { path: 'players', element: <Players /> },
           { path: 'players/:id', element: <Player /> },
+          { path: 'photo', element: <Photo /> },
           { path: 'transfers', element: <Transfers /> },
           { path: 'tv', element: <Tv /> },
           { path: 'referees', element: <Referees /> },

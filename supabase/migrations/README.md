@@ -95,6 +95,7 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 | 198_api_reads.sql | GIN index on `college_crawl_runs.params` (a program page's last runs, `params @>`; CONCURRENTLY, its own statement) and `college_ranking_weeks()` (a season's distinct poll / week / label for the rankings page instead of every ranking row) | yes (2026-10-16) |
 | 204_referees_in_db.sql | pg_cron rebuilds the pro (10:40 UTC) and college (10:55) referee tables in the database; `referees_refresh_status()` for the service's 11:10 check (the REST gateway timed out on the 5-minute pro rebuild and the college one never ran) | yes (2026-10-21) |
 | 205_relation_order_keys.sql | `relation_order_keys()`: each table's primary key (else narrowest plain unique index), read once per process by `selectAll` to page reads longer than 1,000 rows in a stable order (unordered pages overlapped: 13,626 intl finals came back as 11,786 distinct rows) | yes (2026-10-21) |
+| 206_player_photo_submissions.sql | `player_photo_submissions` (photos sent in on /photo with three consents, IP as a salted hash, pending/approved/declined/removed), `college_players.photo_url` / `photo_credit` (the approved photo, apart from the crawled `headshot_url`), storage buckets `player-photo-submissions` (private) and `player-photos` (public) | yes (2026-10-27) |
 
 Two files share the number 171 (`171_pro_leaders_fast.sql` and `171_pro_more_player_stats.sql`); both are applied, fast first.
 

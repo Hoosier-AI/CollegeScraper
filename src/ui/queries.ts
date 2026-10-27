@@ -339,7 +339,16 @@ export async function leaders(db: Db, o: LeadersFilter) {
     }
     throw new Error(`leaders: ${error.message}`);
   }
-  return { stat, rows: data ?? [], total: count ?? (data?.length ?? 0), limit, offset, min_sample: team ? null : PLAYER_MIN_SAMPLE[stat]?.label ?? null };
+  return { stat, rows: team ? data ?? [] : await withSubmittedPhotos(db, data ?? []), total: count ?? (data?.length ?? 0), limit, offset, min_sample: team ? null : PLAYER_MIN_SAMPLE[stat]?.label ?? null };
+}
+
+/** Each leader row with the photo the player sent in and a founder approved (migration 206), for Plaibook's posts. */
+async function withSubmittedPhotos<T extends { player_id?: string | null }>(db: Db, rows: T[]): Promise<(T & { submitted_photo: { url: string; credit: string | null } | null })[]> {
+  const ids = [...new Set(rows.map((r) => r.player_id).filter(Boolean))] as string[];
+  // A database without migration 206 (or a failed read) means no photos, never a failed leaders page.
+  const photos = ids.length ? await selectIn<any>(db, 'college_players', 'id,photo_url,photo_credit', 'id', ids, (q) => q.not('photo_url', 'is', null)).catch(() => []) : [];
+  const by = new Map(photos.map((p) => [p.id, { url: p.photo_url as string, credit: (p.photo_credit as string | null) ?? null }]));
+  return rows.map((r) => ({ ...r, submitted_photo: (r.player_id && by.get(r.player_id)) || null }));
 }
 
 export async function standings(db: Db, o: { season: number; gender?: string; division?: string; conference?: string }) {
