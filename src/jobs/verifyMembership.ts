@@ -76,7 +76,9 @@ export async function verifyMembership(ctx: JobContext): Promise<void> {
       const ps = seasonOf.get(p.id);
       if (ps && ps.division !== division) ctx.inc('division_corrected');
       if (!info.record) ctx.inc('members_without_official_record');
-      patches.set(p.id, { program_id: p.id, season, division, conference_id: ps?.conference_id ?? null, ncaa_member: true, member_source: 'leaderboard',
+      // Never conference_id: this job has no conference data, and writing back the copy read at the start erased the
+      // conference of every team that copy missed (169 NCAA teams in 2026). discover-teams and compute-standings own it.
+      patches.set(p.id, { program_id: p.id, season, division, ncaa_member: true, member_source: 'leaderboard',
         official_w: info.record?.w ?? null, official_l: info.record?.l ?? null, official_t: info.record?.t ?? null, official_record_at: info.record ? now : null });
     }
     ctx.inc(`members_${gender}_${division}`, found.size);
@@ -89,8 +91,8 @@ export async function verifyMembership(ctx: JobContext): Promise<void> {
     if (listed.has(ps.program_id)) continue;
     const p = programs.find((x) => x.id === ps.program_id);
     if (!p || !wanted.has(p.gender) || !divisions.includes(ps.division)) continue;
-    if (ps.conference_id) { patches.set(ps.program_id, { program_id: ps.program_id, season, division: ps.division, conference_id: ps.conference_id, ncaa_member: true, member_source: 'conference' }); ctx.inc('members_unlisted'); }
-    else { patches.set(ps.program_id, { program_id: ps.program_id, season, division: ps.division, conference_id: null, ncaa_member: false, member_source: 'none' }); ctx.inc('non_members'); }
+    if (ps.conference_id) { patches.set(ps.program_id, { program_id: ps.program_id, season, division: ps.division, ncaa_member: true, member_source: 'conference' }); ctx.inc('members_unlisted'); }
+    else { patches.set(ps.program_id, { program_id: ps.program_id, season, division: ps.division, ncaa_member: false, member_source: 'none' }); ctx.inc('non_members'); }
   }
   if (patches.size) await upsertProgramSeasons(db, [...patches.values()] as any);
   ctx.inc('program_seasons_updated', patches.size);

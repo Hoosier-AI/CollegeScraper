@@ -6,6 +6,8 @@
 //   College teams: NCAA.com's team leaderboards (scoring, goals against, corners and fouls a game, W-L-T %).
 //   Pro: in the US leagues' current seasons, the provider's season goals, assists and minutes against the sum of its
 //     match lines, and goals against American Soccer Analysis.
+//   Conferences: every D1/D2 NCAA team has one, and no conference lost over a quarter of last season's teams (a job
+//     once erased 169 teams' conferences and nothing noticed, 2026-10).
 import { registerJob, type JobContext } from './runner.js';
 import { selectAll, selectIn, type Db } from '../db/client.js';
 import { currentSeason } from './seasons.js';
@@ -105,9 +107,40 @@ async function proChecks(db: Db): Promise<AuditRow[]> {
   return out;
 }
 
+export interface MemberRow { season: number; program: string; gender: string; division: string; conference: string | null; ncaa_member: boolean | null }
+
+/** Pure: the two conference checks over this season's and last season's program seasons. */
+export function conferenceAudit(rows: MemberRow[], season: number): AuditRow[] {
+  const side = (g: string) => (g === 'w' ? 'Women' : 'Men');
+  const members = rows.filter((r) => r.season === season && r.ncaa_member !== false && (r.division === 'd1' || r.division === 'd2'));
+  const missing = members.filter((r) => !r.conference);
+  const size = new Map<string, { last: number; now: number }>();
+  for (const r of rows) {
+    if (!r.conference || r.ncaa_member === false) continue;
+    const k = `${side(r.gender)} ${r.conference}`, e = size.get(k) ?? { last: 0, now: 0 };
+    if (r.season === season) e.now += 1; else if (r.season === season - 1) e.last += 1;
+    size.set(k, e);
+  }
+  const compared = [...size].filter(([, e]) => e.last >= 4);
+  const shrank = compared.filter(([, e]) => e.now < e.last * 0.75).sort((a, b) => (b[1].last - b[1].now) - (a[1].last - a[1].now));
+  const rate = (agree: number, n: number) => (n ? Math.round((agree / n) * 1000) / 1000 : 0);
+  return [
+    { area: 'college', check_key: 'conf:members', label: 'Conferences: D1 and D2 teams with a conference', target: 0.99, compared: members.length, agree: members.length - missing.length,
+      rate: rate(members.length - missing.length, members.length), worst: missing.slice(0, 15).map((r) => ({ who: `${side(r.gender)} ${r.division.toUpperCase()}: ${r.program}`, ours: null, theirs: 1 })) },
+    { area: 'college', check_key: 'conf:size', label: "Conferences: kept at least 75% of last season's teams", target: 0.95, compared: compared.length, agree: compared.length - shrank.length,
+      rate: rate(compared.length - shrank.length, compared.length), worst: shrank.slice(0, 15).map(([who, e]) => ({ who, ours: e.now, theirs: e.last })) },
+  ];
+}
+
+async function conferenceChecks(db: Db, season: number): Promise<AuditRow[]> {
+  const rows = await selectAll<any>(db, 'college_program_seasons', 'program_id,season,division,conference_id,ncaa_member,college_programs(name,gender),college_conferences(short_name,name)', (q) => q.in('season', [season, season - 1]));
+  return conferenceAudit(rows.map((r) => ({ season: r.season, program: r.college_programs?.name ?? r.program_id, gender: r.college_programs?.gender ?? 'm', division: r.division,
+    conference: r.conference_id ? (r.college_conferences?.short_name ?? r.college_conferences?.name ?? r.conference_id) : null, ncaa_member: r.ncaa_member })), season);
+}
+
 export async function statAudit(ctx: JobContext): Promise<void> {
   const season = Number(ctx.params.season ?? currentSeason());
-  const rows = [...(await collegeChecks(ctx.db, season)), ...(await proChecks(ctx.db))];
+  const rows = [...(await collegeChecks(ctx.db, season)), ...(await conferenceChecks(ctx.db, season)), ...(await proChecks(ctx.db))];
   if (rows.length) { const { error } = await ctx.db.from('stat_audit_runs').insert(rows); if (error) throw new Error(`stat audit: ${error.message}`); }
   for (const r of rows) ctx.note(r.check_key, `${(r.rate * 100).toFixed(1)}% of ${r.compared}`);
   ctx.inc('checks', rows.length);

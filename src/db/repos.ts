@@ -9,6 +9,7 @@ import { heightToCm } from '../normalize/height.js';
 import { parseHometown } from '../normalize/hometown.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
 import { cityLabel, parseVenue } from '../normalize/venue.js';
+import { conferenceName } from '../normalize/conferenceNames.js';
 import { matchStatLine, resolveRoster, type KnownPlayerSeason, type StatLineCandidate } from '../identity/resolver.js';
 import { log } from '../log.js';
 
@@ -69,7 +70,12 @@ export async function listProgramSeasons(db: Db, season: number, filter?: (q: an
 }
 
 export async function upsertConference(db: Db, ncaaSeo: string, name: string, division: string | null): Promise<string> {
-  const { data, error } = await db.from('college_conferences').upsert({ ncaa_seo: ncaaSeo, name, division }, { onConflict: 'ncaa_seo' }).select('id').single();
+  // The curated name (data/conference-names.json) over the scoreboard's title-cased slug: the short form the site has
+  // always shown ("ACC", "MAAC"), in both columns; the full name stays in the file.
+  const curated = conferenceName(ncaaSeo);
+  if (!curated) log.warn({ ncaaSeo, name }, 'conference name not curated: add it to data/conference-names.json');
+  const row: Record<string, unknown> = curated ? { ncaa_seo: ncaaSeo, name: curated.short, short_name: curated.short, division } : { ncaa_seo: ncaaSeo, name, division };
+  const { data, error } = await db.from('college_conferences').upsert(row, { onConflict: 'ncaa_seo' }).select('id').single();
   if (error) throw new Error(`upsert conference ${ncaaSeo}: ${error.message}`);
   return data.id as string;
 }
