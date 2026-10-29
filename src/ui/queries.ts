@@ -6,6 +6,7 @@ import { eastern } from '../jobs/seasons.js';
 import { teamCategories } from '../normalize/logos.js';
 import { cleanHeadshotUrl } from '../normalize/headshots.js';
 import { eloChances } from './elo.js';
+import { suspectTeamLink } from '../news/entities.js';
 
 export const PLAYER_STATS = ['goals', 'assists', 'points', 'ppg', 'pps', 'shots', 'sog', 'minutes', 'gp', 'gs', 'gwg', 'hat_tricks', 'goals_p90', 'assists_p90', 'points_p90', 'shots_p90', 'sog_p90', 'shot_accuracy', 'conversion_pct', 'saves', 'save_pct', 'gaa', 'shutouts', 'clean_sheets', 'saves_p90', 'ga', 'gk_minutes', 'yc', 'rc', 'fouls', 'corners', 'offsides', 'pk_goals', 'pk_att', 'pk_pct', 'minutes_share', 'goals_1h', 'goals_2h', 'goals_ot', 'minutes_per_goal', 'shots_per_goal', 'pct_points_p90', 'pct_goals_p90', 'pct_assists_p90', 'pct_shots_p90', 'pct_save_pct', 'pct_gaa', 'div_rank_points', 'div_rank_goals', 'div_rank_assists', 'conf_rank_points', 'conf_rank_goals'];
 export const TEAM_STATS = ['w', 'l', 't', 'gp', 'ppg', 'gf', 'ga', 'gd', 'gf_pg', 'ga_pg', 'gf_home', 'gf_away', 'ga_home', 'ga_away', 'gf_1h', 'gf_2h', 'ga_1h', 'ga_2h', 'shots', 'sog', 'shots_pg', 'sog_pg', 'sog_pct', 'shots_per_goal', 'corners', 'corners_pg', 'fouls', 'offsides', 'saves', 'yc', 'rc', 'pk_goals', 'pk_att', 'clean_sheets', 'avg_attendance', 'conf_w', 'conf_l', 'conf_t', 'vs_ranked_w', 'vs_ranked_l', 'vs_ranked_t', 'last5_gf', 'last5_ga', 'div_rank_ppg', 'conf_rank_ppg', 'conf_rank_gf_pg', 'conf_rank_ga_pg', 'div_pct_gf_pg', 'div_pct_ga_pg', 'div_pct_shots_pg'];
@@ -509,7 +510,27 @@ export async function quality(db: Db, season: number) {
   push('usc_unresolved', 'Poll entries not matched to a program', 'United Soccer Coaches school names that resolve to no program.', Object.entries(uscUnres?.by_list ?? {}).flatMap(([list, names]: [string, any]) => [...new Set(names as string[])].map((n) => ({ list, school: n }))));
   push('usc_vs_ncaa', 'USC poll ≠ NCAA.com copy', 'Latest United Soccer Coaches poll compared rank-by-rank with the copy published on ncaa.com (D1).', Object.entries(uscCheck ?? {}).flatMap(([list, c]: [string, any]) => (c.mismatches ?? []).map((m: string) => ({ list, mismatch: m, site_poll: c.site_poll, ncaa_week: c.ncaa_week }))));
   push('fetch_errors', 'Hosts with fetch errors (7 days)', 'Network, 5xx or 429 failures per host (404 probes excluded); expect < 2%.', [...byHost.entries()].filter(([, v]) => v.errors > 0).map(([host, v]) => ({ host, ...v, pct: Math.round(1000 * v.errors / v.fetches) / 10 })).sort((a: any, b: any) => b.pct - a.pct));
+  push('news_name_links', 'News linked to a team through a name or dateline (14 days)', 'A story tagged with a team whose name is only in it as a person ("from Charlotte Hansen" is not the Charlotte 49ers) or as the place it was written ("PITTSBURGH, Pa. –"). Fix the rule in src/news/entities.ts, then run news-retag.', await newsNameLinks(db));
   return { season, games: games.length, finals: finals.length, checks };
+}
+
+/** Stored news links to a team that the story names only as a person or a dateline (the news_name_links check). */
+async function newsNameLinks(db: Db): Promise<unknown[]> {
+  const since = new Date(Date.now() - 14 * 86400_000).toISOString();
+  // A database without the news tables (migration 170) has nothing to check; the other checks still run.
+  const links = await selectAll<any>(db, 'news_links', 'article_id,entity_type,label,href,method', (q) => q.gte('published_at', since).neq('method', 'scope')).catch(() => [] as any[]);
+  const teams = links.filter((l) => l.entity_type === 'program' || l.entity_type === 'pro_team');
+  if (!teams.length) return [];
+  const people = new Map<number, string[]>();
+  for (const l of links) if (l.entity_type === 'college_player' || l.entity_type === 'pro_player') people.set(l.article_id, [...(people.get(l.article_id) ?? []), l.label]);
+  const arts = new Map((await selectIn<any>(db, 'news_articles', 'id,title,url,match_text', 'id', [...new Set(teams.map((l) => l.article_id))])).map((a) => [a.id, a]));
+  const out: unknown[] = [];
+  for (const l of teams) {
+    const a = arts.get(l.article_id);
+    const why = a?.match_text ? suspectTeamLink(a.title, a.match_text, l.label, people.get(l.article_id)) : null;
+    if (why) out.push({ article: l.article_id, title: a.title, team: l.label, href: l.href, reason: why === 'name' ? 'a person\'s name' : 'the dateline', url: a.url });
+  }
+  return out;
 }
 
 

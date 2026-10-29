@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { classify } from '../../src/news/classify.js';
 import { clusterFor, overlap, titleTokens } from '../../src/news/cluster.js';
-import { EntityIndex, personCandidates, resolvePeople, type PersonHit } from '../../src/news/entities.js';
+import { EntityIndex, personCandidates, resolvePeople, suspectTeamLink, withoutDateline, type PersonHit } from '../../src/news/entities.js';
 import { classicSidearmFeed, ENGLISH_COUNTRIES, isSoccerItem, YOUTH_STORY, LEAGUE_RUN, LEAGUE_RUN_PAGE, PUBLISHER_FEEDS, schoolFeedUrl } from '../../src/news/feeds.js';
 import { genderOf, prepare, urlHash, type NewsSource } from '../../src/news/ingest.js';
 import { cleanUrl, feedLinks, imageUrl, parseFeed, parseGdelt, parseGuardian, plainText } from '../../src/news/rss.js';
@@ -131,6 +131,7 @@ describe('linking', () => {
       { id: 40, name: 'Liverpool', display_name: 'Liverpool', gender: 'm', is_national: false, slug: 'liverpool', country: 'England', priority: 20 },
       { id: 9001, name: 'Liverpool', display_name: 'Liverpool', gender: 'm', is_national: false, slug: 'liverpool-uruguay', country: 'Uruguay', priority: 120 },
       { id: 777, name: 'Start', display_name: 'Start', gender: 'm', is_national: false, slug: 'start', country: 'Norway', priority: 200 },
+      { id: 9568, name: 'Charlotte', display_name: 'Charlotte', gender: 'm', is_national: false, slug: 'charlotte', country: 'USA', priority: 2 },
       { id: 2384, name: 'USA', display_name: 'USA', gender: 'm', is_national: true, slug: 'usa', country: 'USA', priority: 34 },
       { id: 2385, name: 'USA W', display_name: 'USA', gender: 'w', is_national: true, slug: 'usa-women', country: 'USA', priority: 35 },
     ],
@@ -141,10 +142,14 @@ describe('linking', () => {
       { id: 'p-lib-w', school_seo: 'liberty', gender: 'w', name: 'Liberty' },
       { id: 'p-ucla-m', school_seo: 'ucla', gender: 'm', name: 'UCLA' },
       { id: 'p-ws-m', school_seo: 'wake-forest', gender: 'm', name: 'Wake Forest' },
+      { id: 'p-clt-w', school_seo: 'charlotte', gender: 'w', name: 'Charlotte' },
+      { id: 'p-d3-m', school_seo: 'crown', gender: 'm', name: 'Crown' },
+      { id: 'p-nw-m', school_seo: 'northwestern', gender: 'm', name: 'Northwestern' },
+      { id: 'p-nwsp-m', school_seo: 'northwestern-st-paul', gender: 'm', name: 'Northwestern-St. Paul' },
     ],
-    schools: [{ seo: 'indiana', name: 'Indiana' }, { seo: 'butler', name: 'Butler' }, { seo: 'liberty', name: 'Liberty' }, { seo: 'ucla', name: 'UCLA' }, { seo: 'wake-forest', name: 'Wake Forest' }],
+    schools: [{ seo: 'indiana', name: 'Indiana' }, { seo: 'butler', name: 'Butler' }, { seo: 'liberty', name: 'Liberty' }, { seo: 'ucla', name: 'UCLA' }, { seo: 'wake-forest', name: 'Wake Forest' }, { seo: 'charlotte', name: 'Charlotte' }, { seo: 'crown', name: 'Crown' }, { seo: 'northwestern', name: 'Northwestern' }, { seo: 'northwestern-st-paul', name: 'Northwestern-St. Paul' }],
     conferences: [{ id: 'c-b1g', ncaa_seo: 'big-ten', name: 'Big Ten', short_name: 'Big Ten' }],
-    memberships: [{ program_id: 'p-ind-m', conference_id: 'c-b1g' }, { program_id: 'p-but-m', conference_id: null }, { program_id: 'p-lib-w', conference_id: null }, { program_id: 'p-ucla-m', conference_id: 'c-b1g' }, { program_id: 'p-ws-m', conference_id: null }],
+    memberships: [{ program_id: 'p-ind-m', conference_id: 'c-b1g' }, { program_id: 'p-but-m', conference_id: null, division: 'd1' }, { program_id: 'p-lib-w', conference_id: null }, { program_id: 'p-ucla-m', conference_id: 'c-b1g' }, { program_id: 'p-ws-m', conference_id: null }, { program_id: 'p-clt-w', conference_id: null }, { program_id: 'p-d3-m', conference_id: null, division: 'd3' }, { program_id: 'p-nw-m', conference_id: 'c-b1g', division: 'd1' }, { program_id: 'p-nwsp-m', conference_id: null, division: 'd3' }],
   });
   const labels = (t: string, scope: 'college' | 'pro', g: 'm' | 'w' | null = null) => ix.scan(t, scope, g).map((l) => l.label);
   it('links clubs, the bigger namesake, the right gender, and leagues', () => {
@@ -168,6 +173,56 @@ describe('linking', () => {
     expect(labels('Williams and Liberty are words', 'college', 'w')).toEqual([]);
     expect(labels('Indiana at #10 UCLA', 'college', 'm')).toEqual(['UCLA']);
     expect(labels('Hosts Wake Forest in Big Ten clash', 'college', 'm')).toEqual(['Wake Forest', 'Big Ten']);
+  });
+  it('does not read a first name as a team', () => {
+    // Real stories (2026-10): each linked the Charlotte 49ers or Charlotte FC through a player called Charlotte.
+    expect(labels('Mount Olive earned a valuable 1-1 draw on the road against Young Harris, handing the Mountain Lions their first tie of the season with a late equalizer from Charlotte Benson.', 'college', 'w')).toEqual([]);
+    expect(labels('A two-goal performance from Charlotte Hansen and a 10-save effort by Grace Stair helped the Davidson College women\'s soccer team secure a 2-2 draw Thursday afternoon against Duquesne.', 'college', 'w')).not.toContain('Charlotte');
+    expect(labels('Falkirk kicked off the match slightly nervy looking, and Charlotte Ferguson was immediately called into action with a save as Renfrew made a charge forward.', 'pro')).toEqual([]);
+    // A headline capitalises every word: there only a person we know by the name counts.
+    expect(labels('Charlotte Hansen Scores Twice', 'college', 'w')).toEqual([]);
+    expect(ix.scan('Charlotte Hansen Scores Twice in Win', 'pro', null, new Set(['hansen|charlotte'])).map((l) => l.label)).toEqual([]);
+    expect(labels('Charlotte Hansen Scores Twice in Win', 'pro')).toEqual(['Charlotte']);
+    // The team itself still links, before a day, in a headline, or after an opponent word.
+    expect(labels('Tigers Host Charlotte in Home Regular Season Finale Wednesday', 'college', 'w')).toEqual(['Charlotte']);
+    expect(labels('The Tigers host Charlotte Thursday at 7 p.m. in the regular season finale at the stadium.', 'college', 'w')).toEqual(['Charlotte']);
+    expect(labels('Inter Miami beat Charlotte on Saturday night to reach the conference semifinals.', 'pro')).toEqual(['Charlotte']);
+    // Lists, hyphens and the rest of a club's name are not a surname.
+    expect(labels('Real Madrid defender Trent Alexander-Arnold is weighing offers, with Liverpool, Chelsea and others keen.', 'pro')).toEqual(['Liverpool', 'Chelsea']);
+    expect(labels('He was battling relegation at Liverpool United before the move to a new club.', 'pro')).toEqual(['Liverpool']);
+    expect(labels('Charlotte Brown scored twice for the visitors in the second half of the game.', 'pro')).toEqual([]);
+    // A team before its nickname is not a first name before a surname.
+    expect(labels('Indiana led 2-0 at the break, but the visiting Butler Bulldogs responded with three goals after intermission.', 'college', 'm')).toEqual(['Butler']);
+  });
+  it('does not run a name across sentences, or read a school\'s own name as a namesake', async () => {
+    expect(labels('Hoosiers Draw Against Butler. Indiana men\'s soccer controlled the match for most of the 90 minutes.', 'college', 'm')).toEqual(['Butler']);
+    expect(labels('Indiana Soccer Ranked in the Top 10. Butler beat Liberty on Saturday.', 'college', 'm')).toEqual([]);
+    expect(labels('Hoosiers win at No. 10 UCLA. The match was close.', 'college', 'm')).toEqual(['UCLA']);
+    expect(labels('Tigers Host Charlotte For Senior Day. The Tigers play host to Charlotte in a conference match at the stadium tonight.', 'college', 'w')).toEqual(['Charlotte']);
+    const src: NewsSource = { id: 'school:p-ind2-m', kind: 'school', name: 'Indiana (PA)', scope: 'college', gender: 'm', program_id: 'p-ind2-m', pro_team_id: null, link_label: 'Indiana (PA) (men)', link_href: '/teams/iup/men' };
+    const [p] = await prepare(null, ix, src, [{ title: 'Crimson Hawks Fall', url: 'https://iup.example/1', published: new Date('2026-10-10T00:00:00Z'), lede: 'The Crimson Hawks fell 2-0 at Butler on Saturday after hosting Indiana in midweek.', categories: [], image: null }], Date.parse('2026-10-11T00:00:00Z'));
+    expect(p!.links.map((l) => l.id)).toEqual(['p-ind2-m', 'p-but-m']);
+    const d3: NewsSource = { ...src, id: 'school:p-d3-m', name: 'Crown', program_id: 'p-d3-m', link_label: 'Crown (men)', link_href: '/teams/crown/men' };
+    const [q] = await prepare(null, ix, d3, [{ title: 'Polars Earn Huge Road Win at Northwestern', url: 'https://crown.example/1', published: new Date('2026-10-10T00:00:00Z'), lede: '', categories: [], image: null }], Date.parse('2026-10-11T00:00:00Z'));
+    expect(q!.links.map((l) => l.id)).toEqual(['p-d3-m']);
+    // A name nobody else shares still links across divisions (D1 Omaha does play D3 Nebraska Wesleyan).
+    const [r] = await prepare(null, ix, d3, [{ title: 'Polars Fall at Butler', url: 'https://crown.example/2', published: new Date('2026-10-10T00:00:00Z'), lede: '', categories: [], image: null }], Date.parse('2026-10-11T00:00:00Z'));
+    expect(r!.links.map((l) => l.id)).toEqual(['p-d3-m', 'p-but-m']);
+  });
+  it('leaves the dateline out', () => {
+    expect(withoutDateline('Colorado Springs, Colo. — UC Davis briefly tied the match')).toBe('UC Davis briefly tied the match');
+    expect(withoutDateline('PITTSBURGH, Pa. - A two-goal performance')).toBe('A two-goal performance');
+    expect(withoutDateline('CHARLOTTE - The Brevard College women')).toBe('The Brevard College women');
+    expect(withoutDateline('WINSTON-SALEM, N.C. – Wake Forest won')).toBe('Wake Forest won');
+    expect(withoutDateline('Sam Oduro scored twice - and Indiana won.')).toBe('Sam Oduro scored twice - and Indiana won.');
+  });
+  it('flags stored team links that read a name or a dateline as the team', () => {
+    expect(suspectTeamLink('Trojans Earn Statement Draw', 'Trojans Earn Statement Draw. Mount Olive drew on the road against Young Harris with a late equalizer from Charlotte Benson.', 'Charlotte')).toBe('name');
+    expect(suspectTeamLink('MATCH REPORT: FALKIRK 5-1 RENFREW LADIES', 'MATCH REPORT: FALKIRK 5-1 RENFREW LADIES. Falkirk kicked off nervy, and Charlotte Ferguson was immediately called into action.', 'Charlotte', ['Charlotte Ferguson'])).toBe('name');
+    expect(suspectTeamLink('BC Falls in Road Action', 'BC Falls in Road Action. CHARLOTTE - The Brevard College women fell 2-0 to Queens on Thursday evening.', 'Charlotte')).toBe('dateline');
+    expect(suspectTeamLink('Tigers Host Charlotte in Home Regular Season Finale Wednesday', 'Tigers Host Charlotte in Home Regular Season Finale Wednesday. The Tigers welcome Charlotte to town.', 'Charlotte (women)')).toBeNull();
+    expect(suspectTeamLink('Owls Fall to JWU Charlotte, 2-0', 'Owls Fall to JWU Charlotte, 2-0. Warren Wilson lost.', 'JWU Charlotte')).toBeNull();
+    expect(suspectTeamLink('Smith Named Goalkeeper of the Week for Shutout vs. Vermont', 'Smith Named Goalkeeper of the Week for Shutout vs. Vermont. NEWARK, NJ -- Kaele Smith recorded a shutout.', 'Vermont')).toBeNull();
   });
   it('finds person names and links them only when unique or on a linked team', () => {
     expect(personCandidates('Christian Pulisic scores as Milan win').map((c) => c.display)).toContain('Christian Pulisic');

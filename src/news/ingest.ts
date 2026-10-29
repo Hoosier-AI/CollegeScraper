@@ -5,8 +5,9 @@ import type { Db } from '../db/client.js';
 import { selectAll } from '../db/client.js';
 import { classify, KIND_WEIGHT } from './classify.js';
 import { clusterFor, titleTokens, type Recent } from './cluster.js';
-import { lookupPeople, personCandidates, resolvePeople, type EntityIndex, type Link, type Scope } from './entities.js';
+import { lookupPeople, personCandidates, resolvePeople, withoutDateline, type EntityIndex, type Link, type Scope } from './entities.js';
 import type { FeedItem } from './rss.js';
+import { stripDiacritics } from '../normalize/names.js';
 
 export interface NewsSource {
   id: string;
@@ -22,13 +23,16 @@ export interface NewsSource {
 
 export const urlHash = (url: string) => createHash('md5').update(url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')).digest('hex');
 
-const WOMEN = /\b(women'?s|womens|wsl|nwsl|uswnt|canwnt|lionesses|matildas|w league|super league women|she ?believes|female)\b/i;
+const WOMEN = /\b(women'?s|womens|wsl|nwsl|uswnt|canwnt|lionesses|matildas|w league|super league women|she ?believes|female|ladies)\b/i;
 const MEN = /\b(men'?s|mens|usmnt|canmnt|mls\b|three lions|el tri)\b/i;
 export function genderOf(text: string, fallback: 'm' | 'w' | null): 'm' | 'w' | null {
   if (fallback) return fallback;
   const w = WOMEN.test(text), m = MEN.test(text);
   return w && !m ? 'w' : m && !w ? 'm' : null;
 }
+
+/** "St. Francis (IL) (men)" → "st francis". */
+const plainName = (s: string) => stripDiacritics(s).toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** Stories older than this are not taken in (a school feed's first read holds months of them). */
 const MAX_AGE_DAYS = 45;
@@ -41,19 +45,33 @@ export async function prepare(db: Db | null, ix: EntityIndex, src: NewsSource, i
   const rows = items
     .map((item) => ({ item, at: item.published ?? new Date(now) }))
     .filter((r) => now - r.at.getTime() < maxAgeDays * 86400_000 && r.at.getTime() < now + 3600_000);
-  const cands = rows.map((r) => personCandidates(`${r.item.title}. ${r.item.lede}`));
+  // The dateline ("PITTSBURGH, Pa. –") is where the story was written, so it is left out of the linking.
+  const texts = rows.map((r) => `${r.item.title}. ${withoutDateline(r.item.lede)}`);
+  const cands = texts.map((t) => personCandidates(t));
   const keys = [...new Set(cands.flat().map((c) => c.key))];
   const hits = db ? await people(db, keys, scanScope) : new Map();
+  // On a school's feed, another program is not the school itself under its plain name ("University of St. Francis" on
+  // St. Francis (IL)'s feed is not St. Francis (PA)), nor a name shared with a longer one in another division
+  // ("Northwestern" on a D3 feed is Northwestern-St. Paul, not the Big Ten school).
+  const own = src.program_id ? plainName(src.name) : null;
+  const ownDiv = src.program_id ? ix.program(src.program_id)?.division ?? null : null;
+  const namesake = (l: Link) => {
+    if (l.type !== 'program' || !src.program_id || l.id === src.program_id) return false;
+    const div = ix.program(l.id)?.division ?? null;
+    return plainName(l.label) === own || (ownDiv != null && div != null && div !== ownDiv && ix.sharedName(l.id));
+  };
   return rows.map(({ item, at }, i) => {
-    const text = `${item.title}. ${item.lede}`;
+    const text = texts[i]!;
+    // People we know by a name in the story ("Charlotte Hansen"): their names are not read as teams.
+    const known = new Set(cands[i]!.map((c) => c.key).filter((k) => hits.has(k)));
     const gender = genderOf(text, src.gender);
     const links: Link[] = [];
     const add = (l: Link) => { if (!links.some((x) => x.type === l.type && x.id === l.id)) links.push(l); };
     // A school or club feed is about its own team.
     if (src.program_id && src.link_href) add({ type: 'program', id: src.program_id, label: src.link_label ?? src.name, href: src.link_href, method: 'scope', primary: true, gender: src.gender });
     if (src.pro_team_id && src.link_href) add({ type: 'pro_team', id: String(src.pro_team_id), label: src.link_label ?? src.name, href: src.link_href, method: 'scope', primary: true });
-    for (const l of ix.scan(text, scanScope, gender)) add(l);
-    for (const l of ix.scan(item.categories.join('. '), scanScope, gender)) add({ ...l, method: 'tag' });
+    for (const l of ix.scan(text, scanScope, gender, known)) if (!namesake(l)) add(l);
+    for (const l of ix.scan(item.categories.join('. '), scanScope, gender)) if (!namesake(l)) add({ ...l, method: 'tag' });
     const teamIds = new Set(links.filter((l) => l.type === 'program' || l.type === 'pro_team').map((l) => l.id));
     for (const p of resolvePeople(cands[i]!, hits, teamIds)) {
       if (gender && p.gender && p.gender !== gender) continue;
