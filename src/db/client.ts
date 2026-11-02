@@ -125,13 +125,15 @@ export class DbFetchCache implements FetchCacheStore {
     };
     return { record, body: (data.body as string | null) ?? null };
   }
-  async put(record: FetchRecord, body: string | null) {
-    const { error } = await this.db.from('college_source_fetches').upsert({
+  async put(record: FetchRecord, body: string | null | undefined) {
+    const row: Record<string, unknown> = {
       url: record.url, host: record.host, status: record.status, etag: record.etag, last_modified: record.lastModified,
       fetched_at: record.fetchedAt, content_sha: record.contentSha, error: record.error, attempts: record.attempts,
-      body: this.storeBodies ? body : null,
       next_retry_at: null,
-    }, { onConflict: 'url' });
+    };
+    // Left out, the upsert keeps the stored body (an unchanged page is not sent again).
+    if (body !== undefined) row.body = this.storeBodies ? body : null;
+    const { error } = await this.db.from('college_source_fetches').upsert(row, { onConflict: 'url' });
     if (error) log.warn({ url: record.url, err: error.message }, 'fetch cache write failed');
   }
 }

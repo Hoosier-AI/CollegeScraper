@@ -22,13 +22,17 @@ export interface FetchRecord {
 export interface FetchCacheStore {
   /** Return the last successful record + body for a URL (used for conditional requests and offline replay). */
   get(url: string): Promise<{ record: FetchRecord; body: string | null } | null>;
-  put(record: FetchRecord, body: string | null): Promise<void>;
+  /** `body` undefined keeps the stored body: the page did not change, so only the record is written. Re-sending
+   * unchanged pages (up to ~1 MB each) to the database was most of the service's Render bandwidth (2026-11-02). */
+  put(record: FetchRecord, body: string | null | undefined): Promise<void>;
 }
 
 export class MemoryFetchCache implements FetchCacheStore {
   private map = new Map<string, { record: FetchRecord; body: string | null }>();
   async get(url: string) { return this.map.get(url) ?? null; }
-  async put(record: FetchRecord, body: string | null) { this.map.set(record.url, { record, body }); }
+  async put(record: FetchRecord, body: string | null | undefined) {
+    this.map.set(record.url, { record, body: body === undefined ? this.map.get(record.url)?.body ?? null : body });
+  }
 }
 
 export interface RobotsPolicy {
@@ -156,7 +160,7 @@ export class HttpClient implements Fetcher {
       if (res.status === 304 && cached?.body != null) {
         this.stats.notModified += 1;
         this.opts.onRequest?.({ url, ok: true, status: 304, notModified: true });
-        await this.opts.cache?.put({ ...cached.record, fetchedAt: new Date().toISOString(), attempts: attempt }, cached.body);
+        await this.opts.cache?.put({ ...cached.record, fetchedAt: new Date().toISOString(), attempts: attempt }, undefined);
         return { status: 200, url: res.url || url, text: cached.body, notModified: true };
       }
       const text = await res.text();
@@ -178,7 +182,9 @@ export class HttpClient implements Fetcher {
         error: res.ok ? null : `HTTP ${res.status}`,
         attempts: attempt,
       };
-      if (!noStore) await this.opts.cache?.put(record, res.ok ? text : null);
+      // Most school sites answer 200 every time (no ETag): the same page as stored keeps its stored body.
+      const unchanged = cached?.body != null && cached.record.contentSha === record.contentSha;
+      if (!noStore) await this.opts.cache?.put(record, !res.ok ? null : unchanged ? undefined : text);
       if (!res.ok) throw new HttpError(res.status, url);
       this.opts.onBody?.(res.url || url, text);
       return { status: res.status, url: res.url || url, text, notModified: false };
