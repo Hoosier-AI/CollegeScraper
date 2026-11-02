@@ -12,10 +12,11 @@ describe('netMeter', () => {
     await withJob(() => 'nightly > quality', () => f('https://db.example.co/rest/v1/teams', { method: 'POST', headers: { apikey: 'k' }, body }));
     await f('https://site.example.edu/roster');
     const r = netReport('db.example.co');
-    const db = r.outbound.top.find((t) => t.key === 'nightly > quality|database')!;
+    const db = r.outbound.top.find((t) => t.key === 'nightly > quality|database|POST teams')!;
     expect(db.requests).toBe(1);
     expect(db.out_bytes).toBeGreaterThan(Buffer.byteLength(body));
-    expect(r.outbound.top.find((t) => t.key === 'web|site.example.edu')!.requests).toBe(1);
+    expect(r.outbound.by_table[0]!.key).toBe('POST teams');
+    expect(r.outbound.top.find((t) => t.key === 'web|site.example.edu|')!.requests).toBe(1);
     expect(r.outbound.total.requests).toBe(2);
   });
 

@@ -47,12 +47,20 @@ export function meterFetch<F extends AnyFetch>(f: F): F {
   if ((f as any)[METERED]) return f;
   const metered = (async (input: any, init?: any) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : String(input?.url ?? '');
+    const method = String(init?.method ?? input?.method ?? 'GET').toUpperCase();
     let host = 'unknown';
-    try { host = new URL(url).host; } catch { /* relative or odd input */ }
-    const row = bump(outbound, `${scope.getStore()?.() ?? 'web'}|${host}`);
+    let detail = '';
+    try {
+      const u = new URL(url);
+      host = u.host;
+      // PostgREST calls name their table (or function), so the database's share splits by what was written.
+      const rest = /^\/rest\/v1\/(rpc\/)?([^/?]+)/.exec(u.pathname);
+      if (rest) detail = `${rest[1] ? 'RPC' : method} ${rest[2]}`;
+    } catch { /* relative or odd input */ }
+    const row = bump(outbound, `${scope.getStore()?.() ?? 'web'}|${host}|${detail}`);
     row.requests++;
     // Request line and HTTP/1.1 framing, roughly; TLS adds a little more.
-    row.out += String(init?.method ?? input?.method ?? 'GET').length + url.length + 40 + headerBytes(init?.headers ?? input?.headers) + bodyBytes(init?.body);
+    row.out += method.length + url.length + 40 + headerBytes(init?.headers ?? input?.headers) + bodyBytes(init?.body);
     const res = await f(input, init);
     const len = Number(res?.headers?.get?.('content-length'));
     if (Number.isFinite(len)) row.in += len;
@@ -92,14 +100,17 @@ const ranked = (m: Map<string, Row>, hours: number, n: number) => [...m].sort((a
 export function netReport(dbHost: string | null, now = Date.now()) {
   const hours = Math.max((now - Date.parse(since)) / 3_600_000, 1 / 60);
   const label = (host: string) => (host === dbHost ? 'database' : host);
-  const relabelled = new Map([...outbound].map(([k, r]) => { const [job, host] = k.split('|'); return [`${job}|${label(host ?? '')}`, r] as const; }));
+  const relabelled = new Map([...outbound].map(([k, r]) => { const [job, host, detail] = k.split('|'); return [`${job}|${label(host ?? '')}|${detail ?? ''}`, r] as const; }));
+  const part = (k: string, i: number) => k.split('|')[i] ?? '';
   return {
     since, hours: +hours.toFixed(2),
     outbound: {
       total: view(sum([...outbound.values()]), hours),
-      by_host: ranked(group(relabelled, (k) => k.split('|')[1] ?? ''), hours, 25),
-      by_job: ranked(group(relabelled, (k) => k.split('|')[0] ?? ''), hours, 40),
-      top: ranked(relabelled, hours, 40),
+      by_host: ranked(group(relabelled, (k) => part(k, 1)), hours, 25),
+      by_job: ranked(group(relabelled, (k) => part(k, 0)), hours, 40),
+      // Database calls by method and table, across jobs.
+      by_table: ranked(group(new Map([...relabelled].filter(([k]) => part(k, 1) === 'database')), (k) => part(k, 2)), hours, 40),
+      top: ranked(relabelled, hours, 50),
     },
     served: {
       total: view(sum([...served.values()]), hours),
