@@ -37,7 +37,6 @@ User-agent: PerplexityBot
 User-agent: Claude-SearchBot
 User-agent: Claude-User
 Allow: /
-Allow: /api/
 Disallow: /admin
 Disallow: /console
 Disallow: /jobs
@@ -47,12 +46,16 @@ Disallow: /api/console
 Disallow: /api/quality
 Disallow: /api/runs
 Disallow: /api/jobs
+Disallow: /api/
+Crawl-delay: 3
 
 User-agent: GPTBot
 User-agent: ClaudeBot
 User-agent: Google-Extended
 User-agent: CCBot
 User-agent: Bytespider
+User-agent: meta-externalagent
+User-agent: Amazonbot
 Disallow: /
 
 Sitemap: https://www.plaibook.live/sitemap.xml

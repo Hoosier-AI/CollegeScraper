@@ -214,7 +214,7 @@ const DATA_USE: LegalPage = {
       'Plaibook Stats has no public API. Its data feeds our own Plaibook app through a private interface that is not open to others. Some data comes from licensed providers and is shown on our pages only. Credit Plaibook Stats wherever you quote the data.',
     ] },
     { id: 'ai', heading: 'AI crawlers', blocks: [
-      'Our robots.txt allows answer engines and AI search tools to read the Site so they can cite it with a link, and asks AI-training crawlers (such as GPTBot, ClaudeBot, Google-Extended, CCBot and Bytespider) not to use it for training. Using the Site\'s data to train AI models is not allowed under our [Terms of Use](/terms).',
+      'Our robots.txt allows answer engines and AI search tools to read the Site\'s pages (not its /api/ endpoints) so they can cite it with a link, at up to about 20 pages a minute each; faster requests are refused with "too many requests". AI-training crawlers (such as GPTBot, ClaudeBot, Google-Extended, CCBot, Bytespider, meta-externalagent and Amazonbot) are kept off the Site, and their requests are refused. Using the Site\'s data to train AI models is not allowed under our [Terms of Use](/terms).',
     ] },
   ],
 };

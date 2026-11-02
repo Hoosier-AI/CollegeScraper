@@ -40,7 +40,8 @@ import { feed as newsFeed } from './news/queries.js';
 import { fileTemplate } from './seo/template.js';
 import { BotVerifier } from './seo/bots.js';
 import { DEFAULT_PUBLIC_URL } from './seo/util.js';
-import { AiBotCounter, canonicalRedirect } from './seo/aiBots.js';
+import { AiBotCounter, aiBotGate, canonicalRedirect } from './seo/aiBots.js';
+import { AI_BOT_RATE_PER_MIN } from './seo/robots.js';
 
 const cfg = loadConfig();
 registerAllJobs();
@@ -94,13 +95,22 @@ process.on('unhandledRejection', (err) => log.error({ err: String(err) }, 'unhan
 process.on('uncaughtException', (err) => { log.error({ err: String(err), stack: err.stack }, 'uncaught exception'); process.exit(1); });
 
 // Old onrender.com page URLs move to the Stats domain (301) once PUBLIC_URL is set to it.
-// AI crawler visits are counted for the hub's SEO dashboard.
+// AI crawler visits are counted for the hub's SEO dashboard (refused ones too), then held to robots.txt: training
+// crawlers and /api get a 403, answer bots past their per-minute share a 429 (src/seo/aiBots.ts aiBotGate).
 const aiBots = new AiBotCounter({ url: cfg.SEO_BOT_URL ?? null, secret: cfg.SEO_BOT_SECRET ?? null, onError: (msg) => log.warn({ msg }, 'ai bot counts not sent') });
 aiBots.start();
+const aiBotLimiter = new RateLimiter(AI_BOT_RATE_PER_MIN);
 app.addHook('onRequest', async (req, reply) => {
   const to = canonicalRedirect(cfg.PUBLIC_URL, req.headers.host, req.url);
   if (to) return reply.code(301).header('location', to).send();
-  aiBots.hit(req.headers['user-agent']);
+  const bot = aiBots.hit(req.headers['user-agent']);
+  if (!bot) return;
+  const gate = aiBotGate(bot, req.url);
+  if (gate === 'refuse') return reply.code(403).type('text/plain; charset=utf-8').send('Not open to this crawler. See /robots.txt and /data-use.\n');
+  if (gate === 'limit') {
+    const r = aiBotLimiter.take(bot);
+    if (!r.ok) return reply.code(429).header('Retry-After', String(Math.ceil(r.resetMs / 1000))).type('text/plain; charset=utf-8').send('Too many requests. See /data-use.\n');
+  }
 });
 
 function authorized(header: string | undefined): boolean {

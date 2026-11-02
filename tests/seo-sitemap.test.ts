@@ -63,12 +63,15 @@ describe('robots.txt', () => {
     expect(txt.slice(txt.indexOf('User-agent: Googlebot'))).toMatch(/Allow: \/api\//);
     expect(g).toBeTruthy();
   });
-  it('blocks AI training crawlers everywhere and allows AI answer crawlers', () => {
-    for (const bot of ['GPTBot', 'ClaudeBot', 'Google-Extended', 'CCBot', 'Bytespider']) expect(group(bot)).toMatch(/^Disallow: \/$/m);
+  it('blocks AI training crawlers everywhere and allows AI answer crawlers on pages, slowly', () => {
+    for (const bot of ['GPTBot', 'ClaudeBot', 'Google-Extended', 'CCBot', 'Bytespider', 'meta-externalagent', 'Amazonbot']) expect(group(bot)).toMatch(/^Disallow: \/$/m);
     for (const bot of ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User']) {
       expect(txt).toContain(`User-agent: ${bot}\n`);
       expect(group(bot)).toContain('Allow: /\n');
       expect(group(bot)).not.toMatch(/^Disallow: \/$/m);
+      expect(group(bot)).toMatch(/^Disallow: \/api\/$/m);
+      expect(group(bot)).not.toMatch(/^Allow: \/api\//m);
+      expect(group(bot)).toMatch(/^Crawl-delay: 3$/m);
     }
     expect(txt).toContain(`Sitemap: ${BASE}/sitemap.xml`);
   });

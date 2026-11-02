@@ -5,10 +5,17 @@
 // "AI crawlers"). Never per request, never blocking, and it drops the batch if
 // the hub is down: this is analytics, not data.
 //
+// aiBotGate: robots.txt asks, this makes it so. Render bills every byte we
+// send (5 GB a month included, then $0.15/GB), and AI crawlers were 45-80% of
+// requests in late October 2026. A refusal costs a few hundred bytes where a
+// page costs ~45 KB.
+//
 // canonicalRedirect: once PUBLIC_URL is the Stats domain, page requests that
 // arrive on the old *.onrender.com host get a 301 to the same path there, so
 // search engines move their rankings. /api, /v1 and /health keep answering on
 // both hosts (API customers and Render's health check use them).
+
+import { AI_TRAINING_BOTS } from './robots.js';
 
 /** Same names the hub accepts (hub src/lib/seo/traffic.ts AI_BOTS). */
 export const AI_BOT_NAMES = [
@@ -22,6 +29,19 @@ export function classifyAiBot(userAgent: string | null | undefined): string | nu
   if (!userAgent) return null;
   const ua = userAgent.toLowerCase();
   return AI_BOT_NAMES.find((b) => ua.includes(b.toLowerCase())) ?? null;
+}
+
+const TRAINING = new Set(AI_TRAINING_BOTS.map((b) => b.toLowerCase()));
+
+/**
+ * What the site does with a request from an AI crawler (a name from classifyAiBot): 'refuse' a training crawler
+ * anywhere and any AI crawler on the site's /api, 'limit' the rest to AI_BOT_RATE_PER_MIN per bot name (one bucket
+ * per bot: a crawler spreads over many addresses). robots.txt is always served so a crawler can read the rules.
+ */
+export function aiBotGate(bot: string, url: string): 'refuse' | 'limit' | 'serve' {
+  if (/^\/robots\.txt($|\?)/.test(url)) return 'serve';
+  if (TRAINING.has(bot.toLowerCase()) || /^\/api(\/|$|\?)/.test(url)) return 'refuse';
+  return 'limit';
 }
 
 type Post = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number }>;

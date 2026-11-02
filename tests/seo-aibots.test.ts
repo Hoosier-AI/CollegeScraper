@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AiBotCounter, canonicalRedirect, classifyAiBot } from '../src/seo/aiBots.js';
+import { AiBotCounter, aiBotGate, canonicalRedirect, classifyAiBot } from '../src/seo/aiBots.js';
 
 describe('classifyAiBot', () => {
   it('recognizes AI crawlers and ignores browsers and search engines', () => {
@@ -8,6 +8,27 @@ describe('classifyAiBot', () => {
     expect(classifyAiBot('Mozilla/5.0 (compatible; Googlebot/2.1)')).toBeNull();
     expect(classifyAiBot('Mozilla/5.0 (Macintosh) Safari/605')).toBeNull();
     expect(classifyAiBot(undefined)).toBeNull();
+  });
+});
+
+describe('aiBotGate', () => {
+  it('refuses training crawlers everywhere but robots.txt', () => {
+    for (const ua of ['meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)', 'Mozilla/5.0 (compatible; Amazonbot/0.1)', 'GPTBot/1.1', 'CCBot/2.0']) {
+      const bot = classifyAiBot(ua)!;
+      expect(aiBotGate(bot, '/teams/duke/men')).toBe('refuse');
+      expect(aiBotGate(bot, '/')).toBe('refuse');
+      expect(aiBotGate(bot, '/robots.txt')).toBe('serve');
+    }
+  });
+  it('limits answer bots on pages and refuses them on /api', () => {
+    for (const bot of ['PerplexityBot', 'Claude-SearchBot', 'OAI-SearchBot', 'ChatGPT-User', 'Perplexity-User']) {
+      expect(aiBotGate(bot, '/players/123')).toBe('limit');
+      expect(aiBotGate(bot, '/sitemap.xml')).toBe('limit');
+      expect(aiBotGate(bot, '/api/college/teams')).toBe('refuse');
+      expect(aiBotGate(bot, '/api')).toBe('refuse');
+      expect(aiBotGate(bot, '/robots.txt?x=1')).toBe('serve');
+    }
+    expect(aiBotGate('PerplexityBot', '/apis-of-the-week')).toBe('limit');
   });
 });
 
