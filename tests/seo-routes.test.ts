@@ -156,6 +156,21 @@ describe('seo routes', () => {
     expect((await app.inject({ url: '/googleffff.html', headers: HTML })).statusCode).toBe(404);
   });
 
+  it('answers a crawler that already has a sitemap with 304', async () => {
+    const first = await app.inject({ url: '/sitemaps/teams.xml' });
+    const etag = first.headers.etag as string;
+    expect(etag).toMatch(/^"[0-9a-f]{20}"$/);
+    expect(first.headers['last-modified']).toBeTruthy();
+    const again = await app.inject({ url: '/sitemaps/teams.xml', headers: { 'if-none-match': `W/${etag}` } });
+    expect(again.statusCode).toBe(304);
+    expect(again.body).toBe('');
+    const since = await app.inject({ url: '/sitemaps/teams.xml', headers: { 'if-modified-since': first.headers['last-modified'] as string } });
+    expect(since.statusCode).toBe(304);
+    const stale = await app.inject({ url: '/sitemaps/teams.xml', headers: { 'if-none-match': '"something-else"' } });
+    expect(stale.statusCode).toBe(200);
+    expect(stale.body).toBe(first.body);
+  });
+
   it('still serves static files next to the rendered routes', async () => {
     const r = await app.inject({ url: '/brand/og.png' });
     expect(r.statusCode).toBe(200);

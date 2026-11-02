@@ -7,6 +7,7 @@
 import { LEGAL, LEGAL_SLUGS } from '../legal/content.js';
 import { legalBody, legalHead } from './legal.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
 import type { EntityKind, Gender, SeoData } from './types.js';
 import type { Template } from './template.js';
 import { LruCache } from './cache.js';
@@ -387,11 +388,26 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   // ---------- crawler files ----------
   app.get('/robots.txt', async (_req, reply) => reply.header('Cache-Control', 'public, max-age=3600').type('text/plain; charset=utf-8').send(robotsTxt(baseUrl)));
 
+  // Sitemaps run to ~4 MB and crawlers re-check them often: an ETag (content hash) and Last-Modified let one that
+  // already has the file get a 304 instead of the whole file (2026-11-02, Render bandwidth). Last-Modified is when
+  // this process first served the current content.
+  const sitemapSeen = new Map<string, { etag: string; modified: string }>();
   const sitemap = async (req: FastifyRequest, reply: FastifyReply) => {
     try {
-      const xml = await sitemaps.get(pathOf(req.url));
+      const path = pathOf(req.url);
+      const xml = await sitemaps.get(path);
       if (xml == null) return reply.code(404).type('text/plain; charset=utf-8').send('not found');
-      return reply.header('Cache-Control', 'public, max-age=3600').type('application/xml; charset=utf-8').send(xml);
+      const etag = `"${createHash('sha1').update(xml).digest('hex').slice(0, 20)}"`;
+      let seen = sitemapSeen.get(path);
+      if (seen?.etag !== etag) { seen = { etag, modified: new Date().toUTCString() }; sitemapSeen.set(path, seen); }
+      reply.header('Cache-Control', 'public, max-age=3600').header('ETag', etag).header('Last-Modified', seen.modified);
+      const inm = req.headers['if-none-match'];
+      const ims = req.headers['if-modified-since'];
+      const fresh = inm
+        ? inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)
+        : !!ims && Date.parse(ims) >= Date.parse(seen.modified);
+      if (fresh) return reply.code(304).send();
+      return reply.type('application/xml; charset=utf-8').send(xml);
     } catch (err) {
       warn({ err: String(err), url: req.url }, 'sitemap failed');
       return reply.code(503).header('Retry-After', '300').type('text/plain; charset=utf-8').send('temporarily unavailable');

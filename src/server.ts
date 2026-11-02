@@ -26,6 +26,8 @@ import { heartbeats, LANES } from './ops/consoleQueries.js';
 import { AUX_JOBS, PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
 import { runningNow, type WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
+import fastifyCompress from '@fastify/compress';
+import { constants as zlibConstants } from 'node:zlib';
 import { existsSync } from 'node:fs';
 import { PerformanceObserver } from 'node:perf_hooks';
 import { getHeapStatistics } from 'node:v8';
@@ -51,6 +53,11 @@ registerAllJobs();
 // trustProxy: Render terminates TLS in front of us, so without it req.ip is the proxy for every caller and
 // the whole free tier would share one rate-limit bucket. A request gets 60 s (the slowest console reads take 25).
 const app = Fastify({ logger: false, trustProxy: true, requestTimeout: 60_000, bodyLimit: 256 * 1024 });
+// Compressed here, not only at Render's edge: Render bills the bytes that leave this process, which were the
+// uncompressed pages, JSON and sitemaps (~4x the compressed size; measured 2026-11-02 with src/ops/netMeter.ts).
+// Brotli at quality 4 costs well under a millisecond on a page. Awaited: the plugin hooks each route as it is
+// declared, so it must be loaded before the first one.
+await app.register(fastifyCompress, { global: true, threshold: 1024, encodings: ['br', 'gzip'], brotliOptions: { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 } } });
 // Every GET /api route, as registered below, for Plaibook's mirror of the site (/v1/site, src/api/siteMirror.ts).
 const siteRoutes = collectSiteRoutes(app);
 
@@ -58,11 +65,13 @@ const siteRoutes = collectSiteRoutes(app);
 // sends one request at a time down a connection, so the socket's bytesWritten across a request is its response.
 const wroteAtStart = new WeakMap<object, number>();
 const SEARCH_ENGINE = /googlebot|bingbot|applebot|duckduckbot|yandexbot/i;
+// Names another bot by its user agent's bot word (AhrefsBot, SemrushBot...), else the agent's first word.
+const botName = (ua: string | undefined) => (/([A-Za-z][\w.-]*(?:bot|crawler|spider|slurp)[\w.-]*)/i.exec(ua ?? '')?.[1] ?? /^[\w.-]+/.exec(ua ?? '')?.[0] ?? 'no-agent').slice(0, 40);
 app.addHook('onRequest', async (req) => { wroteAtStart.set(req, req.raw.socket?.bytesWritten ?? 0); });
 app.addHook('onResponse', async (req) => {
   const ua = req.headers['user-agent'];
   const ai = classifyAiBot(ua);
-  const who = ai ? `ai:${ai}` : SEARCH_ENGINE.test(ua ?? '') ? 'search-engine' : req.headers.authorization ? (req.url.startsWith('/v1/') ? 'plaibook-api' : 'admin') : isBot(ua) ? 'other-bot' : 'browser';
+  const who = ai ? `ai:${ai}` : SEARCH_ENGINE.test(ua ?? '') ? 'search-engine' : req.headers.authorization ? (req.url.startsWith('/v1/') ? 'plaibook-api' : 'admin') : isBot(ua) ? `bot:${botName(ua)}` : 'browser';
   meterServed(who, routeGroup(req.url), (req.raw.socket?.bytesWritten ?? 0) - (wroteAtStart.get(req) ?? 0));
 });
 
