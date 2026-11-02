@@ -5,6 +5,7 @@
 // missing, not as unreachable (2026-10-15: the strict rule stopped live college scores).
 import type { RobotsPolicy } from './client.js';
 import { fetch as undiciFetch } from 'undici';
+import { meterFetch } from '../ops/netMeter.js';
 
 interface Rules { disallow: string[]; allow: string[]; delayMs?: number; until?: number }
 
@@ -16,7 +17,7 @@ export const UNREACHABLE_RETRY_MS = 10 * 60_000;
 export class RobotsCache implements RobotsPolicy {
   private rules = new Map<string, Promise<Rules>>();
   private loaded = new Map<string, Rules>();
-  constructor(private userAgent: string, private fetchImpl: typeof undiciFetch = undiciFetch, private now: () => number = Date.now) {}
+  constructor(private userAgent: string, private fetchImpl: typeof undiciFetch = meterFetch(undiciFetch), private now: () => number = Date.now) {}
 
   async allowed(url: string): Promise<boolean> {
     const u = new URL(url);

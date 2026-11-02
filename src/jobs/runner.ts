@@ -4,6 +4,7 @@ import { hostname } from 'node:os';
 import { kvSet, type Db } from '../db/client.js';
 import { KV, crawlPaused } from '../ops/settings.js';
 import { log } from '../log.js';
+import { withJob } from '../ops/netMeter.js';
 
 export interface JobContext {
   db: Db;
@@ -88,7 +89,8 @@ export async function runInline(db: Db, job: string, params: Record<string, unkn
 async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise<JobContext['counters']> {
   const started = Date.now();
   try {
-    await fn(ctx);
+    // Bytes the job sends are counted under its name and current step (src/ops/netMeter.ts).
+    await withJob(() => { const step = ctx.runId ? runningSteps.get(ctx.runId) : undefined; return step ? `${job} > ${step}` : job; }, () => fn(ctx));
     await db.from('college_crawl_runs').update({ status: 'done', finished_at: new Date().toISOString(), counters: ctx.counters }).eq('id', ctx.runId!);
     log.info({ job, runId: ctx.runId, ms: Date.now() - started, counters: ctx.counters }, 'job done');
   } catch (err) {

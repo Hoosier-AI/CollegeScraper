@@ -40,9 +40,12 @@ import { feed as newsFeed } from './news/queries.js';
 import { fileTemplate } from './seo/template.js';
 import { BotVerifier } from './seo/bots.js';
 import { DEFAULT_PUBLIC_URL } from './seo/util.js';
-import { AiBotCounter, aiBotGate, canonicalRedirect } from './seo/aiBots.js';
+import { AiBotCounter, aiBotGate, canonicalRedirect, classifyAiBot } from './seo/aiBots.js';
+import { meterFetch, meterServed, routeGroup } from './ops/netMeter.js';
 import { AI_BOT_RATE_PER_MIN } from './seo/robots.js';
 
+// Every fetch this process makes is counted by job and host (src/ops/netMeter.ts, /api/console/net).
+globalThis.fetch = meterFetch(globalThis.fetch);
 const cfg = loadConfig();
 registerAllJobs();
 // trustProxy: Render terminates TLS in front of us, so without it req.ip is the proxy for every caller and
@@ -50,6 +53,18 @@ registerAllJobs();
 const app = Fastify({ logger: false, trustProxy: true, requestTimeout: 60_000, bodyLimit: 256 * 1024 });
 // Every GET /api route, as registered below, for Plaibook's mirror of the site (/v1/site, src/api/siteMirror.ts).
 const siteRoutes = collectSiteRoutes(app);
+
+// Bytes each response put on the wire, by kind of caller and route group (refusals included). Render's proxy
+// sends one request at a time down a connection, so the socket's bytesWritten across a request is its response.
+const wroteAtStart = new WeakMap<object, number>();
+const SEARCH_ENGINE = /googlebot|bingbot|applebot|duckduckbot|yandexbot/i;
+app.addHook('onRequest', async (req) => { wroteAtStart.set(req, req.raw.socket?.bytesWritten ?? 0); });
+app.addHook('onResponse', async (req) => {
+  const ua = req.headers['user-agent'];
+  const ai = classifyAiBot(ua);
+  const who = ai ? `ai:${ai}` : SEARCH_ENGINE.test(ua ?? '') ? 'search-engine' : req.headers.authorization ? (req.url.startsWith('/v1/') ? 'plaibook-api' : 'admin') : isBot(ua) ? 'other-bot' : 'browser';
+  meterServed(who, routeGroup(req.url), (req.raw.socket?.bytesWritten ?? 0) - (wroteAtStart.get(req) ?? 0));
+});
 
 // The visitor's real address. Every request reaches us through Render's Cloudflare edge, which sets
 // CF-Connecting-IP and refuses a request that brings its own (403, checked 2026-10-15). X-Forwarded-For alone is not

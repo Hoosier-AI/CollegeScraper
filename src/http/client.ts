@@ -5,6 +5,7 @@ import { fetch as undiciFetch, type Response } from 'undici';
 import { createHash } from 'node:crypto';
 import type { Fetcher, HttpResponseLike } from '../model.js';
 import { log } from '../log.js';
+import { meterFetch } from '../ops/netMeter.js';
 
 export interface FetchRecord {
   url: string;
@@ -85,7 +86,7 @@ export class HttpClient implements Fetcher {
       timeoutMs: 20_000,
       maxAttempts: 4,
       freshMs: 0,
-      fetchImpl: undiciFetch,
+      fetchImpl: meterFetch(undiciFetch),
       sleep: defaultSleep,
       ...options,
     };

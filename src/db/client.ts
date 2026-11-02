@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { loadConfig, assertWritable, type Config } from '../config.js';
 import type { FetchCacheStore, FetchRecord } from '../http/client.js';
 import { log } from '../log.js';
+import { meterFetch } from '../ops/netMeter.js';
 
 export type Db = SupabaseClient<any, 'public', any>;
 
@@ -13,7 +14,7 @@ export function getDb(cfg: Config = loadConfig()): Db {
   assertWritable(cfg);
   client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { 'x-client-info': 'plaibook-college-scraper' } },
+    global: { headers: { 'x-client-info': 'plaibook-college-scraper' }, fetch: meterFetch(fetch) },
   });
   log.info({ host: new URL(cfg.SUPABASE_URL).host }, 'database target');
   return client;

@@ -10,6 +10,7 @@ import { SCHEDULE } from '../jobs/scheduler.js';
 import { currentSeason } from '../jobs/seasons.js';
 import { loadConfig } from '../config.js';
 import * as cq from '../ops/consoleQueries.js';
+import { netReport } from '../ops/netMeter.js';
 import { fixFor } from '../ops/qualityFixes.js';
 import { KV, forgetKv, normalizeLive, setKv, schedulerOverrides, type LiveSettings } from '../ops/settings.js';
 import { RenderClient, maskEnv, mergeEnv } from '../ops/render.js';
@@ -39,6 +40,8 @@ export function registerConsoleApi(app: FastifyInstance, o: ConsoleOptions): voi
   const todayUsage = () => { const today = new Date().toISOString().slice(0, 10); return o.usage.pending().filter((u) => u.day === today); };
 
   app.get('/api/console/overview', async () => cq.overview(getDb(), o.startedAt, todayUsage()));
+  // Bytes sent per job and host, and per kind of site request, since the process started (src/ops/netMeter.ts).
+  app.get('/api/console/net', async () => netReport(cfg.SUPABASE_URL ? new URL(cfg.SUPABASE_URL).host : null));
   // The hub's Stats Overview and Traffic: health, what needs attention, site traffic, API use, growth, coverage.
   app.get<{ Querystring: Record<string, string> }>('/api/console/insights', async (req) => insights(getDb(), Number(req.query.days) || 30, o.startedAt));
 
