@@ -38,8 +38,23 @@ import { fetchDetails, pendingDetail } from './detail.js';
 import { fetchStandings } from './standings.js';
 
 export interface TaskRow { kind: string; key: string; priority: number; every_days: number | null; page: number; pages: number | null; attempts: number; calls: number }
-/** also: other tasks of the same kind this one finished too (people asked for in the same request). */
-export interface TaskResult { done: boolean; page?: number; pages?: number | null; also?: string[] }
+/**
+ * also: other tasks of the same kind this one finished too (people asked for in the same request).
+ * waitHours: not done and nothing to do yet; look again after this long.
+ */
+export interface TaskResult { done: boolean; page?: number; pages?: number | null; also?: string[]; waitHours?: number }
+
+/** What a turn writes back to its task row. */
+export function taskPatch(task: TaskRow, res: TaskResult, calls: number, at = Date.now()): Record<string, unknown> {
+  const patch: Record<string, unknown> = { calls: task.calls + calls, pages: res.pages ?? task.pages };
+  if (res.done) Object.assign(patch, { page: 0, attempts: 0, last_error: null, last_done_at: new Date(at).toISOString(), due_at: task.every_days ? new Date(at + Number(task.every_days) * 86400_000).toISOString() : 'infinity' });
+  else {
+    patch.page = res.page ?? task.page;
+    // A task left due is picked straight back up: one with nothing to do kept pro-crawl busy for days (2026-11-02).
+    if (res.waitHours) patch.due_at = new Date(at + res.waitHours * 3600_000).toISOString();
+  }
+  return patch;
+}
 
 /** Database pace: halves the batch size and asks for a pause when writes get slow or fail. */
 export class Pace {
@@ -243,7 +258,7 @@ const handlers: Record<string, Handler> = {
     // Nothing to fetch because the season's matches are not stored yet: not done, so it comes back after them.
     if (!pending.length) {
       const { count } = await t.ctx.db.from('pro_fixtures').select('id', { count: 'exact', head: true }).eq('league_id', league).eq('season', season).eq('status', 'final');
-      if (!count) return { done: false };
+      if (!count) return { done: false, waitHours: 6 };
     }
     const affordable = Math.max(0, Math.min(t.api.headroom('backfill'), t.callsLeft(), 1e6)) * 20;
     // Detail writes are the heaviest: at most 400 matches (20 requests) per turn keeps a run inside its slot.

@@ -17,7 +17,7 @@ import { selectAll, type Db } from '../../db/client.js';
 import { insertTasks, leagueIndex, rescheduleTasks, type LeagueInfo, type TaskSeed } from '../../db/proRepo.js';
 import { isUsScene } from '../../sources/apiFootball/leagues.js';
 import { QuotaExhausted } from '../../sources/apiFootball/client.js';
-import { handlerFor, Pace, type TaskRow } from './tasks.js';
+import { handlerFor, Pace, taskPatch, type TaskRow } from './tasks.js';
 import { SCRAPED_TABLE_SOURCES } from '../../db/proRepo.js';
 import { withApi } from './shared.js';
 import { log } from '../../log.js';
@@ -322,11 +322,7 @@ export async function proCrawl(ctx: JobContext): Promise<void> {
         try {
           if (!handler) throw new Error(`no handler for ${task.kind}`);
           const res = await handler({ ctx, api, task, leagues, pace, deadline, callsLeft: () => maxCalls - spent() });
-          const calls = api.quota.used - before;
-          const patch: Record<string, unknown> = { calls: task.calls + calls, pages: res.pages ?? task.pages };
-          if (res.done) Object.assign(patch, { page: 0, attempts: 0, last_error: null, last_done_at: new Date().toISOString(), due_at: task.every_days ? new Date(Date.now() + Number(task.every_days) * 86400_000).toISOString() : 'infinity' });
-          else patch.page = res.page ?? task.page;
-          await ctx.db.from('pro_crawl_tasks').update(patch).eq('kind', task.kind).eq('key', task.key);
+          await ctx.db.from('pro_crawl_tasks').update(taskPatch(task, res, api.quota.used - before)).eq('kind', task.kind).eq('key', task.key);
           ctx.inc(res.done ? 'tasks_done' : 'tasks_partial');
           for (const k of res.also ?? []) { handled.add(`${task.kind}|${k}`); ctx.inc('tasks_done'); ctx.inc(`kind_${task.kind}`); }
           ctx.inc(`kind_${task.kind}`);
