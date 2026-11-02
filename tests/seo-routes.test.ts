@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { registerSeo, PAGE_CACHE_CONTROL } from '../src/seo/routes.js';
 import { stringTemplate } from '../src/seo/template.js';
@@ -143,7 +144,7 @@ describe('seo routes', () => {
     expect(idx.headers['content-type']).toContain('application/xml');
     expect(idx.body).toContain('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
     const locs = [...idx.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-    expect(locs).toEqual([`${BASE}/sitemaps/core.xml`, `${BASE}/sitemaps/teams.xml`, `${BASE}/sitemaps/matches-2026-1.xml`, `${BASE}/sitemaps/players-2026-1.xml`, `${BASE}/sitemaps/players-2025-1.xml`]);
+    expect(locs).toEqual([`${BASE}/sitemaps/core.xml.gz`, `${BASE}/sitemaps/teams.xml.gz`, `${BASE}/sitemaps/matches-2026-1.xml.gz`, `${BASE}/sitemaps/players-2026-1.xml.gz`, `${BASE}/sitemaps/players-2025-1.xml.gz`]);
     const teams = await app.inject({ url: '/sitemaps/teams.xml' });
     expect(teams.body).toContain(`<url><loc>${BASE}/teams/duke/men</loc><lastmod>2026-09-20</lastmod></url>`);
     expect((await app.inject({ url: '/sitemaps/players-2026-9.xml' })).statusCode).toBe(404);
@@ -169,6 +170,17 @@ describe('seo routes', () => {
     const stale = await app.inject({ url: '/sitemaps/teams.xml', headers: { 'if-none-match': '"something-else"' } });
     expect(stale.statusCode).toBe(200);
     expect(stale.body).toBe(first.body);
+  });
+
+  it('serves each sitemap gzipped at .xml.gz, with its own ETag', async () => {
+    const plain = await app.inject({ url: '/sitemaps/teams.xml' });
+    const gz = await app.inject({ url: '/sitemaps/teams.xml.gz' });
+    expect(gz.statusCode).toBe(200);
+    expect(gz.headers['content-type']).toBe('application/gzip');
+    expect(gunzipSync(gz.rawPayload).toString('utf8')).toBe(plain.body);
+    expect(gz.headers.etag).not.toBe(plain.headers.etag);
+    expect((await app.inject({ url: '/sitemaps/teams.xml.gz', headers: { 'if-none-match': gz.headers.etag as string } })).statusCode).toBe(304);
+    expect((await app.inject({ url: '/sitemaps/players-2026-9.xml.gz' })).statusCode).toBe(404);
   });
 
   it('still serves static files next to the rendered routes', async () => {

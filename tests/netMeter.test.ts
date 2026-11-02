@@ -34,5 +34,6 @@ describe('netMeter', () => {
     expect(routeGroup('/v1/site/api/teams')).toBe('/v1/site/api');
     expect(routeGroup('/api/pro/teams/x')).toBe('/api/pro/teams');
     expect(routeGroup('/assets/index-abc.js')).toBe('assets');
+    expect(routeGroup('/sitemaps/players-2026-1.xml.gz')).toBe('sitemaps');
   });
 });

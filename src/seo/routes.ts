@@ -8,6 +8,8 @@ import { LEGAL, LEGAL_SLUGS } from '../legal/content.js';
 import { legalBody, legalHead } from './legal.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash } from 'node:crypto';
+import { gzip } from 'node:zlib';
+import { promisify } from 'node:util';
 import type { EntityKind, Gender, SeoData } from './types.js';
 import type { Template } from './template.js';
 import { LruCache } from './cache.js';
@@ -26,6 +28,8 @@ import type { Story } from '../news/queries.js';
 import * as ex from './extra.js';
 import { cardFor, limiter, ogCache, renderCard } from './og.js';
 import type { ExtraSeo } from './extra.js';
+
+const gzipAsync = promisify(gzip);
 
 // A minute in the browser, no stale-while-revalidate: with it a browser kept showing a page (and the app build it names)
 // for up to a day after a deploy, so changes looked like they had not shipped (2026-10-15). The server's own render
@@ -390,16 +394,18 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
 
   // Sitemaps run to ~4 MB and crawlers re-check them often: an ETag (content hash) and Last-Modified let one that
   // already has the file get a 304 instead of the whole file (2026-11-02, Render bandwidth). Last-Modified is when
-  // this process first served the current content.
-  const sitemapSeen = new Map<string, { etag: string; modified: string }>();
+  // this process first served the current content. /sitemaps/<file>.xml.gz is the same file gzipped (the index lists
+  // those), kept until its content changes.
+  const sitemapSeen = new Map<string, { etag: string; modified: string; gz?: Buffer }>();
   const sitemap = async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       const path = pathOf(req.url);
-      const xml = await sitemaps.get(path);
+      const gz = path.endsWith('.xml.gz');
+      const xml = await sitemaps.get(gz ? path.slice(0, -3) : path);
       if (xml == null) return reply.code(404).type('text/plain; charset=utf-8').send('not found');
-      const etag = `"${createHash('sha1').update(xml).digest('hex').slice(0, 20)}"`;
+      const etag = `"${createHash('sha1').update(xml).digest('hex').slice(0, 20)}${gz ? '-gz' : ''}"`;
       let seen = sitemapSeen.get(path);
-      if (seen?.etag !== etag) { seen = { etag, modified: new Date().toUTCString() }; sitemapSeen.set(path, seen); }
+      if (seen?.etag !== etag) { seen = { etag, modified: new Date().toUTCString(), gz: gz ? await gzipAsync(xml) : undefined }; sitemapSeen.set(path, seen); }
       reply.header('Cache-Control', 'public, max-age=3600').header('ETag', etag).header('Last-Modified', seen.modified);
       const inm = req.headers['if-none-match'];
       const ims = req.headers['if-modified-since'];
@@ -407,6 +413,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
         ? inm.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)
         : !!ims && Date.parse(ims) >= Date.parse(seen.modified);
       if (fresh) return reply.code(304).send();
+      if (seen.gz) return reply.type('application/gzip').send(seen.gz);
       return reply.type('application/xml; charset=utf-8').send(xml);
     } catch (err) {
       warn({ err: String(err), url: req.url }, 'sitemap failed');

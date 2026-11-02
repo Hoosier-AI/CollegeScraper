@@ -83,6 +83,7 @@ export function routeGroup(url: string): string {
   const m = /^\/(api|v1)\/([^/]+)(?:\/([^/]+))?/.exec(path);
   if (m) return m[2] === 'site' || m[2] === 'pro' || m[2] === 'intl' || m[2] === 'console' ? `/${m[1]}/${m[2]}/${m[3] ?? ''}` : `/${m[1]}/${m[2]}`;
   if (path.startsWith('/assets/')) return 'assets';
+  if (path.startsWith('/sitemap')) return 'sitemaps';
   return 'pages';
 }
 

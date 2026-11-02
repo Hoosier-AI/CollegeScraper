@@ -56,7 +56,9 @@ export class Sitemaps {
   }
 
   private async build(path: string): Promise<string | null> {
-    if (path === '/sitemap.xml') return sitemapIndexXml(this.baseUrl, await this.files());
+    // The index lists each file gzipped (/sitemaps/<file>.xml.gz, src/seo/routes.ts): a crawler that sends no
+    // Accept-Encoding (PerplexityBot) took players files at 4 MB each. The plain .xml addresses still answer.
+    if (path === '/sitemap.xml') return sitemapIndexXml(this.baseUrl, (await this.files()).map((f) => ({ path: `${f.path}.gz` })));
     const m = /^\/sitemaps\/(.+)$/.exec(path);
     if (!m) return null;
     const file = m[1]!;
