@@ -311,6 +311,9 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail'], idleMs: 15_000, lane: 'aux-b' }).catch((err) => { log.error({ err: String(err) }, 'aux-b worker crashed'); process.exit(1); });
   // A fourth for Plaibook Stats Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
+  // A second worker that only takes pro-live (2026-11-02): full time used to wait behind pro-predictions (up to 800
+  // requests every 3 h) or pro-leaders on the one pro worker, so a final reached Plaibook 8-16 min after the whistle.
+  workerLoop(getDb(), { signal: controller.signal, jobs: ['pro-live'], idleMs: 10_000, lane: 'pro-live' }).catch((err) => { log.error({ err: String(err) }, 'pro-live worker crashed'); process.exit(1); });
   // A fifth for the pro bulk crawl (minutes per run): never behind the college crawl, never in front of live pro scores.
   workerLoop(getDb(), { signal: controller.signal, jobs: PRO_BULK_JOBS, idleMs: 15_000, lane: 'pro-bulk' }).catch((err) => { log.error({ err: String(err) }, 'pro-bulk worker crashed'); process.exit(1); });
   // A past season's full backfill (2024, 2025: days of school-site pages): its own lane, so hourly, nightly and the

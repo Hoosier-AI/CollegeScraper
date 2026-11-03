@@ -32,9 +32,15 @@ const noticeOf = (g: FinalGame): Notice => ({ game_id: g.id, home_program_id: g.
 
 /** One POST of these notices, retried on a network error, 429 or 5xx (a 4xx is Plaibook refusing it: not retried). */
 export async function postNotices(notices: Notice[], env = process.env, doFetch: typeof fetch = fetch, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<'sent' | 'skipped' | 'failed' | 'refused'> {
+  if (!notices.length) return 'skipped';
+  return postSigned({ games: notices }, env, doFetch, sleep);
+}
+
+/** The signed POST to Plaibook's final webhook (college `games` or pro `pro_games`), retried as above. */
+export async function postSigned(payload: Record<string, unknown>, env = process.env, doFetch: typeof fetch = fetch, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<'sent' | 'skipped' | 'failed' | 'refused'> {
   const url = env.PLAIBOOK_FINAL_WEBHOOK_URL; const secret = env.PLAIBOOK_FINAL_WEBHOOK_SECRET;
-  if (!url || !secret || !notices.length) return 'skipped';
-  const body = JSON.stringify({ games: notices });
+  if (!url || !secret) return 'skipped';
+  const body = JSON.stringify(payload);
   for (let attempt = 0; ; attempt++) {
     let status = 0;
     try {

@@ -1,6 +1,7 @@
 // Reads for Plaibook Stats Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
 import { WIKI_TARGETS } from '../jobs/sources/wikipedia.js';
+import { oldestFetch, withNewMatches, type FinalRef, type FixtureLine } from './catchUp.js';
 import { coverageOf } from '../jobs/pro/coverage.js';
 import { sourcesOff } from './sources.js';
 import { isMinor } from './minor.js';
@@ -300,7 +301,7 @@ export async function team(db: Db, slug: string, season?: number | null) {
   const games = s == null ? [] : (await selectAll<any>(db, 'pro_fixtures', FIXTURE_SELECT, (q) => q.or(`home_team_id.eq.${tm.id},away_team_id.eq.${tm.id}`).eq('season', s).order('kickoff'))).map(toMatchRow);
   const today = new Date().toISOString().slice(0, 10);
   const [squadRows, totals, standingRows, listed, coachRows, moves, hurt, ground, detailRows] = await Promise.all([
-    s == null ? [] : selectAll<any>(db, 'pro_player_season_stats', 'player_id,league_id,source,apps,starts,minutes,goals,assists,yellow,red,saves,conceded,clean_sheets,rating,position,number,player:pro_players(id,display_name,slug,photo,position,nationality,birth_date)', (q) => q.eq('team_id', tm.id).eq('season', s)),
+    s == null ? [] : selectAll<any>(db, 'pro_player_season_stats', 'player_id,league_id,season,team_id,source,computed_at,apps,starts,minutes,goals,assists,yellow,red,saves,conceded,clean_sheets,rating,position,number,player:pro_players(id,display_name,slug,photo,position,nationality,birth_date)', (q) => q.eq('team_id', tm.id).eq('season', s)),
     s == null ? [] : selectAll<any>(db, 'pro_team_season_stats', '*', (q) => q.eq('team_id', tm.id).eq('season', s)),
     s == null ? [] : selectAll<any>(db, 'pro_standings', 'league_id,group_name,rank,points,played,win,draw,lose,gf,ga,gd,form', (q) => q.eq('team_id', tm.id).eq('season', s)),
     // The current squad (players/squads), only shown for the latest season.
@@ -329,7 +330,9 @@ export async function team(db: Db, slug: string, season?: number | null) {
   // A provider row with more appearances than the club's matches in that competition (+2) is filed under the wrong
   // competition (migration 152: Mitrovic's league games under the Club World Cup): left out, as on player pages.
   const clubMatches = new Map<number, number>(); for (const g of games) clubMatches.set(g.league.id, (clubMatches.get(g.league.id) ?? 0) + 1);
-  for (const r of squadRows) {
+  // The newest matches count before the provider's next crawl (src/pro/catchUp.ts).
+  const freshRows = await withNewTeamMatches(db, tm.id, squadRows, games);
+  for (const r of freshRows) {
     if (!r.player) continue;
     if (r.source === 'provider' && clubMatches.has(r.league_id) && r.apps > clubMatches.get(r.league_id)! + 2) continue;
     const row = squad.get(r.player_id) ?? blank(r.player, r.number ?? null, r.position ?? null);
@@ -439,6 +442,26 @@ export async function team(db: Db, slug: string, season?: number | null) {
 
 function chunkIds<T>(ids: T[], n: number): T[][] { const out: T[][] = []; for (let i = 0; i < ids.length; i += n) out.push(ids.slice(i, i + n)); return out; }
 
+// ---------- the newest matches in season totals ----------
+const LINE_COLS = 'fixture_id,team_id,player_id,starter,minutes,from_events,goals,assists,yellow,red,saves,conceded,shots,shots_on,key_passes,passes,tackles,interceptions,duels_won,dribbles_won,fouls_drawn,fouls_committed,rating';
+const CATCH_UP_WINDOW_MS = 4 * 3600_000;
+/** A club's season rows with the finals that ended after their fetch added (catchUp.ts). Only the club's finals that
+ *  kicked off since the oldest fetch (less a game's length) are read; nothing is read in the usual case. Fails open:
+ *  a read error leaves the rows as stored. */
+async function withNewTeamMatches(db: Db, teamId: number, rows: any[], games: ProMatchRow[]): Promise<any[]> {
+  const oldest = oldestFetch(rows);
+  if (oldest == null) return rows;
+  const ids = games.filter((g) => g.status === 'final' && Date.parse(g.kickoff) > oldest - CATCH_UP_WINDOW_MS).map((g) => g.id);
+  if (!ids.length) return rows;
+  const [fx, lines] = await Promise.all([
+    db.from('pro_fixtures').select('id,league_id,season,final_at').in('id', ids),
+    db.from('pro_fixture_players').select(LINE_COLS).in('fixture_id', ids).eq('team_id', teamId),
+  ]);
+  if (fx.error || lines.error) return rows;
+  const finals = new Map(((fx.data ?? []) as FinalRef[]).map((f) => [f.id, f]));
+  return rows.map((r) => withNewMatches(r, (lines.data ?? []) as FixtureLine[], finals));
+}
+
 // ---------- players ----------
 // ---------- MLS salaries (pro_salaries, the asa-salaries job) ----------
 const money = (v: unknown) => (v == null ? null : Math.round(Number(v)));
@@ -493,7 +516,7 @@ export async function player(db: Db, slug: string) {
   const recentInjury = new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
   const [allSeasons, recent, links, moves, trophies, hurt, spells, missed, implausible] = await Promise.all([
     selectAll<any>(db, 'pro_player_season_stats', '*', (q) => q.eq('player_id', pl.id).order('season', { ascending: false })),
-    db.from('pro_fixture_players').select(`fixture_id,team_id,starter,minutes,goals,assists,yellow,red,rating,saves,conceded,pos,shots,shots_on,key_passes,passes,pass_accuracy,tackles,interceptions,duels,duels_won,dribbles,dribbles_won,fouls_drawn,fouls_committed,fixture:pro_fixtures(${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
+    db.from('pro_fixture_players').select(`fixture_id,team_id,player_id,starter,minutes,from_events,goals,assists,yellow,red,rating,saves,conceded,pos,shots,shots_on,key_passes,passes,pass_accuracy,tackles,interceptions,duels,duels_won,dribbles,dribbles_won,fouls_drawn,fouls_committed,fixture:pro_fixtures(final_at,league_id,${FIXTURE_SELECT})`).eq('player_id', pl.id).order('fixture_id', { ascending: false }).limit(120),
     db.from('pro_college_links').select('college_name,school_seo,college_player_id,first_season,last_season,confidence,verified,rejected,method,college:college_players(slug,display_name)').eq('pro_player_id', pl.id).eq('rejected', false),
     db.from('pro_transfers').select('date,type,from_team_id,from_name,from_logo,to_team_id,to_name,to_logo').eq('player_id', pl.id).order('date', { ascending: false }).limit(40),
     db.from('pro_trophies').select('league,country,season,place').eq('subject', 'player').eq('subject_id', pl.id).limit(200),
@@ -504,7 +527,10 @@ export async function player(db: Db, slug: string) {
     db.rpc('pro_implausible_seasons', { p_player: pl.id }),
   ]);
   const wrong = new Set(((implausible.data ?? []) as { league_id: number; season: number; team_id: number }[]).map((r) => `${r.league_id}-${r.season}-${r.team_id}`));
-  const seasons = allSeasons.filter((s) => !wrong.has(`${s.league_id}-${s.season}-${s.team_id}`));
+  // The newest matches count before the provider's next crawl (src/pro/catchUp.ts): his own lines already read below.
+  const recentRows = ((recent.data ?? []) as any[]).filter((r) => r.fixture);
+  const finals = new Map<number, FinalRef>(recentRows.map((r) => [r.fixture_id, { id: r.fixture_id, league_id: r.fixture.league_id, season: r.fixture.season, final_at: r.fixture.final_at ?? null }]));
+  const seasons = allSeasons.filter((s) => !wrong.has(`${s.league_id}-${s.season}-${s.team_id}`)).map((s) => withNewMatches(s, recentRows as FixtureLine[], finals));
   // Matches missed in a spell: the provider's per-fixture absences that fall inside it (known for covered leagues).
   const missedDates = ((missed.data ?? []) as { date: string | null }[]).map((m) => m.date).filter(Boolean) as string[];
   const todayIso = new Date().toISOString().slice(0, 10);

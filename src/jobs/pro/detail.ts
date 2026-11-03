@@ -8,6 +8,7 @@ import { hasDetail, parseFixture, parseFixtureDetail, teamsOf, type AfFixtureIte
 import { leagueIndex, noteEmptyDetail, refreshAggregates, upsertFixtures, upsertTeamStubs, writeFixtureDetails, type LeagueInfo } from '../../db/proRepo.js';
 import { chunk, numList, withApi } from './shared.js';
 import { log } from '../../log.js';
+import { noticesFor, notifyPlaibookPro } from './notify.js';
 
 export const IDS_PER_CALL = 20;
 
@@ -85,6 +86,9 @@ export async function proFinalDetail(ctx: JobContext): Promise<void> {
     ctx.inc('pending', ids.length);
     const touched = await fetchDetails(ctx, api, ids, leagues);
     await refreshTouched(ctx, touched);
+    // The settled copy (ratings, late events): Plaibook reads the match again for the clubs linked to it.
+    const settled = (await noticesFor(ctx.db, ids, leagues)).filter((n) => n.settled);
+    if (settled.length) ctx.note('plaibook', `${await notifyPlaibookPro(settled, ctx.db)}: ${settled.length} settled`);
   });
 }
 

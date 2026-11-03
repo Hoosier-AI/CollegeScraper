@@ -3,13 +3,14 @@
 // pro-live: one request for every match in play (fixtures?live=all) while any is live, for minute-by-minute scores;
 // a match that drops off the live list is asked for by id, which brings its final score and its detail at once.
 import { registerJob, enqueue, type JobContext } from '../runner.js';
-import { selectAll } from '../../db/client.js';
+import { kvGet, kvSet, selectAll } from '../../db/client.js';
 import { parseFixture, teamsOf, type AfFixtureItem } from '../../sources/apiFootball/parse.js';
 import { leagueIndex, upsertFixtures, upsertTeamStubs, type LeagueInfo } from '../../db/proRepo.js';
 import { addDays, utcDate, withApi } from './shared.js';
 import { fetchDetails, refreshTouched } from './detail.js';
 import type { Db } from '../../db/client.js';
 import { coverageOf } from './coverage.js';
+import { noticesFor, notifyPlaibookPro, type ProNotice } from './notify.js';
 
 /** Store the fixtures of enabled competitions; returns how many finals still need detail. */
 export async function storeFixtures(db: Db, items: AfFixtureItem[], leagues: Map<number, LeagueInfo>): Promise<{ stored: number; finals: number; skipped: number }> {
@@ -92,13 +93,31 @@ export async function proLive(ctx: JobContext): Promise<void> {
     }
     const nowLive = new Set(res.response.map((it) => it.fixture.id));
     const ended = before.map((b) => b.id).filter((id) => !nowLive.has(id));
-    if (ended.length) {
-      ctx.inc('ended', ended.length);
-      const touched = await fetchDetails(ctx, api, ended, leagues, 'everyday', { provisional: true });
+    // A final the 10-minute scoreboard stored before this job saw it end never left the live list here: read it the
+    // same way while its final is a few minutes old (one request for all of them).
+    const seen = ((await kvGet<{ ids: Array<{ id: number; at: number }> }>(ctx.db, ENDED_KEY).catch(() => null))?.ids ?? []).filter((x) => Date.now() - x.at < 30 * 60_000);
+    const done = new Set(seen.map((x) => x.id));
+    const missed = (await selectAll<{ id: number }>(ctx.db, 'pro_fixtures', 'id', (q) => q.eq('status', 'final').is('detail_fetched_at', null)
+      .gte('final_at', new Date(Date.now() - MISSED_FINAL_MS).toISOString()))).map((r) => r.id).filter((id) => !nowLive.has(id) && !ended.includes(id) && !done.has(id));
+    const finished = [...ended, ...missed];
+    // Each final is read at full time once, whichever way it was noticed.
+    if (finished.length || seen.length) await kvSet(ctx.db, ENDED_KEY, { ids: [...seen, ...finished.map((id) => ({ id, at: Date.now() }))].slice(-500) }).catch(() => {});
+    let notices: ProNotice[] = [];
+    if (finished.length) {
+      ctx.inc('ended', ended.length); if (missed.length) ctx.inc('ended_missed', missed.length);
+      const touched = await fetchDetails(ctx, api, finished, leagues, 'everyday', { provisional: true });
       await refreshTouched(ctx, touched);
+      notices = await noticesFor(ctx.db, finished, leagues);
+      // The league table moves with the result: pro-standings picks the league seasons with a final newer than it.
+      if (notices.length) await enqueue(ctx.db, 'pro-standings', {});
     }
+    // Plaibook syncs the linked clubs now (and anything still waiting from an earlier run goes with it).
+    const sent = await notifyPlaibookPro(notices, ctx.db);
+    if (notices.length) ctx.note('plaibook', `${sent}: ${notices.length} final${notices.length === 1 ? '' : 's'}`);
   });
 }
+const MISSED_FINAL_MS = 6 * 60_000;
+const ENDED_KEY = 'pro:live_ended';
 
 registerJob('pro-scoreboard', proScoreboard);
 registerJob('pro-live', proLive);

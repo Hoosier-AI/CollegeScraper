@@ -100,7 +100,7 @@ export function planTasks(input: PlanInput): TaskSeed[] {
     const needTotals = (_s: number) => true;
     const statClubs = (s: number) => (teamsOf.get(k(s)) ?? []).filter((t) => l.country === 'USA' ? l.type === 'league' : usClubs.has(t));
     add('season_fixtures', k(c), 11, 3);
-    // The table, every day (the scoreboard job also refreshes it after each final).
+    // The table, every day (pro-live queues pro-standings when a US-scene final lands; pro-standings also runs every 3 h).
     if (now?.standings !== false) add('standings', k(c), 11, 1);
     if (now?.injuries !== false) add('injuries', k(c), 11, 1);
     // Match detail first: 20 matches a request, and it fills match logs, lineups, events, cards, ratings and club stats.
