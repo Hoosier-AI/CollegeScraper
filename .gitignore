@@ -11,3 +11,7 @@ ui/node_modules/
 ui/dist/
 
 scripts/tmp/
+
+# Claude Code files stay local
+CLAUDE.md
+.claude/
