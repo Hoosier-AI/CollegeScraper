@@ -18,4 +18,5 @@ COPY --from=build /app/ui/dist ./ui/dist
 COPY data ./data
 COPY package.json ./
 EXPOSE 8080
-CMD ["node", "dist/server.js"]
+# The website gets its own heap ceiling; the crawl child process gets WORKER_HEAP_MB (src/workerProcess.ts).
+CMD ["node", "--max-old-space-size=600", "dist/server.js"]

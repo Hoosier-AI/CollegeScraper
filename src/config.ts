@@ -14,6 +14,8 @@ const schema = z.object({
   SCHEDULER_ENABLED: z.string().default('0'),
   // '0' serves pages and the API only: a laptop pointed at the production database must not claim its jobs.
   WORKERS_ENABLED: z.string().default('1'),
+  // '1' runs the worker lanes inside the web process (the old way); default is a supervised child process.
+  WORKERS_INLINE: z.string().default('0'),
   // Plaibook's API (/v1, no keyless tier since 2026-10-16): "name:key,name:key" (keys ≥ 16 chars; plaibook = the app,
   // hub = the operator console) and requests per minute per key.
   COLLEGE_API_KEYS: z.string().default(''),
@@ -64,6 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     PORT: env.PORT,
     SCHEDULER_ENABLED: env.SCHEDULER_ENABLED,
     WORKERS_ENABLED: env.WORKERS_ENABLED,
+    WORKERS_INLINE: env.WORKERS_INLINE,
     COLLEGE_API_KEYS: env.COLLEGE_API_KEYS,
     API_RATE_LIMIT_PER_MIN: env.API_RATE_LIMIT_PER_MIN,
     SITE_RATE_LIMIT_PER_MIN: env.SITE_RATE_LIMIT_PER_MIN,

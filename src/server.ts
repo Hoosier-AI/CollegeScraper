@@ -8,11 +8,11 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import { loadConfig } from './config.js';
 import { getDb } from './db/client.js';
-import { jobNames, workerLoop } from './jobs/runner.js';
+import { jobNames } from './jobs/runner.js';
 import { registerAllJobs } from './jobs/index.js';
-import { startScheduler } from './jobs/scheduler.js';
+import { startWorkers } from './workerLanes.js';
+import { superviseWorker, workerBuilt, type WorkerSupervisor } from './workerProcess.js';
 import { flushRequests, startRequestFlush } from './ops/sourceRequests.js';
-import { CHECK_JOBS } from './pro/crawlSites.js';
 import { registerUiApi } from './ui/api.js';
 import { registerPublicApi } from './api/v1.js';
 import { collectSiteRoutes, registerSiteMirror } from './api/siteMirror.js';
@@ -23,7 +23,6 @@ import { isBot } from './pro/onView.js';
 import { registerConsoleApi } from './ui/consoleApi.js';
 import { evaluateHealth } from './ops/health.js';
 import { heartbeats, LANES } from './ops/consoleQueries.js';
-import { AUX_JOBS, PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
 import { runningNow, type WorkerHeartbeat } from './jobs/runner.js';
 import fastifyStatic from '@fastify/static';
 import fastifyCompress from '@fastify/compress';
@@ -205,6 +204,7 @@ siteMirror = registerSiteMirror(app, siteRoutes);
 
 // The owner's console: everything behind the trigger secret.
 const startedAt = Date.now();
+let supervisor: WorkerSupervisor | null = null;
 registerConsoleApi(app, { usage, analytics, envKeys: apiKeys.map((k) => k.name), limits: { key: cfg.API_RATE_LIMIT_PER_MIN, site: cfg.SITE_RATE_LIMIT_PER_MIN }, startedAt });
 
 // Server-rendered public pages (titles, canonicals, JSON-LD, a text summary), slug redirects, sitemaps, robots.txt
@@ -287,7 +287,7 @@ app.get('/health', async (_req, reply) => {
   const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : Object.fromEntries(LANES.map((l) => [l, null]));
   const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: LANES });
   reply.code(h.ok ? 200 : 503);
-  return { ...h, jobs: jobNames().length, api: '/v1', time: new Date().toISOString(), loop: loopStats() };
+  return { ...h, jobs: jobNames().length, worker: supervisor?.status() ?? 'inline', api: '/v1', time: new Date().toISOString(), loop: loopStats() };
 });
 
 const port = cfg.PORT;
@@ -299,39 +299,11 @@ app.listen({ port, host: '0.0.0.0' }).then(() => {
   const stop = () => { controller.abort(); void app.close().catch(() => {}); };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
-  // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
-  if (cfg.WORKERS_ENABLED !== '0') {
-  workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'h2h-detail', 'backfill', 'weekly', ...AUX_JOBS, ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
-  // A third lane for short side jobs (finals' box scores, weather, ratings, sims, RPI, Elo, the stat audit) so they
-  // never wait hours behind the nightly crawl. They also keep running while the college crawl is paused.
-  workerLoop(getDb(), { signal: controller.signal, jobs: AUX_JOBS, idleMs: 15_000, lane: 'aux' }).catch((err) => { log.error({ err: String(err) }, 'aux worker crashed'); process.exit(1); });
-  // A second worker for finished college matches' box scores (since the 2 GB instance, 2026-10-15): a busy night's
-  // finals no longer queue for hours behind one worker. Each run claims its own games.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail'], idleMs: 15_000, lane: 'aux-b' }).catch((err) => { log.error({ err: String(err) }, 'aux-b worker crashed'); process.exit(1); });
-  // A fourth for Plaibook Stats Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
-  workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
-  // A second worker that only takes pro-live (2026-11-02): full time used to wait behind pro-predictions (up to 800
-  // requests every 3 h) or pro-leaders on the one pro worker, so a final reached Plaibook 8-16 min after the whistle.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['pro-live'], idleMs: 10_000, lane: 'pro-live' }).catch((err) => { log.error({ err: String(err) }, 'pro-live worker crashed'); process.exit(1); });
-  // A fifth for the pro bulk crawl (minutes per run): never behind the college crawl, never in front of live pro scores.
-  workerLoop(getDb(), { signal: controller.signal, jobs: PRO_BULK_JOBS, idleMs: 15_000, lane: 'pro-bulk' }).catch((err) => { log.error({ err: String(err) }, 'pro-bulk worker crashed'); process.exit(1); });
-  // A past season's full backfill (2024, 2025: days of school-site pages): its own lane, so hourly, nightly and the
-  // standings never wait behind it. School sites keep their per-host limits in the shared fetch client.
-  // The weekly full pass takes about a day: its own lane, so the nightly, hourly and standings runs never queue behind it.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['weekly'], idleMs: 60_000, lane: 'weekly' }).catch((err) => { log.error({ err: String(err) }, 'weekly worker crashed'); process.exit(1); });
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['backfill'], idleMs: 30_000, lane: 'history' }).catch((err) => { log.error({ err: String(err) }, 'history worker crashed'); process.exit(1); });
-  // Box scores for earlier meetings a match page asked for: their own lane, so a backlog never holds up final-detail.
-  workerLoop(getDb(), { signal: controller.signal, jobs: ['h2h-detail'], idleMs: 15_000, lane: 'h2h' }).catch((err) => { log.error({ err: String(err) }, 'h2h worker crashed'); process.exit(1); });
-  // The scraped and open sources (ASA, Wikipedia, openfootball ...): two workers that download, side by side (each
-  // site keeps its own per-host limit in the shared client), and one that matches, checks and fills, one job at a
-  // time so a check never runs in the middle of a matching pass. Never on API-Football's quota.
-  const fetchJobs = SOURCE_JOBS.filter((j) => !CHECK_JOBS.includes(j) && j !== 'asa-fill');
-  const checkJobs = SOURCE_JOBS.filter((j) => !fetchJobs.includes(j));
-  for (const lane of ['sources-a', 'sources-b']) workerLoop(getDb(), { signal: controller.signal, jobs: fetchJobs, idleMs: 15_000, lane }).catch((err) => { log.error({ err: String(err), lane }, 'sources worker crashed'); process.exit(1); });
-  workerLoop(getDb(), { signal: controller.signal, jobs: checkJobs, idleMs: 15_000, lane: 'sources' }).catch((err) => { log.error({ err: String(err) }, 'sources worker crashed'); process.exit(1); });
-  }
-  if (cfg.SCHEDULER_ENABLED === '1') startScheduler(getDb(), { signal: controller.signal });
+  // The crawl, the live lanes and the scheduler run in a child process (src/worker.ts, supervised in
+  // src/workerProcess.ts): a job that holds the CPU or fills the heap stalls only itself. 2026-11-07: they shared this
+  // process, 22 s stalls failed Render's health check and every restart took the site down for minutes.
+  if (cfg.WORKERS_INLINE === '1' || !workerBuilt()) startWorkers(controller, cfg);
+  else supervisor = superviseWorker(controller.signal);
   // Requests per site for the hub's Crawling page (pro_source_requests).
   startRequestFlush(getDb());
   // The hub's Crawling tab reads take 10-25 s to build: build them once a minute after boot (a deploy empties the

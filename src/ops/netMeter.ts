@@ -14,6 +14,8 @@ const scope = new AsyncLocalStorage<() => string>();
 const outbound = new Map<string, Row>();
 const served = new Map<string, Row>();
 let since = new Date().toISOString();
+// The worker child process counts its own fetches and sends a snapshot over IPC; the report adds them in.
+let remote = new Map<string, Row>();
 
 /** Runs a job with its name (a function, so a composite job's current step is read at request time). */
 export const withJob = <T>(label: () => string, fn: () => Promise<T>): Promise<T> => scope.run(label, fn);
@@ -70,6 +72,11 @@ export function meterFetch<F extends AnyFetch>(f: F): F {
   return metered;
 }
 
+/** This process's outbound counters, for the parent to merge (worker child only). */
+export const outboundSnapshot = (): [string, Row][] => [...outbound];
+/** Replaces the child's last snapshot (web process). */
+export function setRemoteOutbound(rows: [string, Row][]): void { remote = new Map(rows); }
+
 /** Counts one site response: `who` (a kind of caller) and `what` (a route group). */
 export function meterServed(who: string, what: string, bytes: number): void {
   const r = bump(served, `${who}|${what}`);
@@ -101,12 +108,14 @@ const ranked = (m: Map<string, Row>, hours: number, n: number) => [...m].sort((a
 export function netReport(dbHost: string | null, now = Date.now()) {
   const hours = Math.max((now - Date.parse(since)) / 3_600_000, 1 / 60);
   const label = (host: string) => (host === dbHost ? 'database' : host);
-  const relabelled = new Map([...outbound].map(([k, r]) => { const [job, host, detail] = k.split('|'); return [`${job}|${label(host ?? '')}|${detail ?? ''}`, r] as const; }));
+  const allOutbound = new Map(outbound);
+  for (const [k, r] of remote) { const x = allOutbound.get(k); allOutbound.set(k, x ? { requests: x.requests + r.requests, out: x.out + r.out, in: x.in + r.in } : r); }
+  const relabelled = new Map([...allOutbound].map(([k, r]) => { const [job, host, detail] = k.split('|'); return [`${job}|${label(host ?? '')}|${detail ?? ''}`, r] as const; }));
   const part = (k: string, i: number) => k.split('|')[i] ?? '';
   return {
     since, hours: +hours.toFixed(2),
     outbound: {
-      total: view(sum([...outbound.values()]), hours),
+      total: view(sum([...allOutbound.values()]), hours),
       by_host: ranked(group(relabelled, (k) => part(k, 1)), hours, 25),
       by_job: ranked(group(relabelled, (k) => part(k, 0)), hours, 40),
       // Database calls by method and table, across jobs.
@@ -123,4 +132,4 @@ export function netReport(dbHost: string | null, now = Date.now()) {
 }
 
 /** Tests only. */
-export function resetNetMeter(): void { outbound.clear(); served.clear(); since = new Date().toISOString(); }
+export function resetNetMeter(): void { outbound.clear(); remote.clear(); served.clear(); since = new Date().toISOString(); }
