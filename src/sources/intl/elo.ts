@@ -80,14 +80,23 @@ export interface BestRank { rank: number; month: string }
  *  `regress` of the way back to START (its own part; the level stays). */
 export interface EloOptions { provisional?: number; confederations?: Map<string, string>; share?: number; ranks?: RankRules;
   k?: (m: EloMatch) => number; homeEdge?: number; keepSteps?: boolean; regressAfterDays?: number; regress?: number; onMatch?: (m: EloMatch, we: number, w: number) => void;
-  /** Every side's rating at the end of this date (the result's `snapshot`): a month ago, without a second run. */ snapshotAt?: string }
+  /** Every side's rating at the end of this date (the result's `snapshot`): a month ago, without a second run. */ snapshotAt?: string;
+  /** Damp the goal factor when the favourite wins big (the margin-of-victory correction): a 5-0 over a side it was
+   *  expected to beat says less than one over an equal. Without it, clubs that pile goals on minnows in early qualifiers
+   *  lift their whole league. */ mov?: boolean;
+  /** A second, wider grouping above the regions (college divisions above conferences): its own level, moved by
+   *  `outerShare` of each result between two established sides of different groups. Cross-division games are few,
+   *  so one shared level per division learns from all of them where each conference's level sees a handful. */
+  outer?: Map<string, string>; outerShare?: number; initialOuterLevels?: Map<string, number>;
+  /** Region levels to start from (an earlier run's `levels`), so levels settle when the results cover few seasons. */ initialLevels?: Map<string, number> }
 export function runElo(matches: EloMatch[], o: EloOptions = {}): {
   steps: EloStep[]; ratings: Map<string, number>; played: Map<string, { n: number; last: string }>;
-  best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]>; current: Map<string, number>; levels: Map<string, number>; snapshot: Map<string, number> | null;
+  best: Map<string, BestRank>; history: Map<string, { m: string; r: number }[]>; current: Map<string, number>; levels: Map<string, number>; outerLevels: Map<string, number>; snapshot: Map<string, number> | null;
 } {
   const provisional = o.provisional ?? PROVISIONAL, share = o.share ?? CONFED_SHARE, confs = o.confederations ?? new Map<string, string>();
-  const team = new Map<string, number>(), levels = new Map<string, number>(), inter = new Map<string, number>();
-  const rating = (t: string) => (team.get(t) ?? START) + (levels.get(confs.get(t) ?? '') ?? 0);
+  const team = new Map<string, number>(), levels = new Map<string, number>(o.initialLevels ?? []), inter = new Map<string, number>();
+  const outer = o.outer ?? new Map<string, string>(), outerLevels = new Map<string, number>(o.initialOuterLevels ?? []), outerShare = o.outerShare ?? 0;
+  const rating = (t: string) => (team.get(t) ?? START) + (levels.get(confs.get(t) ?? '') ?? 0) + (outerLevels.get(outer.get(t) ?? '') ?? 0);
   const played = new Map<string, { n: number; last: string }>();
   const steps: EloStep[] = [];
   const best = new Map<string, BestRank>(), history = new Map<string, { m: string; r: number }[]>(), current = new Map<string, number>();
@@ -117,7 +126,8 @@ export function runElo(matches: EloMatch[], o: EloOptions = {}): {
     const rh = rating(m.home), ra = rating(m.away);
     const dr = rh + (m.neutral ? 0 : homeEdge) - ra;
     const { diff, w } = resultOf(m);
-    const k = o.k ? o.k(m) : kFactor(m.tournament, m.date), g = goalFactor(diff), we = expected(dr);
+    const k = o.k ? o.k(m) : kFactor(m.tournament, m.date), we = expected(dr);
+    const g = goalFactor(diff) * (o.mov && diff !== 0 ? 2.2 / ((diff > 0 ? dr : -dr) * 0.001 + 2.2) : 1);
     o.onMatch?.(m, we, w);
     const change = k * g * (w - we);
     // A provisional side's results move only its own rating against an established side.
@@ -126,8 +136,11 @@ export function runElo(matches: EloMatch[], o: EloOptions = {}): {
     // Between two established sides of different confederations, a share of the move goes through the levels.
     const ch = confs.get(m.home), ca = confs.get(m.away), across = !!ch && !!ca && ch !== ca;
     const viaLevel = across && !ph && !pa ? share : 0;
-    team.set(m.home, (team.get(m.home) ?? START) + dh * (1 - viaLevel)); team.set(m.away, (team.get(m.away) ?? START) + da * (1 - viaLevel));
+    const oh = outer.get(m.home), oa = outer.get(m.away), viaOuter = !!oh && !!oa && oh !== oa && !ph && !pa ? outerShare : 0;
+    const own = 1 - viaLevel - viaOuter;
+    team.set(m.home, (team.get(m.home) ?? START) + dh * own); team.set(m.away, (team.get(m.away) ?? START) + da * own);
     if (viaLevel) { levels.set(ch!, (levels.get(ch!) ?? 0) + viaLevel * dh); levels.set(ca!, (levels.get(ca!) ?? 0) + viaLevel * da); }
+    if (viaOuter) { outerLevels.set(oh!, (outerLevels.get(oh!) ?? 0) + viaOuter * dh); outerLevels.set(oa!, (outerLevels.get(oa!) ?? 0) + viaOuter * da); }
     if (across) for (const side of [m.home, m.away]) inter.set(side, (inter.get(side) ?? 0) + 1);
     for (const side of [m.home, m.away]) { const p = played.get(side) ?? { n: 0, last: m.date }; p.n += 1; p.last = m.date; played.set(side, p); }
     if (!keep) continue;
@@ -143,7 +156,27 @@ export function runElo(matches: EloMatch[], o: EloOptions = {}): {
   for (const [t, h] of history) { const l = h[h.length - 1]!; if (l.m === lastMonth) current.set(t, l.r); }
   const ratings = new Map([...team.keys()].map((t) => [t, rating(t)]));
   if (o.snapshotAt && !snapshot) snapshot = snap();
-  return { steps, ratings, played, best, history, current, levels, snapshot };
+  return { steps, ratings, played, best, history, current, levels, outerLevels, snapshot };
+}
+
+/** Levels that settle: when the results cover only a few seasons (college from 2024, clubs from 2023), one run leaves
+ *  every region's level close to the 0 it started from, so tiers and divisions that seldom meet sit too close together
+ *  (Louisville City of the USL Championship ranked among MLS's top ten, D3 programs in college's top five; 2026-11-10).
+ *  This runs the results `passes` times, each starting from the last run's levels (sides start again from 1500), and
+ *  re-centres the levels after each run so the average rated side stays at 1500. Only the last run's snapshot, steps and
+ *  onMatch count. */
+export function runEloSettled(matches: EloMatch[], o: EloOptions, passes: number): ReturnType<typeof runElo> {
+  const centre = (lv: Map<string, number>, groups: Map<string, string>) => {
+    const sides = new Map<string, number>(); for (const g of groups.values()) sides.set(g, (sides.get(g) ?? 0) + 1);
+    let sum = 0, n = 0; for (const [g, c] of sides) { sum += (lv.get(g) ?? 0) * c; n += c; }
+    const mean = n ? sum / n : 0; return new Map([...lv].map(([g, v]) => [g, v - mean]));
+  };
+  let levels = o.initialLevels, outerLevels = o.initialOuterLevels;
+  for (let i = 1; i < passes; i++) {
+    const r = runElo(matches, { ...o, initialLevels: levels, initialOuterLevels: outerLevels, keepSteps: false, snapshotAt: undefined, onMatch: undefined, ranks: undefined });
+    levels = centre(r.levels, o.confederations ?? new Map()); outerLevels = centre(r.outerLevels, o.outer ?? new Map());
+  }
+  return runElo(matches, { ...o, initialLevels: levels, initialOuterLevels: outerLevels });
 }
 
 /** FIFA members among the results: every side that has played the World Cup or its qualifiers. */

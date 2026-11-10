@@ -1,22 +1,30 @@
 // Plaibook Elo for college programs (college-elo) and pro clubs (pro-elo), nightly, with the engine International
 // uses (src/sources/intl/elo.ts). No requests: only results we already hold.
 //
-// College: every finished game from 2024 on. Conferences play the part confederations play for nations (regions that
-// seldom meet): a result between two conferences moves both conferences' levels a little, so a strong D3 conference
-// does not sit level with the ACC. K 30 (40 in the postseason), home edge 60 (college home sides win less often than
-// national teams at home), five games before a side's results move established ones, and a third of the way back to
-// 1500 after an off-season. Ranked: NCAA members with 3+ games this season, by gender and division.
+// Both run the results several times so the levels settle (runEloSettled), and damp big wins by favourites (mov).
+// Chosen 2026-11-10 by how well each setting predicted results since mid-2025, above all results between levels:
+//   pro, between leagues: 0.1561 -> 0.1505 (Brier); MLS 39-9-10 against the USL Championship now reads ~190 points.
+//   college, between divisions: men 0.192 -> 0.163, women 0.197 -> 0.157; no D2/D3 program in either top 25.
 //
-// Pro: every club result since 2023 in every competition we follow. A club's main league plays the region part (tiers
-// and countries seldom meet; cups and continental cups say how they compare), with a bigger share than nations get so
-// three seasons are enough to separate them. K 30 (40 continental cups, 15 friendlies), home edge 70, ten matches
-// before a side moves established ones, a fifth of the way back after 60 idle days.
+// College: every finished game from 2024 on. Conferences play the part confederations play for nations (regions that
+// seldom meet), with a level for each division above them: a result between two conferences moves both conferences'
+// levels a little, one between divisions both divisions' levels, so a strong D3 conference does not sit level with the
+// ACC. K 30 (40 in the postseason), home edge 60 (college home sides win less often than national teams at home), five
+// games before a side's results move established ones, and a third of the way back to 1500 after an off-season.
+// Ranked: NCAA members with 3+ games this season, by gender and division.
+//
+// Pro: every club result since 2023 in every competition we follow. A club's main league plays the region part, with
+// its country's level above it (tiers seldom meet but cups say how they compare; countries meet in continental cups).
+// K 24 (32 continental cups, 12 friendlies), home edge 70, ten matches before a side moves established ones, a fifth of
+// the way back after 60 idle days.
 // Ranked: professional clubs with 10+ matches and one in the last year, by gender (US amateur leagues are rated only).
 import { registerJob, type JobContext } from './runner.js';
 import { kvSet, selectAll, upsertChunked, type Db } from '../db/client.js';
-import { COLLEGE_DRAW_KEY, PRO_DRAW_KEY, drawCounter, runElo, type EloMatch } from '../sources/intl/elo.js';
+import { COLLEGE_DRAW_KEY, PRO_DRAW_KEY, drawCounter, runEloSettled, type EloMatch } from '../sources/intl/elo.js';
 import { eastern } from './seasons.js';
 
+/** Runs of the results before the one that counts (levels settle by the fifth; 2026-11-10). */
+const PASSES = 6;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 /** Amateur US leagues: their clubs are rated (they meet pros in the Open Cup) but not ranked among professionals. */
 const AMATEUR = /^(USL League Two|NPSL|UPSL|WPSL|Women's Premier Soccer League|USL W League)$/i;
@@ -34,12 +42,13 @@ async function collegeElo(ctx: JobContext): Promise<void> {
   const latest = new Map<string, any>(); for (const s of seasons) { const p = latest.get(s.program_id); if (!p || s.season > p.season) latest.set(s.program_id, s); }
   const now = new Map(seasons.filter((s) => s.season === current).map((s) => [s.program_id, s]));
   const conf = new Map<string, string>(); for (const [pid, s] of latest) if (s.conference_id) conf.set(pid, s.conference_id);
+  const division = new Map<string, string>(); for (const [pid, s] of latest) if (s.division) division.set(pid, s.division);
   for (const gender of ['m', 'w'] as const) {
     const mine = games.filter((g) => g.gender === gender && g.game_date <= today);
     const post = new Set(mine.filter((g) => g.postseason).map((g) => g.id));
     const matches: (EloMatch & { id: string })[] = mine.map((g) => ({ id: g.id, date: g.game_date, home: g.home_program_id, away: g.away_program_id, home_score: g.home_score, away_score: g.away_score, tournament: post.has(g.id) ? 'postseason' : 'season', neutral: !!g.neutral_site }));
     const draws = drawCounter();
-    const { ratings, played, snapshot, steps } = runElo(matches, { ...eloCollege(), keepSteps: true, snapshotAt: cut30, onMatch: (_m, we, w) => draws.add(we, w) });
+    const { ratings, played, snapshot, steps } = runEloSettled(matches, { ...eloCollege(), keepSteps: true, snapshotAt: cut30, onMatch: (_m, we, w) => draws.add(we, w) }, PASSES);
     const then = snapshot!;
     const thisSeason = new Map<string, number>(); for (const g of mine) if (g.season === current) for (const p of [g.home_program_id, g.away_program_id]) thisSeason.set(p, (thisSeason.get(p) ?? 0) + 1);
     const rows = [...ratings].map(([pid, rating]) => { const s = now.get(pid) ?? latest.get(pid); return { program_id: pid, gender, season: current, division: s?.division ?? null, conference_id: s?.conference_id ?? null, rating: r1(rating), games: played.get(pid)!.n, last_match: played.get(pid)!.last, change_30d: then.has(pid) ? r1(rating - then.get(pid)!) : null, rank: null as number | null, rank_all: null as number | null, updated_at: at, member: !!now.get(pid)?.ncaa_member && (thisSeason.get(pid) ?? 0) >= 3 }; });
@@ -58,7 +67,7 @@ async function collegeElo(ctx: JobContext): Promise<void> {
   await ctx.db.from('college_elo').delete().lt('updated_at', at);
   ctx.note('as_of', today);
   function eloCollege() {
-    return { confederations: conf, provisional: 5, homeEdge: 60, keepSteps: false, regressAfterDays: 120, regress: 1 / 3, k: (m: EloMatch) => (m.tournament === 'postseason' ? 40 : 30) };
+    return { confederations: conf, share: 0.1, outer: division, outerShare: 0.2, mov: true, provisional: 5, homeEdge: 60, keepSteps: false, regressAfterDays: 120, regress: 1 / 3, k: (m: EloMatch) => (m.tournament === 'postseason' ? 40 : 30) };
   }
 }
 
@@ -102,10 +111,14 @@ async function proElo(ctx: JobContext): Promise<void> {
     const mine = byGender[gender];
     // A club's region is its main league (else its country): tiers within a country seldom meet, and cup meetings
     // between them move the leagues' levels.
-    const region = new Map<string, string>(); for (const id of new Set(mine.flatMap((m) => [m.home, m.away]))) { const r = mainLeague.get(id) ?? (countries.get(id) ? `c:${countries.get(id)}` : null); if (r) region.set(id, r); }
+    const region = new Map<string, string>(), country = new Map<string, string>();
+    for (const id of new Set(mine.flatMap((m) => [m.home, m.away]))) {
+      const r = mainLeague.get(id) ?? (countries.get(id) ? `c:${countries.get(id)}` : null); if (r) region.set(id, r);
+      const c = leagues.get(Number(mainLeague.get(id)))?.country ?? countries.get(id); if (c) country.set(id, c);
+    }
     const draws = drawCounter();
-    const { ratings, played, snapshot } = runElo(mine, { confederations: region, share: 0.35, provisional: 10, homeEdge: 70, keepSteps: false, regressAfterDays: 60, regress: 0.2, snapshotAt: cut30,
-      k: (m: EloMatch) => (m.tournament === 'continental' ? 40 : m.tournament === 'friendly' ? 15 : 30), onMatch: (_m, we, w) => draws.add(we, w) });
+    const { ratings, played, snapshot } = runEloSettled(mine, { confederations: region, share: 0.2, outer: country, outerShare: 0.1, mov: true, provisional: 10, homeEdge: 70, keepSteps: false, regressAfterDays: 60, regress: 0.2, snapshotAt: cut30,
+      k: (m: EloMatch) => (m.tournament === 'continental' ? 32 : m.tournament === 'friendly' ? 12 : 24), onMatch: (_m, we, w) => draws.add(we, w) }, PASSES);
     const rows = [...ratings].map(([id, rating]) => ({ team_id: Number(id), gender, country: countries.get(id) ?? null, rating: r1(rating), games: played.get(id)!.n, last_match: played.get(id)!.last, change_30d: snapshot!.has(id) ? r1(rating - snapshot!.get(id)!) : null, rank: null as number | null, updated_at: at }));
     const amateur = (id: number) => { const l = leagues.get(Number(mainLeague.get(String(id)))); return !!l && AMATEUR.test(l.name); };
     rows.filter((r) => r.games >= 10 && r.last_match >= yearAgo && !amateur(r.team_id)).sort((a, b) => b.rating - a.rating).forEach((r, i) => { r.rank = i + 1; });
