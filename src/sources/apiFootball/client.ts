@@ -201,7 +201,8 @@ export class ApiFootball {
       if (res.status === 429 || res.status >= 500) {
         lastErr = new ApiFootballError(res.status, `HTTP ${res.status} for ${url}`);
         const ra = Number(res.headers.get('retry-after'));
-        await this.o.sleep(Number.isFinite(ra) && ra > 0 ? ra * 1000 : 5_000 * attempt);
+        // Capped: an hour-long Retry-After held this lane (and the provider's rate window is a minute).
+        await this.o.sleep(Number.isFinite(ra) && ra > 0 ? Math.min(120_000, ra * 1000) : 5_000 * attempt);
         continue;
       }
       if (!res.ok) throw new ApiFootballError(res.status, `HTTP ${res.status} for ${url}`);

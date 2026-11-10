@@ -5,7 +5,7 @@ import { loadConfig } from '../config.js';
 import { GraphqlTransport, NcaaApiTransport, PersistedQueryStore, fetchGameDocs, parseNcaaBoxScore, PersistedQueryNotFoundError, type NcaaGameTransport, type NcaaOp, type PersistedQueryPersistence } from '../sources/ncaa/index.js';
 import { kvGet, kvSet, type Db } from '../db/client.js';
 import { listGames, statLineCandidates, writeBoxScore, updateGame, type GameRow } from '../db/repos.js';
-import { currentSeason } from './seasons.js';
+import { currentSeason, eastern } from './seasons.js';
 import type { Fetcher } from '../model.js';
 import { log } from '../log.js';
 
@@ -31,7 +31,11 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
   await store.init();
   const wanted = Array.isArray(ctx.params.contest_ids) ? (ctx.params.contest_ids as unknown[]).map(Number).filter(Number.isFinite) : null;
   let games = (await listGames(db, season, (q) => (wanted ? q.in('ncaa_contest_id', wanted) : q.not('ncaa_contest_id', 'is', null)))).filter((g) => (!ctx.params.gender || g.gender === ctx.params.gender) && (!ctx.params.division || g.division === ctx.params.division));
-  const today = new Date().toISOString().slice(0, 10);
+  // game_date is the Eastern calendar day. The UTC date is already tomorrow from 7 or 8 PM Eastern, so an evening
+  // game looked like "a past date": asked minutes after full time, its box score (still "in progress" at NCAA.com)
+  // was stamped as fetched and not read again until the nightly refetch.
+  const today = eastern().date;
+  const yesterday = eastern(new Date(Date.now() - 86_400_000)).date;
   if (ctx.params.contest_ids) { const want = new Set((ctx.params.contest_ids as string[]).map(String)); games = games.filter((g) => want.has(String(g.ncaa_contest_id))); }
   else if (ctx.params.recent_days) { const since = new Date(Date.now() - Number(ctx.params.recent_days) * 86400000).toISOString().slice(0, 10); games = games.filter((g) => g.game_date >= since && g.game_date <= today); }
   if (typeof ctx.params.program === 'string') {
@@ -58,11 +62,12 @@ export async function fetchGamesNcaa(ctx: JobContext): Promise<void> {
       const box = parseNcaaBoxScore(docs, String(g.ncaa_contest_id), g.gender, (g.division ?? 'd1') as 'd1' | 'd2' | 'd3', g.game_date);
       if (box.status !== 'final') {
         // A same-day game that is not over yet is not "fetched": stamping it would hide the final box until a refetch.
-        const stamp = g.game_date < today ? { ncaa_fetched_at: new Date().toISOString() } : {};
+        // Nor is a final from last night whose box still reads "in progress": it is asked again, not marked done.
+        const stamp = g.game_date < today && !(g.status === 'final' && g.game_date >= yesterday) ? { ncaa_fetched_at: new Date().toISOString() } : {};
         // NCAA.com's box score often still reads "in progress" minutes after its scoreboard says final: a game the
         // scoreboard closed stays final (writing "live" back made the live job close it again and queue final-detail
         // every tick, 2026-10-05).
-        await updateGame(db, g.id, { detail_attempts: (g.detail_attempts ?? 0) + 1, ...stamp, status: box.status === 'live' && g.status !== 'final' ? 'live' : g.status, ...(g.detail_attempts >= 2 && daysAgo(g.game_date) > 3 ? { status: 'postponed' } : {}) });
+        await updateGame(db, g.id, { detail_attempts: (g.detail_attempts ?? 0) + 1, ...stamp, status: box.status === 'live' && g.status !== 'final' ? 'live' : g.status, ...(g.detail_attempts >= 2 && daysAgo(g.game_date) > 3 && g.status === 'scheduled' && g.home_score == null ? { status: 'postponed' } : {}) });
         ctx.inc('not_final'); continue;
       }
       for (const pid of [g.home_program_id, g.away_program_id]) if (pid && !candCache.has(pid)) candCache.set(pid, await statLineCandidates(db, pid, season));

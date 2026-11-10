@@ -66,10 +66,21 @@ export function makeContext(db: Db, runId: string | null, params: Record<string,
   return ctx;
 }
 
+/** JSON with every object's keys sorted, at every depth: equal for two objects that differ only in key order. */
+export function canonicalJson(value: unknown): string {
+  const sort = (v: unknown): unknown => Array.isArray(v) ? v.map(sort)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sort((v as Record<string, unknown>)[k])]))
+    : v;
+  return JSON.stringify(sort(value));
+}
+
 /** Enqueue a run unless an identical job is already queued/running (returns the existing one then). */
 export async function enqueue(db: Db, job: string, params: Record<string, unknown> = {}): Promise<{ id: string; status: string; existing: boolean }> {
   const { data: existing } = await db.from('college_crawl_runs').select('id,status,params').eq('job', job).in('status', ['queued', 'running']).order('created_at', { ascending: true });
-  const dup = (existing ?? []).find((r: any) => JSON.stringify(r.params ?? {}) === JSON.stringify(params));
+  // Compared with keys sorted: Postgres returns a jsonb object's keys ordered by length then bytes, not as written,
+  // so `{ season, manual }` never equalled the stored `{ manual, season }` and every repeat click queued another run.
+  const want = canonicalJson(params);
+  const dup = (existing ?? []).find((r: any) => canonicalJson(r.params ?? {}) === want);
   if (dup) return { id: dup.id, status: dup.status, existing: true };
   const { data, error } = await db.from('college_crawl_runs').insert({ job, params, status: 'queued' }).select('id,status').single();
   if (error) throw new Error(`enqueue ${job}: ${error.message}`);
@@ -88,16 +99,37 @@ export async function runInline(db: Db, job: string, params: Record<string, unkn
 
 async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise<JobContext['counters']> {
   const started = Date.now();
+  // A run whose heartbeat is 10 minutes old is taken to be dead and claimed again. Jobs beat only when they call
+  // ctx.heartbeat(), and many long ones never do (ratings, aggregates, reconcile, the composites' long steps), so a
+  // healthy run could be started a second time beside itself. The runner now beats for every job while it runs.
+  const beat = setInterval(() => {
+    void db.from('college_crawl_runs').update({ heartbeat_at: new Date().toISOString() }).eq('id', ctx.runId!).eq('status', 'running')
+      .then(({ error }) => { if (error) log.warn({ job, runId: ctx.runId, err: error.message }, 'run heartbeat failed'); }, () => {});
+  }, 60_000);
+  beat.unref?.();
+  // The last write of a run. Only a row still 'running' is closed (a run cancelled meanwhile stays cancelled), the
+  // answer is checked (supabase-js does not throw), and a failed write is tried again: left 'running', the whole
+  // job was claimed and run a second time.
+  const close = async (patch: Record<string, unknown>) => {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { error } = await db.from('college_crawl_runs').update({ ...patch, finished_at: new Date().toISOString(), counters: ctx.counters }).eq('id', ctx.runId!).eq('status', 'running');
+      if (!error) return;
+      log.warn({ job, runId: ctx.runId, attempt, err: error.message }, 'closing the run failed');
+      await sleep(1_000 * attempt);
+    }
+  };
   try {
     // Bytes the job sends are counted under its name and current step (src/ops/netMeter.ts).
     await withJob(() => { const step = ctx.runId ? runningSteps.get(ctx.runId) : undefined; return step ? `${job} > ${step}` : job; }, () => fn(ctx));
-    await db.from('college_crawl_runs').update({ status: 'done', finished_at: new Date().toISOString(), counters: ctx.counters }).eq('id', ctx.runId!);
+    await close({ status: 'done' });
     log.info({ job, runId: ctx.runId, ms: Date.now() - started, counters: ctx.counters }, 'job done');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await db.from('college_crawl_runs').update({ status: 'failed', finished_at: new Date().toISOString(), counters: ctx.counters, error: message.slice(0, 2000) }).eq('id', ctx.runId!);
+    await close({ status: 'failed', error: message.slice(0, 2000) });
     log.error({ job, runId: ctx.runId, err: message }, 'job failed');
     throw err;
+  } finally {
+    clearInterval(beat);
   }
   return ctx.counters;
 }
@@ -134,7 +166,13 @@ export async function workerLoop(db: Db, opts: { idleMs?: number; signal?: Abort
   const beatTimer = setInterval(() => { void beat(); }, 30_000);
   opts.signal?.addEventListener('abort', () => clearInterval(beatTimer));
   while (!opts.signal?.aborted) {
-    if (opts.lane === 'crawl' && (await crawlPaused(db))) { await sleep(idleMs); continue; }
+    // The pause flag is a database read. A failed read (one 502) used to reject this loop, and the process exits
+    // when a lane stops: every lane's job in flight was orphaned. Unknown counts as "not now": wait and ask again.
+    if (opts.lane === 'crawl') {
+      let paused: boolean;
+      try { paused = await crawlPaused(db); } catch (err) { log.warn({ err: String(err) }, 'pause flag unreadable'); await sleep(idleMs); continue; }
+      if (paused) { await sleep(idleMs); continue; }
+    }
     // Lanes: a loop may claim only some jobs (the live scoreboard) or everything but those (the crawl).
     const { data, error } = await db.rpc('college_claim_run', { p_stale_minutes: 10, p_jobs: opts.jobs ?? null, p_exclude: opts.exclude ?? null });
     if (error) { log.error({ err: error.message }, 'claim failed'); await sleep(idleMs); continue; }

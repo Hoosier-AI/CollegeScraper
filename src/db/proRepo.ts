@@ -178,6 +178,9 @@ export async function upsertSeasonStats(db: Db, rows: SeasonStatRow[], chunk = 2
 
 /** A club's squad is replaced whole: players who left are gone from it. */
 export async function replaceSquad(db: Db, teamId: number, rows: SquadRow[], stubs: PlayerStubRow[], chunk = 250): Promise<number> {
+  // An empty answer is "the provider has no squad for this club" (it says so for thousands of clubs), never "the
+  // club has no players": it must not clear a stored squad.
+  if (!rows.length) return 0;
   await insertPlayerStubs(db, stubs);
   const { error } = await db.from('pro_squads').delete().eq('team_id', teamId);
   if (error) throw new Error(`clear squad ${teamId}: ${error.message}`);

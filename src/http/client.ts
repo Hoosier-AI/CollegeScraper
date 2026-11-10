@@ -70,6 +70,9 @@ export class HttpError extends Error {
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** The longest a server's Retry-After is honoured for (see backoff). */
+const RETRY_AFTER_CAP_MS = 120_000;
+const MAX_REDIRECTS = 5;
 
 export interface HostStats { requests: number; errors: number; status429: number; lastError: string | null; lastErrorAt: string | null }
 export interface HttpStats { requests: number; cacheHits: number; notModified: number; errors: number; status429: number; robotsBlocked: number; byHost: Map<string, HostStats> }
@@ -149,12 +152,14 @@ export class HttpClient implements Fetcher {
       if (cached?.body != null && cached.record.lastModified) headers['if-modified-since'] = cached.record.lastModified;
       let res: Response;
       try {
-        res = await this.opts.fetchImpl(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(this.opts.timeoutMs) });
+        res = await this.fetchFollowing(url, headers);
       } catch (err) {
+        // A redirect to a site we agreed not to crawl is final: no retry, no backoff.
+        if (err instanceof HttpError && err.status === 451) throw err;
         lastErr = err;
         this.stats.errors += 1; hs.errors += 1; hs.lastError = err instanceof Error ? err.message : String(err); hs.lastErrorAt = new Date().toISOString();
         this.opts.onRequest?.({ url, ok: false, status: 0, error: hs.lastError });
-        await this.backoff(attempt, null);
+        if (attempt < maxAttempts) await this.backoff(attempt, null);
         continue;
       }
       if (res.status === 304 && cached?.body != null) {
@@ -171,7 +176,8 @@ export class HttpClient implements Fetcher {
         lastErr = new HttpError(res.status, url);
         this.stats.errors += 1; hs.errors += 1; hs.lastError = `HTTP ${res.status}`; hs.lastErrorAt = new Date().toISOString();
         if (res.status === 429) { this.stats.status429 += 1; hs.status429 += 1; }
-        await this.backoff(attempt, res.headers.get('retry-after'));
+        // No wait after the last attempt: it only held the queue (a whole Retry-After) before failing anyway.
+        if (attempt < maxAttempts) await this.backoff(attempt, res.headers.get('retry-after'));
         continue;
       }
       const record: FetchRecord = {
@@ -198,10 +204,34 @@ export class HttpClient implements Fetcher {
   private async backoff(attempt: number, retryAfter: string | null): Promise<void> {
     let ms = Math.min(60_000, 2_000 * 2 ** (attempt - 1));
     if (retryAfter) {
+      // Honoured up to a ceiling. The wait is spent inside this host's queue AND one of the eight global slots, so a
+      // single `Retry-After: 3600` parked a slot for an hour per attempt; eight of them stopped all crawling.
       const n = Number(retryAfter);
-      if (Number.isFinite(n)) ms = Math.max(ms, n * 1000);
+      if (Number.isFinite(n) && n > 0) ms = Math.min(RETRY_AFTER_CAP_MS, Math.max(ms, n * 1000));
     }
     await this.opts.sleep(ms);
+  }
+
+  /**
+   * One network attempt, following redirects by hand so every hop is checked against the do-not-crawl list. With
+   * `redirect: 'follow'` only the first URL was checked: a school site that redirects to a host we agreed not to
+   * request was followed there on every crawl.
+   */
+  private async fetchFollowing(url: string, headers: Record<string, string>): Promise<Response> {
+    let current = url;
+    for (let hop = 0; ; hop += 1) {
+      const res = await this.opts.fetchImpl(current, { headers, redirect: 'manual', signal: AbortSignal.timeout(this.opts.timeoutMs) });
+      const location = res.status >= 300 && res.status < 400 && res.status !== 304 ? res.headers.get('location') : null;
+      if (!location) return res;
+      if (hop >= MAX_REDIRECTS) throw new HttpError(0, url, `too many redirects from ${url}`);
+      let next: string;
+      try { next = new URL(location, current).toString(); } catch { throw new HttpError(0, url, `bad redirect from ${current}`); }
+      if (!/^https?:/i.test(next)) throw new HttpError(0, url, `redirect to a non-web address from ${current}`);
+      const refused = this.opts.refuse?.(next);
+      if (refused) throw new HttpError(451, url, `do not crawl: ${refused} (redirect from ${current})`);
+      try { await res.body?.cancel(); } catch { /* nothing to release */ }
+      current = next;
+    }
   }
 }
 

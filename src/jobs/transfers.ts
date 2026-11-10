@@ -47,7 +47,15 @@ export async function deriveTransfers(ctx: JobContext, season: number): Promise<
       // Merge identities: repoint this season's row to the earlier player id.
       const { error } = await db.from('college_player_seasons').update({ player_id: m.playerId, confidence: m.confidence }).eq('id', r.id);
       if (error) { ctx.inc('transfer_merge_failed'); continue; }
-      await db.from('college_players').delete().eq('id', r.player_id).then(() => {});
+      // The old identity is deleted only when no season still points at it. Its seasons cascade on delete: a player
+      // with another season under the old id (a later year, when an earlier one is being recomputed) lost that
+      // season, its stats and its honours.
+      const left = await db.from('college_player_seasons').select('id', { count: 'exact', head: true }).eq('player_id', r.player_id);
+      if (left.error) ctx.inc('transfer_merge_failed');
+      else if ((left.count ?? 0) === 0) {
+        const del = await db.from('college_players').delete().eq('id', r.player_id);
+        if (del.error) ctx.inc('transfer_merge_failed');
+      } else ctx.inc('transfer_identity_kept');
       rows.push({ player_id: m.playerId, from_program_id: m.fromProgramId, to_program_id: r.program_id, from_season: m.fromSeason, to_season: season, confidence: m.confidence, evidence: m.evidence });
       ctx.inc('transfer_merges');
     } else if (m) {

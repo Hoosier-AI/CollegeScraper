@@ -128,14 +128,27 @@ export function startScheduler(db: Db, opts: { signal?: AbortSignal } = {}): voi
     lastSlot = key;
     const season = currentSeason();
     try {
-      const [paused, overrides, live] = await Promise.all([schedulerPaused(db), schedulerOverrides(db), liveSettings(db)]);
+      let paused: boolean, overrides: Awaited<ReturnType<typeof schedulerOverrides>>, live: LiveSettings;
+      try {
+        [paused, overrides, live] = await Promise.all([schedulerPaused(db), schedulerOverrides(db), liveSettings(db)]);
+      } catch (err) {
+        // The settings could not be read: this minute is not spent. The next tick (20 s) tries it again; before, one
+        // failed read at 08:15 lost the nightly for the day.
+        lastSlot = '';
+        throw err;
+      }
       const c = clockAt(now, live);
       if (!paused) {
         for (const e of SCHEDULE) {
-          if (overrides[e.job]?.enabled === false || !e.due(c)) continue;
-          if (e.gate && !(await e.gate(db, now, season))) continue;
-          await enqueue(db, e.job, { season, scheduled: true });
-          lastFired[e.job] = now.toISOString();
+          // Each entry on its own: one failing gate or enqueue used to skip every entry after it that minute.
+          try {
+            if (overrides[e.job]?.enabled === false || !e.due(c)) continue;
+            if (e.gate && !(await e.gate(db, now, season))) continue;
+            await enqueue(db, e.job, { season, scheduled: true });
+            lastFired[e.job] = now.toISOString();
+          } catch (err) {
+            log.warn({ job: e.job, err: err instanceof Error ? err.message : String(err) }, 'scheduler entry failed');
+          }
         }
       }
       const state: SchedulerState = { tick_at: now.toISOString(), last_fired: lastFired, next: Object.fromEntries(SCHEDULE.map((e) => [e.job, nextOf(e, now, live)])), paused };
