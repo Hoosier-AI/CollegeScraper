@@ -61,7 +61,8 @@ export async function programElo(db: Db, programId: string) {
   const { data, error } = await db.from('college_elo').select('rating,rank,rank_all,division,games,change_30d,season').eq('program_id', programId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
-  const { data: hist, error: e2 } = await db.from('college_elo_history').select('day,rating').eq('program_id', programId).order('day').limit(400);
-  // Before migration 182 the table is missing: the trend is simply left out.
-  return { ...data, rating: Number(data.rating), history: e2 ? [] : (hist ?? []).map((h: any) => ({ day: String(h.day), rating: Number(h.rating) })) };
+  const { data: hist, error: e2 } = await db.from('college_elo_history').select('day,rating').eq('program_id', programId).order('day', { ascending: false }).limit(400);
+  // Before migration 182 the table is missing: the trend is simply left out. The NEWEST 400 days, oldest first
+  // (ascending + limit kept the oldest 400, so the trend stopped moving once a program had more history).
+  return { ...data, rating: Number(data.rating), history: e2 ? [] : (hist ?? []).map((h: any) => ({ day: String(h.day), rating: Number(h.rating) })).reverse() };
 }

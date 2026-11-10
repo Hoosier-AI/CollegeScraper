@@ -74,18 +74,21 @@ export async function program(db: Db, id: string, season: number) {
   const { data: p, error } = await db.from('college_programs').select('*,college_schools(*)').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!p) return null;
-  const [ps, coaches, tss, standing, rankings, runs, seasonsAvail, checks] = await Promise.all([
+  const [ps, coaches, tss, standing, rankingRows, runs, seasonsAvail, checks] = await Promise.all([
     db.from('college_program_seasons').select('*,college_conferences(id,name,ncaa_seo,site_host,points_rule)').eq('program_id', id).eq('season', season).maybeSingle(),
     selectAll<any>(db, 'college_coach_seasons', 'title,is_head,college_coaches(id,name,headshot_url)', (q) => q.eq('program_id', id).eq('season', season)),
     db.from('college_team_season_stats').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
     db.from('college_standings').select('*').eq('program_id', id).eq('season', season).maybeSingle(),
-    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes,player_season_id,subject_name', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false })),
+    selectAll<any>(db, 'college_rankings', 'poll,week_of,rank,value,label,previous_rank,record,first_place_votes,player_season_id,subject_name,college_player_seasons(college_players(suppress))', (q) => q.eq('program_id', id).eq('season', season).order('week_of', { ascending: false })),
     selectAll<any>(db, 'college_crawl_runs', 'id,job,status,started_at,finished_at,counters,error,params', (q) => q.contains('params', { program: p.school_seo }).order('created_at', { ascending: false }).limit(5)),
     selectAll<any>(db, 'college_program_seasons', 'season', (q) => q.eq('program_id', id).order('season', { ascending: false })),
     selectAll<any>(db, 'college_standings_checks', '*', (q) => q.eq('program_id', id).eq('season', season)),
   ]);
   // Conference table for the position badge (rank within the conference).
   const confRows = ps.data?.conference_id ? await selectAll<any>(db, 'college_standings', 'program_id,rank,pod,source,conf_w,conf_l,conf_t,conf_pts,college_programs!inner(id,name,gender,college_schools(logo_svg_url))', (q) => q.eq('season', season).eq('conference_id', ps.data.conference_id).eq('college_programs.gender', p.gender).order('rank')) : [];
+  // An individual stat ranking names its player (subject_name): a player removed on request is left out, here as in
+  // the rankings route. The join is only for this check and is not sent on.
+  const rankings = rankingRows.filter((r) => !r.college_player_seasons?.college_players?.suppress).map(({ college_player_seasons: _hidden, ...r }) => r);
   const usc = rankings.filter((r) => r.poll === 'usc' && !String(r.label ?? '').includes('(RV)')).sort((a, b) => String(b.week_of).localeCompare(String(a.week_of)));
   const categories = teamCategories(rankings);
   return { program: p, season: ps.data, coaches, teamStats: tss.data, standing: standing.data, standingsChecks: checks, conferenceTable: confRows, rankings, usc: usc[0] ?? null, uscHistory: usc, categories, runs, seasons: seasonsAvail.map((s) => s.season) };
@@ -758,7 +761,12 @@ export async function matchPreview(db: Db, id: string, opts: { queue?: boolean }
   return { game, head_to_head: h2h, sides: { home, away }, elo, rpi: { home: rpiOf(A), away: rpiOf(B) } };
 }
 
-const requestedDetail = new Set<string>();
+// Contest ids asked for recently, with the time: an id is asked again after REQUEST_AGAIN_MS (the job may have
+// failed), and only an insert that really landed is remembered. The old Set marked ids before the insert and never
+// forgot them, so one failed insert kept that game's box score from ever being asked for again until restart.
+const requestedDetail = new Map<string, number>();
+const REQUEST_AGAIN_MS = 6 * 3600_000;
+const askedRecently = (id: string, now = Date.now()) => { const at = requestedDetail.get(id); return at != null && now - at < REQUEST_AGAIN_MS; };
 /** The most h2h-detail jobs waiting at once; past it a page view queues nothing (the meetings stay pending). */
 export const H2H_QUEUE_CAP = 200;
 /** Queue NCAA.com box scores for meetings never fetched; true when any are on their way. Bots walking every match
@@ -767,15 +775,23 @@ async function requestMeetingDetail(db: Db, queue: boolean, games: MatchRow[]): 
   if (!games.length) return false;
   const { data } = await db.from('college_games').select('id,season,ncaa_contest_id,ncaa_fetched_at').in('id', games.map((g) => g.id));
   const todo = (data ?? []).filter((r: any) => !r.ncaa_fetched_at && r.ncaa_contest_id != null);
-  const fresh = queue ? todo.filter((r: any) => !requestedDetail.has(String(r.ncaa_contest_id))) : [];
+  const fresh = queue ? todo.filter((r: any) => !askedRecently(String(r.ncaa_contest_id))) : [];
   if (fresh.length) {
     const { count } = await db.from('college_crawl_runs').select('id', { count: 'exact', head: true }).eq('job', 'h2h-detail').eq('status', 'queued');
     if ((count ?? 0) >= H2H_QUEUE_CAP) return todo.length > 0;
   }
   const bySeason = new Map<number, string[]>();
-  for (const r of fresh as any[]) { requestedDetail.add(String(r.ncaa_contest_id)); bySeason.set(r.season, [...(bySeason.get(r.season) ?? []), String(r.ncaa_contest_id)]); }
+  for (const r of fresh as any[]) bySeason.set(r.season, [...(bySeason.get(r.season) ?? []), String(r.ncaa_contest_id)]);
   // A plain insert: enqueue() reads every waiting run of the job to find an identical one, and these never are.
-  for (const [season, ids] of bySeason) await db.from('college_crawl_runs').insert({ job: 'h2h-detail', params: { season, contest_ids: ids.sort() }, status: 'queued' }).then(() => {}, () => {});
+  for (const [season, ids] of bySeason) {
+    // supabase-js answers { error } and does not throw: only a landed insert counts as asked.
+    const { error } = await db.from('college_crawl_runs').insert({ job: 'h2h-detail', params: { season, contest_ids: ids.sort() }, status: 'queued' });
+    if (error) continue;
+    const now = Date.now();
+    for (const id of ids) requestedDetail.set(id, now);
+  }
+  // Keep the table small: forget what may be asked again anyway.
+  if (requestedDetail.size > 5000) for (const [id, at] of requestedDetail) if (Date.now() - at >= REQUEST_AGAIN_MS) requestedDetail.delete(id);
   return todo.length > 0;
 }
 

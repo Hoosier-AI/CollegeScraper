@@ -77,7 +77,9 @@ app.addHook('onResponse', async (req) => {
   const ua = req.headers['user-agent'];
   const ai = classifyAiBot(ua);
   const who = ai ? `ai:${ai}` : SEARCH_ENGINE.test(ua ?? '') ? 'search-engine' : req.headers.authorization ? (req.url.startsWith('/v1/') ? 'plaibook-api' : 'admin') : isBot(ua) ? `bot:${botName(ua)}` : 'browser';
-  meterServed(who, routeGroup(req.url), (req.raw.socket?.bytesWritten ?? 0) - (wroteAtStart.get(req) ?? 0));
+  // Grouped by the route the request matched (an unmatched path is "other"): grouping by the URL text gave every
+  // junk /api/<anything> its own row.
+  meterServed(who, routeGroup(req.routeOptions?.url ?? '/api/other'), (req.raw.socket?.bytesWritten ?? 0) - (wroteAtStart.get(req) ?? 0));
 });
 
 // The visitor's real address. Every request reaches us through Render's Cloudflare edge, which sets
@@ -290,15 +292,23 @@ app.get('/healthz', async (_req, reply) => {
 
 // The full picture for the console: the database answers and both worker lanes have beaten recently (src/ops/health.ts).
 let dbLastOkAt: number | null = null;
+// Public and outside every limiter: one answer is shared for a few seconds, so a burst of calls is one database
+// read, not one per call.
+let healthAt = 0;
+let healthLast: { status: number; body: unknown } | null = null;
 app.get('/health', async (_req, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  if (healthLast && Date.now() - healthAt < 5_000) return reply.code(healthLast.status).send(healthLast.body);
   const db = getDb();
   let dbOk = false;
   try { const { error } = await db.from('college_kv').select('key').limit(1); dbOk = !error; } catch { dbOk = false; }
   if (dbOk) dbLastOkAt = Date.now();
   const hb: Record<string, WorkerHeartbeat | null> = dbOk ? await heartbeats(db) : Object.fromEntries(LANES.map((l) => [l, null]));
   const h = evaluateHealth({ now: Date.now(), startedAt, dbOk, dbLastOkAt, heartbeats: hb, lanes: LANES });
-  reply.code(h.ok ? 200 : 503);
-  return { ...h, jobs: jobNames().length, worker: supervisor?.status() ?? 'inline', api: '/v1', time: new Date().toISOString(), loop: loopStats() };
+  const body = { ...h, jobs: jobNames().length, worker: supervisor?.status() ?? 'inline', api: '/v1', time: new Date().toISOString(), loop: loopStats() };
+  healthAt = Date.now();
+  healthLast = { status: h.ok ? 200 : 503, body };
+  return reply.code(healthLast.status).send(body);
 });
 
 const port = cfg.PORT;

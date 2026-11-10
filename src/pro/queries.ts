@@ -855,16 +855,22 @@ export async function teamLeaders(db: Db, f: TeamLeadersFilter) {
     .filter((r) => r.season === season.get(r.league_id) && r.played > 0).map((r) => [`${r.team_id}|${r.league_id}`, r])).values()] : [];
   const per = (n: number | null, p: number) => (n == null || p < 3 ? null : n / p);
   // Fewest conceded and fewest cards rank per match (a club with fewer matches is not 'better' for it).
-  const scored = rows.map((r) => ({ ...r, points: r.w * 3 + r.d, ppg: per(r.w * 3 + r.d, r.played), gd: r.gf - r.ga, gf_pg: per(r.gf, r.played), ga_pg: per(r.ga, r.played), ga: per(r.ga, r.played), yellow: per(r.yellow, r.played), red: per(r.red, r.played), possession: r.possession == null ? null : Number(r.possession) }))
-    .filter((r) => (r as any)[stat] != null);
+  // The per-match rate is what a row is RANKED by; the row keeps its totals. Writing the rate over `ga` sent goals
+  // against back as an average, and the table printed "45:1.2352941176470589".
+  const RANK_PER_MATCH = new Set(['ga', 'yellow', 'red']);
+  const scored = rows.map((r) => {
+    const row = { ...r, points: r.w * 3 + r.d, ppg: per(r.w * 3 + r.d, r.played), gd: r.gf - r.ga, gf_pg: per(r.gf, r.played), ga_pg: per(r.ga, r.played), possession: r.possession == null ? null : Number(r.possession) };
+    const by: number | null = RANK_PER_MATCH.has(stat) ? per((r as any)[stat], r.played) : ((row as any)[stat] ?? null);
+    return { ...row, by };
+  }).filter((r) => r.by != null);
   const dir = TEAM_ASC.has(stat) ? 1 : -1;
-  scored.sort((a, b) => dir * ((a as any)[stat] - (b as any)[stat]) || b.played - a.played || a.team_id - b.team_id);
+  scored.sort((a, b) => dir * (a.by! - b.by!) || b.played - a.played || a.team_id - b.team_id);
   const page = scored.slice(offset, offset + limit);
   const teams = await teamsById(db, page.map((r) => r.team_id));
   const lg = new Map(pick.map((l) => [l.id, l]));
   return {
     stat, total: scored.length, limit, offset,
-    rows: page.map((r, i) => ({ rank: offset + i + 1, team: teams.get(r.team_id) ?? null, league: lg.get(r.league_id) ?? null, season: r.season, played: r.played, w: r.w, d: r.d, l: r.l, gf: r.gf, ga: r.ga, points: r.points, value: (r as any)[stat] as number })),
+    rows: page.map((r, i) => ({ rank: offset + i + 1, team: teams.get(r.team_id) ?? null, league: lg.get(r.league_id) ?? null, season: r.season, played: r.played, w: r.w, d: r.d, l: r.l, gf: r.gf, ga: r.ga, points: r.points, value: r.by as number })),
   };
 }
 
@@ -917,7 +923,8 @@ export async function compare(db: Db, a: string, b: string) {
 /** us: only moves to or from a club in a current US competition (pro_us_transfers, migration 156). */
 export async function transfersFeed(db: Db, o: { limit?: number; offset?: number; team?: number | null; us?: boolean } = {}) {
   const today = new Date().toISOString().slice(0, 10);
-  const limit = Math.min(100, o.limit ?? 50), offset = o.offset ?? 0;
+  // Clamped below too: a negative limit or offset reached the database as a bad range and came back a 500.
+  const limit = Math.min(100, Math.max(1, Math.floor(o.limit ?? 50) || 50)), offset = Math.max(0, Math.floor(o.offset ?? 0) || 0);
   let rows: any[];
   if (o.us && !o.team) {
     const { data, error } = await db.rpc('pro_us_transfers', { p_limit: limit, p_offset: offset });

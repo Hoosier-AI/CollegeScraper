@@ -2,7 +2,7 @@
 // xG, the xG race. College from the box score's play-by-play; pro from the match events and American Soccer
 // Analysis' shots. Pre-match chances from Plaibook Elo (college: each side's rating the day before; pro: the club's
 // rating now), else the provider's prediction. Nothing is returned when there is too little to draw.
-import { kvGet, selectAll, type Db } from '../db/client.js';
+import { kvGet, selectAll, selectIn, type Db } from '../db/client.js';
 import { COLLEGE_DRAW_KEY, PRO_DRAW_KEY, expected, predict, type DrawModel } from '../sources/intl/elo.js';
 import { matchAdvanced } from '../pro/sources.js';
 import { memo } from '../pro/memo.js';
@@ -52,7 +52,7 @@ export async function collegeFlow(db: Db, id: string): Promise<Flow | null> {
   if (!game || (game.status !== 'final' && game.status !== 'live') || !game.home_program_id || !game.away_program_id) return null;
   const live = game.status === 'live';
   return memo(`flow-c:${id}:${game.status}`, async () => {
-    const evs = await selectAll<{ source: string; period: number; clock_seconds: number | null; program_id: string | null; event_type: string; player_name_raw: string | null }>(db, 'college_game_events', 'source,period,clock_seconds,program_id,event_type,player_name_raw',
+    const evs = await selectAll<{ source: string; period: number; clock_seconds: number | null; program_id: string | null; event_type: string; player_name_raw: string | null; player_season_id: string | null }>(db, 'college_game_events', 'source,period,clock_seconds,program_id,event_type,player_name_raw,player_season_id',
       (q) => q.eq('game_id', id).in('event_type', ['shot', 'goal', 'pk', 'corner', 'save', 'red']));
     // The play-by-play of the box score we trust, else the other one if it has more.
     const by = (s: string) => evs.filter((e) => e.source === s && e.clock_seconds != null && e.program_id);
@@ -62,12 +62,17 @@ export async function collegeFlow(db: Db, id: string): Promise<Flow | null> {
     const minute = (cs: number) => Math.floor(cs / 60) + 1;
     const actions: Action[] = [];
     const marks: Flow['marks'] = [];
+    // A player removed on request scored or was sent off: the mark stays, the name goes (the box score already
+    // withholds it; this chart printed it).
+    const named = [...new Set(pick.filter((e) => (e.event_type === 'goal' || e.event_type === 'red') && e.player_season_id).map((e) => e.player_season_id as string))];
+    const hidden = new Set(named.length ? (await selectIn<any>(db, 'college_player_seasons', 'id,college_players!inner(suppress)', 'id', named)).filter((r) => r.college_players?.suppress).map((r) => r.id as string) : []);
+    const who = (e: { player_name_raw: string | null; player_season_id?: string | null }) => (e.player_season_id && hidden.has(e.player_season_id) ? null : personName(e.player_name_raw));
     for (const e of pick) {
       const s = side(e.program_id); if (!s) continue;
       const m = minute(e.clock_seconds!);
       if (e.event_type === 'save') actions.push({ m, side: s === 'home' ? 'away' : 'home', w: 0.5 });
-      else if (e.event_type === 'red') marks.push({ m, side: s, type: 'red', who: personName(e.player_name_raw) });
-      else { actions.push({ m, side: s, w: COLLEGE_WEIGHTS[e.event_type] ?? 0 }); if (e.event_type === 'goal') marks.push({ m, side: s, type: 'goal', who: personName(e.player_name_raw) }); }
+      else if (e.event_type === 'red') marks.push({ m, side: s, type: 'red', who: who(e) });
+      else { actions.push({ m, side: s, w: COLLEGE_WEIGHTS[e.event_type] ?? 0 }); if (e.event_type === 'goal') marks.push({ m, side: s, type: 'goal', who: who(e) }); }
     }
     const lastEvent = Math.max(0, ...pick.map((e) => minute(e.clock_seconds!)));
     const until = live ? Math.max(lastEvent, liveMinute(game.live_period, game.live_clock) ?? 0) : Math.max(90, lastEvent);

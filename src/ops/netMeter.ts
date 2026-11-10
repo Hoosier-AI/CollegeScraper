@@ -79,10 +79,15 @@ export function setRemoteOutbound(rows: [string, Row][]): void { remote = new Ma
 
 /** Counts one site response: `who` (a kind of caller) and `what` (a route group). */
 export function meterServed(who: string, what: string, bytes: number): void {
-  const r = bump(served, `${who}|${what}`);
+  // Both parts come from the request (a user agent's first word, a path), so the table is capped: past the cap a
+  // new pair is counted under "other". It used to grow with every distinct agent and junk path until restart.
+  const key = `${who}|${what}`;
+  const r = bump(served, served.has(key) || served.size < SERVED_MAX ? key : 'other|other');
   r.requests++;
   r.out += Math.max(0, bytes);
 }
+
+const SERVED_MAX = 2000;
 
 /** The route group a URL is counted under: /api/<first part>, /v1/<first part>, assets, or pages. */
 export function routeGroup(url: string): string {

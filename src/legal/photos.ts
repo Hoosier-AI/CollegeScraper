@@ -9,7 +9,7 @@
 //                                      or remove (files deleted, the player's photo cleared); admin only
 import { randomUUID } from 'node:crypto';
 import multipart from '@fastify/multipart';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import sharp from 'sharp';
 import { getDb } from '../db/client.js';
 import { forgetMemo } from '../pro/memo.js';
@@ -25,6 +25,10 @@ const HOURLY_LIMIT = 5;
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_SIDE = 1600;
 const MIN_SIDE = 400;
+// The most pixels a submitted picture may declare (a 40-megapixel phone photo passes).
+const PIXEL_LIMIT = 50_000_000;
+const MAX_UPLOADS_IN_FLIGHT = 4;
+let uploadsInFlight = 0;
 const FORMATS = new Set(['jpeg', 'png', 'webp', 'heif']);
 
 const clip = (v: unknown, n: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
@@ -53,9 +57,15 @@ export function checkPhotoFields(f: PhotoFields): CheckedPhoto {
 /** The picture as we keep it: upright, at most 1600 px on its long side, JPEG, with no EXIF (location) data. */
 export async function cleanPhoto(buf: Buffer): Promise<{ ok: true; jpeg: Buffer; width: number; height: number } | { ok: false; status: number; error: string }> {
   let meta;
-  try { meta = await sharp(buf).metadata(); } catch { return { ok: false, status: 415, error: 'That file is not a photo we can read. Send a JPEG, PNG, WebP or HEIC.' }; }
+  // limitInputPixels: a small file can declare an enormous image; the default (268 megapixels) decodes it.
+  const unreadable = { ok: false as const, status: 415, error: 'That file is not a photo we can read. Send a JPEG, PNG, WebP or HEIC.' };
+  try { meta = await sharp(buf, { limitInputPixels: PIXEL_LIMIT }).metadata(); } catch { return unreadable; }
   if (!meta.format || !FORMATS.has(meta.format)) return { ok: false, status: 415, error: 'Send a JPEG, PNG, WebP or HEIC photo.' };
-  const { data, info } = await sharp(buf).rotate().resize(MAX_SIDE, MAX_SIDE, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer({ resolveWithObject: true });
+  let data: Buffer, info: { width: number; height: number };
+  // A file whose header reads but whose pixels do not decode used to throw here: a 500 instead of the message.
+  try {
+    ({ data, info } = await sharp(buf, { limitInputPixels: PIXEL_LIMIT }).rotate().resize(MAX_SIDE, MAX_SIDE, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer({ resolveWithObject: true }));
+  } catch { return unreadable; }
   if (Math.min(info.width, info.height) < MIN_SIDE) return { ok: false, status: 400, error: `The photo is too small: send one at least ${MIN_SIDE} pixels on its short side.` };
   return { ok: true, jpeg: data, width: info.width, height: info.height };
 }
@@ -69,6 +79,13 @@ export function registerPhotoApi(app: FastifyInstance, o: { salt: string }) {
     await scoped.register(multipart, { throwFileSizeLimit: false, limits: { fileSize: MAX_BYTES, files: 1, fields: 12, fieldSize: 2000 } });
     scoped.post('/api/photo-submissions', { bodyLimit: MAX_BYTES + 64 * 1024 }, async (req, reply) => {
       if (!req.isMultipart()) return reply.code(415).send({ error: 'Send the form with the photo attached.' });
+      // Each upload is buffered whole (up to 10 MB) before the hourly limit can be checked, and this form is outside
+      // the site limiter: a burst of uploads held gigabytes. A few at a time; the rest are asked to try again.
+      if (uploadsInFlight >= MAX_UPLOADS_IN_FLIGHT) return reply.code(503).header('Retry-After', '10').send({ error: 'We are busy with other photos right now. Please try again in a moment.' });
+      uploadsInFlight++;
+      try { return await receive(req, reply); } finally { uploadsInFlight--; }
+    });
+    const receive = async (req: FastifyRequest, reply: FastifyReply) => {
       const fields: Record<string, string> = {};
       let file: Buffer | null = null;
       for await (const part of req.parts()) {
@@ -99,7 +116,7 @@ export function registerPhotoApi(app: FastifyInstance, o: { salt: string }) {
         throw new Error(`photo insert: ${error.message}`);
       }
       return reply.code(201).send({ ok: true });
-    });
+    };
   });
 
   app.get<{ Querystring: { status?: string } }>('/api/console/photos', async (req) => {

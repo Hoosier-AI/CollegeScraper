@@ -27,11 +27,19 @@ export async function memo<T>(key: string, load: () => Promise<T>, o: { fresh?: 
   // Nothing usable: one load for everyone asking at the same time.
   if (e?.refresh) return e.refresh as Promise<T>;
   const p = run();
+  // The cap is applied HERE, where a new key first enters the map. It used to be checked only after the load, by
+  // which time this placeholder had already put the key in (`!entries.has(key)` was never true), so nothing was
+  // ever evicted: keys come from request data (a search term, any query string) and the map grew until the heap
+  // ran out. Oldest first; an entry still loading re-adds itself when it lands.
+  if (!e) while (entries.size >= MAX) entries.delete(entries.keys().next().value!);
   entries.set(key, { at: e?.at ?? 0, value: e?.value, refresh: p });
   return p.catch((err) => { if (entries.get(key)?.refresh === p) entries.delete(key); throw err; });
 }
 
 export const memoKey = (name: string, args: unknown) => `${name}:${JSON.stringify(args)}`;
+
+/** How many answers are held (tests, and the console's memory view). */
+export const memoSize = (): number => entries.size;
 
 /** Drops every cached answer whose key starts with `prefix` (after an edit the next read loads afresh). */
 export function forgetMemo(prefix: string): void {

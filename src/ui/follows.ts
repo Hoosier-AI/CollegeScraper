@@ -2,6 +2,8 @@
 // list lives in their browser, ui/src/lib/follows.ts): each team's last result and next match, each player's latest
 // match line. College, Pro and International in one call; at most 40 follows, a few small reads each kind.
 import { selectIn, type Db } from '../db/client.js';
+import { isMinor } from '../pro/minor.js';
+import { eastern } from '../jobs/seasons.js';
 
 export type FollowKind = 'team' | 'player' | 'pro-team' | 'pro-player';
 export interface FollowRef { kind: FollowKind; id: string }
@@ -23,7 +25,8 @@ interface Game { id: string; slug: string | null; date: string; status: string; 
 interface Line { game: Game; minutes: number | null; goals: number; assists: number; saves: number | null; started: boolean | null; rating?: number | null }
 export interface FollowItem { kind: FollowKind; id: string; last: Game | null; next: Game | null; line: Line | null }
 
-const today = () => new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
+// The US Eastern calendar day (a fixed UTC-5 was an hour out for the whole college season, which is on daylight time).
+const today = () => eastern().date;
 
 function collegeGame(g: any, programId: string, names: Map<string, string>): Game {
   const home = g.home_program_id === programId;
@@ -62,7 +65,9 @@ async function collegeTeams(db: Db, ids: string[]): Promise<FollowItem[]> {
 
 async function collegePlayers(db: Db, ids: string[]): Promise<FollowItem[]> {
   if (!ids.length) return [];
-  const seasons = await selectIn<any>(db, 'college_player_seasons', 'id,player_id,season', 'player_id', ids);
+  // A player removed on request has no line here either (the id may be followed from before the removal).
+  const shown = new Set((await selectIn<any>(db, 'college_players', 'id,suppress', 'id', ids)).filter((p) => !p.suppress).map((p) => p.id as string));
+  const seasons = (await selectIn<any>(db, 'college_player_seasons', 'id,player_id,season', 'player_id', ids)).filter((s) => shown.has(s.player_id));
   const latest = new Map<string, any>();
   for (const s of seasons) if (!latest.has(s.player_id) || s.season > latest.get(s.player_id).season) latest.set(s.player_id, s);
   const psIds = [...latest.values()].map((s) => s.id);
@@ -106,8 +111,10 @@ async function proTeams(db: Db, ids: number[]): Promise<FollowItem[]> {
 
 async function proPlayers(db: Db, ids: number[]): Promise<FollowItem[]> {
   if (!ids.length) return [];
-  // Each player's lines of the last 120 days; the newest final is the one shown.
-  const lines = await selectIn<any>(db, 'pro_fixture_players', 'fixture_id,team_id,player_id,starter,minutes,rating,goals,assists,saves', 'player_id', ids, (q) => q.gt('minutes', 0));
+  // No under-18 profiles: a minor's match line is not shown here either.
+  const adults = new Set((await selectIn<any>(db, 'pro_players', 'id,birth_date', 'id', ids)).filter((p) => !isMinor(p.birth_date)).map((p) => Number(p.id)));
+  // Each player's lines; the newest final is the one shown.
+  const lines = (await selectIn<any>(db, 'pro_fixture_players', 'fixture_id,team_id,player_id,starter,minutes,rating,goals,assists,saves', 'player_id', ids, (q) => q.gt('minutes', 0))).filter((l) => adults.has(Number(l.player_id)));
   const fixtures = new Map((lines.length ? await selectIn<any>(db, 'pro_fixtures', 'id,slug,kickoff,status,home_team_id,away_team_id,home_goals,away_goals', 'id', [...new Set(lines.map((l) => l.fixture_id))], (q) => q.eq('status', 'final').gte('kickoff', new Date(Date.now() - 120 * 86400_000).toISOString())) : []).map((f) => [f.id, f]));
   const names = await teamNames(db, [...fixtures.values()].flatMap((f) => [Number(f.home_team_id), Number(f.away_team_id)]));
   return ids.map((id) => {

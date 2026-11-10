@@ -133,7 +133,9 @@ export function suspectTeamLink(title: string, matchText: string, label: string,
 export async function teamIndexRows(db: Db): Promise<any[]> {
   const out: any[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await db.rpc('news_team_index').range(from, from + 999);
+    // Ordered by id: the function has no ORDER BY, and paging an unordered result can repeat or skip rows (a club
+    // missing from this index has its stories unlinked, or linked to a lower-priority namesake).
+    const { data, error } = await db.rpc('news_team_index').order('id').range(from, from + 999);
     if (error) throw new Error(error.message);
     out.push(...((data ?? []) as any[]));
     if (!data || data.length < 1000) return out;

@@ -25,6 +25,18 @@ export function superviseWorker(signal: AbortSignal): WorkerSupervisor {
     startedAt = new Date().toISOString();
     log.info({ pid: child.pid, heap_mb: WORKER_HEAP_MB }, 'worker process forked');
     child.on('message', (m: any) => { if (m?.type === 'net' && Array.isArray(m.rows)) setRemoteOutbound(m.rows); });
+    // A fork that fails (out of memory, EAGAIN) emits 'error' and no 'exit'. Unhandled, that error reached
+    // uncaughtException and took the WEBSITE down with it; handled, the crawl just tries again after a wait.
+    child.on('error', (err) => {
+      log.error({ err: String(err) }, 'worker process error');
+      if (child && !child.pid) {
+        child = null;
+        if (signal.aborted) return;
+        restarts++;
+        fastExits++;
+        setTimeout(start, Math.min(60_000, 2_000 * 2 ** Math.min(fastExits, 5))).unref();
+      }
+    });
     child.on('exit', (code, sig) => {
       lastExit = `${new Date().toISOString()} code=${code} signal=${sig}`;
       child = null;
