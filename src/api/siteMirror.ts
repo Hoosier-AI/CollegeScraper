@@ -56,7 +56,10 @@ export function registerSiteMirror(app: FastifyInstance, routes: readonly string
   const tokenBuf = Buffer.from(token);
   const internal = (req: FastifyRequest) => {
     const got = req.headers['x-stats-internal'];
-    return typeof got === 'string' && got.length === token.length && timingSafeEqual(Buffer.from(got), tokenBuf);
+    if (typeof got !== 'string') return false;
+    // Bytes, not characters: a non-ASCII header of the same character count made timingSafeEqual throw.
+    const gotBuf = Buffer.from(got);
+    return gotBuf.length === tokenBuf.length && timingSafeEqual(gotBuf, tokenBuf);
   };
 
   app.get<{ Params: { '*': string } }>('/v1/site/*', async (req, reply) => {

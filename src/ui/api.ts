@@ -3,6 +3,7 @@
 // Every read except the admin viewer's leaves out players under a takedown request (src/api/redact.ts). Plaibook reads
 // these same routes through /v1/site (src/api/siteMirror.ts), which skips the per-visitor limit.
 import { coachOnSide, refereeOnSide, sideOf } from './side.js';
+import { routedPath } from '../http/routePath.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getDb } from '../db/client.js';
 import { enqueue, jobNames } from '../jobs/runner.js';
@@ -45,17 +46,21 @@ export interface UiApiOptions {
 export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: string | undefined) => boolean)): void {
   const { authorized, limitAnonymous, internal } = typeof opts === 'function' ? { authorized: opts, limitAnonymous: undefined, internal: undefined } : opts;
   // Admin-only paths: anything that starts work or cancels it, plus the crawl-health surfaces.
-  const adminOnly = (req: FastifyRequest): boolean =>
-    req.method !== 'GET' || req.url.startsWith('/api/quality') || req.url.startsWith('/api/console') || /^\/api\/runs(\/|\?|$)/.test(req.url);
+  // Every test here is on the ROUTE the request matched, never on the raw URL text: the router decodes a path
+  // before matching, so `/api/%63onsole/requests` (and `/%61pi/jobs/enqueue`, which skipped this hook entirely)
+  // used to reach admin handlers with no secret. See src/http/routePath.ts.
+  const adminOnly = (method: string, path: string): boolean =>
+    method !== 'GET' || path.startsWith('/api/quality') || path.startsWith('/api/console') || /^\/api\/runs(\/|$)/.test(path);
   app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/api/')) return;
+    const path = routedPath(req);
+    if (!path.startsWith('/api/')) return;
     // The analytics beacon (src/server.ts) keeps its own limit and is not an API read.
-    if (req.url === '/api/t') return;
+    if (path === '/api/t') return;
     // The public corrections form (src/legal/routes.ts) keeps its own per-visitor limit.
-    if (req.method === 'POST' && req.url === '/api/requests') return;
+    if (req.method === 'POST' && path === '/api/requests') return;
     // So does the player photo form (src/legal/photos.ts).
-    if (req.method === 'POST' && req.url === '/api/photo-submissions') return;
-    if (adminOnly(req)) {
+    if (req.method === 'POST' && path === '/api/photo-submissions') return;
+    if (adminOnly(req.method, path)) {
       if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
       return;
     }

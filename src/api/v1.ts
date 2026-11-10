@@ -3,6 +3,7 @@
 // access (server-to-server only, so no CORS). The college routes below map onto the same query helpers the site uses;
 // everything else the site shows is under /v1/site (src/api/siteMirror.ts).
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { routedPath } from '../http/routePath.js';
 import { getDb, selectAll } from '../db/client.js';
 import * as q from '../ui/queries.js';
 import { openapiSpec } from './openapi.js';
@@ -48,7 +49,8 @@ export function withSchoolNames<T extends { school_seo?: string | null }>(progra
 
 export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions): void {
   app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/v1/')) return;
+    // The matched route, not the raw URL text: `/v%31/meta` reached /v1 handlers with no key (src/http/routePath.ts).
+    if (!routedPath(req).startsWith('/v1/')) return;
     // Server-to-server only: a browser preflight is refused (no CORS headers are ever sent).
     if (req.method === 'OPTIONS') return reply.code(405).send({ error: 'method_not_allowed' });
     const token = bearerOf(req.headers as never);
@@ -65,7 +67,7 @@ export function registerPublicApi(app: FastifyInstance, opts: PublicApiOptions):
     (req as FastifyRequest & { principal?: ApiPrincipal }).principal = principal;
   });
   app.addHook('onSend', async (req, reply, payload) => {
-    if (req.url.startsWith('/v1/') && req.method === 'GET' && reply.statusCode === 200 && !reply.getHeader('Cache-Control')) reply.header('Cache-Control', 'private, max-age=60');
+    if (routedPath(req).startsWith('/v1/') && req.method === 'GET' && reply.statusCode === 200 && !reply.getHeader('Cache-Control')) reply.header('Cache-Control', 'private, max-age=60');
     return payload;
   });
 

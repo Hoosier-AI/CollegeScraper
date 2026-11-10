@@ -1,5 +1,6 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
 import { registerLegalApi } from './legal/routes.js';
+import { hasDisguisedPath } from './http/routePath.js';
 import { registerPhotoApi } from './legal/photos.js';
 import { adsTxt, ADS_OFF, buildCsp } from './money/config.js';
 import { adsSettings } from './ops/settings.js';
@@ -66,6 +67,11 @@ const wroteAtStart = new WeakMap<object, number>();
 const SEARCH_ENGINE = /googlebot|bingbot|applebot|duckduckbot|yandexbot/i;
 // Names another bot by its user agent's bot word (AhrefsBot, SemrushBot...), else the agent's first word.
 const botName = (ua: string | undefined) => (/([A-Za-z][\w.-]*(?:bot|crawler|spider|slurp)[\w.-]*)/i.exec(ua ?? '')?.[1] ?? /^[\w.-]+/.exec(ua ?? '')?.[0] ?? 'no-agent').slice(0, 40);
+// First hook of all: a path that percent-encodes a plain letter or digit is refused. The router would decode it
+// and run the real route, while anything that reads the URL text (a gate, a limiter, a cache key) saw another path.
+app.addHook('onRequest', async (req, reply) => {
+  if (hasDisguisedPath(req.url)) return reply.code(400).header('Cache-Control', 'no-store').send({ error: 'bad request' });
+});
 app.addHook('onRequest', async (req) => { wroteAtStart.set(req, req.raw.socket?.bytesWritten ?? 0); });
 app.addHook('onResponse', async (req) => {
   const ua = req.headers['user-agent'];
@@ -112,6 +118,9 @@ app.get('/ads.txt', async (_req, reply) => {
 app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {
   const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
   if (status >= 500) log.error({ err: String(err), url: req.url, method: req.method }, 'request failed');
+  // A route sets its public max-age before it awaits the data: without this, a database blip was replayed from
+  // caches for minutes.
+  if (status >= 500) reply.header('Cache-Control', 'no-store');
   reply.code(status).send(status >= 500 ? { error: 'Something went wrong on our side. Please try again.' } : { error: err.message });
 });
 process.on('unhandledRejection', (err) => log.error({ err: String(err) }, 'unhandled rejection'));
@@ -139,10 +148,12 @@ app.addHook('onRequest', async (req, reply) => {
 function authorized(header: string | undefined): boolean {
   const secret = cfg.COLLEGE_TRIGGER_SECRET;
   if (!secret) return false;
-  const expected = `Bearer ${secret}`;
-  const got = String(header ?? '');
+  // Compared as bytes of equal length: a header with a non-ASCII character and the right number of characters has a
+  // different byte length, and timingSafeEqual threw (a 500 that also told the caller the secret's length).
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const got = Buffer.from(String(header ?? ''));
   if (got.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(got), Buffer.from(expected));
+  return timingSafeEqual(got, expected);
 }
 
 // One limiter for the API's keys and the admin secret (per key name), and one for the site's own reads (per visitor
