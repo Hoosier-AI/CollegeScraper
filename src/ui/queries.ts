@@ -786,7 +786,8 @@ async function requestMeetingDetail(db: Db, queue: boolean, games: MatchRow[]): 
   for (const [season, ids] of bySeason) {
     // supabase-js answers { error } and does not throw: only a landed insert counts as asked.
     const { error } = await db.from('college_crawl_runs').insert({ job: 'h2h-detail', params: { season, contest_ids: ids.sort() }, status: 'queued' });
-    if (error) continue;
+    // 23505: the same run is already waiting (one queued run per job and params, migration 207). That counts as asked.
+    if (error && error.code !== '23505') continue;
     const now = Date.now();
     for (const id of ids) requestedDetail.set(id, now);
   }

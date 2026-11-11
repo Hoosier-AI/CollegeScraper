@@ -100,3 +100,4 @@ Every file is written to be re-runnable (`IF NOT EXISTS`, `CREATE OR REPLACE`).
 Two files share the number 171 (`171_pro_leaders_fast.sql` and `171_pro_more_player_stats.sql`); both are applied, fast first.
 
 After a change: `npm test`, then `STATS_URL=https://www.plaibook.live STATS_KEY=<plaibook key> node scripts/site-contract.mjs` (every site read Plaibook can make) and from the Plaibook repo `node scripts/qa/college-contract.mjs` (read-only, live).
+| 207_run_attempts_and_queue_unique.sql | `college_crawl_runs.attempts` (each claim counts; a run whose worker died 3 times is closed as failed instead of being claimed forever), one queued run per job and params (unique index), `college_claim_run` rewritten | yes (2026-11-11) |

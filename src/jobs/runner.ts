@@ -83,6 +83,12 @@ export async function enqueue(db: Db, job: string, params: Record<string, unknow
   const dup = (existing ?? []).find((r: any) => canonicalJson(r.params ?? {}) === want);
   if (dup) return { id: dup.id, status: dup.status, existing: true };
   const { data, error } = await db.from('college_crawl_runs').insert({ job, params, status: 'queued' }).select('id,status').single();
+  if (error?.code === '23505') {
+    // Another request queued the same run between the read above and this insert (migration 207 allows one).
+    const { data: twins } = await db.from('college_crawl_runs').select('id,status,params').eq('job', job).eq('status', 'queued');
+    const twin = (twins ?? []).find((r: any) => canonicalJson(r.params ?? {}) === want);
+    if (twin) return { id: twin.id, status: twin.status, existing: true };
+  }
   if (error) throw new Error(`enqueue ${job}: ${error.message}`);
   return { id: data.id, status: data.status, existing: false };
 }
