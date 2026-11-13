@@ -11,7 +11,8 @@ export const AI_ANSWER_BOTS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot',
 /** Page requests a minute each AI answer bot is served (the /data-use limit); robots.txt asks for the matching
  * Crawl-delay. Perplexity alone sent ~480k a day on 2026-10-29. */
 export const AI_BOT_RATE_PER_MIN = 20;
-export const DISALLOWED = ['/admin', '/console', '/jobs', '/quality', '/v1', '/api/console', '/api/quality', '/api/runs', '/api/jobs'];
+// /card/: the stat-card PNGs (src/seo/statcard.ts) are for people posting them, not for crawlers (bandwidth).
+export const DISALLOWED = ['/admin', '/console', '/jobs', '/quality', '/v1', '/api/console', '/api/quality', '/api/runs', '/api/jobs', '/card/'];
 
 /** Search engines that render pages with JavaScript, which reads the site's own /api: they may read it. */
 export const SEARCH_ENGINES = ['Googlebot', 'Bingbot', 'Applebot', 'DuckDuckBot', 'YandexBot'];

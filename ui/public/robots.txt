@@ -12,6 +12,7 @@ Disallow: /api/console
 Disallow: /api/quality
 Disallow: /api/runs
 Disallow: /api/jobs
+Disallow: /card/
 Disallow: /api/
 
 User-agent: Googlebot
@@ -30,6 +31,7 @@ Disallow: /api/console
 Disallow: /api/quality
 Disallow: /api/runs
 Disallow: /api/jobs
+Disallow: /card/
 
 User-agent: OAI-SearchBot
 User-agent: ChatGPT-User
@@ -46,6 +48,7 @@ Disallow: /api/console
 Disallow: /api/quality
 Disallow: /api/runs
 Disallow: /api/jobs
+Disallow: /card/
 Disallow: /api/
 Crawl-delay: 3
 
