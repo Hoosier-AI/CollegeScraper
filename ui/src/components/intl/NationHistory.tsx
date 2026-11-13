@@ -86,7 +86,7 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
               {c.slug ? <Link to={proPath.player(c.slug)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.name}</Link> : <span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{c.name}</span>}
               <span className="text-2xs tnum text-chalk-500">{c.goals != null ? `${c.goals} goals` : ''}</span><span className="display w-8 text-right tnum text-chalk-100">{c.caps}</span></li>
           ))}</ol> : <p className="text-sm text-chalk-400">Caps appear as players' careers are added.</p>}
-          {h.caps.length > 0 && <p className="text-2xs text-chalk-500">Players Plaibook Stats follows (today's and recent players); earlier greats are added over time.</p>}
+          {h.caps.length > 0 && <p className="text-2xs text-chalk-500">Players Plaibook Live follows (today's and recent players); earlier greats are added over time.</p>}
         </Section>
       </div>
       <Section title="Latest results"><ResultList rows={h.recent} nation={key} /></Section>

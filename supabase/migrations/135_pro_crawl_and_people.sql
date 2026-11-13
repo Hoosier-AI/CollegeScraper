@@ -1,4 +1,4 @@
--- Plaibook Stats Pro v2: crawl every league, club and player, and the tables behind the richer pages.
+-- Plaibook Live Pro v2: crawl every league, club and player, and the tables behind the richer pages.
 --   pro_crawl_tasks         one row per unit of crawl work (kind + key), drained in priority order by pro-crawl
 --   pro_countries           the provider's country list (country pages)
 --   pro_league_teams        which clubs play in which league season (squad / transfer / coach tasks come from it)

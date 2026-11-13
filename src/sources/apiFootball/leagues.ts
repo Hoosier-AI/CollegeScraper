@@ -1,4 +1,4 @@
-// Which of API-Football's ~1,250 competitions Plaibook Stats Pro crawls, in what order, and for which gender. The
+// Which of API-Football's ~1,250 competitions Plaibook Live Pro crawls, in what order, and for which gender. The
 // provider has no gender or level field, so both come from the name plus a hand-kept list of the competitions
 // Plaibook's audience follows first (the US pyramid, then the big European leagues and the women's top flights).
 // The US scene (every competition in the USA, amateur and pre-pro ones included, plus the international club

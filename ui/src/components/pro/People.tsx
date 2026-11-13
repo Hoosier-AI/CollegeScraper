@@ -1,4 +1,4 @@
-// Plaibook Stats Pro v2 building blocks: a country flag, percentile bars, the transfers list, goals by 15-minute
+// Plaibook Live Pro v2 building blocks: a country flag, percentile bars, the transfers list, goals by 15-minute
 // period, and the leaders table the directory, leaders, country and league pages share.
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';

@@ -23,7 +23,7 @@ export default function Photo() {
   const key = params.get('player') ?? '';
   const entity = useEntityId('player', key);
   const q = useQuery({ queryKey: ['player', entity.id], queryFn: () => api<any>(`/api/players/${entity.id}`), enabled: !!entity.id });
-  if (!key || entity.missing) return <EmptyState title="Which player?" body="Open the player's page on Plaibook Stats and choose Add a photo there." action={<Link className="btn-ghost btn-sm" to="/players">Find a player</Link>} />;
+  if (!key || entity.missing) return <EmptyState title="Which player?" body="Open the player's page on Plaibook Live and choose Add a photo there." action={<Link className="btn-ghost btn-sm" to="/players">Find a player</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
   if (q.isPending) return <div className="mx-auto max-w-2xl space-y-3"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
@@ -40,7 +40,7 @@ export default function Photo() {
         </div>
       </header>
       <div className="space-y-2 text-[15px] leading-relaxed text-chalk-300">
-        <p>Send a photo of this player for their Plaibook Stats page and for Plaibook&apos;s posts about them (team of the week, stat leaders). We look at every photo before it is used, and credit it the way you ask.</p>
+        <p>Send a photo of this player for their Plaibook Live page and for Plaibook&apos;s posts about them (team of the week, stat leaders). We look at every photo before it is used, and credit it the way you ask.</p>
         <p>The player, a parent or guardian, or school or team staff can send one. We remove the location and camera details from the file. To have a photo taken down later, use the <Link to="/corrections" className="text-pitch-300 hover:text-pitch-200">corrections form</Link>.</p>
       </div>
       <PhotoForm playerId={p.id} name={p.display_name} />
@@ -114,7 +114,7 @@ function PhotoForm({ playerId, name }: { playerId: string; name: string }) {
         <legend className={label}>Please confirm</legend>
         <label className="flex items-start gap-2"><input type="checkbox" required className="mt-1" checked={f.consent_owner} onChange={set('consent_owner')} /><span>I took this photo, or the person who took it said we can use it.</span></label>
         <label className="flex items-start gap-2"><input type="checkbox" required className="mt-1" checked={f.consent_age} onChange={set('consent_age')} /><span>The player is 18 or older, or I am their parent or guardian.</span></label>
-        <label className="flex items-start gap-2"><input type="checkbox" required className="mt-1" checked={f.consent_use} onChange={set('consent_use')} /><span>Plaibook may show this photo on Plaibook Stats and in Plaibook&apos;s social posts, credited as above, until I ask for it to be removed.</span></label>
+        <label className="flex items-start gap-2"><input type="checkbox" required className="mt-1" checked={f.consent_use} onChange={set('consent_use')} /><span>Plaibook may show this photo on Plaibook Live and in Plaibook&apos;s social posts, credited as above, until I ask for it to be removed.</span></label>
       </fieldset>
       {/* A person never fills this in; bots do. */}
       <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden"><label htmlFor="photo-website">Website</label><input id="photo-website" tabIndex={-1} autoComplete="off" value={f.website} onChange={set('website')} /></div>

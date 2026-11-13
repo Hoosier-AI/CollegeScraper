@@ -16,7 +16,7 @@ import './liveScoreboard.js';
 import './schedules.js';
 import './quality.js';
 import './weather.js';
-// Plaibook Stats Pro (API-Football).
+// Plaibook Live Pro (API-Football).
 import './pro/catalog.js';
 import './pro/scoreboard.js';
 import './pro/detail.js';

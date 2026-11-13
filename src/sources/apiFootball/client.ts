@@ -1,4 +1,4 @@
-// API-Football (v3.football.api-sports.io): the one source for Plaibook Stats Pro. The key is Plaibook's own Pro plan
+// API-Football (v3.football.api-sports.io): the one source for Plaibook Live Pro. The key is Plaibook's own Pro plan
 // (7,500 requests a day, shared with the Plaibook app), so every call goes through a quota guard: the provider reports
 // what is left of the day in x-ratelimit-requests-remaining on each answer, and this client refuses to spend below a
 // floor. Everyday jobs (scores, finals, tables) use `reserve`; the history backfill uses the higher `backfillReserve`,

@@ -1,4 +1,4 @@
-# Plaibook Stats. The pages are public. The /api reads behind them are for the site itself (search engines
+# Plaibook Live. The pages are public. The /api reads behind them are for the site itself (search engines
 # that render pages may read them); the admin console, job routes and the bulk API are not for crawlers.
 # AI training crawlers are not welcome. Rules for bots and automated access: /data-use
 User-agent: *

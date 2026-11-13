@@ -33,7 +33,7 @@ export default function RequestsTab() {
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={r.kind === 'removal' || r.kind === 'privacy' ? 'red' : r.kind === 'copyright' ? 'amber' : 'blue'}>{KIND[r.kind] ?? r.kind}</Badge>
               {r.status !== 'open' && <Badge tone="gray">{r.status}</Badge>}
-              <a href={`mailto:${r.email}?subject=${encodeURIComponent(`Your Plaibook Stats request (${KIND[r.kind] ?? r.kind})`)}`} className="font-medium text-pitch-300 hover:text-pitch-200">{r.name ? `${r.name} <${r.email}>` : r.email}</a>{r.company && <span className="text-chalk-400">{r.company}</span>}
+              <a href={`mailto:${r.email}?subject=${encodeURIComponent(`Your Plaibook Live request (${KIND[r.kind] ?? r.kind})`)}`} className="font-medium text-pitch-300 hover:text-pitch-200">{r.name ? `${r.name} <${r.email}>` : r.email}</a>{r.company && <span className="text-chalk-400">{r.company}</span>}
               {r.relation && <span className="text-xs text-chalk-400">{r.relation}</span>}
               <span className="ml-auto text-xs text-chalk-500" title={r.created_at}>{fmt.ago(r.created_at)}</span>
             </div>

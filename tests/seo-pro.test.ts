@@ -1,4 +1,4 @@
-// Plaibook Stats Pro's server-rendered pages and sitemaps, end to end through Fastify inject over fixture data.
+// Plaibook Live Pro's server-rendered pages and sitemaps, end to end through Fastify inject over fixture data.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { readFileSync } from 'node:fs';
@@ -78,7 +78,7 @@ describe('pro seo routes', () => {
   it('renders a final with a score-line title, SportsEvent JSON-LD and the summary', async () => {
     const r = await app.inject({ url: `/pro/matches/${matchRow().slug}`, headers: HTML });
     expect(r.statusCode).toBe(200);
-    expect(between(r.body, '<title>', '</title>')).toBe('Portland Thorns 3-1 Boston Legacy, NWSL Women, Oct 4, 2026 | Plaibook Stats');
+    expect(between(r.body, '<title>', '</title>')).toBe('Portland Thorns 3-1 Boston Legacy, NWSL Women, Oct 4, 2026 | Plaibook Live');
     expect(r.body).toContain(`<link rel="canonical" href="${BASE}/pro/matches/${matchRow().slug}" />`);
     expect(r.body).not.toContain('name="robots"');
     const ld = jsonLd(r.body);
@@ -87,7 +87,7 @@ describe('pro seo routes', () => {
     const ssr = between(r.body, '<section id="ssr">', '</section>');
     expect(ssr).toContain('<a href="/pro/players/sophia-smith-9">Sophia Smith</a>');
     expect(ssr).toContain('assisted by O. Moultrie');
-    expect(ssr).toContain('Plaibook Stats Pro');
+    expect(ssr).toContain('Plaibook Live Pro');
   });
 
   it('unplayed and score-only matches are noindex', async () => {
@@ -119,7 +119,7 @@ describe('pro seo routes', () => {
 
   it('league and home pages', async () => {
     const l = await app.inject({ url: '/pro/leagues/usa-nwsl-women', headers: HTML });
-    expect(between(l.body, '<title>', '</title>')).toBe('NWSL Women 2026: Table, Results, Fixtures and Top Scorers | Plaibook Stats');
+    expect(between(l.body, '<title>', '</title>')).toBe('NWSL Women 2026: Table, Results, Fixtures and Top Scorers | Plaibook Live');
     expect(l.body).toContain('Portland Thorns top the table on 47 points');
     // The Pro home is the one home page now: /pro moves there (query kept), and / carries today's pro matches.
     const old = await app.inject({ url: '/pro?gender=w', headers: HTML });

@@ -39,7 +39,7 @@ export default function Player() {
   const [tab] = useUrlState('tab', 'overview', { allow: ['overview', 'stats', 'matches', 'career', 'news'] });
   const { pathname } = useLocation();
   const q = useQuery({ queryKey: ['player', id], queryFn: () => api<any>(`/api/players/${id}`), enabled: !!id });
-  // Plaibook Stats Pro: a confident link to this player's professional career.
+  // Plaibook Live Pro: a confident link to this player's professional career.
   const pro = useQuery({ queryKey: ['pro-from-college', id], queryFn: () => api<{ pro: { name: string; slug: string } | null }>(`/api/pro/from-college/${id}`), enabled: !!id, staleTime: 300_000 });
   if (entity.missing) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/players">Browse players</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;

@@ -1,11 +1,11 @@
-// The policy and information pages of Plaibook Stats (/about, /contact, /terms, /privacy, /sources, /data-use,
+// The policy and information pages of Plaibook Live (/about, /contact, /terms, /privacy, /sources, /data-use,
 // /copyright, /corrections, /accessibility, /advertise, /privacy-choices). Pure data, one copy: the server renders it for search engines and
 // no-JavaScript readers (src/seo/legal.ts) and the app fetches it from /api/legal/:slug, so the two never differ.
 // A block is a paragraph (string; [text](url) makes a link), { bullets }, or { table: { head, rows } }.
 // Written for the free stats site; the paid Plaibook app (plaibook.soccer) has its own policies.
 
 export const COMPANY = 'Plaibook Technologies, Inc.';
-export const SITE_NAME = 'Plaibook Stats';
+export const SITE_NAME = 'Plaibook Live';
 export const SITE = 'www.plaibook.live';
 /** The one address on every page. Change it here only. */
 export const CONTACT = 'support@plaibook.soccer';
@@ -21,8 +21,8 @@ const T = (head: string[], rows: string[][]): Block => ({ table: { head, rows } 
 const mail = (subject: string) => `[${CONTACT}](mailto:${CONTACT}?subject=${encodeURIComponent(subject)})`;
 
 const ABOUT: LegalPage = {
-  slug: 'about', path: '/about', nav: 'About', title: 'About Plaibook Stats',
-  description: 'Plaibook Stats is a free soccer statistics site for NCAA college soccer, professional leagues and international football, run by Plaibook Technologies, Inc.',
+  slug: 'about', path: '/about', nav: 'About', title: 'About Plaibook Live',
+  description: 'Plaibook Live is a free soccer statistics site for NCAA college soccer, professional leagues and international football, run by Plaibook Technologies, Inc.',
   intro: `${SITE_NAME} is a free soccer statistics site covering NCAA college soccer (Divisions I, II and III, men's and women's), professional leagues around the world and international football. It is run by ${COMPANY}, the company behind Plaibook, the coaching platform at plaibook.soccer. The Site is free to use; it is supported by advertising, sponsorships and paid data access.`,
   sections: [
     { id: 'what', heading: 'What you will find here', blocks: [B([
@@ -44,7 +44,7 @@ const ABOUT: LegalPage = {
 
 const CONTACT_PAGE: LegalPage = {
   slug: 'contact', path: '/contact', nav: 'Contact', title: 'Contact',
-  description: 'How to reach Plaibook Stats about corrections, removal requests, privacy, copyright, press and data licensing.',
+  description: 'How to reach Plaibook Live about corrections, removal requests, privacy, copyright, press and data licensing.',
   intro: `The quickest way to reach us is the request form on [Corrections and removal](/corrections), which goes straight to the people who keep the data. You can also email ${CONTACT}; please use the subject line below so your message reaches the right place.`,
   sections: [
     { id: 'who', heading: 'Who to contact about what', blocks: [T(['About', 'Use', 'Subject line'], [
@@ -63,7 +63,7 @@ const CONTACT_PAGE: LegalPage = {
 
 const TERMS: LegalPage = {
   slug: 'terms', path: '/terms', nav: 'Terms of use', title: 'Terms of Use',
-  description: 'The terms that apply when you use Plaibook Stats, including acceptable use, automated access, attribution and disclaimers.',
+  description: 'The terms that apply when you use Plaibook Live, including acceptable use, automated access, attribution and disclaimers.',
   intro: `These Terms of Use govern your use of ${SITE_NAME} at ${SITE}, its pages and its data (together, the "Site"), provided by ${COMPANY}, a Delaware corporation ("we", "us"). By using the Site you agree to these Terms and to our [Privacy Policy](/privacy). If you do not agree, do not use the Site.`,
   sections: [
     { id: 'use', heading: 'Using the Site', blocks: [
@@ -122,7 +122,7 @@ const TERMS: LegalPage = {
 
 const PRIVACY: LegalPage = {
   slug: 'privacy', path: '/privacy', nav: 'Privacy', title: 'Privacy Policy',
-  description: 'What Plaibook Stats collects (very little), what stays in your browser, how advertising works, and the rights you have.',
+  description: 'What Plaibook Live collects (very little), what stays in your browser, how advertising works, and the rights you have.',
   intro: `${SITE_NAME} has no accounts and sets no cookies of its own. To stay free it shows sponsors, which we serve ourselves without cookies or tracking, and it may show display ads from Google AdSense, which do use cookies; the section on cookies below explains how, and [Your privacy choices](/privacy-choices) lets you turn off personalised ads. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}.`,
   sections: [
     { id: 'collect', heading: 'What we collect when you visit', blocks: [
@@ -171,7 +171,7 @@ const PRIVACY: LegalPage = {
 
 const SOURCES: LegalPage = {
   slug: 'sources', path: '/sources', nav: 'Credits', title: 'Credits',
-  description: 'Licence notices for the open data used on Plaibook Stats.',
+  description: 'Licence notices for the open data used on Plaibook Live.',
   intro: `Some of the data on ${SITE_NAME} is adapted from open sources whose licences ask for the notices below. Questions: ${CONTACT}.`,
   sections: [
     { id: 'wikipedia', heading: 'Wikipedia', blocks: [
@@ -191,7 +191,7 @@ const SOURCES: LegalPage = {
 
 const DATA_USE: LegalPage = {
   slug: 'data-use', path: '/data-use', nav: 'Data use and bots', title: 'Data use, our crawler and bots',
-  description: 'How Plaibook Stats collects data from other sites, the limits for bots and automated access, and AI crawlers.',
+  description: 'How Plaibook Live collects data from other sites, the limits for bots and automated access, and AI crawlers.',
   intro: 'This page explains how our own crawler behaves when it visits other sites, and the rules for anyone reading this Site automatically.',
   sections: [
     { id: 'crawler', heading: 'Our crawler', blocks: [
@@ -211,7 +211,7 @@ const DATA_USE: LegalPage = {
       'There is no public API or bulk download (see below); for data in bulk, ask us.',
     ] },
     { id: 'api', heading: 'No public API', blocks: [
-      'Plaibook Stats has no public API. Its data feeds our own Plaibook app through a private interface that is not open to others. Some data comes from licensed providers and is shown on our pages only. Credit Plaibook Stats wherever you quote the data.',
+      'Plaibook Live has no public API. Its data feeds our own Plaibook app through a private interface that is not open to others. Some data comes from licensed providers and is shown on our pages only. Credit Plaibook Live wherever you quote the data.',
     ] },
     { id: 'ai', heading: 'AI crawlers', blocks: [
       'Our robots.txt allows answer engines and AI search tools to read the Site\'s pages (not its /api/ endpoints) so they can cite it with a link, at up to about 20 pages a minute each; faster requests are refused with "too many requests". AI-training crawlers (such as GPTBot, ClaudeBot, Google-Extended, CCBot, Bytespider, meta-externalagent and Amazonbot) are kept off the Site, and their requests are refused. Using the Site\'s data to train AI models is not allowed under our [Terms of Use](/terms).',
@@ -221,7 +221,7 @@ const DATA_USE: LegalPage = {
 
 const COPYRIGHT: LegalPage = {
   slug: 'copyright', path: '/copyright', nav: 'Copyright', title: 'Copyright and DMCA',
-  description: 'How to tell Plaibook Stats about copyrighted material, the counter-notice process and our repeat-infringer policy.',
+  description: 'How to tell Plaibook Live about copyrighted material, the counter-notice process and our repeat-infringer policy.',
   intro: `We respect the rights of others. If you believe material on the Site infringes your copyright, send a notice to our designated agent and we will remove or disable it promptly, as the Digital Millennium Copyright Act (17 U.S.C. §512) provides.`,
   sections: [
     { id: 'notice', heading: 'Sending a notice', blocks: [
@@ -249,7 +249,7 @@ const COPYRIGHT: LegalPage = {
 
 const CORRECTIONS: LegalPage = {
   slug: 'corrections', path: '/corrections', nav: 'Corrections and removal', title: 'Corrections and removal requests',
-  description: 'Report an error on Plaibook Stats, or ask for a player\'s details or photo to be corrected or removed.',
+  description: 'Report an error on Plaibook Live, or ask for a player\'s details or photo to be corrected or removed.',
   intro: 'Found a wrong score, a misspelled name or a player in the wrong team? Want your details or photo taken down? Tell us here. We read every request.',
   form: 'request',
   sections: [
@@ -272,7 +272,7 @@ const CORRECTIONS: LegalPage = {
 
 const ACCESSIBILITY: LegalPage = {
   slug: 'accessibility', path: '/accessibility', nav: 'Accessibility', title: 'Accessibility',
-  description: 'Plaibook Stats aims to meet WCAG 2.2 AA. What we have done, known limits and how to tell us about a problem.',
+  description: 'Plaibook Live aims to meet WCAG 2.2 AA. What we have done, known limits and how to tell us about a problem.',
   intro: `We want everyone to be able to use ${SITE_NAME}, including people who use screen readers, keyboards, magnification or other assistive technology. We aim to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA.`,
   sections: [
     { id: 'done', heading: 'What we have done', blocks: [B([
@@ -295,7 +295,7 @@ const ACCESSIBILITY: LegalPage = {
 
 const ADVERTISE: LegalPage = {
   slug: 'advertise', path: '/advertise', nav: 'Advertise', title: 'Advertise and data licensing',
-  description: 'Sponsor a section of Plaibook Stats, advertise to college, pro and international soccer fans, or ask about data licensing.',
+  description: 'Sponsor a section of Plaibook Live, advertise to college, pro and international soccer fans, or ask about data licensing.',
   intro: `${SITE_NAME} is read by players, parents, coaches and fans following college, professional and international soccer, with an American focus. Sponsorships, advertising and data licensing keep the Site free. Tell us what you have in mind with the form below and we will reply within 2 business days.`,
   form: 'advertise',
   sections: [
@@ -318,7 +318,7 @@ const ADVERTISE: LegalPage = {
 
 const PRIVACY_CHOICES: LegalPage = {
   slug: 'privacy-choices', path: '/privacy-choices', nav: 'Your privacy choices', title: 'Your privacy choices',
-  description: 'Turn off personalised ads on Plaibook Stats, and how Global Privacy Control and consent work here.',
+  description: 'Turn off personalised ads on Plaibook Live, and how Global Privacy Control and consent work here.',
   intro: 'Choose whether the ads on this Site may be personalised. Your choice is kept in this browser only; set it again on each browser or device you use. It applies whenever display ads are switched on.',
   form: 'privacy-choices',
   sections: [

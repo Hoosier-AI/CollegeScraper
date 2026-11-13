@@ -1,4 +1,4 @@
-// Plaibook Stats Pro: the shapes /api/pro/* returns (src/pro/queries.ts) and small display helpers.
+// Plaibook Live Pro: the shapes /api/pro/* returns (src/pro/queries.ts) and small display helpers.
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import { currentLinkSection } from './section';

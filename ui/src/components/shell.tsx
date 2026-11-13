@@ -46,7 +46,7 @@ function AreaSwitch({ section }: { section: Section | null }) {
       </nav>
       <div ref={root} className="relative shrink-0 sm:hidden">
         <button type="button" className="flex min-h-11 items-center gap-1.5 rounded-md pr-1 text-sm font-semibold text-chalk-100" aria-expanded={open} aria-haspopup="true" aria-controls="area-menu" onClick={() => setOpen((v) => !v)}>
-          <Logo withText={false} size={24} />{section ? AREA_LABEL[section] : 'Plaibook Stats'}<ChevronDown size={14} aria-hidden className="text-chalk-400" />
+          <Logo withText={false} size={24} />{section ? AREA_LABEL[section] : 'Plaibook Live'}<ChevronDown size={14} aria-hidden className="text-chalk-400" />
         </button>
         {open && (
           <nav id="area-menu" aria-label="Area" className="absolute left-0 top-full z-40 mt-1 w-56 rounded-lg border border-field-700 bg-field-900 p-1 shadow-xl shadow-black/50">
@@ -154,7 +154,7 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950">
       <div className="mx-auto flex h-14 max-w-page items-center gap-2 px-4 sm:gap-4 sm:px-6">
-        <Link to="/" className="hidden shrink-0 rounded sm:block" aria-label="Plaibook Stats home"><Logo size={34} className="hidden xl:inline-flex" /><Logo withText={false} size={28} className="xl:hidden" /></Link>
+        <Link to="/" className="hidden shrink-0 rounded sm:block" aria-label="Plaibook Live home"><Logo size={34} className="hidden xl:inline-flex" /><Logo withText={false} size={28} className="xl:hidden" /></Link>
         <AreaSwitch section={home ? null : section} />
         {/* The home page belongs to no one area: its search and the switch are the way in. */}
         {!home && <AreaNav area={section} admin={admin} />}
@@ -259,7 +259,7 @@ export function Crumbs({ items }: { items: { label: ReactNode; to?: string }[] }
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
   { title: 'College', links: [['/matches', 'Matches'], ['/conferences', 'Conferences'], ['/rankings', 'Rankings'], ['/team-of-the-week', 'Team of the week'], ['/tournament', 'NCAA tournament odds'], ['/tv', 'On TV']] },
   { title: 'Pro and International', links: [['/pro/matches', 'Pro matches'], ['/pro/leagues', 'Leagues'], ['/pro/abroad', 'Americans abroad'], ['/intl/matches', 'International matches'], ['/intl/tournaments', 'Tournaments'], ['/intl/rankings', 'World rankings']] },
-  { title: 'About', links: [['/about', 'About Plaibook Stats'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Credits'], ['/data-use', 'Data use and bots'], ['/advertise', 'Advertise with us']] },
+  { title: 'About', links: [['/about', 'About Plaibook Live'], ['/contact', 'Contact'], ['/corrections', 'Report an error or request removal'], ['/sources', 'Credits'], ['/data-use', 'Data use and bots'], ['/advertise', 'Advertise with us']] },
   { title: 'Legal', links: [['/terms', 'Terms of use'], ['/privacy', 'Privacy'], ['/privacy#browser', 'Cookies and storage'], ['/privacy-choices', 'Your privacy choices'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility']] },
 ];
 
@@ -274,7 +274,7 @@ export function Footer() {
       <div className="mx-auto w-full max-w-page px-4 pb-28 pt-10 sm:px-6 md:pb-10">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,3fr)]">
           <div className="space-y-3">
-            <Link to="/" aria-label="Plaibook Stats home" className="inline-block"><Logo size={26} /></Link>
+            <Link to="/" aria-label="Plaibook Live home" className="inline-block"><Logo size={26} /></Link>
             <p className="max-w-xs text-sm leading-relaxed text-chalk-300">Free soccer stats for NCAA college soccer, professional leagues and international football.</p>
             <p className="text-sm text-chalk-400">Coaching a team? <a href="https://www.plaibook.soccer/?utm_source=stats&amp;utm_medium=referral&amp;utm_campaign=footer" className="text-pitch-300 hover:text-pitch-200">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
           </div>
@@ -288,7 +288,7 @@ export function Footer() {
           </nav>
         </div>
         <div className="mt-8 space-y-2 border-t border-field-700 pt-5 text-xs leading-relaxed text-chalk-500">
-          <p>Team names, logos and competition names are trademarks of their owners. Plaibook Stats is independent and is not affiliated with or endorsed by the NCAA, any conference, school, league or federation.</p>
+          <p>Team names, logos and competition names are trademarks of their owners. Plaibook Live is independent and is not affiliated with or endorsed by the NCAA, any conference, school, league or federation.</p>
           <p className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-chalk-400">
             <span>© {year} Plaibook Technologies, Inc.</span>
             <span>Stats are provided as-is. <Link to="/corrections" className="text-chalk-300 hover:text-pitch-300">See an error? Report it.</Link></span>

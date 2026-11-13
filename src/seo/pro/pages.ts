@@ -1,4 +1,4 @@
-// Pure: Plaibook Stats Pro page models (src/pro/queries.ts) -> <head> metadata and the escaped #ssr summary that
+// Pure: Plaibook Live Pro page models (src/pro/queries.ts) -> <head> metadata and the escaped #ssr summary that
 // search engines and no-JavaScript readers get. Same rules as the college pages: unplayed and score-only matches,
 // players without an appearance and competitions without a match stay out of search (noindex,follow).
 import type * as Q from '../../pro/queries.js';

@@ -19,7 +19,7 @@ export function startWorkers(controller: AbortController, cfg: Pick<Config, 'WOR
     // A second worker for finished college matches' box scores (since the 2 GB instance, 2026-10-15): a busy night's
     // finals no longer queue for hours behind one worker. Each run claims its own games.
     workerLoop(getDb(), { signal: controller.signal, jobs: ['final-detail'], idleMs: 15_000, lane: 'aux-b' }).catch((err) => { log.error({ err: String(err) }, 'aux-b worker crashed'); process.exit(1); });
-    // A fourth for Plaibook Stats Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
+    // A fourth for Plaibook Live Pro's everyday jobs (scores, detail, tables): seconds each, all year, never behind a college crawl.
     workerLoop(getDb(), { signal: controller.signal, jobs: PRO_LANE_JOBS, idleMs: 10_000, lane: 'pro' }).catch((err) => { log.error({ err: String(err) }, 'pro worker crashed'); process.exit(1); });
     // A second worker that only takes pro-live (2026-11-02): full time used to wait behind pro-predictions (up to 800
     // requests every 3 h) or pro-leaders on the one pro worker, so a final reached Plaibook 8-16 min after the whistle.

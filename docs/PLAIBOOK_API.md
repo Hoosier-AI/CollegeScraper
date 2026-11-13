@@ -1,10 +1,10 @@
-# Plaibook Stats API: Plaibook's private contract
+# Plaibook Live API: Plaibook's private contract
 
 Read-only HTTP API over everything this service holds, for **Plaibook only** (the app, plus the hub's status read).
 It has not been public since 2026-10-16: there is no keyless tier, no browser access and no keys for anyone else.
 
 - `/v1/...` (17 routes below): the NCAA college catalog the app's sync, opponent briefs and Tekki tools read.
-- `/v1/site/<path>`: any read the Plaibook Stats site itself makes (college, pro, international, news). See
+- `/v1/site/<path>`: any read the Plaibook Live site itself makes (college, pro, international, news). See
   "Everything the site shows" below.
 
 Base URL: `https://www.plaibook.live` (also `https://plaibook-college-scraper.onrender.com`).

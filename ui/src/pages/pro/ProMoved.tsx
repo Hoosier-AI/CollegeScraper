@@ -13,5 +13,5 @@ export function ProMoved({ kind, slug }: { kind: keyof typeof PATH; slug: string
   // The 404 body carries `moved` when the slug was renamed.
   const q = useQuery({ queryKey: ['pro-moved', kind, slug], queryFn: async () => (await (await fetch(`/api/pro/${API[kind]}/${slug}`)).json()) as { moved?: string | null }, retry: false });
   useEffect(() => { if (q.data?.moved) nav(PATH[kind](q.data.moved), { replace: true }); }, [q.data, kind, nav]);
-  return <EmptyState title="Not found" body="This page may have moved, or the link was cut short." action={<Link className="btn-ghost btn-sm" to={proPath.home}>Plaibook Stats Pro</Link>} />;
+  return <EmptyState title="Not found" body="This page may have moved, or the link was cut short." action={<Link className="btn-ghost btn-sm" to={proPath.home}>Plaibook Live Pro</Link>} />;
 }

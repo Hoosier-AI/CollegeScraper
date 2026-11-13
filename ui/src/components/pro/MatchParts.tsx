@@ -1,4 +1,4 @@
-// Match page pieces for Plaibook Stats Pro: the event timeline, both elevens on a pitch (the provider's formation
+// Match page pieces for Plaibook Live Pro: the event timeline, both elevens on a pitch (the provider's formation
 // grid), the side-by-side team stats and a lineup list.
 import { Link } from 'react-router-dom';
 import { ArrowLeftRight, Square } from 'lucide-react';

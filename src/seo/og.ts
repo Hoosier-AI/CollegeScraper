@@ -92,7 +92,7 @@ const frame = (mark: Node, ...content: (Node | null)[]): Node => h('div', { posi
   mark, h('div', { position: 'absolute', left: 0, top: 0, width: OG_W, height: OG_H, boxSizing: 'border-box', flexDirection: 'column', justifyContent: 'space-between', padding: '56px 64px' }, ...content));
 
 const wordmark = (context: string): Node => h('div', { alignItems: 'center', gap: 18, fontFamily: 'Plex', fontSize: 26 },
-  h('div', { fontFamily: 'Archivo', fontWeight: 800, color: C.text, letterSpacing: -0.5 }, 'Plaibook', h('span', { color: C.teal, marginLeft: 8 }, 'Stats')),
+  h('div', { fontFamily: 'Archivo', fontWeight: 800, color: C.text, letterSpacing: -0.5 }, 'Plaibook', h('span', { color: C.teal, marginLeft: 8 }, 'Live')),
   h('div', { width: 2, height: 26, background: C.line }),
   h('div', { color: C.soft }, fit(context, 60)));
 

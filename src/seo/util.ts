@@ -2,7 +2,7 @@
 import type { Gender, TeamRef } from './types.js';
 
 export const DEFAULT_PUBLIC_URL = 'https://plaibook-college-scraper.onrender.com';
-export const SITE_NAME = 'Plaibook Stats';
+export const SITE_NAME = 'Plaibook Live';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SLUG = /^[a-z0-9][a-z0-9-]{0,160}$/;
 

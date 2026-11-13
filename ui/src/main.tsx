@@ -56,7 +56,7 @@ const ProRankings = lazy(() => import('./pages/pro/ProRankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Console = lazy(() => import('./pages/Console'));
-// Plaibook Stats Pro.
+// Plaibook Live Pro.
 const ProMatches = lazy(() => import('./pages/pro/ProMatches'));
 const ProLeagues = lazy(() => import('./pages/pro/ProLeagues'));
 const ProLeague = lazy(() => import('./pages/pro/ProLeague'));

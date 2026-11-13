@@ -143,7 +143,7 @@ text summary in `<section id="ssr">` at `<!--ssr-body-->`, which the app removes
 - Googlebot and Bingbot, verified by reverse and forward DNS (cached 24 h), are exempt from the site rate limit.
 - `GSC_VERIFICATION_FILE` and `INDEXNOW_KEY` add the Search Console verification file and the IndexNow key file.
 
-## Plaibook Stats Pro (/pro)
+## Plaibook Live Pro (/pro)
 
 Professional soccer worldwide, from **API-Football** (api-sports.io), on Plaibook's existing Pro plan: 7,500 requests a day, shared with the Plaibook app. Its terms allow showing the data on our own pages, not reselling the raw feed: it reaches only this site and the Plaibook app (through the private `/v1/site` mirror; there is no public API). Scraping FBref, FotMob, ESPN, Transfermarkt, Sofascore, WhoScored or mlssoccer.com is off the table: their terms forbid it.
 

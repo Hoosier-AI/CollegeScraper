@@ -20,7 +20,7 @@ export function robotsTxt(baseUrl: string): string {
   const pages = ['Allow: /', ...DISALLOWED.map((p) => `Disallow: ${p}`)];
   const withApi = ['Allow: /', 'Allow: /api/', ...DISALLOWED.map((p) => `Disallow: ${p}`)];
   return [
-    '# Plaibook Stats. The pages are public. The /api reads behind them are for the site itself (search engines',
+    '# Plaibook Live. The pages are public. The /api reads behind them are for the site itself (search engines',
     '# that render pages may read them); the admin console, job routes and the bulk API are not for crawlers.',
     '# AI training crawlers are not welcome. Rules for bots and automated access: /data-use',
     'User-agent: *',

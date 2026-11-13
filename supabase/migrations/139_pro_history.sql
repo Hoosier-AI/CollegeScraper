@@ -1,4 +1,4 @@
--- Plaibook Stats Pro history from other sources (openfootball, public domain): MLS results before API-Football's
+-- Plaibook Live Pro history from other sources (openfootball, public domain): MLS results before API-Football's
 -- coverage, checked first against API-Football on the seasons both have.
 --   pro_src_games        gains round, half-time, extra-time and penalty scores
 --   pro_fixtures.source  'api-football' (default) or the source a history match came from; those carry negative ids

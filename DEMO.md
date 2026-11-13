@@ -1,4 +1,4 @@
-# Plaibook Stats demo — walkthrough
+# Plaibook Live demo — walkthrough
 
 **URL:** https://plaibook-college-scraper.onrender.com — the stats pages need no sign-in.
 **Admin console** (`/admin`, for steps 7 and 8 and the Sync buttons): the trigger secret (ask Evan).

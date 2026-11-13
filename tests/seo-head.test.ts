@@ -13,7 +13,7 @@ const ldOf = (h: { jsonLd: Record<string, unknown>[] }, type: string) => h.jsonL
 describe('teamHead', () => {
   it('builds title, description and an absolute canonical without the current season', () => {
     const h = teamHead(teamFixture(), ctx);
-    expect(h.title).toBe("Duke Men's Soccer 2026: Roster, Schedule and Stats | Plaibook Stats");
+    expect(h.title).toBe("Duke Men's Soccer 2026: Roster, Schedule and Stats | Plaibook Live");
     expect(h.canonical).toBe('https://plaibook-college-scraper.onrender.com/teams/duke/men');
     expect(h.description).toContain('8-2-1 overall (3-1-0 ACC)');
     expect(h.description).toContain('head coach Kevin Coach');
@@ -32,7 +32,7 @@ describe('teamHead', () => {
     expect(team.coach).toEqual({ '@type': 'Person', name: 'Kevin Coach' });
     expect(team.athlete[0]).toMatchObject({ '@type': 'Person', url: 'https://plaibook-college-scraper.onrender.com/players/jane-doe-222222' });
     const bc = ldOf(h, 'BreadcrumbList');
-    expect(bc.itemListElement.map((i: any) => i.name)).toEqual(['Plaibook Stats', 'Teams', "Duke Men's Soccer"]);
+    expect(bc.itemListElement.map((i: any) => i.name)).toEqual(['Plaibook Live', 'Teams', "Duke Men's Soccer"]);
   });
   it('noindexes programs that are not NCAA members that season', () => {
     expect(teamHead(teamFixture({ member: false }), ctx).robots).toBe('noindex,follow');
@@ -42,7 +42,7 @@ describe('teamHead', () => {
 describe('playerHead', () => {
   it('emits Person with the team affiliation', () => {
     const h = playerHead(playerFixture(), ctx);
-    expect(h.title).toBe("Jane Doe - Duke Men's Soccer Stats | Plaibook Stats");
+    expect(h.title).toBe("Jane Doe - Duke Men's Soccer Stats | Plaibook Live");
     expect(h.canonical).toBe('https://plaibook-college-scraper.onrender.com/players/jane-doe-222222');
     expect(h.description).toContain('2026: 6 goals, 3 assists in 11 games');
     const p = ldOf(h, 'Person');
@@ -60,7 +60,7 @@ describe('playerHead', () => {
 describe('matchHead', () => {
   it('describes a final with SportsEvent competitors, start and location', () => {
     const h = matchHead(matchFixture(), ctx);
-    expect(h.title).toBe("Wake Forest 1-2 Duke, Sep 12, 2026: Men's Soccer Box Score | Plaibook Stats");
+    expect(h.title).toBe("Wake Forest 1-2 Duke, Sep 12, 2026: Men's Soccer Box Score | Plaibook Live");
     expect(h.description).toContain('Goals: Jane Doe 12′');
     const e = ldOf(h, 'SportsEvent');
     expect(e.sport).toBe('Soccer');
@@ -132,7 +132,7 @@ describe('template', () => {
     expect(html.match(/name="description"/g)).toHaveLength(1);
     expect(html.match(/property="og:title"/g)).toHaveLength(1);
     expect(html.match(/property="og:image"/g)).toHaveLength(1);
-    expect(html).toContain('<meta property="og:site_name" content="Plaibook Stats" />');
+    expect(html).toContain('<meta property="og:site_name" content="Plaibook Live" />');
     expect(html.indexOf('<div id="root"></div>')).toBeLessThan(html.indexOf('<section id="ssr">'));
     expect(plainShell(shell)).not.toContain('<!--ssr-');
   });

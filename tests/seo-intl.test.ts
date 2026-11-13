@@ -77,7 +77,7 @@ describe('international seo routes', () => {
     expect(r.statusCode).toBe(200);
     expect(r.body).toContain(`<link rel="canonical" href="${BASE}/intl/tournaments/world-cup" />`);
     const ssr = between(r.body, '<section id="ssr">', '</section>');
-    expect(ssr).toContain('<a href="/intl">Plaibook Stats International</a>');
+    expect(ssr).toContain('<a href="/intl">Plaibook Live International</a>');
     expect(ssr).toContain(`<a href="/intl/matches/${match.slug}">`);
   });
 

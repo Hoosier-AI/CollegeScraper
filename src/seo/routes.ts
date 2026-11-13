@@ -56,7 +56,7 @@ export interface SeoOptions {
   cache?: LruCache<CachedPage>;
   sitemaps?: Sitemaps;
   log?: SeoLogger;
-  /** Plaibook Stats Pro pages (/pro/...) and their sitemaps. */
+  /** Plaibook Live Pro pages (/pro/...) and their sitemaps. */
   pro?: ProSeoData | null;
   /** International pages (/intl/...): national teams. Needs pro (a tournament, team or match page is Pro's model). */
   intl?: IntlSeoData | null;
@@ -227,7 +227,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     return conf ? { head: conferenceHead(conf, c), body: conferenceBody(conf, c) } : null;
   }));
 
-  // ---------- Plaibook Stats Pro ----------
+  // ---------- Plaibook Live Pro ----------
   const pro = opts.pro;
   if (pro) {
     // The Pro and International homes became the one home page (2026-10-14).

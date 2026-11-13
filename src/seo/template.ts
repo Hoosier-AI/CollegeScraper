@@ -12,7 +12,7 @@ export const MINIMAL_SHELL = `<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Plaibook Stats</title>
+    <title>Plaibook Live</title>
     ${HEAD_MARKER}
   </head>
   <body>

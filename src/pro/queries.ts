@@ -1,4 +1,4 @@
-// Reads for Plaibook Stats Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
+// Reads for Plaibook Live Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
 import { WIKI_TARGETS } from '../jobs/sources/wikipedia.js';
 import { oldestFetch, withNewMatches, type FinalRef, type FixtureLine } from './catchUp.js';

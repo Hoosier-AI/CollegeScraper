@@ -1,4 +1,4 @@
--- Plaibook Stats Pro: sources other than API-Football, mapped onto its ids and checked against it.
+-- Plaibook Live Pro: sources other than API-Football, mapped onto its ids and checked against it.
 --   pro_source_seasons       per source, league and season: last sync, row counts, errors (drives the sync and progress)
 --   pro_src_games / teams / players / venues / officials
 --                            a source's own records, keyed by its own ids (American Soccer Analysis first)

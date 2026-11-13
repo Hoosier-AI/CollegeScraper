@@ -1,4 +1,4 @@
--- Plaibook Stats Pro: professional leagues worldwide, from API-Football (api-sports.io, the Pro plan Plaibook already
+-- Plaibook Live Pro: professional leagues worldwide, from API-Football (api-sports.io, the Pro plan Plaibook already
 -- pays for; its terms allow showing the data on a website, not reselling the raw feed, so nothing here is exposed
 -- through /v1). Separate from the college_* tables: pro seasons, competitions and clubs share nothing with NCAA
 -- programs. Rows are keyed by the provider's own integer ids (league, team, fixture, player), which are stable.

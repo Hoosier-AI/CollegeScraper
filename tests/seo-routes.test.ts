@@ -35,7 +35,7 @@ describe('seo routes', () => {
     expect(r.headers['content-type']).toContain('text/html');
     expect(r.headers['cache-control']).toBe(PAGE_CACHE_CONTROL);
     const html = r.body;
-    expect(between(html, '<title>', '</title>')).toBe("Duke Men&#39;s Soccer 2026: Roster, Schedule and Stats | Plaibook Stats");
+    expect(between(html, '<title>', '</title>')).toBe("Duke Men&#39;s Soccer 2026: Roster, Schedule and Stats | Plaibook Live");
     expect(html).toContain(`<link rel="canonical" href="${BASE}/teams/duke/men" />`);
     const ld = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]!));
     expect(ld.map((j) => j['@type'])).toEqual(['SportsTeam', 'BreadcrumbList']);

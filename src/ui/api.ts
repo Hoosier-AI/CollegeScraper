@@ -115,7 +115,7 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     return shared(req, 'search', [query.toLowerCase(), gender, limit], 120_000, () => q.search(getDb(), { q: query, gender, limit }));
   });
 
-  // Plaibook Stats Pro (/pro pages) and International (/intl pages).
+  // Plaibook Live Pro (/pro pages) and International (/intl pages).
   registerProApi(app);
   registerIntlApi(app);
   // News for College, Pro and International (src/news).

@@ -3,7 +3,7 @@
 //   /sitemaps/teams.xml                one URL per NCAA program (canonical, current season)
 //   /sitemaps/matches-<season>-<n>.xml  games, at most 40,000 per file
 //   /sitemaps/players-<season>-<n>.xml  players who appeared that season (never noindex or suppressed ones)
-//   /sitemaps/pro-core.xml              Plaibook Stats Pro: home, competitions index, every enabled competition
+//   /sitemaps/pro-core.xml              Plaibook Live Pro: home, competitions index, every enabled competition
 //   /sitemaps/pro-teams-<n>.xml          clubs with a profile
 //   /sitemaps/pro-matches-<year>-<n>.xml finals with detail (score-only finals and unplayed matches are noindex)
 //   /sitemaps/pro-players-<n>.xml        players who have played

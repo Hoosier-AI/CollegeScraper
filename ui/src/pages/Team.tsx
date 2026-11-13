@@ -40,7 +40,7 @@ export default function Team() {
   const roster = useQuery({ queryKey: ['roster', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/roster${qs({ season: f.season })}`), enabled: !!id });
   const games = useQuery({ queryKey: ['pgames', id, f.season], queryFn: () => api<any[]>(`/api/programs/${id}/games${qs({ season: f.season })}`), enabled: !!id });
   const sync = useMutation({ mutationFn: (force: boolean) => api<{ id: string }>(`/api/programs/${id}/sync`, { method: 'POST', body: JSON.stringify({ season: f.season, force }) }), onSuccess: (r) => setRunId(r.id) });
-  // Plaibook Stats Pro: players from this program who play professionally (College to Pro links).
+  // Plaibook Live Pro: players from this program who play professionally (College to Pro links).
   const prog = team.data?.program;
   const alumni = useQuery({ queryKey: ['pro-alumni', prog?.school_seo, prog?.gender], queryFn: () => api<{ players: any[] }>(`/api/pro/college/${prog!.school_seo}/${prog!.gender}`), enabled: !!prog?.school_seo, staleTime: 600_000 });
   const refreshAll = () => { qc.invalidateQueries({ queryKey: ['program', id] }); qc.invalidateQueries({ queryKey: ['roster', id] }); qc.invalidateQueries({ queryKey: ['pgames', id] }); };

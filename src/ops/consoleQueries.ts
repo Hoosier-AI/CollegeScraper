@@ -63,7 +63,7 @@ export async function schedule(db: Db) {
   };
 }
 
-/** group: 'pro' = Plaibook Stats Pro jobs (pro-* and the sources lane), 'intl' = International's (intl-*), 'college' =
+/** group: 'pro' = Plaibook Live Pro jobs (pro-* and the sources lane), 'intl' = International's (intl-*), 'college' =
  *  everything else. */
 export interface RunFilter { job?: string; status?: string; since?: string; hide_live?: boolean; limit?: number; offset?: number; group?: 'pro' | 'college' | 'intl' }
 

@@ -1,4 +1,4 @@
-// Every club competition Plaibook Stats Pro follows, grouped by country (the continental and world club cups first),
+// Every club competition Plaibook Live Pro follows, grouped by country (the continental and world club cups first),
 // with a filter. National-team competitions are International's (/intl/tournaments).
 const CROSS = 'Continental club cups';
 import { useEffect, useMemo, useState } from 'react';
