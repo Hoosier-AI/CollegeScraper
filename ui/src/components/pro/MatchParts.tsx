@@ -3,6 +3,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeftRight, Square } from 'lucide-react';
 import { PlayerAvatar, RailCard } from '../primitives';
+import { RatingBadge } from '../Rating';
 import { Goals } from '../icons';
 import { proPath } from '../../lib/pro';
 
@@ -19,32 +20,58 @@ function EventIcon({ e }: { e: ProEvent }) {
   return <span aria-hidden className="rounded bg-field-700 px-1 text-2xs font-semibold leading-4 text-chalk-200">VAR</span>;
 }
 
-function eventText(e: ProEvent): string {
+/** The event as two lines: who (bold) and what else (the assist, who went off, the card's reason). */
+function eventLines(e: ProEvent): [string, string | null] {
   if (e.type === 'goal') {
     // Shootout kicks come as goal events marked 'Penalty Shootout'; they are not goals.
-    if (e.comments === 'Penalty Shootout') return `${e.player_name ?? 'Kick'} (shootout, ${e.detail === 'Missed Penalty' ? 'missed' : 'scored'})`;
+    if (e.comments === 'Penalty Shootout') return [e.player_name ?? 'Kick', `Shootout, ${e.detail === 'Missed Penalty' ? 'missed' : 'scored'}`];
     const kind = e.detail === 'Own Goal' ? ' (own goal)' : e.detail === 'Penalty' ? ' (pen)' : e.detail === 'Missed Penalty' ? ' (missed pen)' : '';
-    return `${e.player_name ?? 'Goal'}${kind}${e.assist_name && e.detail !== 'Own Goal' ? `, assist ${e.assist_name}` : ''}`;
+    return [`${e.player_name ?? 'Goal'}${kind}`, e.assist_name && e.detail !== 'Own Goal' ? `Assist ${e.assist_name}` : null];
   }
-  if (e.type === 'card') return `${e.player_name ?? ''}${e.comments ? ` (${e.comments.toLowerCase()})` : ''}`;
+  if (e.type === 'card') return [e.player_name ?? '', e.comments ? e.comments : null];
   // Substitutions: the provider names the player coming off as `player` and the one coming on as `assist`.
-  if (e.type === 'subst') return `${e.assist_name ?? '?'} on, ${e.player_name ?? '?'} off`;
-  return `${e.detail ?? 'VAR'}${e.player_name ? `: ${e.player_name}` : ''}`;
+  if (e.type === 'subst') return [`${e.assist_name ?? '?'} on`, `${e.player_name ?? '?'} off`];
+  return [e.detail ?? 'VAR', e.player_name];
 }
 
-export function EventTimeline({ events, homeName, awayName }: { events: ProEvent[]; homeName: string; awayName: string }) {
+/** Goals, cards, substitutions and VAR in match order. Phones: one column (minute, icon, who and what), the side shown
+ *  by a coloured bar and the club's name; wider screens: home events on the left, away on the right. A half-time line
+ *  splits the halves. */
+export function EventTimeline({ events, homeName, awayName, ht }: { events: ProEvent[]; homeName: string; awayName: string; ht?: [number | null, number | null] }) {
   if (!events.length) return <p className="text-sm text-chalk-400">No events recorded for this match.</p>;
+  // In match order: the feed lists late cards and stoppage-time events out of turn (90+9 before 90+6, a 90th-minute goal last).
+  const sorted = [...events].sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999) || (a.extra ?? 0) - (b.extra ?? 0) || a.seq - b.seq);
+  const htAt = sorted.findIndex((e) => (e.minute ?? 0) > 45);
   return (
-    <ol className="frame divide-y divide-field-700" aria-label="Match events">
-      {/* In match order: the feed lists late cards and stoppage-time events out of turn (90+9 before 90+6, a 90th-minute goal last). */}
-      {[...events].sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999) || (a.extra ?? 0) - (b.extra ?? 0) || a.seq - b.seq).map((e) => {
-        const label = `${minute(e)} ${e.type === 'goal' ? 'Goal' : e.type === 'card' ? e.detail : e.type === 'subst' ? 'Substitution' : 'VAR'}, ${e.side === 'home' ? homeName : e.side === 'away' ? awayName : ''}: ${eventText(e)}`;
-        const text = e.player_slug && e.type !== 'subst' ? <Link to={proPath.player(e.player_slug)} className="hover:text-pitch-300">{eventText(e)}</Link> : eventText(e);
+    <ol className="card divide-y divide-field-700/70 overflow-hidden" aria-label="Match events">
+      {sorted.map((e, i) => {
+        const [main, more] = eventLines(e);
+        const label = `${minute(e)} ${e.type === 'goal' ? 'Goal' : e.type === 'card' ? e.detail : e.type === 'subst' ? 'Substitution' : 'VAR'}, ${e.side === 'home' ? homeName : e.side === 'away' ? awayName : ''}: ${main}${more ? `, ${more}` : ''}`;
+        const who = e.player_slug && e.type !== 'subst' ? <Link to={proPath.player(e.player_slug)} className="hover:text-pitch-300">{main}</Link> : main;
+        const goal = e.type === 'goal';
+        const text = (align: 'left' | 'right') => (
+          <span className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}>
+            <span className={`block text-sm ${goal ? 'font-semibold text-chalk-100' : 'font-medium text-chalk-200'}`}>{who}</span>
+            {more && <span className="block text-xs text-chalk-400">{more}</span>}
+          </span>
+        );
+        const away = e.side === 'away';
         return (
-          <li key={e.seq} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${e.side === 'away' ? 'flex-row-reverse text-right' : ''} ${e.type === 'goal' ? 'text-chalk-100' : 'text-chalk-300'}`} aria-label={label}>
-            <span className="w-12 shrink-0 text-center text-xs tnum text-chalk-500">{minute(e)}</span>
-            <span className="flex w-5 shrink-0 justify-center"><EventIcon e={e} /></span>
-            <span className="min-w-0 truncate">{text}</span>
+          <li key={e.seq} aria-label={label} className={goal ? 'bg-pitch-400/[0.04]' : ''}>
+            {i === htAt && htAt > 0 && <div className="border-b border-field-700/70 bg-field-950/40 px-4 py-1.5 text-center text-2xs font-medium text-chalk-400">Half time{ht && ht[0] != null ? ` ${ht[0]}–${ht[1]}` : ''}</div>}
+            {/* Phones */}
+            <div className={`flex items-start gap-3 border-l-[3px] py-2.5 pl-3 pr-4 sm:hidden ${away ? 'border-away' : e.side === 'home' ? 'border-pitch-400' : 'border-transparent'}`}>
+              <span className="w-10 shrink-0 pt-0.5 text-xs font-medium tnum text-chalk-400">{minute(e)}</span>
+              <span className="flex w-5 shrink-0 justify-center pt-0.5"><EventIcon e={e} /></span>
+              <span className="min-w-0 flex-1">{text('left')}</span>
+              <span className="max-w-[30%] shrink-0 truncate pt-0.5 text-2xs text-chalk-500">{away ? awayName : e.side === 'home' ? homeName : ''}</span>
+            </div>
+            {/* Wider screens */}
+            <div className="hidden grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] items-center gap-3 px-4 py-2 sm:grid">
+              <span className="flex min-w-0 items-center justify-end gap-2.5">{!away && <>{text('right')}<span className="flex w-5 shrink-0 justify-center"><EventIcon e={e} /></span></>}</span>
+              <span className="rounded bg-field-950/50 py-0.5 text-center text-xs font-medium tnum text-chalk-300">{minute(e)}</span>
+              <span className="flex min-w-0 items-center gap-2.5">{away && <><span className="flex w-5 shrink-0 justify-center"><EventIcon e={e} /></span>{text('left')}</>}</span>
+            </div>
           </li>
         );
       })}
@@ -85,7 +112,7 @@ function Token({ line, x, y, top, full, crest, to }: { line: ProLine; x: number;
         {(line.red ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-loss" /> : (line.yellow ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-note" /> : null}
       </span>
       <span className="mt-1 block max-w-[84px] truncate text-center text-2xs font-medium text-white drop-shadow">{last}</span>
-      {line.rating != null && line.rating > 0 && <span className="text-2xs tnum text-chalk-200">{line.rating.toFixed(1)}</span>}
+      {line.rating != null && line.rating > 0 && <RatingBadge v={line.rating} size="xs" className="mt-0.5" />}
     </>
   );
   const cls = 'absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2';
@@ -158,20 +185,27 @@ export function TeamStatsCompare({ home, away, homeName, awayName }: { home: Pro
   if (!home && !away) return null;
   const rows = STAT_ROWS.filter(([k]) => home?.[k] != null || away?.[k] != null);
   return (
-    <div className="frame py-1">
-      <div className="flex justify-between px-3 pb-1 pt-0.5 text-2xs font-medium text-chalk-500"><span className="truncate">{homeName}</span><span className="truncate">{awayName}</span></div>
+    <div className="card py-2">
+      <div className="flex justify-between gap-4 px-4 pb-2 pt-1 text-xs font-semibold"><span className="flex min-w-0 items-center gap-1.5 text-pitch-300"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-pitch-400" /><span className="truncate">{homeName}</span></span><span className="flex min-w-0 items-center gap-1.5 text-away"><span className="truncate">{awayName}</span><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-away" /></span></div>
       {/* One line a stat: value, a bar growing toward the label from each side, value. The larger value reads brighter. */}
       {rows.map(([k, label, f]) => {
         const h = home?.[k] ?? null, a = away?.[k] ?? null; const total = (h ?? 0) + (a ?? 0);
         const hs = total > 0 ? (h ?? 0) / total : 0, as = total > 0 ? (a ?? 0) / total : 0;
-        const tone = (mine: number | null, theirs: number | null) => ((mine ?? 0) > (theirs ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-400');
+        // Lower is better for these: the pill goes to the smaller number.
+        const low = k === 'fouls' || k === 'yellow' || k === 'red' || k === 'offsides';
+        const wins = (mine: number | null, theirs: number | null) => mine != null && theirs != null && mine !== theirs && (low ? mine < theirs : mine > theirs);
+        const val = (mine: number | null, theirs: number | null, cls: string) => <span className={`inline-block min-w-[2.25rem] rounded px-1.5 py-0.5 text-center ${wins(mine, theirs) ? `font-semibold ${cls}` : 'text-chalk-300'}`}>{f(mine)}</span>;
         return (
-          <div key={k} className="grid grid-cols-[2.75rem_minmax(0,1fr)_minmax(6rem,8.5rem)_minmax(0,1fr)_2.75rem] items-center gap-2 px-3 py-1 text-sm tnum">
-            <span className={tone(h, a)}>{f(h)}</span>
-            <span className="flex h-1.5 justify-end overflow-hidden rounded-full bg-field-800" aria-hidden><span className="rounded-full bg-pitch-400" style={{ width: `${hs * 100}%` }} /></span>
-            <span className="truncate text-center text-xs text-chalk-400">{label}</span>
-            <span className="flex h-1.5 overflow-hidden rounded-full bg-field-800" aria-hidden><span className="rounded-full bg-sky-400/80" style={{ width: `${as * 100}%` }} /></span>
-            <span className={`text-right ${tone(a, h)}`}>{f(a)}</span>
+          <div key={k} className="px-4 py-2">
+            <div className="flex items-center justify-between gap-2 text-sm tnum">
+              {val(h, a, 'bg-pitch-400 text-field-950')}
+              <span className="truncate text-center text-xs text-chalk-400">{label}</span>
+              {val(a, h, 'bg-away text-field-950')}
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5" aria-hidden>
+              <span className="flex h-1.5 justify-end overflow-hidden rounded-full bg-field-800"><span className={`rounded-full bg-pitch-400 ${wins(a, h) ? 'opacity-50' : ''}`} style={{ width: `${hs * 100}%` }} /></span>
+              <span className="flex h-1.5 overflow-hidden rounded-full bg-field-800"><span className={`rounded-full bg-away ${wins(h, a) ? 'opacity-50' : ''}`} style={{ width: `${as * 100}%` }} /></span>
+            </div>
           </div>
         );
       })}
@@ -181,22 +215,22 @@ export function TeamStatsCompare({ home, away, homeName, awayName }: { home: Pro
 
 export function LineupList({ side, title }: { side: ProSideDetail; title: string }) {
   const row = (l: ProLine) => (
-    <li key={l.slot} className="flex items-center gap-2 px-3 py-1 text-sm">
+    <li key={l.slot} className="flex items-center gap-2 px-4 py-2 text-sm coarse:min-h-11">
       <span className="w-6 shrink-0 text-right text-xs tnum text-chalk-500">{l.number ?? ''}</span>
       {l.slug ? <Link to={proPath.player(l.slug)} className="min-w-0 truncate text-chalk-100 hover:text-pitch-300">{l.display}</Link> : <span className="min-w-0 truncate text-chalk-200">{l.display}</span>}
       {l.captain && <span className="text-2xs text-chalk-500" title="Captain">(c)</span>}
       <span className="ml-auto flex shrink-0 items-center gap-2 text-xs tnum text-chalk-400">
         {(l.goals ?? 0) > 0 && <Goals n={l.goals!} size={12} />}
         {(l.minutes ?? 0) > 0 && <span title="Minutes">{l.minutes}′</span>}
-        {l.rating != null && l.rating > 0 && <span className={`rounded px-1 font-semibold ${l.rating >= 7.5 ? 'bg-win/20 text-win' : l.rating < 6.3 ? 'bg-loss/15 text-loss' : 'bg-field-700 text-chalk-200'}`} title="Match rating">{l.rating.toFixed(1)}</span>}
+        {l.rating != null && l.rating > 0 && <RatingBadge v={l.rating} label="Match rating" />}
       </span>
     </li>
   );
   return (
-    <div className="frame">
-      <div className="flex items-center justify-between px-3 py-2 text-sm font-semibold text-chalk-100"><span>{title}</span><span className="text-xs font-normal text-chalk-400">{side.formation ?? ''}{side.coach ? ` · Coach ${side.coach}` : ''}</span></div>
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-chalk-100"><span>{title}</span><span className="text-xs font-normal text-chalk-400">{side.formation ?? ''}{side.coach ? ` · Coach ${side.coach}` : ''}</span></div>
       <ul className="divide-y divide-field-700 border-t border-field-700">{side.starters.map(row)}</ul>
-      {side.bench.length > 0 && <><div className="border-t border-field-700 px-3 py-1.5 text-2xs font-medium text-chalk-500">Bench</div><ul className="divide-y divide-field-700">{side.bench.map(row)}</ul></>}
+      {side.bench.length > 0 && <><div className="border-t border-field-700 bg-field-950/40 px-4 py-1.5 text-2xs font-medium text-chalk-500">Bench</div><ul className="divide-y divide-field-700">{side.bench.map(row)}</ul></>}
     </div>
   );
 }
@@ -220,14 +254,14 @@ export function PlayerOfMatch({ home, away, homeName, awayName, homeLogo, awayLo
           <p className="truncate font-semibold text-chalk-100">{name(best!)}</p>
           <p className="truncate text-xs text-chalk-400">{line(best!)}</p>
         </div>
-        <span className="display text-2xl text-chalk-100 tnum" aria-label={`rating ${best!.l.rating!.toFixed(1)}`}>{best!.l.rating!.toFixed(1)}</span>
+        <RatingBadge v={best!.l.rating!} size="lg" />
       </div>
       {next.length > 0 && (
         <ol className="mt-2 space-y-1 border-t border-field-700 pt-2 text-sm">
           {next.slice(0, 2).map((x) => (
             <li key={`${x.team}-${x.l.slot}`} className="flex items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-chalk-200">{name(x)} <span className="text-xs text-chalk-500">{x.team}</span></span>
-              <span className="tnum text-chalk-100">{x.l.rating!.toFixed(1)}</span>
+              <RatingBadge v={x.l.rating!} />
             </li>
           ))}
         </ol>

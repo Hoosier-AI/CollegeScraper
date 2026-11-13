@@ -113,19 +113,28 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
     const group = last?.sub && last.home === home && last.minute === m ? last : (rows.push({ key: e.id, home, minute: m, sub: { on: [], off: [] } }), rows[rows.length - 1]!);
     group.sub![e.event_type === 'sub_in' ? 'on' : 'off'].push(personName(e.player_name_raw) ?? 'Team (bench)');
   }
+  // Phones: one column with a coloured bar for the side; wider screens: home on the left, away on the right.
   const side = (r: Row, content: React.ReactNode, icon: React.ReactNode, label: string, cls?: string) => {
-    const mark = <span className={cls} title={label}>{icon}<span className="sr-only">{label}</span></span>;
+    const mark = <span className={`flex w-5 shrink-0 justify-center ${cls ?? ''}`} title={label}>{icon}<span className="sr-only">{label}</span></span>;
     return (
-      <li key={r.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-1.5">
-        <div className={`flex items-center justify-end gap-2 text-right ${r.home ? '' : 'invisible'}`}>{content}{mark}</div>
-        <div className="w-12 text-center text-xs text-chalk-500 tnum">{r.minute}</div>
-        <div className={`flex items-center gap-2 ${r.home ? 'invisible' : ''}`}>{mark}{content}</div>
+      <li key={r.key}>
+        <div className={`flex items-start gap-3 border-l-[3px] py-2.5 pl-3 pr-4 sm:hidden ${r.home ? 'border-pitch-400' : 'border-away'}`}>
+          <span className="w-9 shrink-0 pt-0.5 text-xs font-medium tnum text-chalk-400">{r.minute}</span>
+          <span className="pt-0.5">{mark}</span>
+          <span className="min-w-0 flex-1">{content}</span>
+          <span className="max-w-[30%] shrink-0 truncate pt-0.5 text-2xs text-chalk-500">{r.home ? homeName : awayName}</span>
+        </div>
+        <div className="hidden grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] items-center gap-3 px-4 py-2 sm:grid">
+          <div className={`flex min-w-0 items-center justify-end gap-2.5 text-right ${r.home ? '' : 'invisible'}`}>{content}{mark}</div>
+          <div className="rounded bg-field-950/50 py-0.5 text-center text-xs font-medium tnum text-chalk-300">{r.minute}</div>
+          <div className={`flex min-w-0 items-center gap-2.5 ${r.home ? 'invisible' : ''}`}>{mark}{content}</div>
+        </div>
       </li>
     );
   };
   return (
     <div className="space-y-2">
-      <ol className="frame divide-y divide-field-700" aria-label="Events">
+      <ol className="card divide-y divide-field-700/70 overflow-hidden" aria-label="Events">
         {rows.map((r) => {
           if (r.sub) {
             const text = <span className="text-sm text-chalk-300">{r.sub.on.length > 0 && <span>On: <span className="text-chalk-100">{r.sub.on.join(', ')}</span></span>}{r.sub.on.length > 0 && r.sub.off.length > 0 && '. '}{r.sub.off.length > 0 && <span>Off: {r.sub.off.join(', ')}</span>}</span>;
@@ -136,7 +145,7 @@ export function Timeline({ events, homeId, homeName, awayName, source }: { event
           return side(r, who, ev.icon, ev.label, ev.cls);
         })}
         {!rows.length && <li className="px-3 py-3 text-center text-sm text-chalk-400">No goals or cards recorded.</li>}
-        <li className="grid grid-cols-[1fr_auto_1fr] px-3 py-1.5 text-2xs text-chalk-500"><span className="text-right">{homeName}</span><span className="w-12" /><span>{awayName}</span></li>
+        <li className="hidden grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] gap-3 px-4 py-2 text-2xs font-semibold sm:grid"><span className="text-right text-pitch-300">{homeName}</span><span /><span className="text-away">{awayName}</span></li>
       </ol>
       {subCount > 8 && <button type="button" className="btn-ghost btn-sm" aria-pressed={subsOn} onClick={() => setSubsOn((v) => !v)}>{subsOn ? 'Hide substitutions' : `Show substitutions (${subCount})`}</button>}
     </div>
@@ -237,20 +246,23 @@ const BAR_FIELDS: [string, string][] = [['shots', 'Shots'], ['shots_on_goal', 'O
 
 export function StatBars({ home, away, homeName, awayName }: { home: any | null; away: any | null; homeName: string | null; awayName: string | null }) {
   if (!home && !away) return <EmptyState title="No team stats for this match yet" />;
+  // Lower is better for these: the pill goes to the smaller number.
+  const LOW = new Set(['fouls', 'offsides', 'yellow_cards', 'red_cards']);
   return (
-    <div className="frame divide-y divide-field-700">
-      <div className="grid grid-cols-[1fr_auto_1fr] px-3 py-1.5 text-2xs text-chalk-500"><span>{homeName}</span><span /><span className="text-right">{awayName}</span></div>
+    <div className="py-2">
+      <div className="flex justify-between gap-4 px-4 pb-2 pt-1 text-xs font-semibold"><span className="flex min-w-0 items-center gap-1.5 text-pitch-300"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-pitch-400" /><span className="truncate">{homeName}</span></span><span className="flex min-w-0 items-center gap-1.5 text-away"><span className="truncate">{awayName}</span><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-away" /></span></div>
       {BAR_FIELDS.map(([k, label]) => {
         const a = home?.[k] ?? null, b = away?.[k] ?? null; if (a == null && b == null) return null;
-        const total = (a ?? 0) + (b ?? 0) || 1; const pa = Math.round(((a ?? 0) / total) * 100), pb = 100 - pa;
+        const total = (a ?? 0) + (b ?? 0); const pa = total ? Math.round(((a ?? 0) / total) * 100) : 0, pb = total ? 100 - pa : 0;
+        const wins = (mine: number | null, theirs: number | null) => mine != null && theirs != null && mine !== theirs && (LOW.has(k) ? mine < theirs : mine > theirs);
+        const val = (mine: number | null, theirs: number | null, cls: string) => <span className={`inline-block min-w-[2.25rem] rounded px-1.5 py-0.5 text-center ${wins(mine, theirs) ? `font-semibold ${cls}` : 'text-chalk-300'}`}>{mine ?? '–'}</span>;
         return (
-          <div key={k} className="px-3 py-2">
-            <div className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2 text-sm tnum">
-              <span className={`text-left ${(a ?? 0) > (b ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{a ?? '–'}</span>
-              <div className="flex items-center gap-1" aria-hidden><div className="flex h-2 flex-1 justify-end overflow-hidden rounded-l bg-field-700"><div className="h-2 bg-pitch-400" style={{ width: `${pa}%` }} /></div><div className="flex h-2 flex-1 overflow-hidden rounded-r bg-field-700"><div className="h-2 bg-chalk-300" style={{ width: `${pb}%` }} /></div></div>
-              <span className={`text-right ${(b ?? 0) > (a ?? 0) ? 'font-semibold text-chalk-100' : 'text-chalk-300'}`}>{b ?? '–'}</span>
+          <div key={k} className="px-4 py-2">
+            <div className="flex items-center justify-between gap-2 text-sm tnum">{val(a, b, 'bg-pitch-400 text-field-950')}<span className="truncate text-xs text-chalk-400">{label}</span>{val(b, a, 'bg-away text-field-950')}</div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5" aria-hidden>
+              <span className="flex h-1.5 justify-end overflow-hidden rounded-full bg-field-800"><span className={`rounded-full bg-pitch-400 ${wins(b, a) ? 'opacity-50' : ''}`} style={{ width: `${pa}%` }} /></span>
+              <span className="flex h-1.5 overflow-hidden rounded-full bg-field-800"><span className={`rounded-full bg-away ${wins(a, b) ? 'opacity-50' : ''}`} style={{ width: `${pb}%` }} /></span>
             </div>
-            <div className="mt-0.5 text-center text-2xs text-chalk-500">{label}</div>
           </div>
         );
       })}

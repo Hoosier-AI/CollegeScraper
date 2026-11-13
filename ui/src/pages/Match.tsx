@@ -191,7 +191,7 @@ export default function Match() {
 
       {tab === 'stats' && (
         <Section title="Team stats" right={sources.length === 2 ? <SegmentedControl label="Box score version" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'Version A' : 'Version B' }))} /> : undefined}>
-          {box.isPending ? <Skeleton className="h-48" /> : <StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} />}
+          {box.isPending ? <Skeleton className="h-48" /> : <div className="card"><StatBars home={teamRow(g.home.program_id, statSrc)} away={teamRow(g.away.program_id, statSrc)} homeName={g.home.name} awayName={g.away.name} /></div>}
           {sources.length === 2 && <Note>The two published box scores count shots differently; goals, cards and saves should agree.</Note>}
         </Section>
       )}
