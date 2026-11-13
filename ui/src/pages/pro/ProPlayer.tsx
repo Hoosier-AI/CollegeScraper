@@ -187,7 +187,8 @@ export default function ProPlayer() {
   const r = (v: N | undefined, s: SeasonRow) => (view === 'per90' ? per90(v ?? null, s.minutes) : v ?? null);
   const dec = view === 'per90' ? 2 : 0;
   const col = (key: string, label: string, get: (s: SeasonRow) => N | undefined, o: { title?: string; scale?: boolean; decimals?: number; priority?: 2 | 3 } = {}): Column<SeasonRow> =>
-    ({ key, label, title: o.title, num: true, priority: o.priority, decimals: o.scale === false ? o.decimals ?? 0 : dec, value: (s: SeasonRow) => (o.scale === false ? get(s) ?? null : r(get(s), s)) });
+    ({ key, label, title: o.title, num: true, priority: o.priority, decimals: o.scale === false ? o.decimals ?? 0 : dec, value: (s: SeasonRow) => (o.scale === false ? get(s) ?? null : r(get(s), s)),
+      ...(key === 'rating' ? { render: (s: SeasonRow) => (s.rating ? <RatingBadge v={s.rating} /> : '–') } : {}) });
   const share = (a: N | undefined, b: N | undefined) => (a != null && b ? Math.round((a / b) * 100) : null);
   const base: Column<SeasonRow>[] = [
     { key: 'season', label: 'Season', primary: true, value: (s) => s.season, render: (s) => String(s.season) },

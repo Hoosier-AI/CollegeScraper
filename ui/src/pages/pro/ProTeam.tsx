@@ -18,6 +18,7 @@ import { EmptyState, ErrorBox, PlayerAvatar, Section, Select, Skeleton, TabsNav,
 import { ClubSeasonDetail, GroundCard, type ClubSeasonRow, type Ground } from '../../components/pro/ClubSeason';
 import { PointsLine, ResultStrip } from '../../components/pro/Charts';
 import { TeamAdvancedCards, type AdvTeamSeason, type SourceCredit } from '../../components/pro/Advanced';
+import { RatingBadge } from '../../components/Rating';
 import { ProHero, StatTile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
 import { ClubExtras } from '../../components/pro/ClubExtras';
@@ -81,7 +82,7 @@ export default function ProTeam() {
     { key: 'minutes', label: 'Min', title: 'Minutes', num: true, priority: 2, value: (r) => r.minutes },
     { key: 'goals', label: 'G', title: 'Goals', num: true, value: (r) => r.goals },
     { key: 'assists', label: 'A', title: 'Assists', num: true, value: (r) => r.assists },
-    { key: 'rating', label: 'Rating', title: 'Average match rating', num: true, decimals: 2, priority: 2, value: (r) => r.rating },
+    { key: 'rating', label: 'Rating', title: 'Average match rating', num: true, decimals: 2, priority: 2, value: (r) => r.rating, render: (r) => (r.rating ? <RatingBadge v={r.rating} /> : '–') },
     { key: 'clean_sheets', label: 'CS', title: 'Clean sheets (keepers)', num: true, priority: 2, value: (r) => r.clean_sheets },
     { key: 'cards', label: 'Cards', title: 'Yellow / red', priority: 2, value: (r) => r.yellow, render: (r) => `${r.yellow}/${r.red}` },
   ];
