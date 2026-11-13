@@ -314,7 +314,7 @@ export function StatTile({ label, value, sub, accent, text, plain, big }: { labe
 }
 
 /** A row of numbers in one card with hairline dividers (no box per number): 4 across on a phone, up to 8 on desktop. */
-export function StatStrip({ children, cols = 'grid-cols-2 min-[420px]:grid-cols-4 lg:grid-cols-8', label, className = '' }: { children: ReactNode; cols?: string; label?: string; className?: string }) {
+export function StatStrip({ children, cols = 'grid-cols-4 lg:grid-cols-8', label, className = '' }: { children: ReactNode; cols?: string; label?: string; className?: string }) {
   return (
     <dl aria-label={label} className={`grid gap-px overflow-hidden rounded-xl border border-field-700 bg-field-700 ${cols} ${className}`}>
       {children}
@@ -323,9 +323,9 @@ export function StatStrip({ children, cols = 'grid-cols-2 min-[420px]:grid-cols-
 }
 export function StripStat({ label, value, sub, accent }: { label: ReactNode; value: ReactNode; sub?: ReactNode; accent?: boolean }) {
   return (
-    <div className="min-w-0 bg-field-900 px-3 py-3 sm:px-4">
+    <div className="min-w-0 bg-field-900 px-2.5 py-2.5 sm:px-4 sm:py-3">
       <dt className="label truncate">{label}</dt>
-      <dd className={`value mt-0.5 truncate text-xl leading-tight sm:text-2xl ${accent ? 'text-pitch-300' : ''}`}>{value}</dd>
+      <dd className={`value mt-0.5 truncate text-lg leading-tight sm:text-2xl ${accent ? 'text-pitch-300' : ''}`}>{value}</dd>
       {sub != null && sub !== '' && <dd className="truncate text-2xs text-chalk-500">{sub}</dd>}
     </div>
   );

@@ -3,13 +3,12 @@
 import { Link } from 'react-router-dom';
 import { fmt, resultOf } from '../../lib/api';
 import { RailNews } from '../news/News';
-import { RailCard, RailRow, ResultBadge } from '../primitives';
+import { PercentileGroup, RailCard, RailRow, ResultBadge } from '../primitives';
 
 type Href = (p: string, o?: Record<string, string | number | null | undefined>) => string;
 
 const FIELD: [string, string][] = [['pct_points_p90', 'Points per 90'], ['pct_goals_p90', 'Goals per 90'], ['pct_assists_p90', 'Assists per 90'], ['pct_shots_p90', 'Shots per 90']];
 const KEEPER: [string, string][] = [['pct_save_pct', 'Save %'], ['pct_gaa', 'Goals against avg']];
-const tone = (p: number) => (p >= 0.8 ? 'bg-win' : p >= 0.5 ? 'bg-pitch-400' : p >= 0.25 ? 'bg-note' : 'bg-loss');
 
 export function PlayerRail({ id, latest, gameLog, keeper, own, href, news = true }: {
   id: string; latest: any; gameLog: any[]; keeper: boolean; own: (r: any) => string | undefined; href: Href; news?: boolean;
@@ -39,18 +38,7 @@ export function PlayerRail({ id, latest, gameLog, keeper, own, href, news = true
       })()}
       {pct.length > 0 && (
         <RailCard title="In the division" to={`/compare?a=${id}`} toLabel="Compare">
-          <ul className="space-y-1.5">
-            {pct.map(([k, label]) => {
-              const v = Number(st[k]);
-              return (
-                <li key={k} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2" aria-label={`${label}: ${fmt.pctile(v)} percentile`}>
-                  <span className="truncate text-chalk-300">{label}</span>
-                  <span className="h-2 overflow-hidden rounded bg-field-700" aria-hidden><span className={`block h-full ${tone(v)}`} style={{ width: `${Math.max(3, Math.round(v * 100))}%` }} /></span>
-                  <span className="text-right text-xs tnum text-chalk-200">{fmt.pctile(v)}</span>
-                </li>
-              );
-            })}
-          </ul>
+          <PercentileGroup labelWidth="7.5rem" groups={[{ rows: pct.map(([k, label]) => ({ key: k, label, pct: Number(st[k]) })) }]} />
           <p className="mt-2 text-2xs text-chalk-500">Percentile within the division, {latest.season}.</p>
         </RailCard>
       )}

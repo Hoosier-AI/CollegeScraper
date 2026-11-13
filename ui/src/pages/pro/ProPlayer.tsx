@@ -11,7 +11,10 @@
 import { PageActions } from '../../components/PageActions';
 import { NewsFeed } from '../../components/news/News';
 import { Crumbs } from '../../components/shell';
-import { KeyFacts, type Salary } from '../../components/player/KeyFacts';
+import { positionWord, type Salary } from '../../components/player/KeyFacts';
+import { AttributePentagon, attributesFrom, hasPentagon } from '../../components/player/Pentagon';
+import { PlayerMatchList, type PlayerMatchItem } from '../../components/player/MatchList';
+import { RatingBadge } from '../../components/Rating';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -20,12 +23,11 @@ import { api, ApiError, fmt, qs } from '../../lib/api';
 import { useUrlState } from '../../lib/urlState';
 import { ageFrom, per90, proPath, proPaths2, type ProLeagueRef, type ProMatch, type ProTeamRef } from '../../lib/pro';
 import { DataTable, type Column } from '../../components/DataTable';
-import { ProMatchRow } from '../../components/pro/ProMatchRow';
 import { Flag, PercentileBars, TransfersList, type TransferLine } from '../../components/pro/People';
 import { FormLine, PercentileWheel, SeasonBars } from '../../components/pro/Charts';
 import { GplusBars, PlayerAdvancedTable, type AdvPlayerSeason, type SourceCredit } from '../../components/pro/Advanced';
-import { EmptyState, ErrorBox, PlayerAvatar, Section, SegmentedControl, Skeleton, TabsNav, TeamLogo } from '../../components/primitives';
-import { ProHero, StatTile as Tile } from '../../components/pro/Hero';
+import { Card, EmptyState, ErrorBox, PlayerAvatar, Section, SegmentedControl, Skeleton, StatStrip, StripStat, TabsNav, TeamLogo } from '../../components/primitives';
+import { FactGrid, ProHero, StatTile as Tile } from '../../components/pro/Hero';
 import { ProMoved } from './ProMoved';
 import { useSection } from '../../lib/section';
 import { nationHref } from '../../components/intl/NationHistory';
@@ -140,7 +142,6 @@ function sumRows(rows: SeasonRow[]): SeasonRow | null {
   return out as unknown as SeasonRow;
 }
 
-const ratingChip = (v: number) => (v >= 8 ? 'bg-win/20 text-win' : v >= 7 ? 'bg-pitch-400/15 text-pitch-300' : v >= 6.3 ? 'bg-note/15 text-note' : 'bg-loss/15 text-loss');
 
 export default function ProPlayer() {
   const { slug = '' } = useParams();
@@ -228,13 +229,44 @@ export default function ProPlayer() {
     { key: 'kp', label: 'KP', title: 'Key passes', num: true, priority: 2, value: (m) => m.key_passes ?? null },
     { key: 'pass', label: 'Passes', num: true, priority: 3, value: (m) => m.passes ?? null, render: (m) => (m.passes == null ? '–' : `${m.passes}${m.pass_accuracy != null && m.passes ? ` (${Math.round((m.pass_accuracy / m.passes) * 100)}%)` : ''}`), title: 'Passes (accuracy: completed of attempted, from the match data)' },
     { key: 'tkl', label: 'Tkl', title: 'Tackles', num: true, priority: 3, value: (m) => m.tackles ?? null },
-    { key: 'rating', label: 'Rating', num: true, decimals: 1, value: (m) => m.rating, render: (m) => (m.rating == null ? '–' : <span className={`rounded px-1.5 py-0.5 text-xs tnum font-semibold ${ratingChip(m.rating)}`}>{m.rating.toFixed(1)}</span>) },
+    { key: 'rating', label: 'Rating', num: true, decimals: 1, value: (m) => m.rating, render: (m) => (m.rating == null ? '–' : <RatingBadge v={m.rating} />) },
   ];
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats' }, { id: 'matches', label: 'Matches', count: lines.length || undefined }, ...(onIntl ? [] : [{ id: 'career' as Tab, label: 'Career' }]), { id: 'news', label: 'News' },
   ];
-  const chips = [p.number != null ? `No. ${p.number}` : null, age != null ? `${age} years old` : null, p.height_cm ? `${p.height_cm} cm` : null, p.weight_kg ? `${p.weight_kg} kg` : null].filter(Boolean) as string[];
+  const usd = (n: number) => (n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2)}M` : `$${Math.round(n / 1000)}K`);
+  const ppg = (now?.res_apps ?? 0) >= 5 && now?.res_pts != null ? (now.res_pts / now.res_apps!).toFixed(2) : null;
+  const pps = (now?.res_starts45 ?? 0) >= 5 && now?.res_pts45 != null ? (now.res_pts45 / now.res_starts45!).toFixed(2) : null;
+  const facts = [
+    { label: 'Position', value: positionWord(p.position ?? now?.position) ?? '–' },
+    { label: 'Age', value: age != null ? `${age} yrs` : '–', sub: p.birth_date ? fmt.date(p.birth_date) : undefined, title: p.birth_place ? `Born in ${p.birth_place}` : undefined },
+    { label: 'Height', value: p.height_cm ? `${p.height_cm} cm` : '–', sub: p.weight_kg ? `${p.weight_kg} kg` : undefined },
+    { label: 'Shirt', value: p.number != null ? p.number : '–' },
+    { label: 'Points a game', value: ppg ?? '–', sub: now?.res_apps ? `${now.res_apps} games${ppg ? '' : ', 5+ to show'}` : 'no games yet', title: "His team's points per game he played: 3 a win, 1 a draw" },
+    { label: 'Points a start', value: pps ?? '–', sub: now?.res_starts45 ? `${now.res_starts45} starts of 45+` : 'no starts of 45+', title: 'The same over his starts of 45+ minutes' },
+    d.salary?.latest && { label: `${d.salary.latest.season} pay`, value: d.salary.latest.guaranteed != null ? usd(d.salary.latest.guaranteed) : '–', sub: 'guaranteed', title: d.salary.latest.base != null ? `Base ${usd(d.salary.latest.base)}, as of ${d.salary.latest.release_date.slice(0, 7)}` : undefined },
+  ];
+  const attrs = d.percentiles ? attributesFrom(d.percentiles.rows) : [];
+  const pctCaption = d.percentiles ? `Per 90 against ${d.percentiles.rows[0]?.peers ?? 0} ${positionWord(p.position)?.toLowerCase() ?? 'player'}s, ${d.percentiles.league?.name ?? ''} ${d.percentiles.season}` : '';
+  const recent: PlayerMatchItem[] = lines.slice(0, 6).map((m) => {
+    const home = m.team_id === m.match.home.id;
+    const o = home ? m.match.away : m.match.home;
+    return { key: String(m.match.id), href: proPath.match(m.match.slug, m.match.league.scope), date: m.match.kickoff, home, opp: { name: o.name, logo: o.logo },
+      us: (home ? m.match.home.score : m.match.away.score) ?? null, them: (home ? m.match.away.score : m.match.home.score) ?? null,
+      comp: m.match.league.name, minutes: m.minutes, goals: m.goals, assists: m.assists, rating: m.rating };
+  });
+  // The attribute block sits beside the main column on desktop and right after the form on a phone.
+  const attributes = d.percentiles && d.percentiles.rows.length > 0 && (
+    <Card as="section" label="Compared with peers">
+      <div className="stack-sm">
+        <div><h2 className="h-section">Compared with peers</h2><p className="mt-0.5 text-xs text-chalk-400">{pctCaption}</p></div>
+        {hasPentagon(attrs) && <AttributePentagon a={attrs} aName={p.name} />}
+        <PercentileBars rows={isGk ? d.percentiles.rows : d.percentiles.rows.filter((r) => r.stat !== 'saves')} caption={null} bare />
+        <details className="text-xs text-chalk-400"><summary className="w-fit cursor-pointer rounded py-2 hover:text-chalk-200 coarse:min-h-11">Show as a wheel</summary><div className="mt-2"><PercentileWheel rows={d.percentiles.rows} labels={WHEEL_LABELS} caption={pctCaption} /></div></details>
+      </div>
+    </Card>
+  );
 
   return (
     <div className="stack">
@@ -251,32 +283,40 @@ export default function ProPlayer() {
           {d.team && <Link to={proPath.team(d.team.slug)} className="inline-flex items-center gap-1.5 font-medium text-pitch-300 hover:text-pitch-200"><Shirt size={14} aria-hidden />{d.team.name}</Link>}
           {p.nationality && <span className="inline-flex items-center gap-1.5"><Flag country={p.nationality} />{p.nationality}</span>}
         </>}
-        chips={[...chips, p.birth_date ? `Born ${fmt.date(p.birth_date)}${p.birth_place ? `, ${p.birth_place}` : ''}` : null]}
+        badge={now?.rating != null && now.rating > 0 ? (
+          <div className="flex flex-col items-center gap-1">
+            <RatingBadge v={now.rating} size="xl" label={`${latest} average rating`} />
+            <span className="text-2xs text-chalk-400">{latest} rating</span>
+          </div>
+        ) : undefined}
         actions={<>
           <PageActions title={p.name} follow={{ kind: 'pro-player', id: String(p.id), name: p.name, href: `/pro/players/${p.slug}`, image: p.photo ?? null, sub: d.team?.name ?? null }} />
           <Link to={proPaths2.compare(p.slug)} className="btn-ghost btn-sm"><GitCompare size={14} /> Compare</Link>
         </>}
       >
-        <div className="mb-3"><KeyFacts position={p.position ?? now?.position} season={latest} apps={now?.res_apps} pts={now?.res_pts} starts={now?.res_starts45} startPts={now?.res_pts45} salary={d.salary?.latest} salaryNote={d.salary_note} /></div>
+        <FactGrid facts={facts} label="Key facts" />
         {now && (
           <section aria-label={`${latest} at a glance`}>
-            <h2 className="mb-1.5 text-2xs text-chalk-400">{latest}, {onIntl ? 'international matches' : 'club competitions'}</h2>
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [mask-image:linear-gradient(to_right,black_82%,transparent)] sm:mx-0 sm:[mask-image:none] sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-8 [&>*]:w-[6.75rem] [&>*]:shrink-0 sm:[&>*]:w-auto">
-              <Tile label="Appearances" value={now.apps} sub={`${now.starts} starts`} />
-              <Tile label="Minutes" value={fmt.num(now.minutes)} sub={now.apps ? `${Math.round(now.minutes / now.apps)} a match` : undefined} />
+            <h2 className="mb-2 text-2xs font-medium text-chalk-400">{latest}, {onIntl ? 'international matches' : 'club competitions'}</h2>
+            <StatStrip>
+              <StripStat label="Apps" value={now.apps} sub={`${now.starts} starts`} />
+              <StripStat label="Minutes" value={fmt.num(now.minutes)} sub={now.apps ? `${Math.round(now.minutes / now.apps)} a match` : undefined} />
               {isGk ? <>
-                <Tile label="Clean sheets" value={now.clean_sheets ?? '–'} accent />
-                <Tile label="Saves" value={now.saves ?? '–'} sub={now.saves != null && now.conceded != null ? `${Math.round((now.saves / Math.max(1, now.saves + now.conceded)) * 100)}% saved` : undefined} />
-                <Tile label="Conceded" value={now.conceded ?? '–'} />
+                <StripStat label="Clean sh." value={now.clean_sheets ?? '–'} />
+                <StripStat label="Saves" value={now.saves ?? '–'} sub={now.saves != null && now.conceded != null ? `${Math.round((now.saves / Math.max(1, now.saves + now.conceded)) * 100)}% saved` : undefined} />
+                <StripStat label="Conceded" value={now.conceded ?? '–'} />
+                <StripStat label="Pass %" value={now.pass_accuracy != null ? `${now.pass_accuracy}%` : '–'} />
+                <StripStat label="Passes" value={now.passes ?? '–'} />
+                <StripStat label="Yellows" value={now.yellow} sub={now.red ? `${now.red} red` : undefined} />
               </> : <>
-                <Tile label="Goals" value={now.goals} sub={xg ? `${xg.toFixed(1)} xG` : now.minutes >= 450 ? `${per90(now.goals, now.minutes)?.toFixed(2)} per 90` : undefined} accent />
-                <Tile label="Assists" value={now.assists} sub={xa ? `${xa.toFixed(1)} xA` : undefined} accent />
-                <Tile label="Shots" value={now.shots ?? '–'} sub={now.shots_on != null ? `${now.shots_on} on target` : undefined} />
+                <StripStat label="Goals" value={now.goals} sub={xg ? `${xg.toFixed(1)} xG` : now.minutes >= 450 ? `${per90(now.goals, now.minutes)?.toFixed(2)} per 90` : undefined} />
+                <StripStat label="Assists" value={now.assists} sub={xa ? `${xa.toFixed(1)} xA` : undefined} />
+                <StripStat label="Shots" value={now.shots ?? '–'} sub={now.shots_on != null ? `${now.shots_on} on target` : undefined} />
+                <StripStat label="Key passes" value={now.key_passes ?? '–'} sub={now.key_passes != null && now.minutes >= 450 ? `${per90(now.key_passes, now.minutes)?.toFixed(2)} per 90` : undefined} />
+                <StripStat label="Pass %" value={now.pass_accuracy != null ? `${now.pass_accuracy}%` : '–'} sub={now.passes != null ? `of ${fmt.num(now.passes)}` : undefined} />
+                <StripStat label="Dribbles" value={now.dribbles_won ?? '–'} sub={now.duels_won != null ? `${now.duels_won} duels won` : undefined} />
               </>}
-              <Tile label="Key passes" value={now.key_passes ?? '–'} />
-              <Tile label="Pass accuracy" value={now.pass_accuracy != null ? `${now.pass_accuracy}%` : '–'} />
-              <Tile label="Rating" value={now.rating != null ? now.rating.toFixed(2) : '–'} sub="average" />
-            </div>
+            </StatStrip>
           </section>
         )}
       </ProHero>
@@ -288,43 +328,35 @@ export default function ProPlayer() {
       <TabsNav label="Player sections" tabs={tabs} value={tab as Tab} hrefFor={hrefFor} />
 
       {tab === 'overview' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_23rem]">
-          <div className="space-y-5">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
+          <div className="stack min-w-0">
             {!shown.length && <EmptyState title={onIntl ? 'No international numbers here yet' : 'No season stats yet'} body={onIntl ? 'Caps from his career are beside this; match lines arrive with his national team\'s matches.' : "Season totals arrive as the crawl reaches this player's competitions."} />}
-            {(bySeason.some((r) => r.a || r.b) || form.length >= 3) && (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <SeasonBars rows={bySeason} a="Goals" b="Assists" caption={`Goals and assists by season (${onIntl ? 'international' : 'club'})`} />
-                <FormLine points={form} caption={`Match ratings, last ${form.length} matches`} />
-              </div>
+            {form.length >= 5 && <FormLine points={form} caption="Form" />}
+            {attributes && <div className="lg:hidden">{attributes}</div>}
+            {recent.length > 0 && (
+              <Section title="Recent matches" to={hrefFor('matches')} toLabel="All matches">
+                <PlayerMatchList items={recent} />
+              </Section>
             )}
+            {bySeason.some((r) => r.a || r.b) && <SeasonBars rows={bySeason} a="Goals" b="Assists" caption={`Goals and assists by season (${onIntl ? 'international' : 'club'})`} />}
             {shown.length > 0 && (
-              <Section title="By season" right={<Link to={hrefFor('stats')} className="text-xs text-pitch-300 hover:text-pitch-200">Every stat</Link>}>
+              <Section title="By season" to={hrefFor('stats')} toLabel="Every stat">
                 <DataTable rows={shown.slice(0, 10)} columns={[...base, ...GROUPS.overview]} rowKey={(s) => `${s.season}-${s.league?.id}-${s.team?.id}`} caption={`${p.name} by season`} dense />
               </Section>
             )}
-            {lines.length > 0 && (
-              <Section title="Recent matches" right={<Link to={hrefFor('matches')} className="text-xs text-pitch-300 hover:text-pitch-200">All matches</Link>}>
-                <ul className="frame divide-y divide-field-700">
-                  {lines.slice(0, 6).map((m) => (
-                    <li key={m.match.id} className="flex items-center">
-                      <div className="min-w-0 flex-1"><ProMatchRow m={m.match} showDate showLeague /></div>
-                      <span className="hidden w-32 shrink-0 px-3 text-right text-xs tnum text-chalk-400 sm:block">{(m.minutes ?? 0) > 0 ? `${m.minutes}′` : 'bench'}{m.goals ? `, ${m.goals} G` : ''}{m.assists ? `, ${m.assists} A` : ''}{m.rating != null ? <span className={`ml-1.5 rounded px-1 py-0.5 font-semibold ${ratingChip(m.rating)}`}>{m.rating.toFixed(1)}</span> : null}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
           </div>
-          <aside className="space-y-5">
+          <aside className="stack min-w-0" aria-label="More about this player">
+            {attributes && <div className="hidden lg:block">{attributes}</div>}
             <div className="grid grid-cols-2 gap-2">
               <Link to={`/pro/players/${p.slug}`} className="block rounded-lg hover:ring-1 hover:ring-pitch-400/50" aria-label="Club career"><Tile label="Club appearances" value={fmt.num(club.reduce((n2, s) => n2 + s.apps, 0))} sub={`${fmt.num(club.reduce((n2, s) => n2 + s.goals, 0))} goals, ${fmt.num(club.reduce((n2, s) => n2 + s.assists, 0))} assists`} /></Link>
               <Link to={`/intl/players/${p.slug}`} className="block rounded-lg hover:ring-1 hover:ring-pitch-400/50" aria-label="International career"><Tile label="International" value={caps ? `${caps} matches` : '–'} sub={caps ? `${intlGoals} goals, in our match data` : 'his international page'} /></Link>
             </div>
+            {winners.length > 0 && <p className="flex items-center gap-2 text-sm text-chalk-300"><Trophy size={16} aria-hidden className="text-note" />{winners.length} {winners.length === 1 ? 'trophy' : 'trophies'} won, <Link to={hrefFor('career')} className="text-pitch-300 hover:text-pitch-200">see career</Link></p>}
             {onIntl && career.data && career.data.caps.length > 0 && (
               <Section title="Caps">
                 <ul className="frame divide-y divide-field-700 text-sm">
                   {career.data.caps.map((c, i) => (
-                    <li key={i} className="flex items-center gap-2 px-3 py-1.5">
+                    <li key={i} className="flex items-center gap-2 row-pad">
                       {c.nation ? <Link to={nationHref(c.nation)} className="min-w-0 flex-1 truncate font-medium text-chalk-100 hover:text-pitch-300">{c.nation.name}</Link> : <span className="min-w-0 flex-1">–</span>}
                       <span className="text-2xs tnum text-chalk-500">{c.first_year ?? ''}–{c.last_year ?? ''}</span>
                       <span className="tnum text-chalk-200">{c.caps ?? '–'} caps, {c.goals ?? 0} goals</span>
@@ -336,15 +368,8 @@ export default function ProPlayer() {
             {onIntl && career.data && career.data.world_cups.length > 0 && (
               <Section title="World Cups">
                 <ul className="frame divide-y divide-field-700 text-sm">
-                  {career.data.world_cups.map((w) => <li key={`${w.tournament}-${w.year}`} className="flex items-center gap-2 px-3 py-1.5"><span className="w-12 tnum text-chalk-400">{w.year}</span><span className="min-w-0 flex-1 truncate">{w.nation?.name ?? ''}</span><span className="text-2xs text-chalk-500">{w.shirt ? `No. ${w.shirt}` : ''}{w.position ? ` · ${w.position}` : ''}</span></li>)}
+                  {career.data.world_cups.map((w) => <li key={`${w.tournament}-${w.year}`} className="flex items-center gap-2 row-pad"><span className="w-12 tnum text-chalk-400">{w.year}</span><span className="min-w-0 flex-1 truncate">{w.nation?.name ?? ''}</span><span className="text-2xs text-chalk-500">{w.shirt ? `No. ${w.shirt}` : ''}{w.position ? ` · ${w.position}` : ''}</span></li>)}
                 </ul>
-              </Section>
-            )}
-            {winners.length > 0 && <p className="flex items-center gap-2 text-sm text-chalk-300"><Trophy size={16} aria-hidden className="text-note" />{winners.length} {winners.length === 1 ? 'trophy' : 'trophies'} won, <Link to={hrefFor('career')} className="text-pitch-300 hover:text-pitch-200">see career</Link></p>}
-            {d.percentiles && d.percentiles.rows.length > 0 && (
-              <Section title="Compared with peers">
-                <PercentileWheel rows={d.percentiles.rows} labels={WHEEL_LABELS} caption={`Percentiles per 90 against ${d.percentiles.rows[0]?.peers ?? 0} players in the same position, ${d.percentiles.league?.name ?? ''} ${d.percentiles.season}`} />
-                <details className="text-xs text-chalk-400"><summary className="w-fit cursor-pointer rounded px-1 py-2 hover:text-chalk-200">Show as bars</summary><div className="mt-2"><PercentileBars rows={d.percentiles.rows} caption={`${d.percentiles.league?.name ?? ''} ${d.percentiles.season}, ${p.position ?? 'same position'}`} /></div></details>
               </Section>
             )}
           </aside>
@@ -353,7 +378,7 @@ export default function ProPlayer() {
 
       {tab === 'news' && <NewsFeed q={{ pro_player: String(p.id) }} hide={`pro_player:${p.id}`} empty={`No news for ${p.name} yet`} />}
       {tab === 'stats' && (
-        <div className="space-y-5">
+        <div className="stack">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <SegmentedControl label="Stat group" size="sm" value={group} onChange={setGroup} options={groupOptions} />
             <SegmentedControl label="Numbers" size="sm" value={view} onChange={setView} options={[{ value: 'totals', label: 'Totals' }, { value: 'per90', label: 'Per 90' }]} />
@@ -376,10 +401,10 @@ export default function ProPlayer() {
       )}
 
       {tab === 'career' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <div className="space-y-5">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="stack">
             {d.college.length > 0 && (
-              <aside className="card flex items-start gap-3 px-4 py-3">
+              <aside className="card pad flex items-start gap-3">
                 <GraduationCap size={20} aria-hidden className="mt-0.5 shrink-0 text-pitch-300" />
                 <div className="text-sm text-chalk-200">
                   {d.college.map((c) => (
@@ -396,12 +421,12 @@ export default function ProPlayer() {
             {d.career && d.career.rows.length > 0 && <Section title="Career"><CareerTable rows={d.career.rows} /></Section>}
             <Section title="Transfers"><TransfersList rows={d.transfers} /></Section>
           </div>
-          <div className="space-y-5">
+          <div className="stack">
             <Section title={<span className="flex items-center gap-2"><Trophy size={16} aria-hidden className="text-note" />Honours{winners.length ? ` (${winners.length} won)` : ''}</span>}>
               {d.trophies.length ? (
                 <ul className="frame divide-y divide-field-700 text-sm">
                   {d.trophies.slice(0, 30).map((t, i) => (
-                    <li key={i} className="flex items-center gap-2 px-3 py-1.5"><span className={`w-16 shrink-0 text-2xs ${/winner/i.test(t.place) ? 'font-semibold text-note' : 'text-chalk-500'}`}>{t.place}</span><span className="min-w-0 flex-1 truncate text-chalk-200">{t.league}</span><span className="shrink-0 text-2xs tnum text-chalk-500">{t.season}</span></li>
+                    <li key={i} className="flex items-center gap-2 row-pad"><span className={`w-16 shrink-0 text-2xs ${/winner/i.test(t.place) ? 'font-semibold text-note' : 'text-chalk-500'}`}>{t.place}</span><span className="min-w-0 flex-1 truncate text-chalk-200">{t.league}</span><span className="shrink-0 text-2xs tnum text-chalk-500">{t.season}</span></li>
                   ))}
                 </ul>
               ) : <p className="text-sm text-chalk-400">No honours recorded yet.</p>}
@@ -410,7 +435,7 @@ export default function ProPlayer() {
               {(d.injury_history?.length ?? 0) > 0 ? (
                 <ul className="frame divide-y divide-field-700 text-sm">
                   {d.injury_history!.slice(0, 20).map((h, i) => (
-                    <li key={`${h.start}-${h.type}-${i}`} className="flex flex-wrap items-center gap-x-2 px-3 py-1.5">
+                    <li key={`${h.start}-${h.type}-${i}`} className="flex flex-wrap items-center gap-x-2 row-pad">
                       <span className="min-w-0 flex-1 truncate text-chalk-200">{h.type}</span>
                       <span className="shrink-0 text-2xs tnum text-chalk-500">{fmt.date(h.start)} – {h.end ? fmt.date(h.end) : <span className="text-loss">now</span>}</span>
                       <span className="w-full text-2xs text-chalk-500">{h.days} {h.days === 1 ? 'day' : 'days'}{h.matches_missed ? ` · ${h.matches_missed} ${h.matches_missed === 1 ? 'match' : 'matches'} missed` : ''}</span>

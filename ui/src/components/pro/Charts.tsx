@@ -1,6 +1,8 @@
 // Small SVG charts for the pro pages (no chart library): bars by season, a form line of match ratings and a percentile
 // wheel. Each is readable without colour (labels and values) and has an aria-label summing it up.
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { RatingBadge, ratingHex } from '../Rating';
 
 /** Two stacked series per column (goals and assists by season). */
 export function SeasonBars({ rows, a, b, caption }: { rows: { label: string; a: number; b: number }[]; a: string; b: string; caption: string }) {
@@ -8,9 +10,9 @@ export function SeasonBars({ rows, a, b, caption }: { rows: { label: string; a: 
   const max = Math.max(1, ...rows.map((r) => r.a + r.b));
   const H = 84;
   return (
-    <figure className="frame pad">
-      <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-chalk-400">
-        <span>{caption}</span>
+    <figure className="card pad min-w-0">
+      <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-xs text-chalk-400">
+        <span className="h-section">{caption}</span>
         <span className="flex gap-3"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-pitch-400" />{a}</span><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-note" />{b}</span></span>
       </figcaption>
       <div className="flex items-end gap-1.5 overflow-x-auto pb-1" role="img" aria-label={`${caption}: ${rows.map((r) => `${r.label} ${r.a} ${a.toLowerCase()}, ${r.b} ${b.toLowerCase()}`).join('; ')}`}>
@@ -29,28 +31,51 @@ export function SeasonBars({ rows, a, b, caption }: { rows: { label: string; a: 
   );
 }
 
-const ratingTone = (v: number) => (v >= 8 ? 'fill-win' : v >= 7 ? 'fill-pitch-400' : v >= 6.3 ? 'fill-note' : 'fill-loss');
+/** The width of a box in CSS pixels, so a chart can draw at 1:1 and its labels stay the size they say. */
+export function useBoxWidth<T extends HTMLElement>(fallback: number) {
+  const ref = useRef<T>(null);
+  const [w, setW] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => { const v = Math.round(e?.contentRect.width ?? 0); if (v > 0) setW(v); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
 
-/** Match ratings over the last matches, oldest on the left; the dashed line is the average. */
+/** Match ratings over the last matches, oldest on the left: the last ten as rating pills, then the line with the
+ *  dashed average. Dots carry the rating colour scale; each links to its match. */
 export function FormLine({ points, caption }: { points: { label: string; value: number; href?: string; title: string }[]; caption: string }) {
+  const [box, W] = useBoxWidth<HTMLDivElement>(480);
   if (points.length < 5) return null;
-  const W = 480, H = 124, PAD = 20, lo = 5, hi = 10;
-  const x = (i: number) => PAD + (i * (W - PAD * 2)) / Math.max(1, points.length - 1);
-  const y = (v: number) => H - PAD - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (H - PAD * 2);
+  const H = 150, L = 22, R = 10, T = 12, B = 14, lo = 5, hi = 10;
+  const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, points.length - 1);
+  const y = (v: number) => T + (1 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (H - T - B);
   const avg = points.reduce((n, p) => n + p.value, 0) / points.length;
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const last = points.slice(-10);
   return (
-    <figure className="frame pad">
-      <figcaption className="mb-1 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">average {avg.toFixed(2)}</span></figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${caption}: ${points.map((p) => `${p.label} ${p.value.toFixed(1)}`).join(', ')}`}>
-        {[6, 7, 8, 9].map((g) => <g key={g}><line x1={PAD} x2={W - PAD} y1={y(g)} y2={y(g)} className="stroke-field-700" strokeWidth={1} /><text x={4} y={y(g) + 4} className="fill-chalk-500 text-[10px]">{g}</text></g>)}
-        <line x1={PAD} x2={W - PAD} y1={y(avg)} y2={y(avg)} className="stroke-chalk-500" strokeDasharray="4 4" strokeWidth={1} />
-        <path d={path} className="fill-none stroke-pitch-300" strokeWidth={2} strokeLinejoin="round" />
-        {points.map((p, i) => {
-          const dot = <circle cx={x(i)} cy={y(p.value)} r={5} className={`${ratingTone(p.value)} stroke-field-900`} strokeWidth={2}><title>{p.title}</title></circle>;
-          return p.href ? <Link key={i} to={p.href}>{dot}</Link> : <g key={i}>{dot}</g>;
-        })}
-      </svg>
+    <figure className="card pad min-w-0">
+      <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <span className="h-section">{caption}</span>
+        <span className="text-xs text-chalk-400">average <RatingBadge v={avg} size="sm" className="ml-1" /></span>
+      </figcaption>
+      <ol className="mb-3 flex flex-wrap gap-1.5" aria-label="Last ten ratings, oldest first">
+        {last.map((p, i) => <li key={i}>{p.href ? <Link to={p.href} title={p.title} className="block rounded hover:ring-2 hover:ring-chalk-300/60"><RatingBadge v={p.value} size="sm" /></Link> : <RatingBadge v={p.value} size="sm" />}</li>)}
+      </ol>
+      <div ref={box} className="w-full">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" role="img" aria-label={`${caption}: ${points.map((p) => `${p.label} ${p.value.toFixed(1)}`).join(', ')}`}>
+          {[6, 7, 8, 9].map((g) => <g key={g}><line x1={L} x2={W - R} y1={y(g)} y2={y(g)} className="stroke-field-700" strokeWidth={1} /><text x={0} y={y(g) + 4} className="fill-chalk-500" style={{ fontSize: 11 }}>{g}</text></g>)}
+          <line x1={L} x2={W - R} y1={y(avg)} y2={y(avg)} className="stroke-chalk-500" strokeDasharray="4 4" strokeWidth={1} />
+          <path d={path} className="fill-none stroke-chalk-300" strokeWidth={1.5} strokeLinejoin="round" />
+          {points.map((p, i) => {
+            const dot = <circle cx={x(i)} cy={y(p.value)} r={5.5} fill={ratingHex(p.value)} className="stroke-field-900" strokeWidth={2}><title>{p.title}</title></circle>;
+            return p.href ? <Link key={i} to={p.href}>{dot}</Link> : <g key={i}>{dot}</g>;
+          })}
+        </svg>
+      </div>
     </figure>
   );
 }
@@ -64,7 +89,7 @@ const GROUP_FILL = { attack: 'fill-pitch-400', possession: 'fill-note', defence:
 /** A percentile wheel: one slice per stat, its length the percentile against the same position. */
 export function PercentileWheel({ rows, labels, caption }: { rows: { stat: string; pct: number; value: number }[]; labels: Record<string, string>; caption: string }) {
   if (rows.length < 3) return null;
-  const S = 320, C = S / 2, R0 = 26, R = C - 44;
+  const S = 340, C = S / 2, R0 = 24, R = C - 52;
   const n = rows.length, step = (Math.PI * 2) / n;
   const arc = (r0: number, r1: number, a0: number, a1: number) => {
     const p = (r: number, a: number) => `${(C + r * Math.sin(a)).toFixed(2)},${(C - r * Math.cos(a)).toFixed(2)}`;
@@ -85,8 +110,8 @@ export function PercentileWheel({ rows, labels, caption }: { rows: { stat: strin
             <g key={r.stat}>
               <path d={arc(R0, R, a0, a1)} className="fill-field-800" />
               <path d={arc(R0, len, a0, a1)} className={GROUP_FILL[group]} fillOpacity={0.9}><title>{`${labels[r.stat] ?? r.stat}: ${Math.round(r.pct * 100)}th percentile (${r.value})`}</title></path>
-              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" className="fill-chalk-300 text-[9px]">{(labels[r.stat] ?? r.stat).replace(' completed', '')}</text>
-              <text x={C + (len - 9) * Math.sin(mid)} y={C - (len - 9) * Math.cos(mid)} textAnchor="middle" dominantBaseline="middle" className="fill-field-950 text-[9px] font-semibold">{len - R0 > 18 ? Math.round(r.pct * 100) : ''}</text>
+              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" className="fill-chalk-300" style={{ fontSize: 11 }}>{(labels[r.stat] ?? r.stat).replace(' completed', '')}</text>
+              <text x={C + (len - 9) * Math.sin(mid)} y={C - (len - 9) * Math.cos(mid)} textAnchor="middle" dominantBaseline="middle" className="fill-field-950 font-semibold" style={{ fontSize: 11 }}>{len - R0 > 18 ? Math.round(r.pct * 100) : ''}</text>
             </g>
           );
         })}

@@ -1,7 +1,8 @@
 // One college player. Tabs in the order every area uses: Overview (career figures, splits, national ranks, honors),
 // Stats (season by season), Matches (game log), Career (transfers, the pro career), News.
 import { PlayerRail } from '../components/player/PlayerRail';
-import { GameForm, type FormGame } from '../components/player/GameForm';
+import { PlayerMatchList, type PlayerMatchItem } from '../components/player/MatchList';
+import { FactGrid, ProHero } from '../components/pro/Hero';
 import { FormLine } from '../components/pro/Charts';
 import { RatingBadge } from '../components/Rating';
 import { SeasonBars } from '../components/pro/Charts';
@@ -11,13 +12,13 @@ import { NewsFeed } from '../components/news/News';
 import { Crumbs } from '../components/shell';
 import { positionWord } from '../components/player/KeyFacts';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ExternalLink, Trophy } from 'lucide-react';
+import { ArrowRight, Camera, ExternalLink, GitCompare, Trophy } from 'lucide-react';
 import { api, fmt, resultOf, useAdmin } from '../lib/api';
 import { useHref, genderLabel } from '../lib/filters';
 import { useUrlState } from '../lib/urlState';
 import { useEntityId } from '../lib/entity';
 import { DataTable, type Column, type Preset } from '../components/DataTable';
-import { PlayerAvatar, Badge, EmptyState, ErrorBox, Figure, JsonViewer, ResultBadge, Section, Skeleton, TabsNav, TeamLogo, PageWithRail, HeroStat } from '../components/primitives';
+import { PlayerAvatar, Badge, EmptyState, ErrorBox, JsonViewer, ResultBadge, Section, Skeleton, StatStrip, StripStat, TabsNav, TeamLogo, PageWithRail } from '../components/primitives';
 
 type Tab = 'overview' | 'stats' | 'matches' | 'career' | 'news';
 
@@ -75,7 +76,6 @@ export default function Player() {
     { key: 'fouls', label: 'Fouls', num: true, priority: 2 }, { key: 'yellow_cards', label: 'YC', num: true, priority: 2 }, { key: 'red_cards', label: 'RC', num: true, priority: 2 },
     ...(isGk ? [{ key: 'goals_allowed', label: 'GA', num: true, render: (r: any) => r.is_goalie ? n(r.goals_allowed) : '' }, { key: 'saves', label: 'Saves', num: true, render: (r: any) => r.is_goalie ? n(r.saves) : '' }] as Column<any>[] : []),
   ];
-  const bioLine = latest ? [latest.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (redshirt)' : ''}` : null, latest.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : null].filter(Boolean).join(', ') : '';
   const bioUrl = latest?.bio_url ?? p.bio_url;
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'stats', label: 'Stats', count: seasons.length || undefined }, { id: 'matches', label: 'Matches', count: gameLog.length || undefined },
@@ -83,75 +83,105 @@ export default function Player() {
   ];
   // Charts: goals and assists by season (two or more), and the latest season's last 12 games.
   const bySeason = [...seasons].filter((s) => s.stats).sort((a, b) => a.season - b.season).map((s) => ({ label: String(s.season), a: s.stats.goals ?? 0, b: s.stats.assists ?? 0 }));
-  const form: FormGame[] = gameLog.filter((r) => r.game?.status === 'final' && r.game.season === latest?.season && r.participated !== false)
-    .sort((a, b) => String(a.game.game_date).localeCompare(String(b.game.game_date))).slice(-12)
-    .map((r) => { const g = r.game, home = g.home_program_id === own(r); const us = home ? g.home_score : g.away_score, them = home ? g.away_score : g.home_score;
-      return { href: href(`/matches/${g.id}`), date: fmt.day(g.game_date), opponent: `${home ? 'vs' : 'at'} ${(home ? g.away_name : g.home_name) ?? '?'}`, result: resultOf(us, them) as FormGame['result'], minutes: r.minutes ?? null, goals: r.goals ?? 0, assists: r.assists ?? 0, started: !!r.starter }; });
+  const recent: PlayerMatchItem[] = gameLog.filter((r) => r.game?.status === 'final' && r.participated !== false)
+    .sort((x, y) => String(y.game.game_date).localeCompare(String(x.game.game_date))).slice(0, 6)
+    .map((r) => { const g = r.game, home = g.home_program_id === own(r);
+      return { key: `${g.id}-${r.source}`, href: href(`/matches/${g.id}`), date: g.game_date, home, opp: { name: (home ? g.away_name : g.home_name) ?? '?', logo: home ? g.away_logo : g.home_logo, seo: home ? g.away_seo : g.home_seo },
+        us: home ? g.home_score : g.away_score, them: home ? g.away_score : g.home_score, minutes: r.minutes ?? null, goals: r.goals, assists: r.assists, rating: r.rating != null ? Number(r.rating) : null }; });
   // Match ratings, the latest season's last 15 rated games (oldest first).
   const ratings = gameLog.filter((r) => r.rating != null && r.game?.season === latest?.season).sort((a, b) => String(a.game.game_date).localeCompare(String(b.game.game_date))).slice(-15)
     .map((r) => { const g = r.game, home = g.home_program_id === own(r); return { label: fmt.day(g.game_date), value: Number(r.rating), href: href(`/matches/${g.id}`), title: `${fmt.day(g.game_date)} ${home ? 'vs' : 'at'} ${(home ? g.away_name : g.home_name) ?? '?'}: ${Number(r.rating).toFixed(1)}` }; });
-  const hasCharts = bySeason.length > 1 || form.length >= 3 || ratings.length >= 5;
+  const seasonRated = gameLog.filter((r) => r.rating != null && r.game?.season === latest?.season);
+  const seasonRating = seasonRated.length >= 3 ? seasonRated.reduce((t, r) => t + Number(r.rating), 0) / seasonRated.length : null;
+  const hasCharts = bySeason.length > 1 || recent.length > 0 || ratings.length >= 5;
   const hasOverview = hasCharts || (career && seasons.length > 1) || latest?.splits?.length > 0 || latest?.ranks?.length > 0 || honors.length > 0;
   return (
     <div className="stack">
       <Crumbs items={[{ label: p.display_name }]} />
-      <header className="card flex flex-col gap-5 pad lg:flex-row lg:items-start lg:justify-between lg:gap-8">
-        <div className="flex min-w-0 items-start gap-4">
-        <span className="shrink-0 [&>*]:!h-16 [&>*]:!w-16 sm:[&>*]:!h-[88px] sm:[&>*]:!w-[88px]"><PlayerAvatar src={p.photo_url ?? latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} /></span>
-        <div className="min-w-0">
-          <h1 className="display text-3xl leading-none sm:text-4xl">{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</h1>
-          {latest?.program && <p className="mt-2 text-sm text-chalk-300"><Link className="font-medium text-chalk-100 hover:text-pitch-300" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}>{latest.program.name}</Link> {genderLabel(latest.program.gender)} soccer{positionWord(latest.position ?? latest.position_raw) ? `, ${positionWord(latest.position ?? latest.position_raw)!.toLowerCase()}` : ''}{latest.jersey != null ? `, No. ${latest.jersey}` : ''}{bioLine ? `, ${bioLine}` : ''}</p>}
-          <p className="mt-1 text-sm text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null].filter(Boolean).join('; ') || 'No bio collected yet.'}</p>
-          <p className="mt-1 flex flex-wrap gap-x-4 text-xs"><Link className="text-pitch-400 hover:text-pitch-300" to={`/compare?a=${p.id}`}>Compare with another player</Link><Link className="text-pitch-400 hover:text-pitch-300" to={`/photo?player=${p.slug ?? p.id}`}>{p.photo_url ? 'Send a new photo' : 'Add a photo'}</Link></p>
-          <PageActions className="mt-3" title={p.display_name}
-            follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: p.photo_url ?? latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
-          {pro.data?.pro && <p className="mt-2"><Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2 py-1 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link></p>}
-        </div>
-        </div>
-        {st && (() => {
+      <ProHero
+        image={<span className="block [&>*]:!h-16 [&>*]:!w-16 sm:[&>*]:!h-24 sm:[&>*]:!w-24"><PlayerAvatar src={p.photo_url ?? latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={96} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} /></span>}
+        title={<>{p.display_name}{p.suppress && <Badge tone="red" className="ml-2 align-middle">suppressed</Badge>}</>}
+        line={<>
+          {latest?.program && <Link className="inline-flex items-center gap-1.5 font-medium text-pitch-300 hover:text-pitch-200" to={href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender })}><TeamLogo src={latest.program.college_schools?.logo_svg_url} seo={latest.program.school_seo} name={latest.program.name} size={16} />{latest.program.name}</Link>}
+          {latest?.program && <span>{genderLabel(latest.program.gender)} soccer</span>}
+          {(latest?.hometown_raw || latest?.previous_school) && <span className="text-chalk-400">{[latest?.hometown_raw ? `From ${latest.hometown_raw}` : null, latest?.previous_school ? `previously ${latest.previous_school}` : null].filter(Boolean).join('; ')}</span>}
+        </>}
+        badge={seasonRating != null ? (
+          <div className="flex flex-col items-center gap-1">
+            <RatingBadge v={seasonRating} size="xl" label={`${latest.season} average rating`} />
+            <span className="text-2xs text-chalk-400">{latest.season} rating</span>
+          </div>
+        ) : undefined}
+        actions={<>
+          <PageActions title={p.display_name} follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: p.photo_url ?? latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
+          <Link className="btn-ghost btn-sm" to={`/compare?a=${p.id}`}><GitCompare size={14} /> Compare</Link>
+          <Link className="btn-quiet btn-sm" to={`/photo?player=${p.slug ?? p.id}`}><Camera size={14} /> {p.photo_url ? 'New photo' : 'Add photo'}</Link>
+        </>}
+      >
+        {pro.data?.pro && <Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2.5 py-1.5 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25 coarse:min-h-11"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link>}
+        {(() => {
           const avg = (pts: number | null | undefined, k: number | null | undefined) => (pts != null && k && k >= 5 ? (pts / k).toFixed(2) : '–');
           return (
-            <dl className="grid min-w-0 grid-cols-3 gap-x-5 gap-y-3 sm:grid-cols-6 lg:max-w-[44rem] lg:flex-1">
-              {isGk ? <>
-                <HeroStat label={`${latest.season} save %`} value={fmt.pct(st.save_pct)} sub={`${st.saves ?? 0} saves`} accent />
-                <HeroStat label="Goals against avg" value={n(st.gaa, 2)} sub={`${st.ga ?? 0} conceded`} />
-                <HeroStat label="Shutouts" value={st.shutouts ?? 0} />
-                <HeroStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
-              </> : <>
-                <HeroStat label={`${latest.season} goals`} value={st.goals ?? 0} sub={st.pct_goals_p90 != null ? `${fmt.pctile(st.pct_goals_p90)} pctl per 90` : undefined} accent />
-                <HeroStat label="Assists" value={st.assists ?? 0} sub={`${st.points ?? 0} points`} />
-                <HeroStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
-                <HeroStat label="Minutes" value={n(st.minutes)} sub={st.goals_p90 != null ? `${n(st.goals_p90, 2)} goals per 90` : undefined} />
-              </>}
-              <HeroStat label="Points a game" value={avg(st.res_pts, st.res_apps)} sub={`${st.res_apps ?? 0} games`} />
-              <HeroStat label="Points a start" value={avg(st.pps_pts, st.pps_starts)} sub={`${st.pps_starts ?? 0} starts of 45+`} />
-            </dl>
+            <FactGrid label="Key facts" facts={[
+              { label: 'Position', value: positionWord(latest?.position ?? latest?.position_raw) ?? '–' },
+              { label: 'Class', value: latest?.class_raw ? `${latest.class_raw}${latest.is_redshirt ? ' (RS)' : ''}` : '–' },
+              { label: 'Height', value: latest?.height_cm ? `${Math.floor(latest.height_cm / 30.48)}′${Math.round(latest.height_cm / 2.54 % 12)}″` : '–' },
+              { label: 'Shirt', value: latest?.jersey ?? '–' },
+              { label: 'Points a game', value: st ? avg(st.res_pts, st.res_apps) : '–', sub: st ? `${st.res_apps ?? 0} games` : undefined, title: "His team's points per game he played: 3 a win, 1 a tie" },
+              { label: 'Points a start', value: st ? avg(st.pps_pts, st.pps_starts) : '–', sub: st ? `${st.pps_starts ?? 0} starts of 45+` : undefined, title: 'The same over his starts of 45+ minutes' },
+            ]} />
           );
         })()}
-      </header>
+        {st && (
+          <section aria-label={`${latest.season} at a glance`}>
+            <h2 className="mb-2 text-2xs font-medium text-chalk-400">{latest.season} season</h2>
+            <StatStrip>
+              {isGk ? <>
+                <StripStat label="Save %" value={fmt.pct(st.save_pct)} sub={`${st.saves ?? 0} saves`} />
+                <StripStat label="GAA" value={n(st.gaa, 2)} sub={`${st.ga ?? 0} conceded`} />
+                <StripStat label="Shutouts" value={st.shutouts ?? 0} />
+                <StripStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
+                <StripStat label="Minutes" value={n(st.minutes)} />
+                <StripStat label="Saves" value={st.saves ?? 0} />
+                <StripStat label="Clean sheets" value={st.clean_sheets ?? '–'} />
+                <StripStat label="Save % pctl" value={st.pct_save_pct != null ? fmt.pctile(st.pct_save_pct) : '–'} sub="in the division" />
+              </> : <>
+                <StripStat label="Goals" value={st.goals ?? 0} sub={st.pct_goals_p90 != null ? `${fmt.pctile(st.pct_goals_p90)} pctl` : undefined} />
+                <StripStat label="Assists" value={st.assists ?? 0} />
+                <StripStat label="Points" value={st.points ?? 0} sub={st.div_rank_points ? `${fmt.ordinal(st.div_rank_points)} in div.` : undefined} />
+                <StripStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
+                <StripStat label="Minutes" value={n(st.minutes)} sub={st.gp ? `${Math.round((st.minutes ?? 0) / st.gp)} a game` : undefined} />
+                <StripStat label="Shots" value={st.shots ?? 0} sub={st.sog != null ? `${st.sog} on goal` : undefined} />
+                <StripStat label="Goals/90" value={st.goals_p90 != null ? n(st.goals_p90, 2) : '–'} />
+                <StripStat label="Conv %" value={st.conversion_pct != null ? fmt.pct(st.conversion_pct) : '–'} sub="goals per shot" />
+              </>}
+            </StatStrip>
+          </section>
+        )}
+      </ProHero>
       <TabsNav label="Player sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'overview' ? null : x })} />
       <PageWithRail label={`${p.display_name} at a glance`} rail={<PlayerRail id={p.id} latest={latest} gameLog={gameLog} keeper={isGk} own={own} href={href} news={tab !== 'news'} />}>
-      {tab === 'overview' && <div className="space-y-6">
-      {hasCharts && (
-        <div className={`grid grid-cols-1 items-start gap-3 ${bySeason.length > 1 ? 'xl:grid-cols-2' : ''}`}>
-          <GameForm games={form} caption={`Last ${form.length} games, ${latest?.season}`} />
-          <FormLine points={ratings} caption={`Match ratings, ${latest?.season}`} />
-          {bySeason.length > 1 && <SeasonBars rows={bySeason} a="Goals" b="Assists" caption="Goals and assists by season" />}
-        </div>
-      )}
+      {tab === 'overview' && <div className="stack">
+      {ratings.length >= 5 && <FormLine points={ratings} caption="Form" />}
+      {recent.length > 0 && <Section title="Recent games" to={href(pathname, { tab: 'matches' })} toLabel="Game log"><PlayerMatchList items={recent} drawWord="T" /></Section>}
+      {bySeason.length > 1 && <SeasonBars rows={bySeason} a="Goals" b="Assists" caption="Goals and assists by season" />}
       {career && seasons.length > 1 && (
-        <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6">
-          <Figure label="Seasons" value={career.seasons} sub={`${career.programs} program${career.programs === 1 ? '' : 's'}`} />
-          <Figure label="Games" value={career.gp ?? 0} sub={`${career.gs ?? 0} starts`} />
-          <Figure label="Minutes" value={n(career.minutes)} />
-          <Figure label="Goals" value={career.goals ?? 0} /><Figure label="Assists" value={career.assists ?? 0} /><Figure label="Shots" value={career.shots ?? 0} sub={`${career.sog ?? 0} on goal`} />
-        </div>
+        <Section title="College career">
+          <StatStrip cols="grid-cols-3 sm:grid-cols-6">
+            <StripStat label="Seasons" value={career.seasons} sub={`${career.programs} program${career.programs === 1 ? '' : 's'}`} />
+            <StripStat label="Games" value={career.gp ?? 0} sub={`${career.gs ?? 0} starts`} />
+            <StripStat label="Minutes" value={n(career.minutes)} />
+            <StripStat label="Goals" value={career.goals ?? 0} />
+            <StripStat label="Assists" value={career.assists ?? 0} />
+            <StripStat label="Shots" value={career.shots ?? 0} sub={`${career.sog ?? 0} on goal`} />
+          </StatStrip>
+        </Section>
       )}
       </div>}
       {tab === 'stats' && <Section title="Seasons">
         <DataTable rows={seasons} columns={seasonCols} rowKey={(s) => s.id} caption="Season by season" presets={PRESETS} preset={preset} onPreset={setPreset} dense empty={<EmptyState title="No seasons recorded" />} />
       </Section>}
-      {tab === 'overview' && <div className="space-y-6">
+      {tab === 'overview' && <div className="stack">
       {latest?.splits?.length > 0 && (
         <Section title={`Splits, ${latest.season}`}>
           <div className="frame overflow-x-auto"><table className="w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Season splits</caption>
@@ -163,7 +193,7 @@ export default function Player() {
       {honors.length > 0 && <Section title="Honors"><ul className="frame divide-y divide-field-700 text-sm">{honors.map((h: any) => <li key={h.id} className="flex items-center gap-2 px-3 py-2"><span>{h.text}</span>{h.source_url && <a className="ml-auto inline-flex items-center gap-1 text-xs text-pitch-400 hover:text-pitch-300" href={h.source_url} target="_blank" rel="noreferrer">source <ExternalLink size={11} aria-hidden /></a>}</li>)}</ul></Section>}
       {!hasOverview && <EmptyState title="Nothing more to show yet" body="Splits, national ranks and honors appear as the season's box scores and bios are collected." />}
       </div>}
-      {tab === 'career' && <div className="space-y-6">
+      {tab === 'career' && <div className="stack">
         {pro.data?.pro && <Section title="Pro career"><Link to={`/pro/players/${pro.data.pro.slug}`} className="frame flex items-center gap-3 px-3 py-3 text-sm hover:bg-field-800"><Trophy size={18} aria-hidden className="text-pitch-300" /><span className="font-medium text-chalk-100">{pro.data.pro.name} plays professionally</span><span className="ml-auto text-xs text-pitch-300">Pro career and stats</span></Link></Section>}
         <Section title="Colleges">
           <ul className="frame divide-y divide-field-700 text-sm">{[...new Map(seasons.filter((s) => s.program).map((s) => [s.program.id, s])).values()].map((s: any) => { const yrs = seasons.filter((x) => x.program?.id === s.program.id).map((x) => x.season).sort(); return <li key={s.program.id}><Link to={href(`/teams/${s.program.id}`, { season: s.season, gender: s.program.gender })} className="flex items-center gap-2 px-3 py-2 hover:bg-field-800"><TeamLogo src={s.program.college_schools?.logo_svg_url} name={s.program.name} size={20} /><span className="font-medium text-chalk-100">{s.program.name}</span><span className="ml-auto text-xs text-chalk-400 tnum">{yrs[0] === yrs[yrs.length - 1] ? yrs[0] : `${yrs[0]}–${yrs[yrs.length - 1]}`}</span></Link></li>; })}</ul>

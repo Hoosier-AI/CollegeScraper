@@ -5,7 +5,8 @@ import { ArrowRight } from 'lucide-react';
 import { fmt } from '../../lib/api';
 import { ageFrom, positionShort, proPath, statLabel, useCountries, type ProLeagueRef, type ProTeamRef } from '../../lib/pro';
 import { DataTable, type Column } from '../DataTable';
-import { EmptyState, PlayerAvatar, TeamLogo } from '../primitives';
+import type { ReactNode } from 'react';
+import { EmptyState, PercentileGroup, PlayerAvatar, TeamLogo, type PctRow } from '../primitives';
 
 export function Flag({ country, size = 14 }: { country: string | null | undefined; size?: number }) {
   const { flag } = useCountries();
@@ -19,31 +20,28 @@ const PCT_LABEL: Record<string, string> = {
   tackles: 'Tackles', interceptions: 'Interceptions', duels_won: 'Duels won', dribbles_won: 'Dribbles completed', saves: 'Saves', rating: 'Match rating',
 };
 
-/** Per-90 percentiles against same-position players of the league season (pro_player_percentiles). */
-export function PercentileBars({ rows, caption }: { rows: { stat: string; value: number; pct: number; peers: number }[]; caption: string }) {
+const PCT_GROUP: [string, string[]][] = [
+  ['Attacking', ['goals', 'shots', 'shots_on', 'dribbles_won']],
+  ['Possession', ['assists', 'key_passes', 'passes', 'pass_accuracy']],
+  ['Defending', ['tackles', 'interceptions', 'duels_won', 'saves']],
+  ['Overall', ['rating']],
+];
+
+/** Per-90 percentiles against same-position players of the league season (pro_player_percentiles), FBref style:
+ *  grouped bars, the percentile at the end, the raw number beside the label. */
+export function PercentileBars({ rows, caption, bare }: { rows: { stat: string; value: number; pct: number; peers: number }[]; caption: ReactNode; bare?: boolean }) {
   if (!rows.length) return null;
-  const order = Object.keys(PCT_LABEL);
-  const sorted = [...rows].sort((a, b) => order.indexOf(a.stat) - order.indexOf(b.stat));
-  const tone = (p: number) => (p >= 0.8 ? 'bg-win' : p >= 0.5 ? 'bg-pitch-400' : p >= 0.25 ? 'bg-note' : 'bg-loss');
-  return (
-    <figure className="frame pad">
-      <figcaption className="mb-2 text-xs text-chalk-400">{caption}</figcaption>
-      <ul className="space-y-1.5">
-        {sorted.map((r) => {
-          const pct = Math.round(r.pct * 100);
-          const per = r.stat === 'rating' || r.stat === 'pass_accuracy' ? '' : ' per 90';
-          return (
-            <li key={r.stat} className="grid grid-cols-[8.5rem_1fr_3rem] items-center gap-2 text-sm" aria-label={`${PCT_LABEL[r.stat] ?? r.stat}: ${r.value}${per}, ${pct}th percentile of ${r.peers}`}>
-              <span className="truncate text-chalk-300">{PCT_LABEL[r.stat] ?? r.stat}</span>
-              <span className="h-2 overflow-hidden rounded bg-field-700" aria-hidden><span className={`block h-full ${tone(r.pct)}`} style={{ width: `${Math.max(3, pct)}%` }} /></span>
-              <span className="text-right text-xs tnum text-chalk-200" title={`${r.value}${per}`}>{pct}</span>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="mt-2 text-2xs text-chalk-500">Percentile among {sorted[0]?.peers ?? 0} players in the same position with 450+ minutes; per 90 minutes except rating and pass accuracy.</p>
-    </figure>
-  );
+  const by = new Map(rows.map((r) => [r.stat, r]));
+  const groups = PCT_GROUP.map(([title, keys]) => ({
+    title,
+    rows: keys.map((k) => by.get(k)).filter((r): r is NonNullable<typeof r> => !!r).map((r): PctRow => {
+      const per = r.stat === 'rating' || r.stat === 'pass_accuracy' ? '' : ' per 90';
+      const v = r.stat === 'pass_accuracy' ? `${Math.round(r.value)}%` : r.stat === 'rating' ? r.value.toFixed(2) : r.value.toFixed(2);
+      return { key: r.stat, label: PCT_LABEL[r.stat] ?? r.stat, pct: r.pct, value: v, title: `${r.value}${per}` };
+    }),
+  }));
+  const body = <PercentileGroup groups={groups} caption={caption} foot={`Percentile among ${rows[0]?.peers ?? 0} players in the same position with 450+ minutes; per 90 minutes except rating and pass accuracy.`} />;
+  return bare ? body : <figure className="card pad">{body}</figure>;
 }
 
 export interface TransferLine { date: string; type: string | null; from_team_id: number; from_name: string | null; from_logo: string | null; to_team_id: number; to_name: string | null; to_logo: string | null; direction?: 'in' | 'out'; player_name?: string | null; player?: { name: string; slug: string | null } | null; from_slug?: string | null; to_slug?: string | null }

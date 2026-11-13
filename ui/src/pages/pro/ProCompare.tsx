@@ -5,7 +5,8 @@ import { api, fmt } from '../../lib/api';
 import { ageFrom, per90, proPath, proPaths2 } from '../../lib/pro';
 import { ProSearchBox, type Hit } from '../../components/pro/ProSearchBox';
 import { Flag, PercentileBars } from '../../components/pro/People';
-import { EmptyState, ErrorBox, PageHeader, PlayerAvatar, Skeleton, TeamLogo } from '../../components/primitives';
+import { AttributePentagon, attributesFrom, hasPentagon } from '../../components/player/Pentagon';
+import { Card, EmptyState, ErrorBox, PageHeader, PlayerAvatar, Skeleton, TeamLogo } from '../../components/primitives';
 import type { PlayerData } from './ProPlayer';
 import { X } from 'lucide-react';
 import { useUrlPatch, useUrlState } from '../../lib/urlState';
@@ -65,14 +66,24 @@ function ComparePlayers() {
           const better = x != null && y != null && x !== y ? (x > y ? 0 : 1) : null;
           const show = (v: number | null) => (v == null ? '–' : rate || k === 'rating' ? v.toFixed(2) : fmt.num(v));
           return (
-            <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2 text-sm">
+            <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 row-pad text-sm">
               <span className={`text-right tnum ${better === 0 ? 'font-semibold text-win' : 'text-chalk-200'}`}>{show(x)}</span>
-              <span className="w-40 text-center text-xs text-chalk-400">{label}</span>
+              <span className="w-28 text-center text-xs text-chalk-400 sm:w-40">{label}</span>
               <span className={`tnum ${better === 1 ? 'font-semibold text-win' : 'text-chalk-200'}`}>{show(y)}</span>
             </div>
           );
         })}
       </div>
+      {(() => {
+        const [a, b] = sides.map((p) => (p.percentiles ? attributesFrom(p.percentiles.rows) : []));
+        return a && b && hasPentagon(a) && hasPentagon(b) ? (
+          <Card as="section" label="By area">
+            <h2 className="h-section">By area</h2>
+            <p className="mb-2 mt-0.5 text-xs text-chalk-400">Each area is the average of the percentiles below, against the same position in each player's league.</p>
+            <AttributePentagon a={a} b={b} aName={sides[0]!.player.name} bName={sides[1]!.player.name} />
+          </Card>
+        ) : null;
+      })()}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {sides.map((p) => p.percentiles && p.percentiles.rows.length > 0 ? <PercentileBars key={p.player.id} rows={p.percentiles.rows} caption={`${p.player.name}: ${p.percentiles.league?.name ?? ''} ${p.percentiles.season}`} /> : <p key={p.player.id} className="text-sm text-chalk-400">No percentiles for {p.player.name} yet (450+ minutes needed).</p>)}
       </div>
