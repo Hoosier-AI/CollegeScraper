@@ -103,7 +103,7 @@ export default function Match() {
   const duration = g.status === 'final' && dm > 60 && dm < 400 ? `${Math.floor(dm / 60)} h ${String(dm % 60).padStart(2, '0')} min` : null;
   const periodLines = (['site', 'ncaa'] as Src[]).map((s) => ({ s, rows: team.filter((t) => t.source === s && t.period_lines) })).find((x) => x.rows.length);
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: `${g.away?.name ?? '?'} at ${g.home?.name ?? '?'}` }]} />
       <MatchMasthead g={g} sides={sides} scorers={scorersFrom(events, players, { home: g.home.program_id, away: g.away.program_id }, evSource)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-chalk-500">
@@ -131,10 +131,10 @@ export default function Match() {
           )}
           {periodLines && (
             <RailCard title="By period" flush>
-              <table className="w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Score by period</caption>
+              <div className="overflow-x-auto"><table className="w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Score by period</caption>
                 <thead><tr><th scope="col" className="th">Team</th>{periodLines.rows[0].period_lines.map((pl: any) => <th key={pl.period} scope="col" className="th text-right">{pl.period > 2 ? `OT${pl.period - 2 > 1 ? pl.period - 2 : ''}` : `${pl.period === 1 ? '1st' : '2nd'} half`}</th>)}<th scope="col" className="th text-right">Final</th></tr></thead>
                 <tbody>{periodLines.rows.map((t) => <tr key={t.program_id}><th scope="row" className="td text-left font-medium">{t.program_id === g.home.program_id ? g.home.name : g.away.name}</th>{t.period_lines.map((pl: any) => <td key={pl.period} className="td num">{pl.score ?? '–'}</td>)}<td className="td num font-semibold">{t.goals ?? '–'}</td></tr>)}</tbody>
-              </table>
+              </table></div>
             </RailCard>
           )}
           {referee && <CollegeRefereeCard gameId={g.id} division={g.division ?? null} gender={g.gender} />}

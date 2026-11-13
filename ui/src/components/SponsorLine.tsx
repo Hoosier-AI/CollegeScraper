@@ -12,7 +12,7 @@ export function SponsorLine() {
   if (!s) return null;
   return (
     <div className="border-b border-field-700 bg-field-900/40">
-      <p className="mx-auto flex w-full max-w-page flex-wrap items-baseline gap-x-2 px-4 py-1.5 text-xs text-chalk-400 sm:px-6">
+      <p className="mx-auto flex w-full max-w-page flex-wrap items-baseline gap-x-2 gutter py-1.5 text-xs text-chalk-400">
         <span>Presented by</span>
         <a href={s.url} target="_blank" rel="sponsored noopener" className="font-medium text-chalk-200 hover:text-pitch-300">{s.name}</a>
         {s.tagline && <span className="truncate text-chalk-500">{s.tagline}</span>}

@@ -92,7 +92,7 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
   const scope = [division ? divisionLabel(division) : 'all divisions', genderLabel(f.gender), String(f.season)].join(', ');
   const pager = <Pager page={page} pageSize={PAGE} total={total} onPage={setPage} busy={busy} noun={isTeam ? 'teams' : 'players'} />;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader as={props.embedded ? 'h2' : 'h1'} title={dir ? 'Players' : 'Leaders'} meta={dir ? `Everyone who has played, most minutes first, ${scope}` : `${def.label}${q.data?.min_sample ? ` (${q.data.min_sample})` : ''}, ${scope}`}>
         {!dir && <Field label="Show">{() => <SegmentedControl label="Players or teams" size="sm" value={kind as 'player' | 'team'} onChange={(v) => patch({ kind: v === 'player' ? null : v, stat: null, min: null })} options={[{ value: 'player', label: 'Players' }, { value: 'team', label: 'Teams' }]} />}</Field>}
         {!dir && <Field label="Stat">{(id) => <Select id={id} value={statParam} onChange={setStat} options={statOptions} className="max-w-[240px]" />}</Field>}

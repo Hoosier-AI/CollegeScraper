@@ -63,7 +63,7 @@ export default function Teams() {
   );
   const scope = [division ? divisionLabel(division) : 'all divisions', genderLabel(f.gender), String(f.season)].join(', ');
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Teams" meta={list.data ? `${fmt.num(rows.length)} programs, ${scope}` : scope}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={setDivision} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[220px]" />}</Field>

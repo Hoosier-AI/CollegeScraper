@@ -20,7 +20,7 @@ export default function Coach() {
   const d = q.data!; const latest = d.seasons[0];
   const h = d.head_record;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[...(latest?.program ? [{ label: latest.program.name, to: href(`/teams/${latest.program.id}`, { season: latest.season, gender: latest.program.gender }) }] : []), { label: d.coach.name }]} />
       <header className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-6">
         <PlayerAvatar src={d.coach.headshot} name={d.coach.name} size={80} crest={latest?.program?.logo} crestSeo={latest?.program?.seo} />
@@ -36,7 +36,7 @@ export default function Coach() {
         )}
       </header>
       <section className="space-y-2">
-        <h2 className="text-base font-semibold text-chalk-100">Seasons</h2>
+        <h2 className="h-section">Seasons</h2>
         <ul className="frame divide-y divide-field-700 text-sm">
           {d.seasons.map((s) => (
             <li key={`${s.season}-${s.program?.id}`} className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5">

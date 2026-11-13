@@ -152,8 +152,8 @@ export function TopBar() {
   const searchRow = useRef<HTMLDivElement>(null);
   useEffect(() => { if (searching) searchRow.current?.querySelector('input')?.focus(); }, [searching]);
   return (
-    <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950">
-      <div className="mx-auto flex h-14 max-w-page items-center gap-2 px-4 sm:gap-4 sm:px-6">
+    <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <div className="gutter mx-auto flex h-14 max-w-page items-center gap-2 sm:gap-4">
         <Link to="/" className="hidden shrink-0 rounded sm:block" aria-label="Plaibook Live home"><Logo size={34} className="hidden xl:inline-flex" /><Logo withText={false} size={28} className="xl:hidden" /></Link>
         <AreaSwitch section={home ? null : section} />
         {/* The home page belongs to no one area: its search and the switch are the way in. */}
@@ -170,7 +170,7 @@ export function TopBar() {
         {admin && <button className="btn-quiet btn-sm hidden lg:inline-flex" onClick={() => clearToken()}><Shield size={14} /> Sign out</button>}
       </div>
       {searching && (
-        <div id="site-search-row" ref={searchRow} className="mx-auto max-w-page border-t border-field-700 px-4 py-2 sm:px-6" onKeyDown={(e) => { if (e.key === 'Escape') setSearching(false); }}>
+        <div id="site-search-row" ref={searchRow} className="gutter mx-auto max-w-page border-t border-field-700 py-2" onKeyDown={(e) => { if (e.key === 'Escape') setSearching(false); }}>
           <UniversalSearch size="md" />
         </div>
       )}
@@ -271,7 +271,7 @@ export function Footer() {
     : <Link to={to} className="inline-block py-1 text-chalk-300 hover:text-pitch-300">{label}</Link>);
   return (
     <footer className="mt-16 border-t border-field-700 bg-field-900/40">
-      <div className="mx-auto w-full max-w-page px-4 pb-28 pt-10 sm:px-6 md:pb-10">
+      <div className="gutter mx-auto w-full max-w-page pb-28 pt-10 md:pb-10">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,3fr)]">
           <div className="space-y-3">
             <Link to="/" aria-label="Plaibook Live home" className="inline-block"><Logo size={26} /></Link>

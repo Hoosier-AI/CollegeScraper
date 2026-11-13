@@ -43,7 +43,7 @@ export default function ProMatches() {
   // Pro: the US scene, then the world. International: one list.
   const blocks = intl ? [{ title: '', list: main }] : [{ title: 'United States', list: main.filter((g) => g.league.us) }, { title: 'Around the world', list: main.filter((g) => !g.league.us) }];
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title={intl ? 'International matches' : 'Pro matches'} meta={`${longDay(date)}, ${q.data ? (count ? `${count} ${gender === 'w' ? "women's" : "men's"} matches in ${groups.length} competitions` : `no ${gender === 'w' ? "women's" : "men's"} matches`) : 'loading'}`} />
       <DateStrip date={date} today={today} onChange={setDate} />
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Show only">

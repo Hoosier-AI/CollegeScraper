@@ -33,9 +33,9 @@ export default function App() {
         <TopBar />
         <SponsorLine />
         {/* From 1600px wide: a 160px rail on each side for advertising (components/AdRail.tsx). */}
-        <div className="mx-auto w-full max-w-page flex-1 px-4 sm:px-6 rails:grid rails:grid-cols-[160px_minmax(0,1fr)_160px] rails:gap-6">
+        <div className="gutter mx-auto w-full max-w-page flex-1 rails:grid rails:grid-cols-[160px_minmax(0,1fr)_160px] rails:gap-6">
           <AdRail side="left" />
-          <main id="main" tabIndex={-1} className="min-w-0 pb-24 pt-5 outline-none md:pb-6">
+          <main id="main" tabIndex={-1} className="min-w-0 pb-24 pt-5 outline-none sm:pt-6 md:pb-8">
             <Suspense fallback={<div className="space-y-4" aria-busy="true"><Skeleton className="h-8 w-64" /><Skeleton lines={3} /><Skeleton className="h-64" /></div>}>
               <Outlet />
             </Suspense>
@@ -43,7 +43,7 @@ export default function App() {
           <AdRail side="right" />
         </div>
         {/* One ad above the footer on every screen size while ads are on; a new unit for each page. */}
-        <AdSlot key={pathname} slot="inline" className="mx-auto mt-10 w-full max-w-page px-4 sm:px-6" />
+        <AdSlot key={pathname} slot="inline" className="gutter mx-auto mt-10 w-full max-w-page" />
         <Footer />
         <BottomBar />
       </div>

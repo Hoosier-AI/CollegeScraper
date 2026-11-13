@@ -43,7 +43,7 @@ export default function Referee() {
     { key: 'home_pct', label: 'Home win', title: 'Home wins (neutral sites left out)', num: true, priority: 2, render: cell('home_pct', { d: 0, pct: true }) },
   ];
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: r.name }]} />
       <ProHero image={<span className="grid h-16 w-16 place-items-center rounded-full bg-field-800 text-chalk-300 sm:h-20 sm:w-20"><FlagIcon size={32} aria-hidden /></span>} title={r.name}
         line={<span>College referee, {r.divisions.map(divisionLabel).join(' and ')}</span>}
@@ -64,11 +64,11 @@ export default function Referee() {
         </RailCard>
       )}>
         <section className="min-w-0 space-y-2">
-          <h2 className="text-base font-semibold text-chalk-100">By season</h2>
+          <h2 className="h-section">By season</h2>
           <DataTable rows={d.seasons} columns={cols} rowKey={(s) => `${s.season}-${s.gender}-${s.division}`} caption={`${r.name} by season`} />
         </section>
         <section className="min-w-0 space-y-2">
-          <h2 className="text-base font-semibold text-chalk-100">Latest games</h2>
+          <h2 className="h-section">Latest games</h2>
           <ul className="frame divide-y divide-field-700">
             {d.recent.map((x) => (
               <li key={x.match.id}>

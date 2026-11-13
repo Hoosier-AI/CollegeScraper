@@ -65,7 +65,7 @@ export default function Team() {
     ...(alumni.data?.players.length ? [{ id: 'pros' as Tab, label: 'Pro alumni', count: alumni.data.players.length }] : []),
   ];
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: `${p.name} (${genderLabel(p.gender)})` }]} />
       <TeamMasthead t={t} id={id} season={f.season} games={games.data} />
       {admin && (
@@ -138,10 +138,10 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
       </Section>
       <Section title={`Conference table${t.standing?.source === 'conference' ? '' : t.standing ? ' (computed)' : ''}`} right={t.season?.conference_id ? <Link className="text-xs text-pitch-400 hover:text-pitch-300" to={href(`/conferences/${t.season.conference_id}`)}>Full conference</Link> : undefined}>
         {t.conferenceTable?.length ? (
-          <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Conference table</caption>
+          <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Conference table</caption>
             <thead><tr><th scope="col" className="th text-right">#</th><th scope="col" className="th">Team</th><th scope="col" className="th text-right">Conf</th><th scope="col" className="th text-right">Pts</th></tr></thead>
             <tbody>{t.conferenceTable.map((r: any) => <tr key={r.program_id} className={r.program_id === id ? '[&>td]:bg-pitch-400/10' : ''}><td className="td num text-chalk-500">{r.rank}</td><td className="td"><Link className="hover:text-pitch-300" to={href(`/teams/${r.program_id}`)}>{r.college_programs?.name}</Link></td><td className="td num">{fmt.rec(r.conf_w, r.conf_l, r.conf_t)}</td><td className="td num">{r.conf_pts ?? ''}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         ) : <EmptyState title="No conference table yet" body={admin ? 'Run compute-standings.' : undefined} />}
       </Section>
       <div className="space-y-6">
@@ -151,10 +151,10 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
         </Section>
         <Section title="Coaches' poll">
           {t.uscHistory?.length ? (
-            <table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Poll history</caption>
+            <div className="overflow-x-auto"><table className="frame w-full border-separate border-spacing-0 text-sm"><caption className="sr-only">Poll history</caption>
               <thead><tr><th scope="col" className="th">Poll</th><th scope="col" className="th text-right">Rank</th><th scope="col" className="th text-right">Prev</th><th scope="col" className="th text-right">Points</th><th scope="col" className="th">Record</th></tr></thead>
               <tbody>{t.uscHistory.map((r: any) => <tr key={r.week_of}><td className="td">{r.label} <span className="text-xs text-chalk-500">{fmt.day(r.week_of)}</span></td><td className="td num">{r.rank}</td><td className="td num">{r.previous_rank ?? 'NR'}</td><td className="td num">{r.value}</td><td className="td">{r.record}</td></tr>)}</tbody>
-            </table>
+            </table></div>
           ) : <p className="text-sm text-chalk-500">Not ranked this season.</p>}
         </Section>
         <Section title="National stat ranks">

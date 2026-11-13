@@ -29,7 +29,7 @@ export function EloView() {
   const confOptions = useMemo(() => [{ value: '', label: 'All conferences' }, ...(meta.data?.conferences ?? []).filter((c) => c.division === division).map((c) => ({ value: c.id, label: c.name }))], [meta.data, division]);
   const pager = q.data && q.data.total > PAGE ? <Pager page={page} pageSize={PAGE} total={q.data.total} onPage={setPage} busy={q.isFetching} noun="teams" /> : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader as="h2" title="Plaibook Elo" meta={`${divisionLabel(division)} ${genderLabel(f.gender)}, every result since 2024${q.data?.as_of ? `, as of ${fmt.date(q.data.as_of)}` : ''}`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); setConference(''); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[220px]" />}</Field>

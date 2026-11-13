@@ -71,7 +71,7 @@ export function MatchFlow({ url, live, home, away, homeLogo, awayLogo, homeSeo, 
       const lead = v == null ? null : v > 0.08 ? 'home' : v < -0.08 ? 'away' : 'even';
       const key = (side: 'home' | 'away') => (
         <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${lead === side ? 'bg-field-700 text-chalk-100' : 'bg-field-800/80 text-chalk-300'}`}>
-          <span aria-hidden className="text-[10px]" style={{ color: side === 'home' ? HOME_C : AWAY_C }}>{side === 'home' ? '▲' : '▼'}</span>
+          <span aria-hidden className="text-[11px]" style={{ color: side === 'home' ? HOME_C : AWAY_C }}>{side === 'home' ? '▲' : '▼'}</span>
           <TeamLogo src={side === 'home' ? homeLogo : awayLogo} seo={side === 'home' ? homeSeo : awaySeo} name={side === 'home' ? home : away} size={14} />
           <span className="max-w-[9rem] truncate">{side === 'home' ? home : away}</span>
           {lead === side && <span className="font-semibold">on top</span>}
@@ -105,7 +105,7 @@ export function MatchFlow({ url, live, home, away, homeLogo, awayLogo, homeSeo, 
       {[0, 0.5, 1].map((g) => <line key={g} x1={0} x2={1000} y1={96 - g * 92} y2={96 - g * 92} stroke="#24395F" strokeWidth={1} strokeDasharray={g === 0.5 ? '4 4' : undefined} vectorEffect="non-scaling-stroke" />)}
       {line('d', DRAW_C, '5 4')}{line('a', AWAY_C)}{line('h', HOME_C)}
     </>;
-    overlay = <>{[1, 0.5, 0].map((g) => <span key={g} className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 text-[10px] text-chalk-500 tnum" style={{ top: `${96 - g * 92}%` }}>{pct(g)}</span>)}</>;
+    overlay = <>{[1, 0.5, 0].map((g) => <span key={g} className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 text-[11px] text-chalk-500 tnum" style={{ top: `${96 - g * 92}%` }}>{pct(g)}</span>)}</>;
     const s = f.winprob[0]!, e = f.winprob.at(-1)!;
     aria = `Win chance before kickoff: ${home} ${pct(s.h)}, draw ${pct(s.d)}, ${away} ${pct(s.a)}. ${f.live ? 'Now' : 'At the end'}: ${home} ${pct(e.h)}, draw ${pct(e.d)}, ${away} ${pct(e.a)}.`;
   } else if (view === 'xg' && f.xg) {
@@ -117,7 +117,7 @@ export function MatchFlow({ url, live, home, away, homeLogo, awayLogo, homeSeo, 
       <path d={step('a')} fill="none" stroke={AWAY_C} strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
       <path d={step('h')} fill="none" stroke={HOME_C} strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
     </>;
-    overlay = <>{[top, top / 2, 0].map((g, i) => <span key={i} className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 text-[10px] text-chalk-500 tnum" style={{ top: `${Y(g)}%` }}>{g.toFixed(1)}</span>)}</>;
+    overlay = <>{[top, top / 2, 0].map((g, i) => <span key={i} className="pointer-events-none absolute left-full ml-1.5 -translate-y-1/2 text-[11px] text-chalk-500 tnum" style={{ top: `${Y(g)}%` }}>{g.toFixed(1)}</span>)}</>;
     const e = f.xg.at(-1)!;
     aria = `Expected goals: ${home} ${e.h.toFixed(2)}, ${away} ${e.a.toFixed(2)}.`;
   }
@@ -165,7 +165,7 @@ export function MatchFlow({ url, live, home, away, homeLogo, awayLogo, homeSeo, 
             );
           })}
         </div>
-        <div className="relative mt-3.5 h-4 text-[10px] text-chalk-500 tnum" aria-hidden>
+        <div className="relative mt-3.5 h-4 text-[11px] text-chalk-500 tnum" aria-hidden>
           {ticks.map((m) => <span key={m} className="absolute" style={{ left: left(m), transform: m === 0 ? 'none' : m === span ? 'translateX(-100%)' : 'translateX(-50%)' }}>{m === 45 ? 'HT' : `${m}′`}</span>)}
         </div>
         </div>
@@ -173,7 +173,7 @@ export function MatchFlow({ url, live, home, away, homeLogo, awayLogo, homeSeo, 
           <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-chalk-300">
             {f.marks.map((g, i) => (
               <li key={i} className="inline-flex items-center gap-1.5">
-                {g.type === 'goal' ? <SoccerBall size={12} className={g.side === 'home' ? 'text-pitch-400' : 'text-[#7DD3FC]'} /> : <span aria-hidden className="h-3 w-2 rounded-sm bg-loss" />}
+                {g.type === 'goal' ? <SoccerBall size={12} className={g.side === 'home' ? 'text-pitch-400' : 'text-away'} /> : <span aria-hidden className="h-3 w-2 rounded-sm bg-loss" />}
                 <span className="tnum text-chalk-500">{g.m}′</span>{g.who ?? (g.side === 'home' ? home : away)}{g.who && <span className="text-chalk-500">({g.side === 'home' ? home : away})</span>}
               </li>
             ))}

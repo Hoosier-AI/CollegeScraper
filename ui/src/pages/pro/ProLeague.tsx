@@ -169,7 +169,7 @@ export default function ProLeague() {
   const tabHref = (t: string) => proPath.league(slug, d.season, l.current_season) + (t === 'table' ? '' : `${d.season && d.season !== l.current_season ? '&' : '?'}tab=${t}`);
   const glance = played ? { matches: Math.round(played / 2), goals, gpm: (goals / Math.max(1, played / 2)).toFixed(2), leader: top?.team.name ?? null, leaderPts: top?.points ?? null, scorer: d.scorers[0]?.player.name ?? null, scorerGoals: d.scorers[0]?.goals ?? null } : null;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: l.name }]} />
       <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-16 sm:w-16"><TeamLogo src={l.logo} name={l.name} size={52} chip={false} /></span>} title={l.name}
         chips={[where, intl ? `${genderWord(l.gender)} ${l.level === 'youth' ? 'youth national teams' : 'national teams'}` : `${genderWord(l.gender)} ${l.type === 'cup' ? 'cup' : 'league'}`, d.teams ? `${d.teams} ${intl ? 'teams' : 'clubs'}` : null, d.season ? `${intl ? 'Edition' : 'Season'} ${d.season}` : null]}

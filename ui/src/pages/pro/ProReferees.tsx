@@ -51,7 +51,7 @@ export default function ProReferees() {
   ];
   const pager = q.data && q.data.total > PAGE ? <Pager page={page - 1} pageSize={PAGE} total={q.data.total} onPage={(p) => setPage(p + 1)} busy={q.isFetching} noun="referees" /> : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Referees" meta={`${gender === 'w' ? "Women's" : "Men's"} referees with ${min}+ matches ${period === 'all' ? 'in every season we hold' : 'this season'}${leagueName ? ` in ${leagueName}` : ''}: cards, penalties, fouls and home wins a match.`}>
         <Field label="Competition">{(id) => <Select id={id} value={shownLeague} onChange={(v) => { setLeague(v); setPage(1); }} className="max-w-[260px]" options={[{ value: 'all', label: 'Every competition' }, ...(q.data?.leagues ?? []).map((l) => ({ value: String(l.league.id), label: `${l.league.name}${l.league.country && l.league.country !== 'World' ? ` (${l.league.country})` : ''}` }))]} />}</Field>
         <Field label="Seasons">{() => <SegmentedControl label="Seasons" size="sm" value={period} onChange={(v) => { setPeriod(v); setPage(1); }} options={[{ value: 'season', label: 'This season' }, { value: 'all', label: 'All' }]} />}</Field>

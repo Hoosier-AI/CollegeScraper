@@ -31,7 +31,7 @@ export default function Photo() {
   const school = q.data?.seasons?.[0]?.program;
   if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/players">Find a player</Link>} />;
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl stack">
       <header className="flex items-center gap-4">
         <PlayerAvatar src={p.photo_url ?? p.headshot_url} name={p.display_name} size={64} crest={school?.college_schools?.logo_svg_url} crestSeo={school?.school_seo} />
         <div>
@@ -86,13 +86,13 @@ function PhotoForm({ playerId, name }: { playerId: string; name: string }) {
   }
 
   if (state === 'sent') return (
-    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 px-4 py-4 ring-1 ring-inset ring-pitch-400/30">
+    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 pad ring-1 ring-inset ring-pitch-400/30">
       <CheckCircle2 size={20} aria-hidden className="mt-0.5 shrink-0 text-pitch-300" />
       <div><p className="font-semibold text-chalk-100">Photo sent</p><p className="mt-1 text-sm text-chalk-300">Thank you. We will look at it within a few days. If we use it, it appears on {name}&apos;s page, credited to {f.credit}.</p></div>
     </div>
   );
   return (
-    <form onSubmit={submit} className="frame space-y-4 px-4 py-4" aria-labelledby="photo-title">
+    <form onSubmit={submit} className="frame space-y-4 pad" aria-labelledby="photo-title">
       <h2 id="photo-title" className="text-base font-semibold text-chalk-100">Send the photo</h2>
       <div>
         <label htmlFor="photo-file" className={label}>Photo (JPEG, PNG, WebP or HEIC, up to {MAX_MB} MB)</label>

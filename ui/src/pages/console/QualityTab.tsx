@@ -28,7 +28,7 @@ export default function QualityTab() {
   return (
     <div className="space-y-6">
       <StatAudit />
-      <h2 className="text-base font-semibold text-chalk-100">Crawl checks</h2>
+      <h2 className="h-section">Crawl checks</h2>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Checks flagged" value={`${flagged.length} of ${d.latest.checks.length}`} tone={flagged.length ? 'warn' : 'ok'} />

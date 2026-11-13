@@ -8,7 +8,7 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 export function WinChances({ elo, home, away, rankingsHref, drawLabel = 'Draw' }: { elo: EloChances; home: string; away: string; rankingsHref: string; drawLabel?: string }) {
   const side = (name: string, s: EloChances['home']) => <span className="text-chalk-400">{name}: <span className="text-chalk-200 tnum">{s.rating}</span>{s.rank ? `, No. ${s.rank}` : ''}</span>;
   return (
-    <section className="frame space-y-3 p-3" aria-label="Plaibook Elo prediction">
+    <section className="frame stack-sm pad" aria-label="Plaibook Elo prediction">
       <h2 className="flex flex-wrap items-baseline justify-between gap-2 text-sm font-semibold text-chalk-100">
         Plaibook Elo prediction
         <Link to={rankingsHref} className="text-2xs font-normal text-pitch-300 hover:text-pitch-200">Rankings and how it works</Link>

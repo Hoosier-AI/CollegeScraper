@@ -52,7 +52,7 @@ export default function ProReferee() {
     { key: 'home_pct', label: 'Home win', title: 'Home wins', num: true, priority: 2, render: cell('home_pct', { d: 0, pct: true }) },
   ];
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: r.name }]} />
       <ProHero image={<span className="grid h-16 w-16 place-items-center rounded-full bg-field-800 text-chalk-300 sm:h-20 sm:w-20"><FlagIcon size={32} aria-hidden /></span>} title={r.name}
         line={<>{r.country && <span>Referee from {r.country}</span>}{main && <span>Mostly {main.name}</span>}</>}
@@ -73,11 +73,11 @@ export default function ProReferee() {
         </RailCard>
       )}>
         <section className="min-w-0 space-y-2">
-          <h2 className="text-base font-semibold text-chalk-100">By competition and season</h2>
+          <h2 className="h-section">By competition and season</h2>
           <DataTable rows={d.seasons} columns={cols} rowKey={(s) => `${s.league?.id ?? 0}-${s.season}`} caption={`${r.name} by competition and season`} pageSize={15} noun="seasons" />
         </section>
         <section className="min-w-0 space-y-2">
-          <h2 className="text-base font-semibold text-chalk-100">Latest matches</h2>
+          <h2 className="h-section">Latest matches</h2>
           <ul className="frame divide-y divide-field-700">
             {d.recent.map((x) => (
               <li key={x.match.id}>

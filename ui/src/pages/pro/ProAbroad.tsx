@@ -24,7 +24,7 @@ export default function ProAbroad() {
   const rest = (d?.lines ?? []).filter((l) => !l.goals && !l.assists);
   const updated = d?.at ? new Date(d.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   return (
-    <div className="space-y-6">
+    <div className="stack">
       <PageHeader title="Americans abroad" meta={`${gender === 'w' ? 'American women' : 'Americans'} at clubs outside the US: last week's games, the week ahead, and the season's leaders.${updated ? ` Updated ${updated}.` : ''}`} />
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-64" />}
@@ -67,7 +67,7 @@ export default function ProAbroad() {
             </Section>
           </div>
           <aside className="space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Coming up<span className="ml-2 text-sm font-normal text-chalk-500">biggest competitions first</span></h2>
+            <h2 className="h-section">Coming up<span className="ml-2 text-sm font-normal text-chalk-500">biggest competitions first</span></h2>
             {d.upcoming.length ? (
               <ul className="frame divide-y divide-field-700">
                 {(allUpcoming ? d.upcoming : d.upcoming.slice(0, 25)).map((u) => {

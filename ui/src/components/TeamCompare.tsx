@@ -15,7 +15,7 @@ export function TeamCompareRows({ rows, peerNote }: { rows: CompareRow[]; peerNo
         const bBetter = r.a != null && r.b != null && (r.better === 'high' ? r.b > r.a : r.b < r.a);
         const bar = (p: number | null, side: 'a' | 'b') => (
           <span className="h-1.5 flex-1 overflow-hidden rounded bg-field-800" aria-hidden>
-            {p != null && <span className={`block h-full ${side === 'a' ? 'ml-auto bg-pitch-400' : 'bg-[#7DD3FC]'}`} style={{ width: `${Math.max(3, p * 100)}%` }} />}
+            {p != null && <span className={`block h-full ${side === 'a' ? 'ml-auto bg-pitch-400' : 'bg-away'}`} style={{ width: `${Math.max(3, p * 100)}%` }} />}
           </span>
         );
         return (

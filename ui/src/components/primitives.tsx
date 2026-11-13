@@ -26,13 +26,31 @@ export function PageHeader({ title, meta, children, as = 'h1' }: { title: ReactN
   );
 }
 
-export function Section({ title, children, right, id, className = '' }: { title: ReactNode; children: ReactNode; right?: ReactNode; id?: string; className?: string }) {
+/** A section's title row: the title, and on the right a link ("See all") or controls. One look on every page. */
+export function SectionHeader({ title, right, to, toLabel = 'See all', as = 'h2', id }: { title: ReactNode; right?: ReactNode; to?: string; toLabel?: string; as?: 'h2' | 'h3'; id?: string }) {
+  const H = as;
   return (
-    <section className={`min-w-0 space-y-2 ${className}`} id={id}>
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-chalk-100">{title}</h2>{right}</div>
+    <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <H id={id} className="h-section">{title}</H>
+      {right}
+      {to && <Link to={to} className="inline-flex items-center text-sm font-medium text-pitch-400 hover:text-pitch-300 coarse:min-h-11">{toLabel}</Link>}
+    </div>
+  );
+}
+
+export function Section({ title, children, right, to, toLabel, id, className = '' }: { title: ReactNode; children: ReactNode; right?: ReactNode; to?: string; toLabel?: string; id?: string; className?: string }) {
+  return (
+    <section className={`stack-sm min-w-0 ${className}`} id={id}>
+      <SectionHeader title={title} right={right} to={to} toLabel={toLabel} />
       {children}
     </section>
   );
+}
+
+/** The raised block a section's content sits in. `pad={false}` for a list or table that brings its own rows. */
+export function Card({ children, pad = true, className = '', as = 'div', label }: { children: ReactNode; pad?: boolean; className?: string; as?: 'div' | 'section' | 'figure'; label?: string }) {
+  const C = as;
+  return <C aria-label={label} className={`card min-w-0 ${pad ? 'pad' : 'overflow-hidden'} ${className}`}>{children}</C>;
 }
 
 /* ---------- media ---------- */
@@ -203,7 +221,7 @@ export function FormPips({ form, size = 'md', label = 'Form' }: { form: string |
   if (!letters.length) return <span className="text-chalk-500">–</span>;
   return (
     <span className="inline-flex gap-0.5" role="img" aria-label={`${label}: ${letters.join(' ')}`}>
-      {letters.map((c, i) => <span key={i} aria-hidden className={`inline-flex items-center justify-center rounded font-semibold tnum ${size === 'sm' ? 'h-4 w-4 text-[10px]' : 'h-6 w-6 text-xs'} ${PIP[c]}`}>{c}</span>)}
+      {letters.map((c, i) => <span key={i} aria-hidden className={`inline-flex items-center justify-center rounded font-semibold tnum ${size === 'sm' ? 'h-5 w-5 text-2xs' : 'h-6 w-6 text-xs'} ${PIP[c]}`}>{c}</span>)}
     </span>
   );
 }
@@ -250,9 +268,9 @@ export function VerifiedMark({ state, details, compact }: { state: VerifyState; 
  *  narrower ones). The rail is where a page puts what would otherwise be empty width. */
 export function PageWithRail({ children, rail, label = 'More about this' }: { children: ReactNode; rail: ReactNode; label?: string }) {
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]">
-      <div className="min-w-0 space-y-5">{children}</div>
-      <aside aria-label={label} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">{rail}</aside>
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]">
+      <div className="stack min-w-0">{children}</div>
+      <aside aria-label={label} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">{rail}</aside>
     </div>
   );
 }
@@ -261,12 +279,12 @@ export function PageWithRail({ children, rail, label = 'More about this' }: { ch
 /** flush: the body has no padding and inner frames lose their borders (a list that brings its own rows). */
 export function RailCard({ title, to, toLabel = 'All', children, className = '', flush }: { title: ReactNode; to?: string; toLabel?: string; children: ReactNode; className?: string; flush?: boolean }) {
   return (
-    <section className={`frame min-w-0 bg-field-900/60 ${className}`}>
-      <header className="flex items-center justify-between gap-2 border-b border-field-700/70 px-3 py-2">
+    <section className={`card min-w-0 ${className}`}>
+      <header className="flex min-h-10 items-center justify-between gap-2 border-b border-field-700/70 px-4 py-2">
         <h2 className="text-sm font-semibold text-chalk-100">{title}</h2>
         {to && <Link to={to} className="text-xs font-medium text-pitch-400 hover:text-pitch-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pitch-400">{toLabel}</Link>}
       </header>
-      <div className={flush ? 'text-sm [&_.frame]:rounded-none [&_.frame]:border-0' : 'px-3 py-2.5 text-sm'}>{children}</div>
+      <div className={flush ? 'text-sm [&_.frame]:rounded-none [&_.frame]:border-0' : 'px-4 py-3 text-sm'}>{children}</div>
     </section>
   );
 }
@@ -279,23 +297,94 @@ export function RailRow({ to, left, right, title }: { to?: string; left: ReactNo
     : <li title={title} className="flex min-h-8 items-center justify-between gap-3 text-chalk-200">{body}</li>;
 }
 
-/** A header number: big enough to read at a glance, small enough for six in a row. */
-export function HeroStat({ label, value, sub, accent }: { label: string; value: ReactNode; sub?: string; accent?: boolean }) {
+/**
+ * One stat tile for the whole site: the value big, the label under it, a short sub line. `plain` drops the box (for a
+ * masthead or a strip that is already a card); `text` is for a value that is a name, not a number; `accent` colours the
+ * value only (no tinted box: a tile is never highlighted just to fill a row).
+ */
+export function StatTile({ label, value, sub, accent, text, plain, big }: { label: ReactNode; value: ReactNode; sub?: ReactNode; accent?: boolean; text?: boolean; plain?: boolean; big?: boolean }) {
+  const size = text ? 'text-base leading-7 sm:text-lg' : big ? 'text-3xl sm:text-4xl' : 'text-xl leading-tight sm:text-2xl';
   return (
-    <div className="min-w-0">
-      <dt className="text-2xs text-chalk-500">{label}</dt>
-      <dd className={`display tnum text-2xl leading-tight sm:text-[1.75rem] ${accent ? 'text-pitch-300' : 'text-chalk-100'}`}>{value}</dd>
-      {sub && <dd className="truncate text-2xs text-chalk-400">{sub}</dd>}
+    <div className={`min-w-0 ${plain ? '' : 'rounded-lg bg-field-950/40 px-3 py-2.5'}`}>
+      <div className={`value truncate ${size} ${accent ? 'text-pitch-300' : ''}`} title={typeof value === 'string' ? value : undefined}>{value}</div>
+      <div className="label truncate">{label}</div>
+      {sub != null && sub !== '' && <div className="truncate text-2xs text-chalk-500">{sub}</div>}
     </div>
   );
 }
 
-/** A number with its label, for mastheads and summary strips. */
-export function Figure({ label, value, sub, big }: { label: string; value: ReactNode; sub?: ReactNode; big?: boolean }) {
+/** A row of numbers in one card with hairline dividers (no box per number): 4 across on a phone, up to 8 on desktop. */
+export function StatStrip({ children, cols = 'grid-cols-2 min-[420px]:grid-cols-4 lg:grid-cols-8', label, className = '' }: { children: ReactNode; cols?: string; label?: string; className?: string }) {
+  return (
+    <dl aria-label={label} className={`grid gap-px overflow-hidden rounded-xl border border-field-700 bg-field-700 ${cols} ${className}`}>
+      {children}
+    </dl>
+  );
+}
+export function StripStat({ label, value, sub, accent }: { label: ReactNode; value: ReactNode; sub?: ReactNode; accent?: boolean }) {
+  return (
+    <div className="min-w-0 bg-field-900 px-3 py-3 sm:px-4">
+      <dt className="label truncate">{label}</dt>
+      <dd className={`value mt-0.5 truncate text-xl leading-tight sm:text-2xl ${accent ? 'text-pitch-300' : ''}`}>{value}</dd>
+      {sub != null && sub !== '' && <dd className="truncate text-2xs text-chalk-500">{sub}</dd>}
+    </div>
+  );
+}
+
+/** A header number inside a <dl>: label, then the value. Same type roles as StatTile. */
+export function HeroStat({ label, value, sub, accent }: { label: string; value: ReactNode; sub?: string; accent?: boolean }) {
   return (
     <div className="min-w-0">
-      <div className={`display tnum text-chalk-100 ${big ? 'text-3xl sm:text-4xl' : 'text-xl'}`}>{value}</div>
-      <div className="text-xs text-chalk-500">{label}{sub && <span className="text-chalk-400">, {sub}</span>}</div>
+      <dt className="label truncate">{label}</dt>
+      <dd className={`value text-2xl leading-tight sm:text-[1.75rem] ${accent ? 'text-pitch-300' : ''}`}>{value}</dd>
+      {sub && <dd className="truncate text-2xs text-chalk-500">{sub}</dd>}
+    </div>
+  );
+}
+
+/** A number with its label, for mastheads and summary strips (StatTile without the box). */
+export function Figure({ label, value, sub, big }: { label: string; value: ReactNode; sub?: ReactNode; big?: boolean }) {
+  return <StatTile plain big={big} label={<>{label}{sub && <span className="text-chalk-500">, {sub}</span>}</>} value={value} />;
+}
+
+/* ---------- percentiles (FBref-style bars) ---------- */
+
+/** 0-30 low, 31-55 mid, 56-80 high, 81+ top. */
+export const pctBand = (p: number) => (p > 0.8 ? 'bg-pct-top' : p > 0.55 ? 'bg-pct-high' : p > 0.3 ? 'bg-pct-mid' : 'bg-pct-low');
+export const pctHex = (p: number) => (p > 0.8 ? '#2DD4BF' : p > 0.55 ? '#86EFAC' : p > 0.3 ? '#FBBF24' : '#F87171');
+
+export interface PctRow { key: string; label: string; pct: number; value?: ReactNode; title?: string }
+
+/** One percentile bar: label, the bar with a 50th-percentile tick, the percentile number. pct is 0..1. */
+export function PercentileBar({ row, labelWidth = '8.5rem' }: { row: PctRow; labelWidth?: string }) {
+  const p = Math.round(row.pct * 100);
+  return (
+    <li className="grid items-center gap-x-3 text-sm" style={{ gridTemplateColumns: `minmax(0,${labelWidth}) minmax(0,1fr) 2.25rem` }}
+      aria-label={`${row.label}: ${p}th percentile${row.title ? `, ${row.title}` : ''}`} title={row.title}>
+      <span className="truncate text-chalk-300">{row.label}{row.value != null && <span className="ml-1.5 text-2xs text-chalk-500 tnum">{row.value}</span>}</span>
+      <span className="relative h-2.5 overflow-hidden rounded-full bg-field-800" aria-hidden>
+        <span className={`block h-full rounded-full ${pctBand(row.pct)}`} style={{ width: `${Math.max(3, p)}%` }} />
+        <span className="absolute inset-y-0 left-1/2 w-px bg-field-950/70" />
+      </span>
+      <span className="text-right text-sm font-semibold tnum text-chalk-100">{p}</span>
+    </li>
+  );
+}
+
+/** Percentile bars in titled groups (Attacking / Possession / Defending), with a caption saying who they are measured against. */
+export function PercentileGroup({ groups, caption, foot, labelWidth }: { groups: { title?: string; rows: PctRow[] }[]; caption?: ReactNode; foot?: ReactNode; labelWidth?: string }) {
+  const shown = groups.filter((g) => g.rows.length);
+  if (!shown.length) return null;
+  return (
+    <div className="stack-sm">
+      {caption && <p className="text-xs text-chalk-400">{caption}</p>}
+      {shown.map((g, i) => (
+        <div key={g.title ?? i} className="space-y-2">
+          {g.title && <h3 className="text-2xs font-semibold uppercase tracking-wide text-chalk-500">{g.title}</h3>}
+          <ul className="space-y-2">{g.rows.map((r) => <PercentileBar key={r.key} row={r} labelWidth={labelWidth} />)}</ul>
+        </div>
+      ))}
+      {foot && <p className="text-2xs text-chalk-500">{foot}</p>}
     </div>
   );
 }

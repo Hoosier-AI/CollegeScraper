@@ -26,7 +26,7 @@ export default function ProTeams() {
   const total = new Set(groups.flatMap((g) => g.teams.map((t) => t.id))).size;
   const leagueOptions = useMemo(() => [{ value: '', label: scope === 'us' ? 'Every US league' : 'The top leagues' }, ...(leagues.data ?? []).filter((l) => l.gender === gender && l.type !== 'cup' && (scope === 'world' || l.country === 'USA')).slice(0, 400).map((l) => ({ value: String(l.id), label: `${l.name}${l.country && l.country !== 'World' ? ` (${l.country})` : ''}` }))], [leagues.data, gender, scope]);
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Teams" meta={q.data ? `${total} ${gender === 'w' ? "women's" : "men's"} clubs in ${groups.length} ${groups.length === 1 ? 'league' : 'leagues'}, this season` : 'US clubs first'}>
         <Field label="Where">{() => <SegmentedControl label="US or worldwide" size="sm" value={scope as 'us' | 'world'} onChange={(v) => { setScope(v); setLeague(''); }} options={[...SCOPE_OPTIONS]} />}</Field>
         <Field label="League">{(id) => <Select id={id} value={leagueOn} onChange={setLeague} options={leagueOptions} className="max-w-[260px]" />}</Field>

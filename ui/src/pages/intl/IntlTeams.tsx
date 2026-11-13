@@ -23,7 +23,7 @@ export default function IntlTeams() {
   }, [q.data, gender, level, term]);
   const total = groups.reduce((n, [, l]) => n + l.length, 0);
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="National teams" meta={q.data ? `${total} ${gender === 'w' ? "women's" : "men's"} ${level === 'youth' ? 'youth sides' : 'national teams'}` : undefined}>
         <Field label="Teams">{() => <SegmentedControl label="Senior or youth" size="sm" value={level} onChange={(v) => setLevel(v === 'senior' ? '' : v)} options={[{ value: 'senior', label: 'Senior' }, { value: 'youth', label: 'Youth' }]} />}</Field>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="Nation" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>

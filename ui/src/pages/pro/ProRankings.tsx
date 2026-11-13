@@ -21,7 +21,7 @@ export default function ProRankings() {
   const q = useQuery({ queryKey: ['pro-rankings', gender, scope, page], queryFn: () => api<{ total: number; as_of: string | null; rows: Row[] }>(`/api/pro/rankings${qs({ gender, scope: world ? 'world' : '', limit: PAGE, offset: page * PAGE })}`), placeholderData: keepPreviousData });
   const pager = q.data && q.data.total > PAGE ? <Pager page={page} pageSize={PAGE} total={q.data.total} onPage={setPage} busy={q.isFetching} noun="clubs" /> : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Club rankings" meta={`Plaibook Elo, ${gender === 'w' ? "women's" : "men's"} clubs, ${world ? 'worldwide' : 'US clubs with their world rank'}${q.data?.as_of ? `, as of ${fmt.date(q.data.as_of)}` : ''}`}>
         <Field label="Where">{() => <SegmentedControl label="US or worldwide" size="sm" value={scope as 'us' | 'world'} onChange={(v) => { setScope(v); setPage(0); }} options={[...SCOPE_OPTIONS]} />}</Field>
       </PageHeader>

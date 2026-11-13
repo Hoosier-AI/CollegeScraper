@@ -31,7 +31,7 @@ export default function IntlRankings() {
     { key: 'last', label: 'Last match', priority: 3, value: (r) => r.last_match, render: (r) => fmt.date(r.last_match) },
   ];
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title={`${gender === 'w' ? "Women's" : "Men's"} national team rankings`} meta={q.data?.updated_at ? `Plaibook Elo, updated ${fmt.date(q.data.updated_at)}` : 'Plaibook Elo'}>
         <Field label="Confederation">{(id) => <Select id={id} value={conf} onChange={setConf} options={[{ value: '', label: 'Every confederation' }, ...CONFEDERATIONS.filter((c) => c !== 'FIFA').map((c) => ({ value: c, label: CONFEDERATION_LABEL[c] ?? c }))]} />}</Field>
       </PageHeader>

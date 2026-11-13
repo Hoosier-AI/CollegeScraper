@@ -69,7 +69,7 @@ function HeadToHead({ m, h2h }: { m: ProMatch; h2h: ProMatch[] }) {
   const seg = (v: number, cls: string, label: string) => (v ? <span className={`${cls} flex items-center justify-center text-xs font-semibold text-field-950`} style={{ width: `${(v / n) * 100}%` }} title={label}>{v}</span> : null);
   return (
     <div className="space-y-3">
-      <div className="frame space-y-2 p-3">
+      <div className="frame space-y-2 pad">
         <div className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-2 font-medium text-chalk-100"><TeamLogo src={m.home.logo} name={m.home.name} size={18} />{hw} {hw === 1 ? 'win' : 'wins'}</span>
           <span className="text-chalk-400">{d} {d === 1 ? 'draw' : 'draws'}</span>
@@ -119,7 +119,7 @@ function Chances({ m, p }: { m: ProMatch; p: ProPrediction }) {
   const sum = parts.reduce((n, [, v]) => n + (v ?? 0), 0) || 1;
   const rows = COMPARE.filter(([k]) => p.comparison?.[k]);
   return (
-    <div className="frame space-y-3 p-3">
+    <div className="frame stack-sm pad">
       {sum > 1 && (
         <div className="space-y-1.5">
           <div className="grid grid-cols-3 text-sm">
@@ -213,7 +213,7 @@ export function MatchPreview({ m, p, h2h }: { m: ProMatch; p: ProPreview; h2h: P
       <div className="space-y-5">
         {p.prediction && (p.prediction.home_pct != null || Object.keys(p.prediction.comparison ?? {}).length > 0) && <Section title="Chances"><Chances m={m} p={p.prediction} /></Section>}
         <Section title="Form">
-          <div className="frame space-y-2 p-3">
+          <div className="frame space-y-2 pad">
             <FormRow team={m.home} form={p.home.form} />
             <FormRow team={m.away} form={p.away.form} />
             <p className="text-2xs text-chalk-500">Last five results in any competition, oldest first.</p>

@@ -45,7 +45,7 @@ export default function Referees() {
   ];
   const pager = q.data && q.data.total > PAGE ? <Pager page={page - 1} pageSize={PAGE} total={q.data.total} onPage={(p) => setPage(p + 1)} busy={q.isFetching} noun="referees" /> : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Referees" meta={`${genderLabel(f.gender).replace(/^./, (c) => c.toUpperCase())} college referees with 5+ games ${period === 'all' ? 'in every season we hold' : `in ${f.season}`}: cards, fouls, penalty kicks and home wins a game.`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); setPage(1); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Seasons">{() => <SegmentedControl label="Seasons" size="sm" value={period} onChange={(v) => { setPeriod(v); setPage(1); }} options={[{ value: 'season', label: String(f.season) }, { value: 'all', label: 'All' }]} />}</Field>

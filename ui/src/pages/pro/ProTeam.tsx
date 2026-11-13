@@ -122,7 +122,7 @@ export default function ProTeam() {
   const ins = d.transfers.filter((x) => x.direction === 'in'), outs = d.transfers.filter((x) => x.direction === 'out');
   const splitRow = (label: string, s: Split) => <tr className="border-t border-field-700"><th scope="row" className="td text-left font-normal text-chalk-300">{label}</th><td className="td text-right tnum">{s.played}</td><td className="td text-right tnum">{s.w}-{s.d}-{s.l}</td><td className="td text-right tnum">{s.gf}:{s.ga}</td><td className="td text-right tnum">{s.played ? ((s.w * 3 + s.d) / s.played).toFixed(2) : '–'}</td></tr>;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: t.name }]} />
       <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-white/95 p-1.5 sm:h-[4.5rem] sm:w-[4.5rem]"><TeamLogo src={t.logo} name={t.name} size={60} chip={false} /></span>} title={t.name}
         line={<>{t.country && <span className="inline-flex items-center gap-1.5"><Flag country={t.country} />{t.country}</span>}{coach && <span>Coach {coach.name}</span>}</>}

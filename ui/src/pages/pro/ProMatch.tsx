@@ -36,7 +36,7 @@ function Scoreline({ m }: { m: MatchData['match'] }) {
   );
   const status = m.status === 'live' ? proMinute(m) : m.status === 'final' ? (m.status_short === 'AET' ? 'After extra time' : m.status_short === 'PEN' ? 'After penalties' : 'Full time') : m.status === 'scheduled' ? new Date(m.kickoff).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : m.status;
   return (
-    <div className="card px-3 py-4 sm:px-5">
+    <div className="card pad">
       <div className="flex items-center gap-3">
         {side(m.home, 'left')}
         <div className="shrink-0 text-center">
@@ -95,7 +95,7 @@ export default function ProMatch() {
     </>
   );
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <Crumbs items={[{ label: m.league.name, to: proPath.league(m.league.slug) }, { label: `${m.home.name} vs ${m.away.name}` }]} />
       <h1 className="sr-only">{m.home.name} vs {m.away.name}, {m.league.name}</h1>
       <Scoreline m={m} />

@@ -10,7 +10,7 @@ export function ProForm({ form }: { form: string | null }) {
   if (!letters.length) return <span className="text-chalk-500">–</span>;
   return (
     <span className="inline-flex gap-0.5" role="img" aria-label={`Form, oldest to latest: ${letters.join(' ')}`}>
-      {letters.map((c, i) => <span key={i} aria-hidden className={`inline-flex h-4 w-4 items-center justify-center rounded text-[10px] font-semibold tnum ${PIP[c]}`}>{c}</span>)}
+      {letters.map((c, i) => <span key={i} aria-hidden className={`inline-flex h-5 w-5 items-center justify-center rounded text-2xs font-semibold tnum ${PIP[c]}`}>{c}</span>)}
     </span>
   );
 }

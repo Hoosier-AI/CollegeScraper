@@ -42,7 +42,7 @@ export function ClubSeasonDetail({ rows }: { rows: ClubSeasonRow[] }) {
         <SegmentedControl label="Competition" size="sm" value={String(pick)} onChange={(v) => setPick(Number(v))}
           options={rows.map((x, i) => ({ value: String(i), label: x.league?.name ?? 'Competition' }))} />
       )}
-      <div className="frame grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:grid-cols-4">
+      <div className="frame grid grid-cols-2 gap-x-4 gap-y-3 pad sm:grid-cols-4">
         <Figure label="Clean sheets" value={n(r.clean_sheet?.total)} sub={homeAway(r.clean_sheet)} />
         <Figure label="Failed to score" value={n(r.failed_to_score?.total)} sub={homeAway(r.failed_to_score)} />
         <Figure label="Penalties scored" value={r.penalty?.total ? `${n(r.penalty.scored)}/${n(r.penalty.total)}` : '–'} sub={r.penalty?.missed ? `${r.penalty.missed} missed` : undefined} />
@@ -54,7 +54,7 @@ export function ClubSeasonDetail({ rows }: { rows: ClubSeasonRow[] }) {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {formations.length > 0 && (
-          <figure className="frame p-3">
+          <figure className="frame pad">
             <figcaption className="mb-2 text-xs text-chalk-400">Formations used (starts)</figcaption>
             <ul className="space-y-1.5">
               {formations.map((f) => (

@@ -123,7 +123,7 @@ function PercentileMirror({ names, stats, keeper }: { names: string[]; stats: (a
     </span>
   );
   return (
-    <figure className="frame mx-auto max-w-4xl p-3">
+    <figure className="frame mx-auto max-w-4xl pad">
       <figcaption className="mb-2 grid grid-cols-[1fr_auto_1fr] gap-3 text-xs text-chalk-400"><span className="truncate text-right">{names[0]}</span><span className="w-44 text-center">Division percentile</span><span className="truncate">{names[1]}</span></figcaption>
       <ul className="space-y-1.5">
         {rows.map(([k, label]) => {
@@ -148,7 +148,7 @@ function PercentileMirror({ names, stats, keeper }: { names: string[]; stats: (a
 export default function Compare() {
   const [mode, setMode] = useUrlState('mode', 'players', { allow: ['players', 'teams'] });
   return (
-    <div className="space-y-3">
+    <div className="stack">
       <div className="flex justify-end"><SegmentedControl label="Compare" size="sm" value={mode} onChange={setMode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Teams' }]} /></div>
       {mode === 'teams' ? <CompareTeams /> : <ComparePlayers />}
     </div>
@@ -183,7 +183,7 @@ function CompareTeams() {
           {q.data.rows.length ? <TeamCompareRows rows={q.data.rows} peerNote="its own division this season" /> : <EmptyState title="No numbers yet this season" />}
           {(q.data.meetings?.games?.length ?? 0) > 0 && (
             <section className="space-y-2">
-              <h2 className="flex items-baseline justify-between text-base font-semibold text-chalk-100">Last meetings<Link to={href('/h2h', { a: ta, b: tb })} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
+              <h2 className="flex items-baseline justify-between h-section">Last meetings<Link to={href('/h2h', { a: ta, b: tb })} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
               <div className="frame divide-y divide-field-700">{q.data.meetings!.games!.slice(0, 5).map((g: any) => <MatchRow key={g.id} g={g} showDate />)}</div>
             </section>
           )}

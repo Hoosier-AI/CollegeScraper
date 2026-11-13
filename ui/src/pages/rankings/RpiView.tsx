@@ -31,7 +31,7 @@ export function RpiView() {
   const updated = q.data?.updated_at ? new Date(q.data.updated_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
   const pager = q.data && q.data.total > PAGE ? <Pager page={page} pageSize={PAGE} total={q.data.total} onPage={setPage} busy={q.isFetching} noun="teams" /> : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader as="h2" title="Live RPI" meta={`${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}${updated ? `, updated ${updated}` : ''}${d1 ? '' : '. The NCAA publishes no RPI for this division: ours, by the same method'}`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); setConference(''); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[220px]" />}</Field>

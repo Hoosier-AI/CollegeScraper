@@ -53,7 +53,7 @@ export default function Records() {
   );
   const gameSub = (g: Game) => `${prog(g.program_id)?.short_name ?? prog(g.program_id)?.name ?? ''}${g.opponent_id ? ` vs ${prog(g.opponent_id)?.short_name ?? prog(g.opponent_id)?.name ?? '?'}` : ''}, ${fmt.day(g.game_date)}`;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Records and streaks" meta={`${division.toUpperCase()} ${genderLabel(f.gender)}, ${f.season}: runs still going and the season's best single games${d ? `, from ${fmt.num(d.played)} games` : ''}.`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={setDivision} options={DIV_OPTIONS} />}</Field>
       </PageHeader>
@@ -63,7 +63,7 @@ export default function Records() {
       {d && d.played > 0 && (
         <div className={`space-y-6 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
           <section className="space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Team runs still going</h2>
+            <h2 className="h-section">Team runs still going</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               <Card title="Unbeaten" sub="Games without a loss" empty={!d.team.unbeaten.length}>{d.team.unbeaten.map((t) => team(t.program_id, count(t.unbeaten, 'games')))}</Card>
               <Card title="Winning" sub="Wins in a row" empty={!d.team.winning.length}>{d.team.winning.map((t) => team(t.program_id, count(t.winning, 'wins')))}</Card>
@@ -72,14 +72,14 @@ export default function Records() {
             </div>
           </section>
           <section className="space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Player runs still going</h2>
+            <h2 className="h-section">Player runs still going</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Card title="Scoring streak" sub="Games played in a row with a goal" empty={!d.player.goals.length}>{d.player.goals.map((p) => player(p, count(p.goals, 'games'), `${prog(p.program_id)?.name ?? ''}, last ${fmt.day(p.last)}`, p.player_id))}</Card>
               <Card title="Point streak" sub="Games played in a row with a goal or an assist" empty={!d.player.points.length}>{d.player.points.map((p) => player(p, count(p.points, 'games'), `${prog(p.program_id)?.name ?? ''}, last ${fmt.day(p.last)}`, p.player_id))}</Card>
             </div>
           </section>
           <section className="space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Best single games this season</h2>
+            <h2 className="h-section">Best single games this season</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               <Card title="Most goals" sub="Three or more in a game" empty={!d.games.goals.length}>{d.games.goals.map((g) => player(g, count(g.goals, 'goals'), gameSub(g), `${g.game_id}-${g.player_id}-${g.name}`, href(`/matches/${g.game_id}`)))}</Card>
               <Card title="Most points" sub="Goals count two, assists one" empty={!d.games.points.length}>{d.games.points.map((g) => player(g, count(g.goals * 2 + g.assists, 'pts'), `${g.goals}G ${g.assists}A, ${gameSub(g)}`, `${g.game_id}-${g.player_id}-${g.name}`, href(`/matches/${g.game_id}`)))}</Card>

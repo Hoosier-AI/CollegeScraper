@@ -84,7 +84,7 @@ function ComparePlayers() {
 export default function ProCompare() {
   const [mode, setMode] = useUrlState('mode', 'players', { allow: ['players', 'teams'] });
   return (
-    <div className="space-y-3">
+    <div className="stack">
       <div className="flex justify-end"><SegmentedControl label="Compare" size="sm" value={mode} onChange={setMode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Clubs' }]} /></div>
       {mode === 'teams' ? <CompareClubs /> : <ComparePlayers />}
     </div>
@@ -120,7 +120,7 @@ function CompareClubs() {
           {q.data.rows.length ? <TeamCompareRows rows={q.data.rows} peerNote="its own league this season" /> : <EmptyState title="No league numbers yet this season" />}
           {(q.data.meetings?.matches.length ?? 0) > 0 && (
             <section className="space-y-2">
-              <h2 className="flex items-baseline justify-between text-base font-semibold text-chalk-100">Last meetings<Link to={`/pro/h2h?a=${ta}&b=${tb}`} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
+              <h2 className="flex items-baseline justify-between h-section">Last meetings<Link to={`/pro/h2h?a=${ta}&b=${tb}`} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
               <div className="frame divide-y divide-field-700">{q.data.meetings!.matches.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div>
             </section>
           )}

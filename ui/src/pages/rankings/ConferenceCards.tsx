@@ -22,7 +22,7 @@ export function ConferenceCards() {
   const rows = useMemo(() => (q.data ?? []).filter((c) => !term || c.name.toLowerCase().includes(term) || (c.short_name ?? '').toLowerCase().includes(term)), [q.data, term]);
   const scope = `${division ? divisionLabel(division) : 'Every division,'} ${genderLabel(f.gender)}, ${f.season}`;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Conferences" meta={q.data ? `${rows.length} conferences, ${scope}. Pick one for its table, matches, players and teams.` : scope}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => setDivision(v || 'all')} options={DIV_OPTIONS} />}</Field>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-44" placeholder="Conference name" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>

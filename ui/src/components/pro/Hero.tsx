@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 export function ProHero({ image, title, line, chips = [], actions, children }: { image: ReactNode; title: ReactNode; line?: ReactNode; chips?: (string | null | undefined | false)[]; actions?: ReactNode; children?: ReactNode }) {
   const shown = chips.filter(Boolean) as string[];
   return (
-    <header className="relative rounded-xl border border-field-700 bg-gradient-to-br from-field-800/80 to-field-900 p-3 sm:p-5">
+    <header className="relative rounded-xl border border-field-700 bg-gradient-to-br from-field-800/80 to-field-900 pad">
       <div className="relative flex flex-row flex-wrap items-center gap-3 sm:flex-nowrap sm:gap-4">
         <div className="w-fit shrink-0 [&>*]:max-h-16 sm:[&>*]:max-h-none">{image}</div>
         <div className="min-w-0 flex-1 space-y-1.5">
@@ -25,14 +25,5 @@ export function ProHero({ image, title, line, chips = [], actions, children }: {
   );
 }
 
-/** A number with its label, for the strips under a header. */
-/** text: the value is a name, not a number (smaller, so it fits on a phone). */
-export function StatTile({ label, value, sub, accent, text }: { label: string; value: ReactNode; sub?: ReactNode; accent?: boolean; text?: boolean }) {
-  return (
-    <div className={`min-w-0 rounded-lg px-3 py-2 ${accent ? 'bg-pitch-400/10 ring-1 ring-inset ring-pitch-400/30' : 'bg-field-950/40'}`}>
-      <div className={`display truncate tnum text-chalk-100 ${text ? 'text-base leading-7 sm:text-lg' : 'text-xl sm:text-2xl'}`} title={typeof value === 'string' ? value : undefined}>{value}</div>
-      <div className="truncate text-2xs text-chalk-400">{label}</div>
-      {sub != null && <div className="truncate text-2xs text-chalk-400">{sub}</div>}
-    </div>
-  );
-}
+// The one stat tile lives in primitives; re-exported here for the pages that import it from the hero.
+export { StatTile } from '../primitives';

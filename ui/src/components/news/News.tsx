@@ -72,7 +72,7 @@ export function NewsList({ stories, hide, dense }: { stories: Story[]; hide?: st
  */
 export function NewsFeed({ q, hide, dense, empty, max }: { q: NewsQuery; hide?: string; dense?: boolean; empty?: string; max?: number }) {
   const news = useNews(q);
-  if (news.isPending) return <div className="frame space-y-3 p-3" aria-busy="true"><Skeleton lines={4} /></div>;
+  if (news.isPending) return <div className="frame stack-sm pad" aria-busy="true"><Skeleton lines={4} /></div>;
   if (news.isError) return <ErrorBox error={news.error} retry={() => news.refetch()} />;
   const stories = news.data.pages.flatMap((p) => p.stories).slice(0, max);
   if (!stories.length) return <EmptyState icon={<Newspaper size={24} />} title={empty ?? 'No news yet'} body="Stories come from school athletics sites and news outlets, a few minutes after they publish." />;
@@ -114,7 +114,7 @@ export function TeamNews({ sides, title = 'Team news' }: { sides: { label: strin
   if (lists.every((l) => !l.stories.length)) return null;
   return (
     <section className="min-w-0 space-y-2">
-      <h2 className="text-base font-semibold text-chalk-100">{title}</h2>
+      <h2 className="h-section">{title}</h2>
       <div className="grid gap-3 md:grid-cols-2">
         {lists.map(({ side, stories }) => (
           <div key={side.hide} className="min-w-0 space-y-1.5">
@@ -134,7 +134,7 @@ export function NewsSection({ title, q, hide, max = 5, dense, right }: { title: 
   if (news.isPending || !stories.length) return null;
   return (
     <section className="min-w-0 space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold text-chalk-100">{title}</h2>{right}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="h-section">{title}</h2>{right}</div>
       <NewsList stories={stories.slice(0, max)} hide={hide} dense={dense} />
     </section>
   );

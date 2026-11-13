@@ -22,7 +22,7 @@ export function Explore({ pro, intl }: { pro: ProHome | undefined; intl: IntlHom
       facts: intl ? [`${fmt.num(intl.counts.nations)} national teams`, `${fmt.num(intl.counts.tournaments)} tournaments`] : [] },
   ] as const;
   return (
-    <section aria-labelledby="explore" className="space-y-3">
+    <section aria-labelledby="explore" className="stack">
       <h2 id="explore" className="text-base font-semibold text-chalk-100">Explore</h2>
       <div className="grid overflow-hidden rounded-xl border border-field-700 bg-field-900 max-md:divide-y max-md:divide-field-700 md:grid-cols-3 md:divide-x md:divide-field-700">
         {areas.map((a) => (

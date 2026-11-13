@@ -195,7 +195,7 @@ export function EloChart({ slug, gender, compareSlug: compareProp, allowCompare 
   const options = (nations.data ?? []).filter((n) => n.level === 'senior' && n.gender === d.gender && n.slug !== slug).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <figure className="frame space-y-2 p-3" aria-label={`${d.nation.name}: Plaibook Elo`}>
+    <figure className="frame space-y-2 pad" aria-label={`${d.nation.name}: Plaibook Elo`}>
       <figcaption className="flex flex-wrap items-center justify-between gap-2 text-xs text-chalk-400">
         <span>{caption ?? `${d.nation.name}: Plaibook Elo`}{bestRank ? <span className="ml-2 text-note">best world rank #{bestRank.rank} (first {monthLabel(bestRank.month)})</span> : null}</span>
         <span className="flex flex-wrap items-center gap-2">

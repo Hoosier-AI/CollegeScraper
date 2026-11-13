@@ -33,7 +33,7 @@ export default function Tv() {
   const byDay = new Map<string, typeof shown>();
   for (const g of shown) byDay.set(g.game_date, [...(byDay.get(g.game_date) ?? []), g]);
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title="On TV" meta={`College soccer on TV and streaming in the next seven days, ${f.gender === 'w' ? "women's" : "men's"}: the network each school lists on its schedule.`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={setDivision} options={DIV_OPTIONS} />}</Field>
         <Field label="Network">{(id) => <Select id={id} value={network} onChange={setNetwork} className="max-w-[240px]" options={[{ value: '', label: `Every network (${games.length})` }, ...networks.map(([n, c]) => ({ value: n, label: `${n} (${c})` }))]} />}</Field>

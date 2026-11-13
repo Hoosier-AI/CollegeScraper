@@ -13,7 +13,7 @@ export function IntlNation({ slug }: { slug: string }) {
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
   const h = q.data!;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <ProHero image={<span className="grid h-14 w-14 place-items-center rounded-lg bg-field-800 sm:h-[4.5rem] sm:w-[4.5rem]"><TeamLogo src={h.nation.logo} name={h.nation.name} size={44} /></span>} title={`${h.nation.name}${h.gender === 'w' ? " women's" : ''}`}
         line={<>{h.nation.confederation && <span>{h.nation.confederation}</span>}{h.nation.fifa_code && <span>{h.nation.fifa_code}</span>}</>}
         chips={[h.first_match ? `First match ${h.first_match.slice(0, 4)}` : null, h.nation.fifa ? null : 'Outside FIFA']} />

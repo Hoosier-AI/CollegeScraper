@@ -88,7 +88,7 @@ export default function Matches() {
           const byDiv = new Map<string, typeof rows>();
           for (const g of rows) { const k = g.division ?? 'other'; byDiv.set(k, [...(byDiv.get(k) ?? []), g]); }
           return (
-            <section key={grp.key} aria-labelledby={`grp-${grp.key}`} className="space-y-3">
+            <section key={grp.key} aria-labelledby={`grp-${grp.key}`} className="stack">
               <h2 id={`grp-${grp.key}`} className="flex items-center gap-2 text-base font-semibold text-chalk-100">
                 {grp.key === 'live' && <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />}{grp.label}<span className="text-sm font-normal text-chalk-500 tnum">{rows.length}</span>
               </h2>

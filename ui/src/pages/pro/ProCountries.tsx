@@ -17,7 +17,7 @@ export function ProCountries() {
   const term = search.value.trim().toLowerCase();
   const rows = useMemo(() => list.filter((c) => !term || c.name.toLowerCase().includes(term)).sort((a, b) => b.leagues - a.leagues || a.name.localeCompare(b.name)), [list, term]);
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Countries" meta={`${list.length} countries and regions`}>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="Country" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>
@@ -49,7 +49,7 @@ export function ProCountry() {
   const d = q.data!;
   const c = d.country;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title={<span className="flex items-center gap-3">{c.flag && <img referrerPolicy="no-referrer" src={c.flag} alt="" width={44} height={32} className="h-8 w-11 rounded object-cover" />}{c.name}</span>}
         meta={`${d.leagues.length} ${gender === 'w' ? "women's" : "men's"} competitions, ${d.clubs.length} clubs we follow`}>
         <Link to={`${proPaths2.players}?nationality=${encodeURIComponent(c.name)}`} className="btn-ghost btn-sm">All {c.name} players</Link>

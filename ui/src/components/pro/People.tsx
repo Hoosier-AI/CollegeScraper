@@ -26,7 +26,7 @@ export function PercentileBars({ rows, caption }: { rows: { stat: string; value:
   const sorted = [...rows].sort((a, b) => order.indexOf(a.stat) - order.indexOf(b.stat));
   const tone = (p: number) => (p >= 0.8 ? 'bg-win' : p >= 0.5 ? 'bg-pitch-400' : p >= 0.25 ? 'bg-note' : 'bg-loss');
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-2 text-xs text-chalk-400">{caption}</figcaption>
       <ul className="space-y-1.5">
         {sorted.map((r) => {
@@ -79,7 +79,7 @@ export function GoalsByPeriod({ rows }: { rows: { period: string; for: number; a
   const max = Math.max(1, ...shown.flatMap((r) => [r.for, r.against]));
   if (!shown.some((r) => r.for || r.against)) return <p className="text-sm text-chalk-400">No goals recorded yet this season.</p>;
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <div className="flex h-36 items-end gap-2" role="img" aria-label={`Goals by period: ${shown.map((r) => `${r.period} minutes ${r.for} for, ${r.against} against`).join('; ')}`}>
         {shown.map((r) => (
           <div key={r.period} className="flex flex-1 flex-col items-center gap-1">

@@ -12,7 +12,7 @@ export default function ProNews() {
   const [gender] = useProGender();
   const base = { scope: 'pro' as const, gender };
   return (
-    <div className="space-y-6">
+    <div className="stack">
       <PageHeader title="Pro soccer news" meta={`${gender === 'w' ? "Women's" : "Men's"} club soccer: injuries, transfers, coaching changes and results, from the US to the top leagues abroad.`} />
       <NewsHub base={base} filters={PRO_FILTERS} aside={<>
         <Section title={gender === 'w' ? 'NWSL' : 'MLS'}><NewsFeed q={{ league: gender === 'w' ? NWSL : MLS, limit: 6 }} max={6} dense empty="No league news lately" /></Section>

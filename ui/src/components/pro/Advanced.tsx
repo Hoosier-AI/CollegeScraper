@@ -36,7 +36,7 @@ export function GplusBars({ byAction, caption }: { byAction: Gplus | Record<stri
   if (!rows.length) return null;
   const max = Math.max(0.1, ...rows.map((r) => Math.abs(r.value)));
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-2 text-xs text-chalk-400">{caption}</figcaption>
       <ul className="space-y-1.5">
         {rows.map((r) => (
@@ -83,7 +83,7 @@ export function TeamAdvancedCards({ competitions }: { competitions: AdvTeamSeaso
       {competitions.map((c) => (
         <div key={c.league?.id ?? 'x'} className="space-y-3">
           {competitions.length > 1 && c.league && <h3 className="text-sm font-medium text-chalk-200">{c.league.name}</h3>}
-          <div className="frame grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:grid-cols-4">
+          <div className="frame grid grid-cols-2 gap-x-4 gap-y-3 pad sm:grid-cols-4">
             {[
               ['xG for', dec(c.xg_for, 1), c.games ? `${dec((c.xg_for ?? 0) / c.games)} a game` : null],
               ['xG against', dec(c.xg_against, 1), c.games ? `${dec((c.xg_against ?? 0) / c.games)} a game` : null],
@@ -131,7 +131,7 @@ export function ShotMap({ shots: all, homeName, awayName, score }: { shots: AdvS
   };
   const options: { value: ShotPeriod; label: string }[] = [{ value: 'all', label: 'Whole match' }, { value: '1', label: '1st half' }, { value: '2', label: '2nd half' }, ...(hasEt ? [{ value: 'et' as const, label: 'Extra time' }] : [])];
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <SegmentedControl options={options} value={view} onChange={setView} label="Which part of the match" size="sm" />
         <p className="text-2xs tnum text-chalk-400"><span className="text-pitch-300">{homeName}</span> {tally('home')} · <span className="text-note">{awayName}</span> {tally('away')}</p>

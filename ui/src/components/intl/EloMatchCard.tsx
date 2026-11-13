@@ -24,7 +24,7 @@ export function EloMatchCard({ slug }: { slug: string }) {
   const asPoint = (s: Side, other: Side): EloPoint | null => (s.move ? { date: '', rating: s.move.rating_after, delta: s.move.delta, opponent: { key: other.nation!.key, name: name(other), slug: other.nation!.slug ?? other.nation!.key, logo: other.nation!.logo }, tournament: null,
     gf: s.move.gf, ga: s.move.ga, opp_rating: s.move.opp_rating, expected: s.move.expected, k: s.move.k, goal_factor: s.move.goal_factor, venue: s.move.venue, match_slug: null } : null);
   return (
-    <section className="frame space-y-3 p-3" aria-label="Plaibook Elo">
+    <section className="frame stack-sm pad" aria-label="Plaibook Elo">
       <h2 className="flex flex-wrap items-baseline justify-between gap-2 text-sm font-semibold text-chalk-100">
         Plaibook Elo {d.played ? 'before and after' : 'prediction'}
         <Link to="/intl/rankings" className="text-2xs font-normal text-pitch-300 hover:text-pitch-200">How it works</Link>

@@ -16,7 +16,7 @@ export function AdSlot({ slot, className = '', format = 'auto' }: { slot: 'rail'
   if (!on) return null;
   return (
     <div className={className}>
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-chalk-500">Advertisement</p>
+      <p className="mb-1 text-2xs uppercase tracking-wide text-chalk-500">Advertisement</p>
       <ins ref={ref} className="adsbygoogle block" style={{ display: 'block' }} data-ad-client={ads.client!} data-ad-slot={id!} data-ad-format={format} data-full-width-responsive={format === 'auto' ? 'true' : undefined} />
     </div>
   );

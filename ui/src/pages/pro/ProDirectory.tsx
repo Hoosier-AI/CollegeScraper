@@ -88,7 +88,7 @@ export default function ProDirectory({ mode }: { mode: 'players' | 'leaders' }) 
   ];
   const busy = teamsOn ? tq.isPlaceholderData : q.isPlaceholderData;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title={title} meta={teamsOn ? (tq.data ? `${fmt.num(tq.data.total)} team seasons, ${where}` : where) : q.data ? `${fmt.num(q.data.total)} player seasons, ${where}${q.data.min_minutes ? `, ${q.data.min_minutes}+ minutes` : ''}` : intl ? 'National teams' : 'US competitions first'}>
         {intl
           ? <Field label="Teams">{() => <SegmentedControl label="Senior or youth" size="sm" value={level} onChange={(v) => { setLevel(v === 'senior' ? '' : v); setLeague(''); setPage(1); }} options={[{ value: 'senior', label: 'Senior' }, { value: 'youth', label: 'Youth' }]} />}</Field>

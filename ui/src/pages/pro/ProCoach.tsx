@@ -25,7 +25,7 @@ export default function ProCoach() {
   const now = d.career.find((x) => x.current) ?? null;
   const age = ageFrom(c.birth_date);
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[...(now?.team.slug ? [{ label: now.team.name, to: proPath.team(now.team.slug, null, !!now.team.national) }] : []), { label: c.name }]} />
       <ProHero image={<PlayerAvatar src={c.photo} name={c.name} size={88} />} title={c.name}
         line={<>{c.nationality && <span className="inline-flex items-center gap-1.5"><Flag country={c.nationality} />{c.nationality}</span>}{now && <span>Coach of {now.team.name}</span>}</>}
@@ -38,7 +38,7 @@ export default function ProCoach() {
       </ProHero>
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
         <section className="space-y-2">
-          <h2 className="text-base font-semibold text-chalk-100">Career</h2>
+          <h2 className="h-section">Career</h2>
           {d.career.length ? <ul className="frame divide-y divide-field-700 text-sm">
             {d.career.map((x, i) => {
               const inner = <><TeamLogo src={x.team.logo} name={x.team.name} size={22} /><span className="min-w-0 flex-1 truncate font-medium text-chalk-100">{x.team.name}</span><span className="text-xs text-chalk-400 tnum">{x.start ? fmt.date(x.start) : '?'} – {x.end ? fmt.date(x.end) : 'now'}</span></>;
@@ -47,7 +47,7 @@ export default function ProCoach() {
           </ul> : <p className="text-sm text-chalk-400">No career recorded.</p>}
         </section>
         <section className="space-y-2">
-          <h2 className="text-base font-semibold text-chalk-100">Trophies as coach</h2>
+          <h2 className="h-section">Trophies as coach</h2>
           {d.trophies.length ? <ul className="frame divide-y divide-field-700 text-sm">
             {d.trophies.map((t, i) => <li key={i} className="flex items-center gap-2.5 px-3 py-2"><Trophy size={15} aria-hidden className="shrink-0 text-note" /><span className="min-w-0 flex-1 truncate text-chalk-100">{t.league}</span><span className="text-xs text-chalk-400">{[t.country, t.season].filter(Boolean).join(', ')}</span></li>)}
           </ul> : <p className="text-sm text-chalk-400">No trophies recorded as coach.</p>}

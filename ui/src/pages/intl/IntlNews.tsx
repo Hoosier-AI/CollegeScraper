@@ -18,7 +18,7 @@ export default function IntlNews() {
   const t = us.data?.team;
   const name = gender === 'w' ? 'USWNT' : 'USMNT';
   return (
-    <div className="space-y-6">
+    <div className="stack">
       <PageHeader title="International soccer news" meta={`${gender === 'w' ? "Women's" : "Men's"} national teams and tournaments: call-ups, injuries, results and qualifying, the ${name} first.`} />
       <NewsHub base={{ scope: 'international', gender }} filters={FILTERS}
         intro={t && <NewsSection title={name} q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} max={5} right={<Link to={proPath.team(t.slug, null, true)} className="text-sm text-pitch-300 hover:text-pitch-200">Team page</Link>} />}

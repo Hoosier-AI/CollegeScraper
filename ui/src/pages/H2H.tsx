@@ -57,7 +57,7 @@ export default function H2H() {
   );
   const streak = s?.streak && d ? (s.streak.kind === 'drawn' ? `The last ${s.streak.count} ${s.streak.count === 1 ? 'meeting was' : 'meetings were'} tied` : `${(s.streak.side === 'home' ? d.a : d.b).name} ${s.streak.kind === 'won' ? 'won' : 'unbeaten in'} the last ${s.streak.count}`) : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Head to head" meta={d ? `${d.a.name} against ${d.b.name}, every meeting we hold` : `Two ${genderLabel(f.gender)} college teams, every meeting`} />
       {(!a || !b) && (
         <div className="flex flex-wrap gap-4">

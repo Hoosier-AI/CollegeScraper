@@ -34,7 +34,7 @@ export default function ProH2H() {
   // Meetings span years: a year line above each new year.
   let year = '';
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Head to head" meta={d ? `${d.a.name} against ${d.b.name}, every meeting we hold` : 'Two clubs, every meeting in any competition'} />
       {(!a || !b) && <div className="flex flex-wrap gap-4">{!a && pick('a', 'Club')}{!b && pick('b', 'Against')}</div>}
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}

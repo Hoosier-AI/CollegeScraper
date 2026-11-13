@@ -62,11 +62,11 @@ function Token({ line, x, y, top, crest, crestSeo, past }: { line: any; x: numbe
     <>
       <span className="relative block">
         <PlayerAvatar src={line.headshot_url} name={line.name} size={40} crest={crest} crestSeo={crestSeo} ring={past ? 'past' : undefined} />
-        <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-[10px] font-semibold text-chalk-100 tnum shadow" aria-hidden>{line.jersey ?? ''}</span>
+        <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-2xs font-semibold leading-4 text-chalk-100 tnum shadow" aria-hidden>{line.jersey ?? ''}</span>
         {line.goals > 0 && <span className="absolute -right-2 -top-1 flex items-center rounded-full bg-white px-0.5 text-field-950 shadow" aria-hidden><Goals n={line.goals} size={11} /></span>}
-        {marks.length > 0 && <span className="absolute -left-1 -top-1 flex flex-col gap-0.5" aria-hidden>{marks.map((m) => <span key={m.t} className={`rounded px-1 text-[9px] font-semibold leading-3 ${m.c}`}>{m.t}</span>)}</span>}
+        {marks.length > 0 && <span className="absolute -left-1 -top-1 flex flex-col gap-0.5" aria-hidden>{marks.map((m) => <span key={m.t} className={`rounded px-1 text-[11px] font-semibold leading-3.5 ${m.c}`}>{m.t}</span>)}</span>}
       </span>
-      <span className="mt-1 block max-w-[72px] truncate text-center text-[11px] font-medium text-white drop-shadow">{last}</span>
+      <span className="mt-1 block max-w-[84px] truncate text-center text-2xs font-medium text-white drop-shadow">{last}</span>
       {line.rating != null && <RatingBadge v={line.rating} size="xs" className="mt-0.5" />}
     </>
   );
@@ -85,21 +85,21 @@ export function Pitch({ home, away, homeName, awayName }: { home: SideLineup; aw
   const label = (s: SideLineup) => (s.status === 'past' ? 'past lineup' : s.status === 'match' ? 'starting XI' : 'no lineup');
   return (
     <figure className="mx-auto w-full max-w-md">
-      <div className="relative w-full overflow-hidden rounded-xl border border-field-700" style={{ aspectRatio: '68 / 105', background: '#123b26' }} role="img" aria-label={`${awayName ?? 'Away'} (${label(away)}) at the top, ${homeName ?? 'home'} (${label(home)}) at the bottom`}>
+      <div className="relative w-full overflow-hidden rounded-xl border border-field-700 bg-turf-900" style={{ aspectRatio: '68 / 105' }} role="img" aria-label={`${awayName ?? 'Away'} (${label(away)}) at the top, ${homeName ?? 'home'} (${label(home)}) at the bottom`}>
         <svg viewBox="0 0 68 105" className="absolute inset-0 h-full w-full" aria-hidden>
-          <g fill="none" stroke="#2c6b46" strokeWidth="0.6">
+          <g fill="none" className="stroke-turf-600" strokeWidth="0.6">
             <rect x="1" y="1" width="66" height="103" />
             <line x1="1" y1="52.5" x2="67" y2="52.5" />
             <circle cx="34" cy="52.5" r="9.15" />
-            <circle cx="34" cy="52.5" r="0.6" fill="#2c6b46" />
-            <rect x="13.84" y="1" width="40.32" height="16.5" /><rect x="24.84" y="1" width="18.32" height="5.5" /><circle cx="34" cy="12" r="0.6" fill="#2c6b46" />
-            <rect x="13.84" y="87.5" width="40.32" height="16.5" /><rect x="24.84" y="98.5" width="18.32" height="5.5" /><circle cx="34" cy="93" r="0.6" fill="#2c6b46" />
+            <circle cx="34" cy="52.5" r="0.6" className="fill-turf-600" />
+            <rect x="13.84" y="1" width="40.32" height="16.5" /><rect x="24.84" y="1" width="18.32" height="5.5" /><circle cx="34" cy="12" r="0.6" className="fill-turf-600" />
+            <rect x="13.84" y="87.5" width="40.32" height="16.5" /><rect x="24.84" y="98.5" width="18.32" height="5.5" /><circle cx="34" cy="93" r="0.6" className="fill-turf-600" />
             <path d="M 26.7 17.5 A 9.15 9.15 0 0 0 41.3 17.5" /><path d="M 26.7 87.5 A 9.15 9.15 0 0 1 41.3 87.5" />
           </g>
           {[8, 20, 32, 44, 56, 68, 80, 92].map((y) => <rect key={y} x="1" y={y} width="66" height="6" fill="#ffffff" opacity="0.025" />)}
         </svg>
-        <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{awayName ?? 'Away'}<LineupChip status={away.status} past={away.past} compact /></span>
-        <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{homeName ?? 'Home'}<LineupChip status={home.status} past={home.past} compact /></span>
+        <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-field-950/70 px-1.5 py-0.5 text-2xs font-medium text-chalk-200">{awayName ?? 'Away'}<LineupChip status={away.status} past={away.past} compact /></span>
+        <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-field-950/70 px-1.5 py-0.5 text-2xs font-medium text-chalk-200">{homeName ?? 'Home'}<LineupChip status={home.status} past={home.past} compact /></span>
         {as.map((p) => <Token key={`a-${p.line.jersey}-${p.line.name}`} line={p.line} x={p.x} y={p.y} top crest={away.crest} crestSeo={away.crestSeo} past={away.status === 'past'} />)}
         {hs.map((p) => <Token key={`h-${p.line.jersey}-${p.line.name}`} line={p.line} x={p.x} y={p.y} top={false} crest={home.crest} crestSeo={home.crestSeo} past={home.status === 'past'} />)}
         {halfNote(away) && <span className="absolute inset-x-0 top-0 flex h-1/2 items-center justify-center px-6 text-center text-sm text-chalk-200">{halfNote(away)}</span>}

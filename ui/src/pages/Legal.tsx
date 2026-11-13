@@ -54,7 +54,7 @@ export default function Legal({ slug }: { slug: string }) {
   const p = q.data!;
   const toc = p.sections.length >= 5;
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl stack">
       <header className="space-y-2">
         <h1 className="display text-3xl text-chalk-100 sm:text-4xl">{p.title}</h1>
         <p className="text-xs text-chalk-500">Last updated {p.updated}</p>
@@ -109,14 +109,14 @@ function RequestForm() {
     }
   }
   if (state === 'sent') return (
-    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 px-4 py-4 ring-1 ring-inset ring-pitch-400/30">
+    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 pad ring-1 ring-inset ring-pitch-400/30">
       <CheckCircle2 size={20} aria-hidden className="mt-0.5 shrink-0 text-pitch-300" />
       <div><p className="font-semibold text-chalk-100">Request sent</p><p className="mt-1 text-sm text-chalk-300">Thank you. We will reply to {f.email} within 10 business days, sooner for anything about safety or a player under 18.</p></div>
     </div>
   );
   const label = 'mb-1 block text-xs font-medium text-chalk-300';
   return (
-    <form onSubmit={submit} className="frame space-y-3 px-4 py-4" aria-labelledby="req-title">
+    <form onSubmit={submit} className="frame stack-sm pad" aria-labelledby="req-title">
       <h2 id="req-title" className="text-base font-semibold text-chalk-100">Send a request</h2>
       <div>
         <label htmlFor="req-kind" className={label}>What is it about?</label>
@@ -169,14 +169,14 @@ function AdvertiseForm() {
     }
   }
   if (state === 'sent') return (
-    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 px-4 py-4 ring-1 ring-inset ring-pitch-400/30">
+    <div role="status" className="frame flex items-start gap-3 bg-pitch-400/10 pad ring-1 ring-inset ring-pitch-400/30">
       <CheckCircle2 size={20} aria-hidden className="mt-0.5 shrink-0 text-pitch-300" />
       <div><p className="font-semibold text-chalk-100">Thanks, we have it</p><p className="mt-1 text-sm text-chalk-300">We will reply to {f.email} within 2 business days.</p></div>
     </div>
   );
   const label = 'mb-1 block text-xs font-medium text-chalk-300';
   return (
-    <form onSubmit={submit} className="frame space-y-3 px-4 py-4" aria-labelledby="adv-title">
+    <form onSubmit={submit} className="frame stack-sm pad" aria-labelledby="adv-title">
       <h2 id="adv-title" className="text-base font-semibold text-chalk-100">Get in touch</h2>
       <div>
         <label htmlFor="adv-kind" className={label}>What are you interested in?</label>
@@ -208,7 +208,7 @@ function PrivacyChoices() {
   const gpc = gpcOn();
   const effectiveOff = gpc || off;
   return (
-    <section className="frame space-y-3 px-4 py-4" aria-labelledby="choice-title">
+    <section className="frame stack-sm pad" aria-labelledby="choice-title">
       <h2 id="choice-title" className="text-base font-semibold text-chalk-100">Personalised ads</h2>
       <label className="flex items-start gap-3 text-sm text-chalk-200">
         <input type="checkbox" className="mt-0.5 h-4 w-4 accent-pitch-400" checked={!effectiveOff} disabled={gpc} onChange={(e) => setPersonalisedOff(!e.target.checked)} />

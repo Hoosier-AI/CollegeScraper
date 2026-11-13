@@ -59,7 +59,7 @@ function MinorNotice({ d }: { d: MinorData }) {
       <Crumbs items={[...(d.team ? [{ label: d.team.name, to: proPath.team(d.team.slug) }] : []), { label: d.player.name }]} />
       <h1 className="display text-3xl text-chalk-100">{d.player.name}</h1>
       {d.team && <p className="flex items-center gap-2 text-chalk-300"><TeamLogo src={d.team.logo} name={d.team.name} size={20} /><Link to={proPath.team(d.team.slug)} className="hover:text-pitch-300">{d.team.name}</Link></p>}
-      <div className="frame px-4 py-4 text-[15px] leading-relaxed text-chalk-300">
+      <div className="frame pad text-[15px] leading-relaxed text-chalk-300">
         <p className="font-semibold text-chalk-100">Player profiles are not shown for players under 18.</p>
         <p className="mt-1">Their appearances still show in match lineups. See our <Link to="/privacy#athletes" className="text-pitch-300 underline underline-offset-2 hover:text-pitch-200">privacy policy</Link>.</p>
       </div>
@@ -93,7 +93,7 @@ function CareerTable({ rows }: { rows: CareerRow[] }) {
       {groups.map(([kind, list]) => (
         <div key={kind}>
           <p className="mb-1 text-xs font-medium text-chalk-400">{CAREER_TITLE[kind]}</p>
-          <table className="frame w-full text-sm">
+          <div className="overflow-x-auto"><table className="frame w-full text-sm">
             <caption className="sr-only">{CAREER_TITLE[kind]}</caption>
             <thead><tr className="text-2xs text-chalk-500"><th scope="col" className="th text-left">Years</th><th scope="col" className="th text-left">Club</th><th scope="col" className="th text-right">Apps</th><th scope="col" className="th text-right">Goals</th></tr></thead>
             <tbody className="divide-y divide-field-700">
@@ -109,7 +109,7 @@ function CareerTable({ rows }: { rows: CareerRow[] }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       ))}
       <p className="text-2xs text-chalk-500">League appearances and goals; clubs we cover link to their pages.</p>
@@ -237,7 +237,7 @@ export default function ProPlayer() {
   const chips = [p.number != null ? `No. ${p.number}` : null, age != null ? `${age} years old` : null, p.height_cm ? `${p.height_cm} cm` : null, p.weight_kg ? `${p.weight_kg} kg` : null].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <Crumbs items={[{ label: p.name }]} />
       <ProHero
         image={

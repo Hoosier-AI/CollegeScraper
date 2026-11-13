@@ -10,7 +10,7 @@ export default function News() {
   const { gender } = useFilters();
   const base = { scope: 'college' as const, gender };
   return (
-    <div className="space-y-6">
+    <div className="stack">
       <PageHeader title="College soccer news" meta={`Every NCAA ${genderLabel(gender)} program's news in one place: results, previews, injuries, commitments, coaching changes and awards.`} />
       <NewsHub base={base} filters={COLLEGE_FILTERS} aside={<>
         <Section title="Coaching changes"><NewsFeed q={{ ...base, kind: ['coaching'], limit: 6 }} max={6} dense empty="No coaching news lately" /></Section>

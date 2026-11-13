@@ -8,7 +8,7 @@ export function SeasonBars({ rows, a, b, caption }: { rows: { label: string; a: 
   const max = Math.max(1, ...rows.map((r) => r.a + r.b));
   const H = 84;
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-chalk-400">
         <span>{caption}</span>
         <span className="flex gap-3"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-pitch-400" />{a}</span><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-note" />{b}</span></span>
@@ -40,7 +40,7 @@ export function FormLine({ points, caption }: { points: { label: string; value: 
   const avg = points.reduce((n, p) => n + p.value, 0) / points.length;
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-1 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">average {avg.toFixed(2)}</span></figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${caption}: ${points.map((p) => `${p.label} ${p.value.toFixed(1)}`).join(', ')}`}>
         {[6, 7, 8, 9].map((g) => <g key={g}><line x1={PAD} x2={W - PAD} y1={y(g)} y2={y(g)} className="stroke-field-700" strokeWidth={1} /><text x={4} y={y(g) + 4} className="fill-chalk-500 text-[10px]">{g}</text></g>)}
@@ -59,7 +59,7 @@ const SLICE_GROUP: Record<string, 'attack' | 'possession' | 'defence'> = {
   goals: 'attack', shots: 'attack', shots_on: 'attack', assists: 'attack', key_passes: 'possession', passes: 'possession', pass_accuracy: 'possession',
   dribbles_won: 'possession', tackles: 'defence', interceptions: 'defence', duels_won: 'defence', saves: 'defence', rating: 'possession',
 };
-const GROUP_FILL = { attack: 'fill-pitch-400', possession: 'fill-note', defence: 'fill-[#7DD3FC]' } as const;
+const GROUP_FILL = { attack: 'fill-pitch-400', possession: 'fill-note', defence: 'fill-away' } as const;
 
 /** A percentile wheel: one slice per stat, its length the percentile against the same position. */
 export function PercentileWheel({ rows, labels, caption }: { rows: { stat: string; pct: number; value: number }[]; labels: Record<string, string>; caption: string }) {
@@ -72,7 +72,7 @@ export function PercentileWheel({ rows, labels, caption }: { rows: { stat: strin
     return `M${p(r0, a0)} L${p(r1, a0)} A${r1},${r1} 0 ${large} 1 ${p(r1, a1)} L${p(r0, a1)} A${r0},${r0} 0 ${large} 0 ${p(r0, a0)} Z`;
   };
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-1 text-xs text-chalk-400">{caption}</figcaption>
       <svg viewBox={`0 0 ${S} ${S}`} className="mx-auto w-full max-w-[22rem]" role="img" aria-label={`${caption}: ${rows.map((r) => `${labels[r.stat] ?? r.stat} ${Math.round(r.pct * 100)}`).join(', ')}`}>
         {[0.25, 0.5, 0.75, 1].map((f) => <circle key={f} cx={C} cy={C} r={R0 + (R - R0) * f} className="fill-none stroke-field-700" strokeWidth={1} />)}
@@ -94,7 +94,7 @@ export function PercentileWheel({ rows, labels, caption }: { rows: { stat: strin
       <div className="mt-1 flex justify-center gap-4 text-2xs text-chalk-400">
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-pitch-400" />Attacking</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-note" />Possession</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#7DD3FC]" />Defending</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-away" />Defending</span>
       </div>
     </figure>
   );
@@ -106,7 +106,7 @@ export function ResultStrip({ items, caption }: { items: { result: 'W' | 'D' | '
   const tone = { W: 'bg-win/20 text-win', D: 'bg-draw/20 text-draw', T: 'bg-draw/20 text-draw', L: 'bg-loss/20 text-loss' } as const;
   const w = items.filter((i) => i.result === 'W').length, d = items.filter((i) => i.result === 'D' || i.result === 'T').length;
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-2 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">{w}-{d}-{items.length - w - d}</span></figcaption>
       <ol className="flex flex-wrap gap-1" aria-label={`${caption}: ${items.map((i) => i.result).join(' ')}`}>
         {items.map((i, k) => <li key={k}><Link to={i.href} title={i.title} className={`grid h-7 w-7 place-items-center rounded text-xs font-semibold ${tone[i.result]} hover:ring-1 hover:ring-chalk-400`}>{i.result}</Link></li>)}
@@ -127,7 +127,7 @@ export function PointsLine({ results, caption }: { results: ('W' | 'D' | 'L' | '
   const path = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const ppg = pts[pts.length - 1]! / pts.length;
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-1 flex justify-between text-xs text-chalk-400"><span>{caption}</span><span className="tnum">{pts[pts.length - 1]} pts · {ppg.toFixed(2)} a match</span></figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${caption}: ${pts[pts.length - 1]} points from ${pts.length} matches`}>
         {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1={PAD} x2={W - PAD} y1={y(max * f)} y2={y(max * f)} className="stroke-field-700" strokeWidth={1} />)}

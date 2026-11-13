@@ -15,6 +15,14 @@ export default {
       colors: {
         field, chalk, pitch,
         win: '#5EEAD4', loss: '#FCA5A5', draw: '#CBD5E1', note: '#FBBF24',
+        // The away side and the defending group in charts (was a hex literal in five files).
+        away: '#7DD3FC',
+        // Match ratings, one scale everywhere (components/Rating.tsx ratingTone): 9+ elite ... below 6 poor.
+        rate: { elite: '#38BDF8', great: '#2DD4BF', good: '#86EFAC', fair: '#FBBF24', weak: '#FB923C', poor: '#F87171' },
+        // Percentile bands for FBref-style bars (components/primitives.tsx PercentileBar).
+        pct: { top: '#2DD4BF', high: '#86EFAC', mid: '#FBBF24', low: '#F87171' },
+        // The pitch behind lineups and shot maps.
+        turf: { 900: '#123B26', 600: '#2C6B46' },
         // Legacy names used by pages that have not migrated yet; remove once nothing references them.
         navy: { 950: field[950], 900: field[900], 800: field[800], 700: field[700] },
         ink: { 100: chalk[100], 200: chalk[200], 300: chalk[300], 400: chalk[400], 500: chalk[500] },

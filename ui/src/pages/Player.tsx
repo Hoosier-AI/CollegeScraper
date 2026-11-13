@@ -93,9 +93,9 @@ export default function Player() {
   const hasCharts = bySeason.length > 1 || form.length >= 3 || ratings.length >= 5;
   const hasOverview = hasCharts || (career && seasons.length > 1) || latest?.splits?.length > 0 || latest?.ranks?.length > 0 || honors.length > 0;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <Crumbs items={[{ label: p.display_name }]} />
-      <header className="card flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+      <header className="card flex flex-col gap-5 pad lg:flex-row lg:items-start lg:justify-between lg:gap-8">
         <div className="flex min-w-0 items-start gap-4">
         <span className="shrink-0 [&>*]:!h-16 [&>*]:!w-16 sm:[&>*]:!h-[88px] sm:[&>*]:!w-[88px]"><PlayerAvatar src={p.photo_url ?? latest?.headshot_url ?? p.headshot_url} name={p.display_name} size={88} crest={latest?.program?.college_schools?.logo_svg_url} crestSeo={latest?.program?.school_seo} /></span>
         <div className="min-w-0">

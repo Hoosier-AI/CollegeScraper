@@ -43,7 +43,7 @@ export default function TeamOfWeek() {
   const playerHref = (x: Line) => (x.player_id ? href(`/players/${x.player_id}`) : null);
   const inPlay = d?.week && d.week === d.current;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Team of the week" meta={d?.week ? `The best-rated XI of ${weekLabel(d.week)}${inPlay ? ' (so far)' : ''}, ${scope}, in a 4-3-3.` : `The best-rated XI of each week, ${scope}.`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); setConference(''); setWeek(''); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={(v) => { setConference(v); setWeek(''); }} options={confOptions} className="max-w-[220px]" />}</Field>

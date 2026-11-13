@@ -49,7 +49,7 @@ export function MatchMasthead({ g, sides, scorers }: { g: any; sides?: any; scor
     );
   };
   return (
-    <header className="card p-4 sm:p-6">
+    <header className="card pad">
       <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
         {team('home')}
         <div className="text-center">
@@ -297,7 +297,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
         <h3 id="h2h-title" className="text-sm font-semibold text-chalk-100">Head-to-head{h2h.first_season ? <span className="font-normal text-chalk-500">, meetings since {h2h.first_season}</span> : null}</h3>
         {h2h.played ? (
           <>
-            <div className="card space-y-4 p-4">
+            <div className="card space-y-4 pad">
               <div className="grid grid-cols-3 items-end text-center">
                 <div><div className="display text-3xl tnum text-chalk-100">{h2h.home_wins}</div><div className="text-xs text-chalk-400">{hn} wins</div></div>
                 <div><div className="display text-3xl tnum text-chalk-300">{h2h.ties}</div><div className="text-xs text-chalk-400">ties</div></div>
@@ -355,7 +355,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
         <h3 id="h2h-title" className="text-sm font-semibold text-chalk-100">Head-to-head{h2h.first_season ? <span className="font-normal text-chalk-500">, meetings since {h2h.first_season}</span> : null}</h3>
         {h2h.played ? (
           <>
-            <div className="card space-y-4 p-4">
+            <div className="card space-y-4 pad">
               <div className="grid grid-cols-3 items-end text-center">
                 <div><div className="display text-3xl tnum text-chalk-100">{h2h.home_wins}</div><div className="text-xs text-chalk-400">{hn} wins</div></div>
                 <div><div className="display text-3xl tnum text-chalk-300">{h2h.ties}</div><div className="text-xs text-chalk-400">ties</div></div>

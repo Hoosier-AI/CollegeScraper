@@ -51,8 +51,8 @@ export function ConferenceDetail({ id }: { id: string }) {
     </div>
   );
   return (
-    <div className="space-y-5">
-      <header className="card flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+    <div className="stack">
+      <header className="card flex flex-col gap-5 pad lg:flex-row lg:items-start lg:justify-between lg:gap-8">
         <div className="min-w-0">
           <Crumbs items={[{ label: divisionLabel(c.division), to: href('/conferences', { division: c.division }) }, { label: c.short_name ?? c.name }]} />
           <h1 className="display mt-1 text-3xl sm:text-4xl">{c.name}</h1>

@@ -35,7 +35,7 @@ export default function Transfers() {
     : <span className="text-chalk-500">Another school</span>;
   const pager = q.data && q.data.total > PAGE ? <Pager page={page} pageSize={PAGE} total={q.data.total} onPage={setPage} busy={q.isFetching} noun="transfers" /> : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Transfers" meta={q.data ? `${fmt.num(q.data.total)} ${genderLabel(f.gender)} players at a new school in ${f.season}` : `${genderLabel(f.gender)} players at a new school in ${f.season}`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); setConference(''); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[220px]" />}</Field>

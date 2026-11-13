@@ -16,7 +16,7 @@ export default function ProTransfers() {
   const q = useQuery({ queryKey: ['pro-transfers', page, scope], queryFn: () => api<FeedRow[]>(`/api/pro/transfers${qs({ limit: PAGE, offset: (page - 1) * PAGE, scope: scope === 'world' ? 'world' : '' })}`), placeholderData: keepPreviousData });
   const rows: TransferLine[] = (q.data ?? []).map((r) => ({ date: r.date, type: r.type, player: r.player, from_team_id: r.from.id, from_name: r.from.name, from_logo: r.from.logo, from_slug: r.from.slug, to_team_id: r.to.id, to_name: r.to.name, to_logo: r.to.logo, to_slug: r.to.slug }));
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Transfers" meta={scope === 'us' ? 'The latest moves to and from clubs in US competitions, newest first. Loans are marked.' : 'The latest moves between clubs worldwide, newest first. Loans are marked.'}>
         <Field label="Where">{() => <SegmentedControl label="US or worldwide" size="sm" value={scope} onChange={setScope} options={[...SCOPE_OPTIONS]} />}</Field>
       </PageHeader>

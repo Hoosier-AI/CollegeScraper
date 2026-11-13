@@ -42,7 +42,7 @@ export default function ProLeagues() {
     return out;
   }, [byCountry, n]);
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Pro competitions" meta={q.data ? `${total} ${gender === 'w' ? "women's" : "men's"} ${cups ? 'competitions' : 'leagues'} in ${byCountry.length} countries and regions` : undefined}>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="League or country" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
       </PageHeader>

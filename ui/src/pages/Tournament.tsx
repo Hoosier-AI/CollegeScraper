@@ -40,7 +40,7 @@ export default function Tournament() {
     { key: 'seed', label: 'Seed', title: 'One of the top 16 seeds', num: true, render: (t) => chance(t.seed) },
   ];
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="NCAA tournament odds" meta={`Division I ${genderLabel(f.gender)}, ${f.season}: the rest of the season played ${d?.sims ? fmt.num(d.sims) : 'thousands of'} times${d?.run_at ? `, updated ${fmt.agoWords(d.run_at)}` : ''}.`} />
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-96" />}
@@ -59,7 +59,7 @@ export default function Tournament() {
           </RailCard>
         </>}>
           <section className="min-w-0 space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Projected field <span className="text-sm font-normal text-chalk-500">{d.field.length} teams, the likeliest champion of each conference and the likeliest at-large teams</span></h2>
+            <h2 className="h-section">Projected field <span className="text-sm font-normal text-chalk-500">{d.field.length} teams, the likeliest champion of each conference and the likeliest at-large teams</span></h2>
             <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {d.field.filter((t) => t.projected_seed).map((t) => (
                 <li key={t.program_id} className="frame flex items-center gap-2.5 px-3 py-2">
@@ -79,7 +79,7 @@ export default function Tournament() {
             </ul>
           </section>
           <section className="min-w-0 space-y-2">
-            <h2 className="text-base font-semibold text-chalk-100">Every team's chances</h2>
+            <h2 className="h-section">Every team's chances</h2>
             <DataTable rows={d.teams} columns={cols} rowKey={(t) => t.program_id} caption="NCAA tournament odds" defaultSort={{ key: 'bid', dir: 'desc' }} pageSize={50} noun="teams" />
           </section>
         </PageWithRail>

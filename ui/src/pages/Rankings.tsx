@@ -30,7 +30,7 @@ export default function Rankings() {
     return <Navigate to={`${to}${q ? `?${q}` : ''}`} replace />;
   }
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Rankings" meta="The coaches' poll, national statistical rankings, live RPI, and Plaibook Elo, our own rating from every result" />
       <TabsNav label="Rankings sections" tabs={[{ id: 'polls' as Tab, label: 'Polls' }, { id: 'rpi' as Tab, label: 'Live RPI' }, { id: 'elo' as Tab, label: 'Plaibook Elo' }]} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'polls' ? null : x, page: null, conference: null })} />
       <PageWithRail label="Other rankings" rail={<RankingsRail tab={tab as Tab} />}>

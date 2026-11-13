@@ -16,7 +16,7 @@ function EventIcon({ e }: { e: ProEvent }) {
   if (e.type === 'goal') return <span className={e.detail === 'Missed Penalty' || e.comments === 'Penalty Shootout' ? 'opacity-40' : ''}><Goals n={1} size={14} /></span>;
   if (e.type === 'card') return <Square size={12} aria-hidden className={/red/i.test(e.detail ?? '') ? 'fill-loss text-loss' : 'fill-note text-note'} />;
   if (e.type === 'subst') return <ArrowLeftRight size={13} aria-hidden className="text-chalk-400" />;
-  return <span aria-hidden className="rounded bg-field-700 px-1 text-[9px] font-semibold text-chalk-200">VAR</span>;
+  return <span aria-hidden className="rounded bg-field-700 px-1 text-2xs font-semibold leading-4 text-chalk-200">VAR</span>;
 }
 
 function eventText(e: ProEvent): string {
@@ -80,12 +80,12 @@ function Token({ line, x, y, top, full, crest, to }: { line: ProLine; x: number;
     <>
       <span className="relative block">
         <PlayerAvatar src={line.photo} name={line.display} size={36} crest={crest} />
-        <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-[10px] font-semibold text-chalk-100 tnum shadow" aria-hidden>{line.number ?? ''}</span>
+        <span className="absolute -bottom-1 -right-1 rounded bg-field-950 px-1 text-2xs font-semibold leading-4 text-chalk-100 tnum shadow" aria-hidden>{line.number ?? ''}</span>
         {(line.goals ?? 0) > 0 && <span className="absolute -right-2 -top-1 flex items-center rounded-full bg-white px-0.5 text-field-950 shadow" aria-hidden><Goals n={line.goals!} size={11} /></span>}
         {(line.red ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-loss" /> : (line.yellow ?? 0) > 0 ? <span aria-hidden className="absolute -left-1 -top-1 h-3 w-2 rounded-sm bg-note" /> : null}
       </span>
-      <span className="mt-1 block max-w-[72px] truncate text-center text-[11px] font-medium text-white drop-shadow">{last}</span>
-      {line.rating != null && line.rating > 0 && <span className="text-[10px] tnum text-chalk-200">{line.rating.toFixed(1)}</span>}
+      <span className="mt-1 block max-w-[84px] truncate text-center text-2xs font-medium text-white drop-shadow">{last}</span>
+      {line.rating != null && line.rating > 0 && <span className="text-2xs tnum text-chalk-200">{line.rating.toFixed(1)}</span>}
     </>
   );
   const cls = 'absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center rounded focus-visible:outline-2';
@@ -99,16 +99,16 @@ export function ProPitch({ home, away, homeName, awayName }: { home: ProSideDeta
   if (!hs.length && !as.length) return null;
   return (
     <figure className="mx-auto w-full max-w-md">
-      <div className="relative w-full overflow-hidden rounded-xl border border-field-700" style={{ aspectRatio: '68 / 105', background: '#123b26' }} role="img" aria-label={`${awayName} (${away.formation ?? 'no formation'}) at the top, ${homeName} (${home.formation ?? 'no formation'}) at the bottom`}>
+      <div className="relative w-full overflow-hidden rounded-xl border border-field-700 bg-turf-900" style={{ aspectRatio: '68 / 105' }} role="img" aria-label={`${awayName} (${away.formation ?? 'no formation'}) at the top, ${homeName} (${home.formation ?? 'no formation'}) at the bottom`}>
         <svg viewBox="0 0 68 105" className="absolute inset-0 h-full w-full" aria-hidden>
-          <g fill="none" stroke="#2c6b46" strokeWidth="0.6">
+          <g fill="none" className="stroke-turf-600" strokeWidth="0.6">
             <rect x="1" y="1" width="66" height="103" /><line x1="1" y1="52.5" x2="67" y2="52.5" /><circle cx="34" cy="52.5" r="9.15" />
             <rect x="13.84" y="1" width="40.32" height="16.5" /><rect x="24.84" y="1" width="18.32" height="5.5" />
             <rect x="13.84" y="87.5" width="40.32" height="16.5" /><rect x="24.84" y="98.5" width="18.32" height="5.5" />
           </g>
         </svg>
-        <span className="absolute left-2 top-2 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{awayName}{away.formation ? ` · ${away.formation}` : ''}</span>
-        <span className="absolute bottom-2 left-2 rounded bg-field-950/70 px-1.5 py-0.5 text-[10px] font-medium text-chalk-200">{homeName}{home.formation ? ` · ${home.formation}` : ''}</span>
+        <span className="absolute left-2 top-2 rounded bg-field-950/70 px-1.5 py-0.5 text-2xs font-medium text-chalk-200">{awayName}{away.formation ? ` · ${away.formation}` : ''}</span>
+        <span className="absolute bottom-2 left-2 rounded bg-field-950/70 px-1.5 py-0.5 text-2xs font-medium text-chalk-200">{homeName}{home.formation ? ` · ${home.formation}` : ''}</span>
         {as.map((p) => <Token key={`a-${p.line.slot}`} line={p.line} x={p.x} y={p.y} top />)}
         {hs.map((p) => <Token key={`h-${p.line.slot}`} line={p.line} x={p.x} y={p.y} top={false} />)}
       </div>
@@ -122,9 +122,9 @@ export function XIPitch({ lines, label, crests, linkOf }: { lines: ProLine[]; la
   if (!ps.length) return null;
   return (
     <figure className="mx-auto w-full max-w-md">
-      <div className="relative w-full overflow-hidden rounded-xl border border-field-700" style={{ aspectRatio: '68 / 90', background: '#123b26' }} role="img" aria-label={label}>
+      <div className="relative w-full overflow-hidden rounded-xl border border-field-700 bg-turf-900" style={{ aspectRatio: '68 / 90' }} role="img" aria-label={label}>
         <svg viewBox="0 0 68 90" className="absolute inset-0 h-full w-full" aria-hidden>
-          <g fill="none" stroke="#2c6b46" strokeWidth="0.6">
+          <g fill="none" className="stroke-turf-600" strokeWidth="0.6">
             <rect x="1" y="1" width="66" height="88" /><circle cx="34" cy="1" r="9.15" /><rect x="13.84" y="72.5" width="40.32" height="16.5" /><rect x="24.84" y="83.5" width="18.32" height="5.5" />
           </g>
         </svg>

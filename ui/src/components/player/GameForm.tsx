@@ -13,7 +13,7 @@ export function GameForm({ games, caption }: { games: FormGame[]; caption: strin
   const g = games.reduce((n, x) => n + x.goals, 0), a = games.reduce((n, x) => n + x.assists, 0);
   const mins = games.filter((x) => x.minutes != null);
   return (
-    <figure className="frame p-3">
+    <figure className="frame pad">
       <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-chalk-400">
         <span>{caption}</span>
         <span className="flex flex-wrap gap-3">

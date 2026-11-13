@@ -23,7 +23,7 @@ export default function IntlH2H() {
   const q = useQuery({ queryKey: ['intl-h2h', a, b], queryFn: () => api<H2H>(`/api/intl/h2h${qs({ a, b })}`), enabled: !!a && !!b && a !== b, retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   const d = q.data;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Head to head" meta={d?.a && d?.b ? `${d.a.name} against ${d.b.name}` : 'Two national teams, every meeting'}>
         <Field label="Nation">{(id) => <Select id={id} value={a} onChange={(v) => patch({ a: v || null })} options={options} className="max-w-[220px]" />}</Field>
         <Field label="Against">{(id) => <Select id={id} value={b} onChange={(v) => patch({ b: v || null })} options={options} className="max-w-[220px]" />}</Field>
