@@ -6,6 +6,8 @@ import { useFilters, useHref, genderLabel, divisionLabel } from '../../lib/filte
 import { useUrlNumber, useUrlPatch, useUrlState, useUrlText } from '../../lib/urlState';
 import { statDef, statGroups } from '../../lib/statNames';
 import { DataTable, type Column } from '../../components/DataTable';
+import { FilterBar } from '../../components/FilterBar';
+import { useMediaQuery } from '../../lib/hooks';
 import { PlayerAvatar, Chip, EmptyState, ErrorBox, Field, PageHeader, Pager, SegmentedControl, Select, TeamLogo } from '../../components/primitives';
 
 const PAGE = 100;
@@ -33,6 +35,7 @@ const TEAM_SUPPORT: Record<string, string[]> = {
  *  minutes first, with the same scope filters and search. */
 export function LeadersView(props: { conference?: string; embedded?: boolean; directory?: boolean } = {}) {
   const f = useFilters();
+  const wide = useMediaQuery('(min-width: 768px)');
   const href = useHref();
   const patch = useUrlPatch();
   const dir = !!props.directory;
@@ -90,34 +93,42 @@ export function LeadersView(props: { conference?: string; embedded?: boolean; di
     ...support.filter((k) => k !== stat && k !== 'w').map(statCell),
   ];
   const scope = [division ? divisionLabel(division) : 'all divisions', genderLabel(f.gender), String(f.season)].join(', ');
+  const searchField = <Field label={isTeam ? 'Find team' : 'Find player or team'} className={dir ? 'w-full md:w-auto' : ''}>{(id) => <input id={id} type="search" className="input w-full md:w-44" placeholder="Name" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>;
+  // Phones: the chosen stat right after the name, so the number the list is sorted by shows without scrolling.
+  const cols = isTeam ? teamCols : playerCols;
+  const shownCols = wide ? cols : [cols[0]!, chosen, ...cols.slice(1).filter((c) => c !== chosen)];
   const pager = <Pager page={page} pageSize={PAGE} total={total} onPage={setPage} busy={busy} noun={isTeam ? 'teams' : 'players'} />;
   return (
     <div className="stack">
-      <PageHeader as={props.embedded ? 'h2' : 'h1'} title={dir ? 'Players' : 'Leaders'} meta={dir ? `Everyone who has played, most minutes first, ${scope}` : `${def.label}${q.data?.min_sample ? ` (${q.data.min_sample})` : ''}, ${scope}`}>
-        {!dir && <Field label="Show">{() => <SegmentedControl label="Players or teams" size="sm" value={kind as 'player' | 'team'} onChange={(v) => patch({ kind: v === 'player' ? null : v, stat: null, min: null })} options={[{ value: 'player', label: 'Players' }, { value: 'team', label: 'Teams' }]} />}</Field>}
-        {!dir && <Field label="Stat">{(id) => <Select id={id} value={statParam} onChange={setStat} options={statOptions} className="max-w-[240px]" />}</Field>}
+      <PageHeader as={props.embedded ? 'h2' : 'h1'} title={dir ? 'Players' : 'Leaders'} meta={dir ? `Everyone who has played, most minutes first, ${scope}` : `${def.label}${q.data?.min_sample ? ` (${q.data.min_sample})` : ''}, ${scope}`} />
+      <FilterBar
+        active={[per90, !props.conference && division, !props.conference && conference, !isTeam && position, !isTeam && classYear, !dir && minParam > 0, !dir && search.value].filter(Boolean).length}
+        onReset={() => patch({ per90: null, division: null, conference: null, position: null, class: null, min: null, q: null })}
+        primary={dir ? searchField : <>
+          <Field label="Show">{() => <SegmentedControl label="Players or teams" size="sm" value={kind as 'player' | 'team'} onChange={(v) => patch({ kind: v === 'player' ? null : v, stat: null, min: null })} options={[{ value: 'player', label: 'Players' }, { value: 'team', label: 'Teams' }]} />}</Field>
+          <Field label="Stat" className="min-w-0 flex-1 md:flex-none">{(id) => <Select id={id} value={statParam} onChange={setStat} options={statOptions} className="w-full md:w-auto md:max-w-[240px]" />}</Field>
+        </>}
+      >
+        {!dir && searchField}
         {!dir && !isTeam && PER90[statParam] && <Field label="Numbers">{() => <SegmentedControl label="Totals or per 90" size="sm" value={rate} onChange={setRate} options={[{ value: '', label: 'Totals' }, { value: '1', label: 'Per 90' }]} />}</Field>}
         {!props.conference && <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v || null, conference: null })} options={DIV_OPTIONS} />}</Field>}
-        {!props.conference && <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[200px]" />}</Field>}
-        <Field label={isTeam ? 'Find team' : 'Find player or team'}>{(id) => <input id={id} type="search" className="input w-44" placeholder="Name" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
-      </PageHeader>
-      {!isTeam && (
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-          <Field label="Position">{() => <SegmentedControl label="Position" size="sm" value={position} onChange={setPosition} options={POS_OPTIONS} />}</Field>
-          <Field label="Class">{() => <SegmentedControl label="Class" size="sm" value={classYear} onChange={setClassYear} options={CLASS_OPTIONS} />}</Field>
-          {!dir && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Minimum minutes">
-              <span className="mr-1">Minimum minutes</span>
+        {!props.conference && <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="md:max-w-[200px]" />}</Field>}
+        {!isTeam && <Field label="Position">{() => <SegmentedControl label="Position" size="sm" value={position} onChange={setPosition} options={POS_OPTIONS} />}</Field>}
+        {!isTeam && <Field label="Class">{() => <SegmentedControl label="Class" size="sm" value={classYear} onChange={setClassYear} options={CLASS_OPTIONS} />}</Field>}
+        {!isTeam && !dir && (
+          <div className="flex flex-col gap-1" role="group" aria-label="Minimum minutes">
+            <span className="text-2xs font-medium text-chalk-500">Minimum minutes</span>
+            <div className="flex flex-wrap items-center gap-1.5">
               {MIN_CHIPS.filter((m) => !per90 || m > 0).map((m) => <Chip key={m} on={minMin === m} onClick={() => setMinMin(m)}>{m === 0 ? 'Any' : `${m}+`}</Chip>)}
               {!MIN_CHIPS.includes(minMin) && <Chip on>{minMin}+</Chip>}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </FilterBar>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {pager}
       <div className={busy ? 'opacity-60 transition-opacity duration-150' : 'transition-opacity duration-150'} aria-busy={busy}>
-        <DataTable rows={q.data?.rows ?? []} columns={isTeam ? teamCols : playerCols} rowKey={(r) => (isTeam ? r.program_id : r.player_season_id)} caption={dir ? `Players, ${scope}` : `${def.label} leaders, ${scope}`} mode="server" loading={q.isPending} dense
+        <DataTable rows={q.data?.rows ?? []} columns={shownCols} rowKey={(r) => (isTeam ? r.program_id : r.player_season_id)} caption={dir ? `Players, ${scope}` : `${def.label} leaders, ${scope}`} mode="server" loading={q.isPending} dense
           rowHref={(r) => (isTeam ? href(`/teams/${r.program_id}`) : `/players/${r.player_id}`)}
           empty={<EmptyState title={search.value ? `Nobody matches “${search.value}”` : `No ${isTeam ? 'teams' : 'players'} with ${def.label.toLowerCase()} yet`} body={minMin ? 'Lower the minimum minutes or clear the search.' : 'Try another stat or a wider scope.'} action={search.value ? <button className="btn-ghost btn-sm" onClick={search.clear}>Clear search</button> : undefined} />} />
       </div>

@@ -49,29 +49,32 @@ export interface TransferLine { date: string; type: string | null; from_team_id:
 export function TransfersList({ rows, showPlayer, empty = 'No transfers recorded.' }: { rows: TransferLine[]; showPlayer?: boolean; empty?: string }) {
   if (!rows.length) return <p className="text-sm text-chalk-400">{empty}</p>;
   const side = (name: string | null, logo: string | null, slug?: string | null) => (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <TeamLogo src={logo} name={name} size={18} />
+    <span className="flex min-w-0 flex-1 basis-0 items-center gap-1.5">
+      <TeamLogo src={logo} name={name} size={20} />
       {slug ? <Link to={proPath.team(slug)} className="truncate hover:text-pitch-300">{name ?? 'Unknown'}</Link> : <span className="truncate">{name ?? 'Unknown'}</span>}
     </span>
   );
+  // Two lines at every width: who (or in/out) with the date and kind, then from -> to.
   return (
-    <ul className="frame divide-y divide-field-700">
+    <ul className="card divide-y divide-field-700/70 overflow-hidden">
       {rows.map((t, i) => (
-        <li key={`${t.date}-${t.from_team_id}-${t.to_team_id}-${i}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-          <span className="w-20 shrink-0 text-xs tnum text-chalk-500">{fmt.date(t.date)}</span>
-          {showPlayer && t.player && <span className="min-w-[8rem] font-medium text-chalk-100">{t.player.slug ? <Link to={proPath.player(t.player.slug)} className="hover:text-pitch-300">{t.player.name}</Link> : t.player.name}</span>}
-          {t.direction && <span className={`rounded px-1.5 text-2xs font-semibold ${t.direction === 'in' ? 'bg-win/15 text-win' : 'bg-loss/15 text-loss'}`}>{t.direction === 'in' ? 'IN' : 'OUT'}</span>}
-          <span className="flex min-w-0 flex-1 items-center gap-2 text-chalk-200">
+        <li key={`${t.date}-${t.from_team_id}-${t.to_team_id}-${i}`} className="row-pad text-sm">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2">
+              {t.direction && <span className={`shrink-0 rounded px-1.5 text-2xs font-semibold ${t.direction === 'in' ? 'bg-win/15 text-win' : 'bg-loss/15 text-loss'}`}>{t.direction === 'in' ? 'IN' : 'OUT'}</span>}
+              {showPlayer && t.player && <span className="truncate font-semibold text-chalk-100">{t.player.slug ? <Link to={proPath.player(t.player.slug)} className="hover:text-pitch-300">{t.player.name}</Link> : t.player.name}</span>}
+            </span>
+            <span className="shrink-0 text-2xs tnum text-chalk-500">{fmt.date(t.date)}{t.type ? <span className={`ml-1.5 rounded px-1.5 py-px ${/loan/i.test(t.type) ? 'bg-note/15 text-note' : 'bg-field-800 text-chalk-300'}`}>{t.type}</span> : null}</span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 text-chalk-200">
             {side(t.from_name, t.from_logo, t.from_slug)}<ArrowRight size={14} aria-label="to" className="shrink-0 text-chalk-500" />{side(t.to_name, t.to_logo, t.to_slug)}
-          </span>
-          {t.type && <span className="text-2xs text-chalk-400">{t.type}</span>}
+          </div>
         </li>
       ))}
     </ul>
   );
 }
 
-/** Goals for and against by 15-minute period: two bars per period. */
 export function GoalsByPeriod({ rows }: { rows: { period: string; for: number; against: number }[] }) {
   const shown = rows.filter((r) => r.period !== 'ET' || r.for || r.against);
   const max = Math.max(1, ...shown.flatMap((r) => [r.for, r.against]));

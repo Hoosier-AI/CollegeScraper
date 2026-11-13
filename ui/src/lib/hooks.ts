@@ -9,3 +9,16 @@ export function useNow(ms = 15_000): number {
 
 export const secondsAgo = (iso: string | null | undefined, now: number): number | null => (iso ? Math.max(0, Math.round((now - Date.parse(iso)) / 1000)) : null);
 export const agoShort = (iso: string | null | undefined, now: number): string => { const s = secondsAgo(iso, now); return s == null ? '' : s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+
+/** True while the media query matches (e.g. '(min-width: 768px)'); follows resizes. */
+export function useMediaQuery(query: string): boolean {
+  const [on, setOn] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const update = () => setOn(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [query]);
+  return on;
+}

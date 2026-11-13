@@ -148,12 +148,12 @@ export default function Player() {
               </> : <>
                 <StripStat label="Goals" value={st.goals ?? 0} sub={st.pct_goals_p90 != null ? `${fmt.pctile(st.pct_goals_p90)} pctl` : undefined} />
                 <StripStat label="Assists" value={st.assists ?? 0} />
-                <StripStat label="Points" value={st.points ?? 0} sub={st.div_rank_points ? `${fmt.ordinal(st.div_rank_points)} in div.` : undefined} />
+                <StripStat label="Points" value={st.points ?? 0} sub={st.div_rank_points ? `${fmt.ordinal(st.div_rank_points)} in div` : undefined} />
                 <StripStat label="Games" value={st.gp ?? 0} sub={`${st.gs ?? 0} starts`} />
-                <StripStat label="Minutes" value={n(st.minutes)} sub={st.gp ? `${Math.round((st.minutes ?? 0) / st.gp)} a game` : undefined} />
+                <StripStat label="Minutes" value={n(st.minutes)} sub={st.gp ? `${Math.round((st.minutes ?? 0) / st.gp)}/game` : undefined} />
                 <StripStat label="Shots" value={st.shots ?? 0} sub={st.sog != null ? `${st.sog} on goal` : undefined} />
                 <StripStat label="Goals/90" value={st.goals_p90 != null ? n(st.goals_p90, 2) : '–'} />
-                <StripStat label="Conv %" value={st.conversion_pct != null ? fmt.pct(st.conversion_pct) : '–'} sub="goals per shot" />
+                <StripStat label="Conv %" value={st.conversion_pct != null ? fmt.pct(st.conversion_pct) : '–'} sub="per shot" />
               </>}
             </StatStrip>
           </section>

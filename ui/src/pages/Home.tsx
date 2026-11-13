@@ -46,13 +46,13 @@ export default function Home() {
   ];
 
   return (
-    <div className="space-y-8 pb-4">
+    <div className="space-y-6 pb-4 sm:space-y-8">
       {/* Title on the left, search and the men's/women's switch on the right: on a wide screen the right half was empty
           and the matches started a screen down. */}
-      <section className="grid grid-cols-1 items-end gap-x-10 gap-y-5 pt-2 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)]">
+      <section className="grid grid-cols-1 items-end gap-x-10 gap-y-4 pt-1 sm:gap-y-5 sm:pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)]">
         <div className="min-w-0">
-          <h1 className="display text-4xl leading-[0.92] text-chalk-100 sm:text-5xl xl:text-6xl">Soccer stats from college to the World Cup</h1>
-          <p className="mt-3 max-w-2xl text-base text-chalk-300">Every NCAA program, MLS, the NWSL and the pro leagues abroad, and national teams back to 1872.</p>
+          <h1 className="display text-[2rem] leading-[0.95] text-chalk-100 sm:text-5xl xl:text-6xl">Soccer stats from college to the World Cup</h1>
+          <p className="mt-2 max-w-2xl text-sm text-chalk-300 sm:mt-3 sm:text-base">Every NCAA program, MLS, the NWSL and the pro leagues abroad, and national teams back to 1872.</p>
         </div>
         <div className="min-w-0 space-y-3">
           <div className="flex justify-end"><SegmentedControl label="Men's or women's" value={gender} onChange={setGender} options={[{ value: 'm', label: 'Men' }, { value: 'w', label: 'Women' }]} /></div>
@@ -62,13 +62,13 @@ export default function Home() {
 
       <FollowingPanel />
 
-      <section aria-labelledby="today" className="space-y-3">
-        <h2 id="today" className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold text-chalk-100">Today<span className="text-sm font-normal text-chalk-500">{longDay(todayEastern())}</span></h2>
+      <section aria-labelledby="today" className="stack-sm">
+        <h2 id="today" className="h-section flex flex-wrap items-baseline gap-x-2">Today<span className="text-sm font-normal text-chalk-500">{longDay(todayEastern())}</span></h2>
         <Board lanes={lanes} />
       </section>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
-        <div className="space-y-4 lg:col-span-8">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        <div className="stack lg:col-span-8">
           <Panel title="Top stories" meta="From the schools, the clubs and the press, across every level"
             action={<span className="flex flex-wrap gap-x-3 gap-y-1"><Link to="/news" className={linkCls}>College</Link><Link to="/pro/news" className={linkCls}>Pro</Link><Link to="/intl/news" className={linkCls}>International</Link></span>}>
             {news.isPending ? <Skeleton lines={6} /> : stories.length ? <div className="-mx-1"><NewsList stories={stories} dense /></div> : <p className="text-sm text-chalk-400">No news yet today.</p>}
@@ -80,7 +80,7 @@ export default function Home() {
           )}
           <LeadersPanel scope={scope} />
         </div>
-        <aside className="space-y-4 lg:col-span-4">
+        <aside className="stack lg:col-span-4">
           <PollPanel scope={scope} />
           <TotwPanel scope={scope} />
           <Panel title="Plaibook Elo" meta="National teams, our own ranking" footer={{ to: '/intl/rankings', label: 'Full rankings' }}>

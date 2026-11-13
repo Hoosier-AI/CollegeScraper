@@ -300,7 +300,7 @@ export default function ProPlayer() {
             <h2 className="mb-2 text-2xs font-medium text-chalk-400">{latest}, {onIntl ? 'international matches' : 'club competitions'}</h2>
             <StatStrip>
               <StripStat label="Apps" value={now.apps} sub={`${now.starts} starts`} />
-              <StripStat label="Minutes" value={fmt.num(now.minutes)} sub={now.apps ? `${Math.round(now.minutes / now.apps)} a match` : undefined} />
+              <StripStat label="Minutes" value={fmt.num(now.minutes)} sub={now.apps ? `${Math.round(now.minutes / now.apps)}/match` : undefined} />
               {isGk ? <>
                 <StripStat label="Clean sh." value={now.clean_sheets ?? '–'} />
                 <StripStat label="Saves" value={now.saves ?? '–'} sub={now.saves != null && now.conceded != null ? `${Math.round((now.saves / Math.max(1, now.saves + now.conceded)) * 100)}% saved` : undefined} />
@@ -309,12 +309,12 @@ export default function ProPlayer() {
                 <StripStat label="Passes" value={now.passes ?? '–'} />
                 <StripStat label="Yellows" value={now.yellow} sub={now.red ? `${now.red} red` : undefined} />
               </> : <>
-                <StripStat label="Goals" value={now.goals} sub={xg ? `${xg.toFixed(1)} xG` : now.minutes >= 450 ? `${per90(now.goals, now.minutes)?.toFixed(2)} per 90` : undefined} />
+                <StripStat label="Goals" value={now.goals} sub={xg ? `${xg.toFixed(1)} xG` : now.minutes >= 450 ? `${per90(now.goals, now.minutes)?.toFixed(2)}/90` : undefined} />
                 <StripStat label="Assists" value={now.assists} sub={xa ? `${xa.toFixed(1)} xA` : undefined} />
                 <StripStat label="Shots" value={now.shots ?? '–'} sub={now.shots_on != null ? `${now.shots_on} on target` : undefined} />
-                <StripStat label="Key passes" value={now.key_passes ?? '–'} sub={now.key_passes != null && now.minutes >= 450 ? `${per90(now.key_passes, now.minutes)?.toFixed(2)} per 90` : undefined} />
+                <StripStat label="Key passes" value={now.key_passes ?? '–'} sub={now.key_passes != null && now.minutes >= 450 ? `${per90(now.key_passes, now.minutes)?.toFixed(2)}/90` : undefined} />
                 <StripStat label="Pass %" value={now.pass_accuracy != null ? `${now.pass_accuracy}%` : '–'} sub={now.passes != null ? `of ${fmt.num(now.passes)}` : undefined} />
-                <StripStat label="Dribbles" value={now.dribbles_won ?? '–'} sub={now.duels_won != null ? `${now.duels_won} duels won` : undefined} />
+                <StripStat label="Dribbles" value={now.dribbles_won ?? '–'} sub={now.duels_won != null ? `${now.duels_won} duels` : undefined} />
               </>}
             </StatStrip>
           </section>
