@@ -7,6 +7,6 @@ const proxy = { target, changeOrigin: true, secure: true };
 
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5174, proxy: { '/api': proxy, '/health': proxy } },
+  server: { port: 5174, proxy: { '/api': proxy, '/health': proxy, '/card': proxy, '/og': proxy } },
   build: { outDir: 'dist', emptyOutDir: true },
 });

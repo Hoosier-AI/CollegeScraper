@@ -27,6 +27,7 @@ import { newsBody, newsHead, type NewsArea } from './news.js';
 import type { Story } from '../news/queries.js';
 import * as ex from './extra.js';
 import { cardFor, limiter, ogCache, renderCard } from './og.js';
+import { renderStatCard, statCardFor } from './statcard.js';
 import type { ExtraSeo } from './extra.js';
 
 const gzipAsync = promisify(gzip);
@@ -150,6 +151,29 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
     } catch (err) {
       warn({ err: String(err), path }, 'share card failed');
       return fallback();
+    }
+  });
+
+  // Stat cards (src/seo/statcard.ts): /card/<page path>.png, a picture made to be posted (player 1080x1350, match
+  // 1080x1080). No card for that page: 404 (the button only shows where there is one). Shares the draw limit above.
+  const statCards = ogCache();
+  app.get('/card/*', async (req, reply) => {
+    const raw = String((req.params as Record<string, string>)['*'] ?? '');
+    if (!raw.endsWith('.png')) return reply.code(404).send();
+    const path = `/${raw.slice(0, -4)}`;
+    const hit = statCards.get(path);
+    const send = (png: Buffer) => reply.header('Cache-Control', 'public, max-age=3600').header('Content-Disposition', `inline; filename="plaibook-${path.split('/').filter(Boolean).pop() ?? 'card'}.png"`).type('image/png').send(png);
+    if (hit) return send(hit);
+    if (opts.limit && !(await opts.limit(req, reply))) return reply;
+    try {
+      const card = await statCardFor(path, data, opts.pro ?? null);
+      if (!card) return reply.code(404).send();
+      const png = await drawing(() => renderStatCard(card));
+      statCards.set(path, png);
+      return send(png);
+    } catch (err) {
+      warn({ err: String(err), path }, 'stat card failed');
+      return reply.code(500).send();
     }
   });
 

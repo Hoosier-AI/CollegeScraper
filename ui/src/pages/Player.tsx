@@ -7,6 +7,7 @@ import { FormLine } from '../components/pro/Charts';
 import { RatingBadge } from '../components/Rating';
 import { SeasonBars } from '../components/pro/Charts';
 import { PageActions } from '../components/PageActions';
+import { StatCardButton } from '../components/StatCardButton';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { NewsFeed } from '../components/news/News';
 import { Crumbs } from '../components/shell';
@@ -115,6 +116,7 @@ export default function Player() {
         actions={<>
           <PageActions title={p.display_name} follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: p.photo_url ?? latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
           <Link className="btn-ghost btn-sm" to={`/compare?a=${p.id}`}><GitCompare size={14} /> Compare</Link>
+          {st && <StatCardButton path={`/players/${p.slug ?? p.id}`} name={p.display_name} />}
           <Link className="btn-quiet btn-sm" to={`/photo?player=${p.slug ?? p.id}`}><Camera size={14} /> {p.photo_url ? 'New photo' : 'Add photo'}</Link>
         </>}
       >

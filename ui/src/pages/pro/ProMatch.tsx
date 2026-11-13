@@ -2,6 +2,7 @@
 // Played: Summary (events), Lineups (both elevens on the pitch, lineups with ratings), Stats (team stats, shot map),
 // Head to head. Before kickoff: Preview, Head to head, Lineups (once announced).
 import { ShareButton } from '../../components/PageActions';
+import { StatCardButton } from '../../components/StatCardButton';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
@@ -104,7 +105,7 @@ export default function ProMatch() {
         {d.advanced && d.advanced.xg[0] != null && <span className="mr-2 font-medium text-chalk-200 tnum" aria-label={`Expected goals ${d.advanced.xg[0]} to ${d.advanced.xg[1]}`}>xG {d.advanced.xg[0]!.toFixed(2)} – {(d.advanced.xg[1] ?? 0).toFixed(2)}.</span>}
         {kickoffLong(m.kickoff)}{facts ? ` · ${facts}` : ''}
         </p>
-        <ShareButton title={`${m.home.name} vs ${m.away.name}, ${m.league.name}`} />
+        <div className="flex flex-wrap gap-2"><ShareButton title={`${m.home.name} vs ${m.away.name}, ${m.league.name}`} />{played && <StatCardButton path={pathname} name={`${m.home.name} ${m.home.score ?? ''}-${m.away.score ?? ''} ${m.away.name}`} />}</div>
       </div>
       {tabs.length > 1 && <TabsNav label="Match sections" tabs={tabs} value={tab} hrefFor={(x) => `${pathname}${x === defaultTab ? '' : `?tab=${x}`}`} />}
       {tab === 'summary' && (

@@ -13,7 +13,7 @@ import { genderFromSegment } from './util.js';
 import { LruCache } from './cache.js';
 
 export const OG_W = 1200, OG_H = 630;
-const C = { bg: '#0A1628', line: '#1B3154', card: '#10203A', text: '#EEF3F8', soft: '#B9C6D8', mute: '#7F91AA', teal: '#2DD4BF' };
+export const C = { bg: '#0A1628', line: '#1B3154', card: '#10203A', text: '#EEF3F8', soft: '#B9C6D8', mute: '#7F91AA', teal: '#2DD4BF' };
 
 export interface CardStat { value: string; label: string }
 export type Card =
@@ -23,7 +23,7 @@ export type Card =
 // ---------- fonts and images ----------
 const require = createRequire(import.meta.url);
 let fonts: { name: string; data: Buffer; weight: 400 | 600 | 700 | 800; style: 'normal' }[] | null = null;
-function loadFonts() {
+export function loadFonts() {
   if (fonts) return fonts;
   const f = (pkg: string, file: string) => readFileSync(require.resolve(`${pkg}/files/${file}`));
   fonts = [
@@ -31,6 +31,11 @@ function loadFonts() {
     { name: 'Archivo', data: f('@fontsource/archivo', 'archivo-latin-700-normal.woff'), weight: 700, style: 'normal' },
     { name: 'Plex', data: f('@fontsource/ibm-plex-sans', 'ibm-plex-sans-latin-400-normal.woff'), weight: 400, style: 'normal' },
     { name: 'Plex', data: f('@fontsource/ibm-plex-sans', 'ibm-plex-sans-latin-600-normal.woff'), weight: 600, style: 'normal' },
+    // Accented names (Pulišić, Šeško, Łukasz): the latin-ext halves, listed second in every font stack (satori does not fall back between faces of one name).
+    { name: 'ArchivoExt', data: f('@fontsource/archivo', 'archivo-latin-ext-800-normal.woff'), weight: 800, style: 'normal' },
+    { name: 'ArchivoExt', data: f('@fontsource/archivo', 'archivo-latin-ext-700-normal.woff'), weight: 700, style: 'normal' },
+    { name: 'PlexExt', data: f('@fontsource/ibm-plex-sans', 'ibm-plex-sans-latin-ext-400-normal.woff'), weight: 400, style: 'normal' },
+    { name: 'PlexExt', data: f('@fontsource/ibm-plex-sans', 'ibm-plex-sans-latin-ext-600-normal.woff'), weight: 600, style: 'normal' },
   ];
   return fonts;
 }
@@ -70,13 +75,13 @@ export async function imageData(url: string | null | undefined, fetcher: typeof 
 }
 
 // ---------- layout ----------
-type Node = { type: string; props: Record<string, unknown> };
-const h = (type: string, style: Record<string, unknown>, ...children: (Node | string | null | false)[]): Node =>
+export type Node = { type: string; props: Record<string, unknown> };
+export const h = (type: string, style: Record<string, unknown>, ...children: (Node | string | null | false)[]): Node =>
   ({ type, props: { style: { display: 'flex', ...style }, children: children.filter((c) => c != null && c !== false) } });
-const img = (src: string, size: number, round: boolean): Node => ({ type: 'img', props: { src, width: size, height: size, style: { width: size, height: size, objectFit: round ? 'cover' : 'contain', borderRadius: round ? size / 2 : 0 } } });
-const initials = (name: string, size: number): Node => h('div', { width: size, height: size, borderRadius: size / 2, background: C.card, border: `3px solid ${C.line}`, alignItems: 'center', justifyContent: 'center', color: C.soft, fontFamily: 'Archivo', fontWeight: 800, fontSize: size * 0.36 },
+export const img = (src: string, size: number, round: boolean): Node => ({ type: 'img', props: { src, width: size, height: size, style: { width: size, height: size, objectFit: round ? 'cover' : 'contain', borderRadius: round ? size / 2 : 0 } } });
+export const initials = (name: string, size: number): Node => h('div', { width: size, height: size, borderRadius: size / 2, background: C.card, border: `3px solid ${C.line}`, alignItems: 'center', justifyContent: 'center', color: C.soft, fontFamily: 'Archivo, ArchivoExt', fontWeight: 800, fontSize: size * 0.36 },
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join(''));
-const fit = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
+export const fit = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 /** Bigger for short names, smaller for long ones, so a name stays on one or two lines. */
 const titleSize = (s: string) => (s.length <= 12 ? 96 : s.length <= 18 ? 80 : s.length <= 26 ? 64 : 52);
 
@@ -91,8 +96,8 @@ const pitchMark = (cx: number, r: number, spot = true): Node => {
 const frame = (mark: Node, ...content: (Node | null)[]): Node => h('div', { position: 'relative', width: OG_W, height: OG_H, background: C.bg, color: C.text },
   mark, h('div', { position: 'absolute', left: 0, top: 0, width: OG_W, height: OG_H, boxSizing: 'border-box', flexDirection: 'column', justifyContent: 'space-between', padding: '56px 64px' }, ...content));
 
-const wordmark = (context: string): Node => h('div', { alignItems: 'center', gap: 18, fontFamily: 'Plex', fontSize: 26 },
-  h('div', { fontFamily: 'Archivo', fontWeight: 800, color: C.text, letterSpacing: -0.5 }, 'Plaibook', h('span', { color: C.teal, marginLeft: 8 }, 'Live')),
+const wordmark = (context: string): Node => h('div', { alignItems: 'center', gap: 18, fontFamily: 'Plex, PlexExt', fontSize: 26 },
+  h('div', { fontFamily: 'Archivo, ArchivoExt', fontWeight: 800, color: C.text, letterSpacing: -0.5 }, 'Plaibook', h('span', { color: C.teal, marginLeft: 8 }, 'Live')),
   h('div', { width: 2, height: 26, background: C.line }),
   h('div', { color: C.soft }, fit(context, 60)));
 
@@ -103,28 +108,28 @@ function subjectCard(c: Extract<Card, { kind: 'subject' }>): Node {
     h('div', { alignItems: 'center', gap: 40 },
       c.image ? img(c.image, 176, c.round) : initials(c.title, 176),
       h('div', { flexDirection: 'column', maxWidth: 820, gap: 8 },
-        h('div', { fontFamily: 'Archivo', fontWeight: 800, fontSize: titleSize(c.title), lineHeight: 1.0, letterSpacing: -1.5 }, fit(c.title, 44)),
-        c.subtitle ? h('div', { fontFamily: 'Plex', fontSize: 32, color: C.soft }, fit(c.subtitle, 56)) : null)),
+        h('div', { fontFamily: 'Archivo, ArchivoExt', fontWeight: 800, fontSize: titleSize(c.title), lineHeight: 1.0, letterSpacing: -1.5 }, fit(c.title, 44)),
+        c.subtitle ? h('div', { fontFamily: 'Plex, PlexExt', fontSize: 32, color: C.soft }, fit(c.subtitle, 56)) : null)),
     h('div', { gap: 56 },
       ...stats.map((s) => h('div', { flexDirection: 'column', gap: 2 },
-        h('div', { fontFamily: 'Archivo', fontWeight: 800, fontSize: 64, color: C.teal, lineHeight: 1 }, s.value),
-        h('div', { fontFamily: 'Plex', fontWeight: 600, fontSize: 24, color: C.mute }, s.label)))));
+        h('div', { fontFamily: 'Archivo, ArchivoExt', fontWeight: 800, fontSize: 64, color: C.teal, lineHeight: 1 }, s.value),
+        h('div', { fontFamily: 'Plex, PlexExt', fontWeight: 600, fontSize: 24, color: C.mute }, s.label)))));
 }
 
 function matchCard(c: Extract<Card, { kind: 'match' }>): Node {
   const side = (s: Extract<Card, { kind: 'match' }>['home']) => h('div', { flexDirection: 'column', alignItems: 'center', gap: 20, width: 340 },
     s.logo ? img(s.logo, 160, false) : initials(s.name, 160),
-    h('div', { fontFamily: 'Archivo', fontWeight: 700, fontSize: s.name.length > 18 ? 34 : 42, textAlign: 'center', justifyContent: 'center', lineHeight: 1.1 }, fit(s.name, 30)));
+    h('div', { fontFamily: 'Archivo, ArchivoExt', fontWeight: 700, fontSize: s.name.length > 18 ? 34 : 42, textAlign: 'center', justifyContent: 'center', lineHeight: 1.1 }, fit(s.name, 30)));
   const score = c.home.score != null && c.away.score != null;
   return frame(pitchMark(OG_W / 2, 200, false),
     wordmark(c.context),
     h('div', { alignItems: 'center', justifyContent: 'space-between' },
       side(c.home),
       h('div', { flexDirection: 'column', alignItems: 'center', gap: 6 },
-        h('div', { fontFamily: 'Archivo', fontWeight: 800, fontSize: score ? 140 : 72, lineHeight: 1, letterSpacing: -2 }, score ? `${c.home.score}-${c.away.score}` : 'vs'),
-        h('div', { fontFamily: 'Plex', fontWeight: 600, fontSize: 28, color: C.teal }, c.status)),
+        h('div', { fontFamily: 'Archivo, ArchivoExt', fontWeight: 800, fontSize: score ? 140 : 72, lineHeight: 1, letterSpacing: -2 }, score ? `${c.home.score}-${c.away.score}` : 'vs'),
+        h('div', { fontFamily: 'Plex, PlexExt', fontWeight: 600, fontSize: 28, color: C.teal }, c.status)),
       side(c.away)),
-    h('div', { fontFamily: 'Plex', fontSize: 26, color: C.mute, justifyContent: 'center' }, c.note ?? ''));
+    h('div', { fontFamily: 'Plex, PlexExt', fontSize: 26, color: C.mute, justifyContent: 'center' }, c.note ?? ''));
 }
 
 export async function renderCard(card: Card): Promise<Buffer> {

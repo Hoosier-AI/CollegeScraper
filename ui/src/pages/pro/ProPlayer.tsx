@@ -9,6 +9,7 @@
 // Pro (/pro/players) shows his club football; International (/intl/players) the same page over his national-team
 // matches, with caps by nation (Wikipedia careers) and World Cup squads.
 import { PageActions } from '../../components/PageActions';
+import { StatCardButton } from '../../components/StatCardButton';
 import { NewsFeed } from '../../components/news/News';
 import { Crumbs } from '../../components/shell';
 import { positionWord, type Salary } from '../../components/player/KeyFacts';
@@ -293,6 +294,7 @@ export default function ProPlayer() {
         actions={<>
           <PageActions title={p.name} follow={{ kind: 'pro-player', id: String(p.id), name: p.name, href: `/pro/players/${p.slug}`, image: p.photo ?? null, sub: d.team?.name ?? null }} />
           <Link to={proPaths2.compare(p.slug)} className="btn-ghost btn-sm"><GitCompare size={14} /> Compare</Link>
+          <StatCardButton path={`/pro/players/${p.slug}`} name={p.name} />
         </>}
       >
         <FactGrid facts={facts} label="Key facts" />
