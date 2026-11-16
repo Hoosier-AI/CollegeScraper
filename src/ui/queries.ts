@@ -561,7 +561,7 @@ export async function latestUscRanks(db: Db, season: number): Promise<Map<string
   return out;
 }
 
-export interface MatchSide { program_id: string | null; name: string | null; short_name: string | null; seo: string | null; logo: string | null; conference: { id: string; name: string; short: string | null } | null; division: string | null; rank: number | null; score: number | null }
+export interface MatchSide { program_id: string | null; name: string | null; short_name: string | null; seo: string | null; logo: string | null; conference: { id: string; name: string; short: string | null } | null; division: string | null; rank: number | null; score: number | null; seed: number | null }
 export interface MatchRow {
   /** Where it is shown (the schools' schedules, else NCAA.com) and the school's watch link. */
   broadcast: { network: string | null; url: string | null } | null;
@@ -569,6 +569,8 @@ export interface MatchRow {
   home: MatchSide; away: MatchSide; live: { period: string | null; clock: string | null; updated_at: string | null } | null;
   venue: { name: string | null; city: string | null } | null; neutral_site: boolean; conference_game: boolean; tournament: string | null;
   postseason: boolean; forfeit: boolean; overtime: boolean; shootout: boolean; source_of_truth: string | null; ncaa_contest_id: number | null;
+  /** Tournament games (migration 208): the round ("Semifinal") and, for a level knockout game, who went through on penalties. */
+  tournament_round: string | null; shootout_winner: string | null;
   /** Not played as far as we know yet, but its day (Eastern) is over or kickoff was 4+ hours ago: the result has not come in. */
   result_pending: boolean;
   /** No kickoff time published (NCAA.com stores those at midnight Eastern). */
@@ -589,6 +591,7 @@ export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = 
     program_id: r[`${p}_program_id`], name: r[`${p}_name`], short_name: r[`${p}_short_name`] ?? null, seo: r[`${p}_seo`] ?? null, logo: r[`${p}_logo`] ?? null,
     conference: r[`${p}_conference_id`] ? { id: r[`${p}_conference_id`], name: r[`${p}_conference_name`], short: r[`${p}_conference_short`] ?? null } : null,
     division: r[`${p}_division`] ?? null, rank: (r[`${p}_program_id`] && ranks?.get(r[`${p}_program_id`])?.rank) ?? null, score: r[`${p}_score`],
+    seed: r[`${p}_seed`] ?? null,
   });
   const liveFresh = r.status === 'live' && r.live_updated_at && now - Date.parse(r.live_updated_at) < LIVE_STALE_MS;
   const status = r.status === 'live' && !liveFresh ? 'scheduled' : r.status;
@@ -601,6 +604,7 @@ export function toMatchRow(r: any, ranks?: Map<string, { rank: number }>, now = 
     venue: r.venue_name || r.venue_city ? { name: r.venue_name ?? null, city: r.venue_city ?? null } : null,
     neutral_site: !!r.neutral_site, conference_game: !!r.conference_game, tournament: r.tournament ?? null, postseason: !!r.postseason,
     forfeit: !!r.forfeit, overtime: !!r.overtime, shootout: !!r.shootout, source_of_truth: r.source_of_truth ?? null, ncaa_contest_id: r.ncaa_contest_id ?? null,
+    tournament_round: r.tournament_round ?? null, shootout_winner: r.shootout_winner ?? null,
     result_pending: resultPending, kickoff_tbd: tbd,
     weather: r.weather ? { ...r.weather, read_at: r.weather_at ?? null } : null,
     broadcast: r.broadcast || r.watch_url ? { network: r.broadcast ?? null, url: r.watch_url ?? null } : null,

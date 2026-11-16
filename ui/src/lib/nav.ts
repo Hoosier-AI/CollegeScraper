@@ -29,7 +29,7 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
       { key: 'transfers', to: '/transfers', label: 'Transfers', icon: ArrowLeftRight, hint: 'Players at a new school this season' },
       { key: 'compare', to: '/compare', label: 'Compare players', icon: Users, hint: 'Two players side by side' },
       { key: 'h2h', to: '/h2h', label: 'Head to head', icon: Swords, hint: 'Every meeting between two teams' },
-      { key: 'tournament', to: '/tournament', label: 'NCAA tournament odds', icon: Network, hint: 'Who makes the field, from thousands of simulated seasons' },
+      { key: 'tournament', to: '/tournament', label: 'NCAA tournament', icon: Network, hint: 'The bracket, conference tournaments and the odds' },
       { key: 'records', to: '/records', label: 'Records and streaks', icon: Flame, hint: 'Runs still going and the best games this season' },
       { key: 'totw', to: '/team-of-the-week', label: 'Team of the week', icon: Star, hint: 'The best-rated XI of each week' },
       { key: 'tv', to: '/tv', label: 'On TV', icon: Tv, hint: 'Games on TV and streaming this week' },

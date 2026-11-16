@@ -15,6 +15,8 @@ import { clip, conferencePath, esc, playerPath, SITE_NAME, teamPath } from './ut
 import { proPaths } from './pro/pages.js';
 import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { collegeReferee, collegeRefereeList, proReferee, proRefereeList } from '../referees.js';
+import { conferenceTournaments, ncaaBracketFor } from '../college/tournaments.js';
+import type { BracketTeam } from '../college/bracket.js';
 
 const G = { m: "Men's", w: "Women's" } as const;
 const month = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : null);
@@ -81,6 +83,10 @@ export function makeExtraSeo(db: Db) {
     },
     collegeReferee: (slug: string) => collegeReferee(db, slug),
     /** The last finished week's Team of the Week, Division I men's and women's. */
+    async tournament(season: number) {
+      const [nm, nw, cm, cw] = await Promise.all([ncaaBracketFor(db, season, 'm'), ncaaBracketFor(db, season, 'w'), conferenceTournaments(db, season, 'm'), conferenceTournaments(db, season, 'w')]);
+      return { season, ncaa: { m: nm, w: nw }, conferences: { m: cm.tournaments, w: cw.tournaments } };
+    },
     async collegeTotw(season: number) {
       const [m, w] = await Promise.all((['m', 'w'] as const).map((gender) => collegeTeamOfWeek(db, { season, gender, division: 'd1', week: null, conference: null })));
       return { season, m: m!, w: w! };
@@ -232,6 +238,39 @@ export function collegeRefereeBody(d: P<'collegeReferee'>, slug: string) {
 
 // ---------- team of the week ----------
 const POSW: Record<string, string> = { G: 'Goalkeeper', D: 'Defender', M: 'Midfielder', F: 'Forward' };
+// ---------- NCAA tournament and conference tournaments ----------
+export function tournamentHead(d: P<'tournament'>, ctx: HeadContext) {
+  const champs = (['m', 'w'] as const).map((g) => d.ncaa[g]?.bracket.champion ? `${G[g].toLowerCase()} champion ${d.ncaa[g]!.bracket.champion!.name}` : null).filter(Boolean);
+  const decided = d.conferences.m.filter((t) => t.champion).length + d.conferences.w.filter((t) => t.champion).length;
+  return page(ctx, '/tournament', `NCAA Soccer Tournament ${d.season}: Bracket, Conference Tournaments and Odds${SUFFIX}`,
+    `The ${d.season} NCAA Division I soccer tournaments, men's and women's: the bracket with every result, each conference tournament and its champion (${decided} decided), and every team's chances${champs.length ? `; ${champs.join(', ')}` : ''}.`,
+    [...college, { name: 'NCAA tournament', path: '/tournament' }]);
+}
+export function tournamentBody(d: P<'tournament'>) {
+  const team = (t: BracketTeam | null, g: 'm' | 'w') => (!t ? 'TBD' : `${t.seed ? `(${esc(t.seed)}) ` : ''}${t.seo ? a(teamPath({ school_seo: t.seo, gender: g }), t.name ?? '') : esc(t.name ?? 'TBD')}`);
+  const parts: string[] = [];
+  for (const g of ['m', 'w'] as const) {
+    const n = d.ncaa[g];
+    if (n) {
+      parts.push(`<h2>${G[g]} NCAA tournament bracket</h2>${n.bracket.champion ? `<p>Champion: ${team(n.bracket.champion, g)}.</p>` : ''}`);
+      for (const r of n.bracket.rounds) {
+        const games = r.games.filter((x): x is NonNullable<typeof x> => !!x && !!(x.home || x.away));
+        if (!games.length) continue;
+        parts.push(`<h3>${esc(r.label)}</h3><ul>${games.map((x) => `<li>${team(x.home, g)} ${x.status === 'final' ? esc(`${x.home?.score ?? ''}-${x.away?.score ?? ''}`) : 'v'} ${team(x.away, g)}${x.status === 'final' && x.shootout ? ' (penalties)' : ''}${x.id ? ` ${a(`/matches/${x.id}`, 'match')}` : ''}</li>`).join('')}</ul>`);
+      }
+    }
+    const confs = d.conferences[g];
+    if (confs.length) {
+      parts.push(`<h2>${G[g]} conference tournaments</h2>${table(`${G[g]} conference tournaments`, ['Conference', 'Champion', 'Final'], confs.map((t) => tr([
+        a(`/conferences/${t.conference.id}?tab=tournament`, t.conference.short ?? t.conference.name),
+        t.champion ? team(t.champion, g) : esc(t.status === 'done' ? 'Decided on penalties' : t.status === 'live' ? 'Under way' : 'Not started'),
+        t.final && t.status === 'done' ? `${team(t.final.home, g)} ${esc(`${t.final.home?.score ?? ''}-${t.final.away?.score ?? ''}`)} ${team(t.final.away, g)}${t.final.shootout ? ' (penalties)' : ''}` : '',
+      ])))}`);
+    }
+  }
+  return wrapBody('rankings', [...college, { name: 'NCAA tournament', path: '/tournament' }], `<h1>NCAA Soccer Tournament ${esc(d.season)}</h1><p>The Division I men's and women's tournaments: the bracket with every result, each conference tournament with its champion (who takes the automatic bid), and every team's chances, played out thousands of times with Plaibook Elo.</p>${parts.join('') || '<p>The field is announced after the conference tournaments. Until then, see every team\'s chances of making it.</p>'}`);
+}
+
 export function collegeTotwHead(d: P<'collegeTotw'>, ctx: HeadContext) {
   const best = d.m.xi.find((x: any) => x.best);
   return page(ctx, '/team-of-the-week', `College Soccer Team of the Week${d.m.week ? `, week of ${d.m.week}` : ''}${SUFFIX}`, `The best-rated XI of the week in NCAA Division I soccer, men's and women's, from Plaibook's box-score ratings${best ? `. Player of the week: ${best.name} (${best.team?.name ?? ''}), ${Number(best.rating).toFixed(1)}` : ''}.`, [...college, { name: 'Team of the week', path: '/team-of-the-week' }]);

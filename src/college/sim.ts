@@ -2,10 +2,12 @@
 // winning its conference, taking the automatic bid, making the NCAA tournament and being seeded.
 //   - every remaining game is drawn from Plaibook Elo's win/draw/loss chances (home edge, the stored draw model);
 //   - the conference table is points (3/1/0) from conference games, then goal difference, then a coin;
-//   - the conference tournament is approximated as a four-team knockout of the table's top four (formats differ and
-//     we do not hold them); a level knockout goes to penalties, a coin. Its winner takes the automatic bid;
+//   - the conference tournament: once played, its real champion takes the automatic bid; while it is being played,
+//     the teams still in it play out the rest (in bracket order); before it starts, it is approximated as a four-team
+//     knockout of the table's top four (formats differ). A level knockout goes to penalties, a coin;
 //   - the season's RPI is recomputed with the simulated results; the best RPIs not already in fill the at-large
-//     places; the top `seeds` RPIs in the field are the seeds.
+//     places; the top `seeds` RPIs in the field are the seeds. Once the NCAA field is out, bids and seeds are the real
+//     ones and the bracket itself is played (simulateBracket) for each team's chance to reach each round.
 // Plus what needs no simulation: points now, the most a team can still reach, clinched, eliminated, magic number.
 import { computeRpi, RPI_DEFAULT, type RpiGame } from './rpi.js';
 import { expected, predict, type DrawModel } from '../sources/intl/elo.js';
@@ -13,6 +15,13 @@ import { expected, predict, type DrawModel } from '../sources/intl/elo.js';
 export interface SimTeam { id: string; rating: number; conf: string | null }
 export interface PlayedGame extends RpiGame { conf: boolean }
 export interface SimGame { home: string; away: string; neutral: boolean; conf: boolean }
+/** A conference tournament under way or finished (classify-postseason): its champion, or the teams still in it in
+ *  bracket order (neighbours meet next). */
+export interface ConfKnockout { champion: string | null; alive: string[] | null }
+/** One NCAA bracket slot: its teams where known and its result where played. */
+export interface BracketSlot { slot: number; home: string | null; away: string | null; homeSeed: number | null; awaySeed: number | null; winner: string | null; neutral: boolean | null }
+/** The NCAA field once announced: every team in it, the top seeds, and the bracket. */
+export interface NcaaField { teams: string[]; topSeeds: string[]; slots: BracketSlot[] }
 export interface SimInput {
   teams: SimTeam[];
   played: PlayedGame[];
@@ -25,12 +34,18 @@ export interface SimInput {
   sims: number;
   draw: DrawModel;
   homeEdge: number;
+  /** Conference tournaments under way or finished, by conference. */
+  confTournaments?: Map<string, ConfKnockout>;
+  /** The NCAA field, once announced. */
+  ncaa?: NcaaField | null;
   rng?: () => number;
 }
 export interface SimOdds {
   team: string; conf: string | null;
   reg_title: number; auto_bid: number; bid: number | null; seed: number | null; avg_rank: number | null; avg_points: number;
   points_now: number; max_points: number; left: number; clinched: boolean; eliminated: boolean; magic: number | null;
+  /** With the NCAA field out: the chance to reach round 2, 3, the quarterfinals, semifinals, the final, and to win it. */
+  rounds: number[] | null;
 }
 
 /** A seeded random number generator (mulberry32), so a run can be repeated. */
@@ -115,14 +130,25 @@ export function simulate(input: SimInput): SimOdds[] {
         games.push({ home: h, away: a, hs: won === h && r < p.win ? 1 : 0, as: won === a && r >= p.win + p.draw ? 1 : 0, neutral: false });
         return won;
       };
-      const top = order.slice(0, 4);
-      const champ = top.length >= 4 ? knock(knock(top[0]!, top[3]!), knock(top[1]!, top[2]!)) : top.length >= 2 ? knock(top[0]!, top[1]!) : top[0]!;
+      const kt = input.confTournaments?.get(conf);
+      let champ: string;
+      if (kt?.champion) champ = kt.champion;
+      else if (kt?.alive?.length) {
+        // Neighbours meet next; an odd one out goes through.
+        let list = kt.alive;
+        while (list.length > 1) { const next: string[] = []; for (let i = 0; i < list.length; i += 2) next.push(i + 1 < list.length ? knock(list[i]!, list[i + 1]!) : list[i]!); list = next; }
+        champ = list[0]!;
+      } else {
+        const top = order.slice(0, 4);
+        champ = top.length >= 4 ? knock(knock(top[0]!, top[3]!), knock(top[1]!, top[2]!)) : top.length >= 2 ? knock(top[0]!, top[1]!) : top[0]!;
+      }
       autos.add(champ);
       tally.get(champ)!.auto += 1;
     }
     if (input.field == null) continue;
     const rpi = [...computeRpi(games, pool, RPI_DEFAULT).values()].sort((a, b) => b.rpi - a.rpi);
     rpi.forEach((r, i) => { const t = tally.get(r.team); if (t) t.rank += i + 1; });
+    if (input.ncaa) continue;
     const field = new Set(autos);
     for (const r of rpi) { if (field.size >= input.field) break; field.add(r.team); }
     let seeded = 0;
@@ -130,14 +156,61 @@ export function simulate(input: SimInput): SimOdds[] {
     for (const id of field) { const t = tally.get(id); if (t) t.bid += 1; }
   }
   const n = input.sims;
+  // The NCAA field is out: bids and seeds are facts, and the bracket is played for the rounds.
+  const field = input.ncaa ? new Set(input.ncaa.teams) : null;
+  const topSeeds = input.ncaa ? new Set(input.ncaa.topSeeds) : null;
+  const reach = input.ncaa ? simulateBracket(input.ncaa.slots, chance, input.sims, rng) : null;
   return input.teams.map((t) => {
     const x = tally.get(t.id)!, m = magic.get(t.id)!;
+    const bid = input.field == null ? null : field ? (field.has(t.id) ? 1 : 0) : round(x.bid / n);
+    const seed = input.field == null ? null : topSeeds ? (topSeeds.has(t.id) ? 1 : 0) : round(x.seed / n);
     return {
       team: t.id, conf: t.conf,
-      reg_title: round(x.reg / n), auto_bid: round(x.auto / n), bid: input.field == null ? null : round(x.bid / n), seed: input.field == null ? null : round(x.seed / n),
+      reg_title: round(x.reg / n), auto_bid: round(x.auto / n), bid, seed,
       avg_rank: input.field == null ? null : Math.round((x.rank / n) * 10) / 10, avg_points: Math.round((x.pts / n) * 10) / 10, ...m,
+      rounds: reach && field?.has(t.id) ? reach.get(t.id) ?? [0, 0, 0, 0, 0, 0] : null,
     };
   });
+}
+
+/** Play the NCAA bracket's remaining games many times. Six rounds; slot r*100+p is fed by r-1 slots 2p-1 and 2p.
+ *  Played games keep their winner. Before the College Cup the higher seed hosts (a seeded team against an unseeded
+ *  one; the listed home side otherwise); the semifinals and final are neutral. Level games go to a coin (penalties).
+ *  Returns, per team, the chance to reach rounds 2..6 and to win: [r2, r3, qf, sf, final, champion]. */
+export function simulateBracket(slots: BracketSlot[], chance: (h: string, a: string, neutral: boolean) => { win: number; draw: number }, sims: number, rng: () => number): Map<string, number[]> {
+  const ROUNDS = 6;
+  const bySlot = new Map(slots.map((s) => [s.slot, s]));
+  const seedOf = new Map<string, number>();
+  for (const s of slots) { if (s.home && s.homeSeed) seedOf.set(s.home, s.homeSeed); if (s.away && s.awaySeed) seedOf.set(s.away, s.awaySeed); }
+  const counts = new Map<string, number[]>();
+  const bump = (t: string, i: number) => { const c = counts.get(t) ?? Array(ROUNDS).fill(0); c[i]! += 1; counts.set(t, c); };
+  for (let s = 0; s < sims; s++) {
+    const won = new Map<number, string>();
+    for (let r = 1; r <= ROUNDS; r++) {
+      for (let p = 1; p <= 2 ** (ROUNDS - r); p++) {
+        const slot = r * 100 + p, row = bySlot.get(slot);
+        // Who plays here: the teams the row names, then the winners of the two games feeding it.
+        const sides: string[] = [];
+        for (const t of [row?.home, row?.away]) if (t && !sides.includes(t)) sides.push(t);
+        if (r > 1) for (const f of [2 * p - 1, 2 * p]) { const w = won.get((r - 1) * 100 + f); if (w && !sides.includes(w) && sides.length < 2) sides.push(w); }
+        if (!sides.length) continue;
+        if (r > 1) for (const t of sides) bump(t, r - 2);
+        if (sides.length === 1) { won.set(slot, sides[0]!); continue; }
+        let w = row?.winner && sides.includes(row.winner) ? row.winner : null;
+        if (!w) {
+          let [h, a] = sides as [string, string];
+          const sh = seedOf.get(h), sa = seedOf.get(a);
+          if (r < 5 && sa != null && (sh == null || sa < sh) && !(row?.home === h && row?.away === a)) [h, a] = [a, h];
+          const neutral = r >= 5 || !!row?.neutral;
+          const p0 = chance(h, a, neutral), x = rng();
+          w = x < p0.win ? h : x < p0.win + p0.draw ? (rng() < 0.5 ? h : a) : a;
+        }
+        won.set(slot, w);
+        if (r === ROUNDS) bump(w, ROUNDS - 1);
+      }
+    }
+  }
+  return new Map([...counts].map(([t, c]) => [t, c.map((v) => round(v / sims))]));
 }
 
 const round = (v: number) => Math.round(v * 1000) / 1000;

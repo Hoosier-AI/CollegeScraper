@@ -98,6 +98,11 @@ describe('placeholders', () => {
       expect(isPlaceholderOpponent(n), n).toBe(true);
     }
   });
+  it('flags conference-tournament schedule lines (2026 Big Ten and others)', () => {
+    for (const n of ['B1G Championship Match', 'B1G Championship Game', 'Ivy League Tournament Championship Game', 'Rutgers or #6 UCLA', 'Michigan State/#20 Washington', 'UIW/#5 Nicholls', 'Winner of QF1']) {
+      expect(isPlaceholderOpponent(n), n).toBe(true);
+    }
+  });
   it('keeps real teams', () => {
     for (const n of ['Duke', 'Notre Dame (OH)', 'Cal State Bakersfield', 'USC Lancaster', 'St. Thomas', 'Loyola Marymount', 'Boston College', 'Wake Forest']) expect(isPlaceholderOpponent(n), n).toBe(false);
   });
@@ -149,6 +154,15 @@ describe('opponent name cleanup', async () => {
     expect(m.cleanOpponentName('vs. No. 12 Elon')).toBe('Elon');
     expect(m.cleanOpponentName('#2/5 Duke')).toBe('Duke');
     expect(m.cleanOpponentName('Rider')).toBe('Rider');
+  });
+  it('strips tournament seeds and round notes', () => {
+    expect(m.cleanOpponentName('(2) Washington')).toBe('Washington');
+    expect(m.cleanOpponentName('#17/(7) North Carolina')).toBe('North Carolina');
+    expect(m.cleanOpponentName('#1 seed Indiana')).toBe('Indiana');
+    expect(m.cleanOpponentName('Washington (B1G Quarterfinal)')).toBe('Washington');
+    expect(m.cleanOpponentName('San Diego State (Pac-12 Final)')).toBe('San Diego State');
+    expect(m.cleanOpponentName('Notre Dame (OH)')).toBe('Notre Dame (OH)');
+    expect(m.cleanOpponentName('Miami (FL)')).toBe('Miami (FL)');
   });
   it('flags exhibitions', () => {
     expect(m.isExhibitionName('Drake (Exh.)')).toBe(true);

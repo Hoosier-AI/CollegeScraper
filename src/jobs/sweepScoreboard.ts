@@ -10,6 +10,12 @@ import { findGame } from '../identity/gameMatch.js';
 import { isCleanOpponentName, opponentSeo, realProgramFor } from '../normalize/aliasIndex.js';
 import { currentSeason, eachDate, eastern } from './seasons.js';
 import type { Division, Gender } from '../model.js';
+import type { ScoreboardGame } from '../sources/ncaa/scoreboard.js';
+
+/** NCAA tournament rounds by number (six rounds in both fields: the men's 48 give the top 16 a first-round bye). */
+export function ncaaRoundLabel(round: number): string {
+  return ['First round', 'Second round', 'Third round', 'Quarterfinal', 'Semifinal', 'Final'][round - 1] ?? `Round ${round}`;
+}
 
 /** params: { season?, gender?, division?, days?: 'all'|'recent', force? } */
 export async function sweepScoreboard(ctx: JobContext): Promise<void> {
@@ -34,6 +40,27 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     for (const off of [-1, 0, 1]) { const x = new Date(d); x.setUTCDate(d.getUTCDate() + off); dates.push(x.toISOString().slice(0, 10)); }
   } else { const today = new Date().toISOString().slice(0, 10); dates = [...eachDate(`${season}-08-10`, `${season}-12-20` < today ? `${season}-12-20` : today)]; }
 
+  // NCAA tournament games. A division's scoreboard also lists other divisions' championship games now and then (a D2
+  // second-round game on the D1 men's page, 2025-11-23), so a game counts only under the championship id that most of
+  // that division's tournament games carry, remembered per season once a day shows four or more of them.
+  const champKey = (gender: Gender, division: Division) => `ncaa_championship:${season}:${gender}:${division}`;
+  const champIds = new Map<string, number | null>();
+  const champOf = async (gender: Gender, division: Division, day: ScoreboardGame[]): Promise<number | null> => {
+    const k = champKey(gender, division);
+    if (!champIds.has(k)) champIds.set(k, (await kvGet<number>(db, k)) ?? null);
+    const counts = new Map<number, number>();
+    for (const x of day) if (x.championship?.id != null) counts.set(x.championship.id, (counts.get(x.championship.id) ?? 0) + 1);
+    const top = [...counts].sort((a, b) => b[1] - a[1])[0];
+    if (top && top[1] >= 4 && champIds.get(k) !== top[0]) { champIds.set(k, top[0]); await kvSet(db, k, top[0]); }
+    return champIds.get(k) ?? (counts.size === 1 ? top![0] : null);
+  };
+  const ncaaTournament = (g: ScoreboardGame, champ: number | null): Record<string, unknown> | null => {
+    const c = g.championship;
+    if (!c || c.id == null || c.id !== champ) return null;
+    return { postseason: true, postseason_source: 'ncaa', tournament: 'NCAA Tournament', tournament_conference_id: null, conference_game: false,
+      tournament_round: ncaaRoundLabel(c.round), round_number: c.round, bracket_slot: c.slot, home_seed: g.home.seed ?? null, away_seed: g.away.seed ?? null };
+  };
+
   for (const gender of genders) for (const division of divisions) for (const date of dates) {
     if (await ctx.cancelled()) return;
     let dayGames;
@@ -46,7 +73,10 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     // both scores is final (Presbyterian 1 @ Wofford 0, 2026-09-06).
     // Judged against the Eastern date: from 20:00 ET every Eastern-today game is already "yesterday" in UTC.
     const played = (x: typeof dayGames[number]) => x.state === 'final' || (x.home.score != null && x.away.score != null && x.date < eastern().date);
+    const champ = await champOf(gender, division, dayGames);
     for (const g of dayGames) {
+      const tourney = ncaaTournament(g, champ);
+      if (tourney) ctx.inc('ncaa_tournament_games');
       // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
       // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
       const ensure = async (t: typeof g.home): Promise<string | null> => {
@@ -107,13 +137,14 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         if (existing.home_score == null && g.home.score != null && played(g)) { patch.home_score = g.home.score; patch.away_score = g.away.score; }
         // Where it is shown: NCAA.com's broadcaster only when neither school's schedule named one.
         if (g.network && !(existing as any).broadcast) { patch.broadcast = g.network; patch.broadcast_source = 'ncaa'; }
+        if (tourney) Object.assign(patch, tourney);
         await updateGame(db, existing.id, patch);
         existing.ncaa_contest_id = Number(g.contestId);
         byContest.set(g.contestId, existing);
         ctx.inc('games_updated');
       } else {
         try {
-          const row = await upsertGameByNcaa(db, { ...base, ...(g.network ? { broadcast: g.network, broadcast_source: 'ncaa' } : {}), ncaa_contest_id: Number(g.contestId), status: played(g) ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: played(g) ? g.home.score : null, away_score: played(g) ? g.away.score : null });
+          const row = await upsertGameByNcaa(db, { ...base, ...(g.network ? { broadcast: g.network, broadcast_source: 'ncaa' } : {}), ...(tourney ?? {}), ncaa_contest_id: Number(g.contestId), status: played(g) ? 'final' : g.state === 'live' ? 'live' : 'scheduled', home_score: played(g) ? g.home.score : null, away_score: played(g) ? g.away.score : null });
           games.push(row); byContest.set(g.contestId, row);
           ctx.inc('games_created');
         } catch (err) {

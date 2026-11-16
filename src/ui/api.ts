@@ -22,6 +22,7 @@ import { follows, parseFollows } from './follows.js';
 import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { collegeFlow } from '../match/flowQueries.js';
 import { simOdds, tournamentOdds } from '../college/simOdds.js';
+import { conferenceTournament, conferenceTournaments } from '../college/tournaments.js';
 import { collegeTableView } from '../standings/viewQueries.js';
 import { icsCalendar } from '../calendar/ics.js';
 import { collegeRecords } from '../college/records.js';
@@ -283,6 +284,18 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     const s = season(req.query.season) ?? (await meta()).currentSeason;
     const r = await tournamentOdds(getDb(), s, req.query.gender === 'w' ? 'w' : 'm');
     return reply.header('Cache-Control', 'public, max-age=300').send(r ?? { season: s, field: [], teams: [] });
+  });
+  // Real tournaments (migration 208): one conference's bracket, and every D1 conference tournament of a season.
+  app.get<{ Querystring: Record<string, string> }>('/api/conference-tournament', async (req, reply) => {
+    const r = req.query;
+    if (!UUID.test(r.conference ?? '')) return reply.code(400).send({ error: 'conference required' });
+    const s = season(r.season) ?? (await meta()).currentSeason;
+    const t = await conferenceTournament(getDb(), s, r.conference!, r.gender === 'w' ? 'w' : 'm');
+    return reply.header('Cache-Control', 'public, max-age=300').send({ season: s, tournament: t });
+  });
+  app.get<{ Querystring: Record<string, string> }>('/api/conference-tournaments', async (req, reply) => {
+    const s = season(req.query.season) ?? (await meta()).currentSeason;
+    return reply.header('Cache-Control', 'public, max-age=300').send(await conferenceTournaments(getDb(), s, req.query.gender === 'w' ? 'w' : 'm'));
   });
   app.get<{ Querystring: Record<string, string> }>('/api/sim-odds', async (req, reply) => {
     const r = req.query;

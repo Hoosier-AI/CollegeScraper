@@ -271,8 +271,10 @@ export function boxScoreHeaderPatch(box: BoxScore, source: 'site' | 'ncaa', opts
   if (source === 'ncaa') patch.live_stats_at = null;
   if (box.status === 'final') Object.assign(patch, { status: 'final', home_score: box.home.score, away_score: box.away.score, overtime: box.overtime, shootout: box.shootout });
   if (source === 'site') {
+    // postseason / tournament are not taken from school box scores: most never set them, so writing them only reset
+    // what NCAA.com's championship flags and classify-postseason (src/college/postseason.ts) had marked.
     Object.assign(patch, { attendance: box.attendance, duration_min: box.durationMin,
-      officials: box.officials.length ? box.officials : null, neutral_site: box.neutral, postseason: box.postseason, tournament: box.tournament });
+      officials: box.officials.length ? box.officials : null, neutral_site: box.neutral });
     // The box score's ground and city beat the schedule's, but a box score without them must not erase the schedule's.
     const v = parseVenue(box.venueCity, box.venueName);
     if (v.name) patch.venue_name = v.name;

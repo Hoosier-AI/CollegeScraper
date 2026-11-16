@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confTables, magicNumbers, seeded, simulate, type PlayedGame, type SimGame, type SimTeam } from '../src/college/sim.js';
+import { confTables, magicNumbers, seeded, simulate, simulateBracket, type PlayedGame, type SimGame, type SimTeam } from '../src/college/sim.js';
 
 const DRAW = [0.27, 0.26, 0.24, 0.22, 0.2, 0.17, 0.14, 0.11, 0.08, 0.05];
 const teams: SimTeam[] = [
@@ -41,5 +41,51 @@ describe('magic numbers', () => {
     const m2 = magicNumbers(teams, done.row, done.left);
     expect(m2.get('A')!.clinched).toBe(true);
     expect(m2.get('B')!.eliminated).toBe(true);
+  });
+});
+
+describe('real tournaments in the simulation', () => {
+  const base = { teams, played, remaining, autoConfs: new Set(['X', 'Y']), field: 4, seeds: 2, sims: 1000, draw: DRAW, homeEdge: 60 };
+  it('a finished conference tournament gives its champion the automatic bid', () => {
+    const r = simulate({ ...base, rng: seeded(3), confTournaments: new Map([['X', { champion: 'D', alive: null }]]) });
+    expect(r.find((x) => x.team === 'D')!.auto_bid).toBe(1);
+    expect(r.filter((x) => x.conf === 'X' && x.team !== 'D').every((x) => x.auto_bid === 0)).toBe(true);
+  });
+  it('a tournament under way is played out by the teams still in it', () => {
+    const r = simulate({ ...base, rng: seeded(3), confTournaments: new Map([['X', { champion: null, alive: ['B', 'C'] }]]) });
+    const B = r.find((x) => x.team === 'B')!, C = r.find((x) => x.team === 'C')!;
+    expect(B.auto_bid + C.auto_bid).toBeCloseTo(1, 5);
+    expect(r.find((x) => x.team === 'A')!.auto_bid).toBe(0);
+    expect(B.auto_bid).toBeGreaterThan(C.auto_bid);
+  });
+  it('once the NCAA field is out, bids and seeds are facts and each round sums to its games', () => {
+    const slots = [
+      { slot: 101, home: 'A', away: 'H', homeSeed: 1, awaySeed: null, winner: null, neutral: false },
+      { slot: 102, home: 'E', away: 'D', homeSeed: 2, awaySeed: null, winner: 'D', neutral: false },
+    ];
+    const r = simulate({ ...base, rng: seeded(5), ncaa: { teams: ['A', 'H', 'E', 'D'], topSeeds: ['A', 'E'], slots } });
+    expect(r.find((x) => x.team === 'E')!.bid).toBe(1);
+    expect(r.find((x) => x.team === 'B')!.bid).toBe(0);
+    expect(r.find((x) => x.team === 'A')!.seed).toBe(1);
+    expect(r.find((x) => x.team === 'D')!.seed).toBe(0);
+    // E lost its played game: never reaches round 2. D always does.
+    expect(r.find((x) => x.team === 'E')!.rounds![0]).toBe(0);
+    expect(r.find((x) => x.team === 'D')!.rounds![0]).toBe(1);
+    const rr = (t: string) => r.find((x) => x.team === t)!.rounds!;
+    expect(rr('A')[0] + rr('H')[0]).toBeCloseTo(1, 5);
+    expect(rr('A')[0]).toBeGreaterThan(rr('H')[0]);
+    expect(r.find((x) => x.team === 'B')!.rounds).toBeNull();
+  });
+});
+
+describe('bracket simulation', () => {
+  it('fills a 64-team bracket from round one and every team reaches each round at most once', () => {
+    const ids = Array.from({ length: 64 }, (_, i) => `T${i + 1}`);
+    const slots = Array.from({ length: 32 }, (_, i) => ({ slot: 101 + i, home: ids[2 * i]!, away: ids[2 * i + 1]!, homeSeed: null, awaySeed: null, winner: null, neutral: false }));
+    const reach = simulateBracket(slots, () => ({ win: 0.45, draw: 0.2 }), 500, seeded(11));
+    const sumAt = (i: number) => [...reach.values()].reduce((s, v) => s + v[i]!, 0);
+    expect(sumAt(0)).toBeCloseTo(32, 5);
+    expect(sumAt(4)).toBeCloseTo(2, 5);
+    expect(sumAt(5)).toBeCloseTo(1, 5);
   });
 });

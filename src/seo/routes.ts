@@ -383,6 +383,7 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       const d = await x.proCoach(id); return d ? { head: ex.proCoachHead(d, id, ctx()), body: ex.proCoachBody(d, id) } : null;
     }));
     app.get('/team-of-the-week', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.collegeTotw(season(req)); return { head: ex.collegeTotwHead(d, ctx()), body: ex.collegeTotwBody(d) }; }));
+    app.get('/tournament', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.tournament(season(req)); return { head: ex.tournamentHead(d, ctx()), body: ex.tournamentBody(d) }; }));
     app.get('/pro/referees', (req, reply) => serve(req, reply, keyOf(req), async () => { const d = await x.proReferees(); return { head: ex.proRefereesHead(d, ctx()), body: ex.proRefereesBody(d) }; }));
     app.get('/pro/referees/:slug', (req: P<{ slug: string }>, reply) => serve(req, reply, keyOf(req), async () => {
       if (!SLUG.test(req.params.slug)) return null;
@@ -394,12 +395,11 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
       const d = await x.collegeReferee(req.params.slug); return d ? { head: ex.collegeRefereeHead(d, req.params.slug, ctx()), body: ex.collegeRefereeBody(d, req.params.slug) } : null;
     }));
   } else {
-    for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings', '/pro/referees', '/pro/referees/:slug', '/referees', '/referees/:slug', '/team-of-the-week']) app.get(path, (_req, reply) => shell(reply));
+    for (const path of ['/conferences', '/leaders', '/players', '/transfers', '/coaches/:id', '/pro/coaches/:id', '/pro/rankings', '/pro/referees', '/pro/referees/:slug', '/referees', '/referees/:slug', '/team-of-the-week', '/tournament']) app.get(path, (_req, reply) => shell(reply));
   }
   // Policy and information pages (src/legal): static text, rendered for crawlers and no-JavaScript readers.
   for (const slug of LEGAL_SLUGS) app.get(LEGAL[slug].path, (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: legalHead(slug, ctx()), body: legalBody(slug) })));
   app.get('/tv', (_req, reply) => shell(reply));
-  app.get('/tournament', (_req, reply) => shell(reply));
   app.get('/records', (_req, reply) => shell(reply));
   app.get('/compare', (_req, reply) => shell(reply));
   // The player photo form (src/legal/photos.ts): a form, not a page to index.

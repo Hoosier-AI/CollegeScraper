@@ -8,7 +8,7 @@ import { useHref } from '../lib/filters';
 import { Badge, RailCard, TeamLogo } from './primitives';
 import { chance } from '../pages/Tournament';
 
-interface Odds { program_id: string; program: { id: string; name: string; seo: string | null; logo: string | null; gender: 'm' | 'w' } | null; division: string; reg_title: number; auto_bid: number; bid: number | null; seed: number | null; points_now: number; max_points: number; conf_left: number; clinched: boolean; eliminated: boolean; magic: number | null; run_at: string; sims: number }
+interface Odds { program_id: string; program: { id: string; name: string; seo: string | null; logo: string | null; gender: 'm' | 'w' } | null; division: string; reg_title: number; auto_bid: number; bid: number | null; seed: number | null; points_now: number; max_points: number; conf_left: number; clinched: boolean; eliminated: boolean; magic: number | null; run_at: string; sims: number; rounds?: number[] | null }
 
 const status = (o: Odds) => (o.clinched ? <Badge tone="green">Clinched</Badge> : o.eliminated ? <Badge tone="gray">Out of the race</Badge> : o.magic != null ? <span className="text-xs text-chalk-300" title="Points still needed to be sure of at least a share of the title, whatever the others do">Magic number {o.magic}</span> : null);
 
@@ -40,7 +40,7 @@ export function TitleRace({ conference, season, gender }: { conference: string; 
           ))}</tbody>
         </table>
       </div>
-      <p className="text-2xs text-chalk-500">From Plaibook Elo's chances for every remaining game; ties on points split by goal difference. {d1 ? 'The conference tournament is approximated as a knockout of the top four. ' : ''}<Link to={href('/tournament')} className="text-pitch-300 hover:text-pitch-200">NCAA tournament odds</Link></p>
+      <p className="text-2xs text-chalk-500">From Plaibook Elo's chances for every remaining game; ties on points split by goal difference. {d1 ? 'Conference tournament games do not count in the table; for the automatic bid, a tournament already played gives its real champion, one under way is played out by the teams still in it, one not started is approximated as a knockout of the top four. ' : ''}<Link to={href('/tournament')} className="text-pitch-300 hover:text-pitch-200">NCAA tournament</Link></p>
     </section>
   );
 }
@@ -56,9 +56,11 @@ export function PostseasonCard({ program, season }: { program: string; season: n
     <RailCard title="Postseason chances" to={d1 ? href('/tournament') : undefined} toLabel="All odds">
       <dl className="space-y-1">
         {line('Conference title', o.reg_title, 'Regular-season title')}
-        {d1 && line('Automatic bid', o.auto_bid, 'Wins the conference tournament (approximated)')}
-        {d1 && line('NCAA tournament', o.bid)}
+        {d1 && line('Automatic bid', o.auto_bid, 'Wins the conference tournament (the real result once it is played)')}
+        {d1 && line('NCAA tournament', o.bid, o.rounds ? 'The field is set' : undefined)}
         {d1 && line('Top-16 seed', o.seed)}
+        {d1 && o.rounds && line('Reach the College Cup', o.rounds[3] ?? null, 'Reaches the semifinals, with the rest of the bracket played out')}
+        {d1 && o.rounds && line('Win the title', o.rounds[5] ?? null)}
       </dl>
       <p className="mt-2 text-xs text-chalk-400">{o.points_now} conference points, {o.conf_left} conference {o.conf_left === 1 ? 'game' : 'games'} left{o.clinched ? '; title clinched' : o.eliminated ? '; out of the title race' : o.magic != null ? `; magic number ${o.magic}` : ''}.</p>
     </RailCard>

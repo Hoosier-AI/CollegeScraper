@@ -15,8 +15,11 @@ import { StandingsGrid } from './StandingsGrid';
 import { longDay } from '../../lib/dates';
 import { NewsFeed, RailNews } from '../../components/news/News';
 import { Crumbs } from '../../components/shell';
+import { Bracket, type BracketData } from '../../components/Bracket';
 
-type Tab = 'table' | 'matches' | 'players' | 'teams' | 'news' | 'rankings';
+interface ConfTournament { name: string; status: 'done' | 'live' | 'upcoming'; first: string; last: string; bracket: BracketData }
+
+type Tab = 'table' | 'matches' | 'tournament' | 'players' | 'teams' | 'news' | 'rankings';
 // Old tab ids (before 2026-10-14) still open the right tab.
 const OLD_TAB: Record<string, Tab> = { leaders: 'players', polls: 'rankings' };
 
@@ -24,10 +27,13 @@ export function ConferenceDetail({ id }: { id: string }) {
   const f = useFilters();
   const href = useHref();
   const { pathname } = useLocation();
-  const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'players', 'teams', 'news', 'rankings', 'leaders', 'polls'] });
+  const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'tournament', 'players', 'teams', 'news', 'rankings', 'leaders', 'polls'] });
   const tab = OLD_TAB[rawTab] ?? (rawTab as Tab);
   const [tview, setTview] = useUrlState('view', 'all', { allow: ['all', 'home', 'away', 'form'] }) as [TableViewKey, (v: string) => void];
   const q = useQuery({ queryKey: ['conference', id, f.season, f.gender], queryFn: () => api<any>(`/api/conferences/${id}${qs({ season: f.season, gender: f.gender })}`) });
+  // The conference tournament (classify-postseason): a tab once it has started.
+  const tq = useQuery({ queryKey: ['conference-tournament', id, f.season, f.gender], queryFn: () => api<{ tournament: ConfTournament | null }>(`/api/conference-tournament${qs({ conference: id, season: f.season, gender: f.gender })}`) });
+  const tourney = tq.data?.tournament ?? null;
   if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (!q.data?.conference) return <EmptyState title="No such conference" action={<Link className="btn-ghost btn-sm" to={href('/conferences')}>All conferences</Link>} />;
@@ -43,7 +49,7 @@ export function ConferenceDetail({ id }: { id: string }) {
     { key: 'gd', label: 'GD', num: true, value: (m) => m.stats?.gd ?? null, priority: 2 },
     { key: 'ppg', label: 'PPG', num: true, decimals: 2, value: (m) => m.stats?.ppg ?? null, priority: 2 },
   ];
-  const tabs = [{ id: 'table' as Tab, label: 'Table' }, { id: 'matches' as Tab, label: 'Matches', count: d.this_week.games.length }, { id: 'players' as Tab, label: 'Players' }, { id: 'teams' as Tab, label: 'Teams', count: d.members.length }, { id: 'news' as Tab, label: 'News' }, { id: 'rankings' as Tab, label: 'Rankings', count: d.ranked.length || undefined }];
+  const tabs = [{ id: 'table' as Tab, label: 'Table' }, { id: 'matches' as Tab, label: 'Matches', count: d.this_week.games.length }, ...(tourney ? [{ id: 'tournament' as Tab, label: 'Tournament' }] : []), { id: 'players' as Tab, label: 'Players' }, { id: 'teams' as Tab, label: 'Teams', count: d.members.length }, { id: 'news' as Tab, label: 'News' }, { id: 'rankings' as Tab, label: 'Rankings', count: d.ranked.length || undefined }];
   const leaderList = (title: string, rows: any[], line: (r: any) => string) => (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-chalk-100">{title}</h3>
@@ -67,6 +73,13 @@ export function ConferenceDetail({ id }: { id: string }) {
       </header>
       <TabsNav label="Conference sections" tabs={tabs} value={tab as Tab} hrefFor={(x) => href(pathname, { tab: x === 'table' ? null : x })} />
       <PageWithRail label={`${c.name} at a glance`} rail={<>
+        {tab !== 'tournament' && tourney && (
+          <RailCard title={tourney.name} to={href(pathname, { tab: 'tournament' })} toLabel="Bracket">
+            {tourney.bracket.champion
+              ? <p className="flex items-center gap-2"><TeamLogo src={tourney.bracket.champion.logo} seo={tourney.bracket.champion.seo} name={tourney.bracket.champion.name} size={22} /><span className="text-chalk-400">Champion</span><span className="font-semibold text-chalk-100">{tourney.bracket.champion.name}</span></p>
+              : <p className="text-chalk-300">{tourney.status === 'done' ? 'The final went to penalties.' : tourney.status === 'live' ? `Under way: ${tourney.bracket.teams} teams.` : `Starts ${fmt.day(tourney.first)}.`}</p>}
+          </RailCard>
+        )}
         {tab !== 'players' && d.leaders.goals?.length > 0 && (
           <RailCard title="Top scorers" to={href(pathname, { tab: 'players' })} toLabel="Players">
             <ol className="space-y-0.5">{d.leaders.goals.slice(0, 5).map((r: any, i: number) => (
@@ -105,6 +118,12 @@ export function ConferenceDetail({ id }: { id: string }) {
         {tab === 'matches' && (byDate.size ? [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, games]) => (
         <section key={date} className="space-y-2"><h2 className="text-sm font-semibold text-chalk-100">{longDay(date)}</h2><div className="frame divide-y divide-field-700">{games.map((g: any) => <MatchRow key={g.id} g={g} />)}</div></section>
       )) : <EmptyState title="No matches this week" body="Conference members have nothing scheduled Monday to Sunday." action={<Chip to={href('/matches', { conference: id })}>Browse matches</Chip>} />)}
+        {tab === 'tournament' && (tourney
+          ? <>
+              <Bracket b={tourney.bracket} title={tourney.name} />
+              <p className="text-xs text-chalk-500">Tournament games are found from the results: the knockout played after the regular season. They do not count in the conference table. Seeds are the regular-season places where those are not tied on points.</p>
+            </>
+          : tq.isPending ? <Skeleton className="h-64" /> : <EmptyState title="No conference tournament found" body="It shows here once its first game is played." />)}
         {tab === 'teams' && <DataTable rows={d.members} columns={memberCols} rowKey={(m) => m.id} caption={`${c.name} members`} rowHref={(m) => href(`/teams/${m.id}`)} defaultSort={{ key: 'conf', dir: 'desc' }} dense />}
         {tab === 'players' && (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

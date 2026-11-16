@@ -28,12 +28,20 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
   ctx.inc('orphans', orphans.length);
   const left: string[] = [];
   const merged = new Set<string>();
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400_000).toISOString().slice(0, 10);
 
   for (const g of orphans) {
     if (merged.has(g.id)) continue;
     if (await ctx.cancelled()) return;
     const ownId = g.home_program_id ?? g.away_program_id;
     const name = g.home_program_id ? g.away_name : g.home_name;
+    // A schedule line that never became a game: still "scheduled" two days after its date with a side missing and no
+    // NCAA.com contest (bracket lines such as "seed Indiana" or "B1G Championship Game" for a team knocked out), or one
+    // standing beside the program's real game that day. NCAA.com's own empty bracket slots carry a contest id and stay.
+    const stale = g.status === 'scheduled' && !g.ncaa_contest_id && g.game_date < twoDaysAgo;
+    const shadowed = g.status !== 'final' && !g.ncaa_contest_id && !!ownId
+      && games.some((x) => x.id !== g.id && x.game_date === g.game_date && !!x.home_program_id && !!x.away_program_id && (x.home_program_id === ownId || x.away_program_id === ownId));
+    if (stale || shadowed) { await db.from('college_games').delete().eq('id', g.id); ctx.inc(stale ? 'stale_orphans_deleted' : 'shadowed_orphans_deleted'); continue; }
     if (!ownId && !name) { ctx.inc('orphans_left'); continue; }
     if (!name || isPlaceholderOpponent(name)) {
       // Scheduled placeholders and exhibitions (even played ones) are not counted games.

@@ -9,7 +9,8 @@
 //   Conferences: every D1/D2 NCAA team has one, and no conference lost over a quarter of last season's teams (a job
 //     once erased 169 teams' conferences and nothing noticed, 2026-10).
 import { registerJob, type JobContext } from './runner.js';
-import { selectAll, selectIn, type Db } from '../db/client.js';
+import { kvGet, selectAll, selectIn, type Db } from '../db/client.js';
+import { POSTSEASON_KEY } from './classifyPostseason.js';
 import { currentSeason } from './seasons.js';
 
 export interface AuditRow { area: 'college' | 'pro' | 'intl'; check_key: string; label: string; compared: number; agree: number; rate: number; target: number | null; worst: unknown[] }
@@ -138,9 +139,56 @@ async function conferenceChecks(db: Db, season: number): Promise<AuditRow[]> {
     conference: r.conference_id ? (r.college_conferences?.short_name ?? r.college_conferences?.name ?? r.conference_id) : null, ncaa_member: r.ncaa_member })), season);
 }
 
+/** Tournaments (migration 208): every D1 conference of six or more has its tournament found once the conference
+ *  season is over (from Nov 20), finished ones have a champion, and the NCAA bracket hangs together (each winner is in
+ *  the slot its game feeds). */
+async function postseasonChecks(db: Db, season: number): Promise<AuditRow[]> {
+  const out: AuditRow[] = [];
+  const rate = (agree: number, n: number) => (n ? Math.round((agree / n) * 1000) / 1000 : 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const kv = await kvGet<{ tournaments: { conference: string; gender: string; complete: boolean; champion: string | null }[] }>(db, POSTSEASON_KEY(season));
+  if (today >= `${season}-11-20` || season < Number(today.slice(0, 4))) {
+    const [ps, programs, confs] = await Promise.all([
+      selectAll<any>(db, 'college_program_seasons', 'program_id,conference_id', (q) => q.eq('season', season).eq('division', 'd1').eq('ncaa_member', true).not('conference_id', 'is', null).order('program_id')),
+      selectAll<any>(db, 'college_programs', 'id,gender', (q) => q.order('id')),
+      selectAll<any>(db, 'college_conferences', 'id,name,short_name', (q) => q.order('id')),
+    ]);
+    const gender = new Map(programs.map((p) => [p.id, p.gender]));
+    const name = new Map(confs.map((c) => [c.id, c.short_name ?? c.name]));
+    const indep = new Set(confs.filter((c) => /independent/i.test(c.name)).map((c) => c.id));
+    const size = new Map<string, number>();
+    for (const r of ps) if (!indep.has(r.conference_id)) { const k = `${r.conference_id}|${gender.get(r.program_id)}`; size.set(k, (size.get(k) ?? 0) + 1); }
+    const groups = [...size].filter(([, n]) => n >= 6).map(([k]) => k);
+    const found = new Set((kv?.tournaments ?? []).map((t) => `${t.conference}|${t.gender}`));
+    const missing = groups.filter((k) => !found.has(k));
+    out.push({ area: 'college', check_key: 'post:conf-tourney', label: 'Postseason: D1 conferences (6+ teams) with their tournament found', target: 0.85, compared: groups.length, agree: groups.length - missing.length,
+      rate: rate(groups.length - missing.length, groups.length), worst: missing.slice(0, 20).map((k) => { const [c, g] = k.split('|'); return { who: `${g === 'w' ? "Women's" : "Men's"} ${name.get(c!) ?? c}`, ours: 0, theirs: 1 }; }) });
+    const done = (kv?.tournaments ?? []).filter((t) => t.complete);
+    const noChamp = done.filter((t) => !t.champion);
+    out.push({ area: 'college', check_key: 'post:conf-champion', label: 'Postseason: finished conference tournaments with a champion', target: 0.95, compared: done.length, agree: done.length - noChamp.length,
+      rate: rate(done.length - noChamp.length, done.length), worst: noChamp.slice(0, 20).map((t) => ({ who: `${t.gender === 'w' ? "Women's" : "Men's"} ${name.get(t.conference) ?? t.conference}: final level, no shootout result`, ours: null, theirs: 1 })) });
+  }
+  for (const g of ['m', 'w'] as const) {
+    const rows = await selectAll<any>(db, 'college_games', 'id,game_date,status,bracket_slot,home_program_id,away_program_id,home_score,away_score,shootout_winner',
+      (q) => q.eq('season', season).eq('gender', g).eq('postseason_source', 'ncaa').not('bracket_slot', 'is', null).order('id'));
+    if (!rows.length) continue;
+    const bySlot = new Map(rows.map((r) => [r.bracket_slot, r]));
+    let compared = 0; const bad: { who: string; ours: unknown; theirs: unknown }[] = [];
+    for (const r of rows) {
+      const nx = bySlot.get((Math.floor(r.bracket_slot / 100) + 1) * 100 + Math.ceil((r.bracket_slot % 100) / 2));
+      if (r.status !== 'final' || r.home_score == null || !nx?.home_program_id || !nx?.away_program_id) continue;
+      const w = r.home_score > r.away_score ? r.home_program_id : r.away_score > r.home_score ? r.away_program_id : r.shootout_winner;
+      compared++;
+      if (!w || (w !== nx.home_program_id && w !== nx.away_program_id)) bad.push({ who: `${g === 'w' ? "Women's" : "Men's"} slot ${r.bracket_slot} (${r.game_date})`, ours: w, theirs: [nx.home_program_id, nx.away_program_id] });
+    }
+    out.push({ area: 'college', check_key: `post:ncaa-tree:${g}`, label: `Postseason: ${g === 'w' ? "women's" : "men's"} NCAA bracket, each winner in the next slot`, target: 1, compared, agree: compared - bad.length, rate: compared ? rate(compared - bad.length, compared) : 1, worst: bad.slice(0, 15) });
+  }
+  return out;
+}
+
 export async function statAudit(ctx: JobContext): Promise<void> {
   const season = Number(ctx.params.season ?? currentSeason());
-  const rows = [...(await collegeChecks(ctx.db, season)), ...(await conferenceChecks(ctx.db, season)), ...(await proChecks(ctx.db))];
+  const rows = [...(await collegeChecks(ctx.db, season)), ...(await conferenceChecks(ctx.db, season)), ...(await postseasonChecks(ctx.db, season)), ...(await proChecks(ctx.db))];
   if (rows.length) { const { error } = await ctx.db.from('stat_audit_runs').insert(rows); if (error) throw new Error(`stat audit: ${error.message}`); }
   for (const r of rows) ctx.note(r.check_key, `${(r.rate * 100).toFixed(1)}% of ${r.compared}`);
   ctx.inc('checks', rows.length);

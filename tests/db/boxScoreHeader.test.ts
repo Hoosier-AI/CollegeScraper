@@ -17,4 +17,9 @@ describe('boxScoreHeaderPatch', () => {
     expect(p).toMatchObject({ site_fetched_at: NOW, status: 'final', attendance: 100, venue_name: 'V' });
     expect('live_stats_at' in p).toBe(false);
   });
+  it('a site write never resets the tournament flags (NCAA.com and classify-postseason own them)', () => {
+    const p = boxScoreHeaderPatch({ ...box('final'), postseason: false, tournament: null } as BoxScore, 'site', {}, NOW);
+    expect('postseason' in p).toBe(false);
+    expect('tournament' in p).toBe(false);
+  });
 });

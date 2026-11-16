@@ -105,6 +105,8 @@ export interface ScoreboardGame {
   finalMessage: string | null;
   title: string | null;
   bracketRound: string | null;
+  /** An NCAA championship (tournament) game: its championship, bracket slot (round * 100 + position) and round. */
+  championship?: { id: number | null; slot: number; round: number; title: string | null } | null;
   home: ScoreboardTeam;
   away: ScoreboardTeam;
   /** The broadcaster NCAA.com lists (GraphQL broadcasterName), when it lists one. */

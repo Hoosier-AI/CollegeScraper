@@ -60,6 +60,8 @@ export const SITE_ROUTES = [
   { path: '/api/rpi', area: 'college', gender: 'query' },
   { path: '/api/sim-odds', area: 'college', gender: 'query' },
   { path: '/api/tournament', area: 'college', gender: 'query' },
+  { path: '/api/conference-tournament', area: 'college', gender: 'query' },
+  { path: '/api/conference-tournaments', area: 'college', gender: 'query' },
   { path: '/api/records', area: 'college', gender: 'query' },
   { path: '/api/team-of-the-week', area: 'college', gender: 'query' },
   { path: '/api/transfers', area: 'college', gender: 'query' },

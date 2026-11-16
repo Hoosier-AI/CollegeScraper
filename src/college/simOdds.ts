@@ -4,11 +4,13 @@ import type { Db } from '../db/client.js';
 import { kvGet, selectAll } from '../db/client.js';
 import { memo } from '../pro/memo.js';
 import { SIMS_LAST_KEY } from '../jobs/collegeSims.js';
+import { ncaaBracketFor } from './tournaments.js';
 
 const FIELD: Record<string, { field: number; seeds: number }> = { m: { field: 48, seeds: 16 }, w: { field: 64, seeds: 16 } };
-const COLS = 'program_id,conference_id,reg_title,auto_bid,bid,seed,avg_rank,avg_points,points_now,max_points,conf_left,clinched,eliminated,magic,sims,run_at';
+const COLS = 'program_id,conference_id,reg_title,auto_bid,bid,seed,avg_rank,avg_points,points_now,max_points,conf_left,clinched,eliminated,magic,sims,run_at,rounds';
 const num = (v: unknown) => (v == null ? null : Number(v));
-const shape = (r: any) => ({ ...r, reg_title: num(r.reg_title), auto_bid: num(r.auto_bid), bid: num(r.bid), seed: num(r.seed), avg_rank: num(r.avg_rank), avg_points: num(r.avg_points) });
+const shape = (r: any) => ({ ...r, reg_title: num(r.reg_title), auto_bid: num(r.auto_bid), bid: num(r.bid), seed: num(r.seed), avg_rank: num(r.avg_rank), avg_points: num(r.avg_points),
+  rounds: Array.isArray(r.rounds) ? r.rounds.map(Number) : null });
 
 async function programs(db: Db, ids: string[]) {
   const rows = ids.length ? await selectAll<any>(db, 'college_programs', 'id,name,short_name,school_seo,gender,college_schools(logo_svg_url)', (q) => q.in('id', ids)) : [];
@@ -19,11 +21,14 @@ async function programs(db: Db, ids: string[]) {
  *  champion, then the likeliest at-large teams), the top seeds and the bubble. */
 export async function tournamentOdds(db: Db, season: number, gender: 'm' | 'w') {
   return memo(`tourney:${season}:${gender}`, async () => {
-    const [odds, last] = await Promise.all([
+    const [odds, last, ncaa] = await Promise.all([
       selectAll<any>(db, 'college_sim_odds', COLS, (q) => q.eq('season', season).eq('gender', gender).eq('division', 'd1').order('program_id')),
       kvGet<{ at: string; sims: number }>(db, SIMS_LAST_KEY),
+      ncaaBracketFor(db, season, gender),
     ]);
-    if (!odds.length) return null;
+    // The real bracket, once NCAA.com lists the field: 'bracket' while it is played, 'done' once there is a champion.
+    const phase: 'projected' | 'bracket' | 'done' = !ncaa || ncaa.bracket.teams < (gender === 'w' ? 60 : 44) ? 'projected' : ncaa.bracket.champion ? 'done' : 'bracket';
+    if (!odds.length) return ncaa ? { season, gender, phase, bracket: ncaa.bracket, field: [], teams: [], field_size: FIELD[gender]!.field, seeds: FIELD[gender]!.seeds } : null;
     const rows = odds.map(shape);
     const ids = rows.map((r) => r.program_id);
     const confIds = [...new Set(rows.map((r) => r.conference_id).filter(Boolean))] as string[];
@@ -47,7 +52,8 @@ export async function tournamentOdds(db: Db, season: number, gender: 'm' | 'w') 
     const atLargeIn = atLarge.slice(0, Math.max(0, f.field - autos.length));
     const field = [...autos, ...atLargeIn].sort((a, b) => b.seed - a.seed || (a.avg_rank ?? 999) - (b.avg_rank ?? 999));
     return {
-      season, gender, run_at: rows[0].run_at, sims: rows[0].sims, as_of: last?.at ?? rows[0].run_at, field_size: f.field, seeds: f.seeds,
+      season, gender, phase, bracket: ncaa?.bracket ?? null,
+      run_at: rows[0].run_at, sims: rows[0].sims, as_of: last?.at ?? rows[0].run_at, field_size: f.field, seeds: f.seeds,
       field: field.map((t, i) => ({ ...t, projected_seed: i < f.seeds ? i + 1 : null, how: autoIds.has(t.program_id) ? 'auto' : 'at-large' })),
       last_in: atLargeIn.slice(-4).reverse(),
       first_out: atLarge.slice(atLargeIn.length, atLargeIn.length + 4),

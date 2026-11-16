@@ -71,7 +71,7 @@ export function MatchMasthead({ g, sides, scorers }: { g: any; sides?: any; scor
         <Fact icon={<CalendarClock size={18} aria-hidden />} label="When">
           <span className="text-chalk-100">{fmt.weekday(g.game_date)}{fmt.kickoff(g.start_epoch) ? `, ${fmt.kickoff(g.start_epoch)}` : ', time TBD'}</span>
           {fmt.kickoffEt(g.start_epoch) && <span className="block text-xs text-chalk-500">{fmt.kickoffEt(g.start_epoch)}</span>}
-          <span className="mt-1 flex flex-wrap gap-1.5">{g.conference_game && <Badge>Conference</Badge>}{g.tournament && <Badge tone="teal">{g.tournament}</Badge>}{g.postseason && <Badge tone="teal">Postseason</Badge>}</span>
+          <span className="mt-1 flex flex-wrap gap-1.5">{g.conference_game && <Badge>Conference</Badge>}{g.tournament && <Badge tone="teal">{g.tournament}{g.tournament_round ? `, ${String(g.tournament_round).toLowerCase()}` : ''}</Badge>}{g.postseason && !g.tournament && <Badge tone="teal">Postseason</Badge>}</span>
         </Fact>
         <Fact label="Weather">
           {g.weather ? <WeatherLine w={g.weather} past={live || final} /> : <span className="text-sm text-chalk-500">{live || final || g.result_pending ? 'No forecast was recorded for this match.' : 'The forecast appears within a week of kickoff, once the ground is known.'}</span>}
@@ -335,7 +335,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
               {(compact ? h2h.games.slice(0, 3) : h2h.games).map((m: any) => {
                 const hw = m.home.score != null && m.away.score != null && m.home.score > m.away.score, aw = m.home.score != null && m.away.score != null && m.away.score > m.home.score;
                 // Older seasons were stored from the scoreboard alone, without a conference flag: only say what is known.
-                const comp = m.postseason ? 'Postseason' : m.tournament ?? (m.conference_game ? 'Conference' : m.season === g.season ? 'Non-conference' : `${m.season} season`);
+                const comp = m.tournament ?? (m.postseason ? 'Postseason' : null) ?? (m.conference_game ? 'Conference' : m.season === g.season ? 'Non-conference' : `${m.season} season`);
                 const sc = (m.scorers ?? []) as { program_id: string | null; name: string | null; minute: string | null }[];
                 return (
                   <li key={m.id}>
@@ -393,7 +393,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
               {(compact ? h2h.games.slice(0, 3) : h2h.games).map((m: any) => {
                 const hw = m.home.score != null && m.away.score != null && m.home.score > m.away.score, aw = m.home.score != null && m.away.score != null && m.away.score > m.home.score;
                 // Older seasons were stored from the scoreboard alone, without a conference flag: only say what is known.
-                const comp = m.postseason ? 'Postseason' : m.tournament ?? (m.conference_game ? 'Conference' : m.season === g.season ? 'Non-conference' : `${m.season} season`);
+                const comp = m.tournament ?? (m.postseason ? 'Postseason' : null) ?? (m.conference_game ? 'Conference' : m.season === g.season ? 'Non-conference' : `${m.season} season`);
                 const sc = (m.scorers ?? []) as { program_id: string | null; name: string | null; minute: string | null }[];
                 return (
                   <li key={m.id}>

@@ -85,6 +85,8 @@ registerJob('standings', async (ctx) => {
   // NCAA.com's W-L-T leaderboard is the "official record" shown next to every team; refreshing it only weekly left
   // almost every team looking like it differed by the weekend.
   await step(ctx, 'verify-membership', { season });
+  // Conference tournaments are followed while they are played (marked, out of the conference tables).
+  await step(ctx, 'classify-postseason', { season });
   await step(ctx, 'compute-standings', { season });
   // The United Soccer Coaches polls come out on Tuesday afternoons (ET); six poll pages are cheap, so every run
   // re-reads them and a new poll is live within three hours instead of waiting for the nightly.

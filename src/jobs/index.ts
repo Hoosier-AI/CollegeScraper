@@ -6,6 +6,7 @@ import './fetchGamesNcaa.js';
 import './finalDetail.js';
 import './mergeTwins.js';
 import './syncSite.js';
+import './classifyPostseason.js';
 import './reconcileGames.js';
 import './computeAggregates.js';
 import './refreshRankings.js';

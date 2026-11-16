@@ -117,8 +117,13 @@ export function cleanOpponentName(raw: string): string {
   let s = String(raw ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:vs\.?|at|@|versus)\s+/i, '');
   for (let i = 0; i < 3; i++) {
     s = s.replace(/^(?:\[rv\]|\(rv\)|rv|nr)(?:\s*\/\s*|\s+)/i, '')
-      .replace(/^(?:#|no\.?\s*)t?\d+(?:\s*\/\s*(?:#|no\.?\s*)?t?\d+)?\s+/i, '');
+      .replace(/^(?:#|no\.?\s*)t?\d+(?:\s*\/\s*(?:#|no\.?\s*|\()?t?\d+\)?)?\s+/i, '')
+      // Tournament seeds: "(2) Washington", "#17/(7) North Carolina", "No. 1 seed Indiana".
+      .replace(/^\(\d{1,2}\)\s*/, '')
+      .replace(/^seed\s+/i, '');
   }
+  // A round note after the name: "Washington (B1G Quarterfinal)", "San Diego State (Pac-12 Final)".
+  s = s.replace(/\s*\((?:[^()]*\s)?(?:quarter-?finals?|semi-?finals?|finals?|first round|second round|championship|tournament)\)$/i, '');
   return s.trim();
 }
 
@@ -138,7 +143,9 @@ let membership: Map<string, boolean> | null = null;
 export function setMembership(m: Map<string, boolean>): void { membership = m; }
 
 const PLACEHOLDER_EXACT = /^(tba|tbd|opponent (tba|tbd)|to be (announced|determined)|semi-?finals?|quarter-?finals?|finals?|first round|second round|third round|championship( game| match)?|consolation( game)?|winner|loser|title game|play-?in|bye|exhibition|scrimmage|alumni( game)?)$/i;
-const PLACEHOLDER_SUFFIX = /\b(semi-?finals?|quarter-?finals?|finals?|championships?|tournament|classic|invitational|college cup|cup|showcase|round(?: \d+| of \d+)?|game \d+|match \d+|bracket|winner|loser)$/i;
+const PLACEHOLDER_SUFFIX = /\b(semi-?finals?|quarter-?finals?|finals?|championships?|championship (?:game|match)|title (?:game|match)|tournament|classic|invitational|college cup|cup|showcase|round(?: \d+| of \d+)?|game \d+|match \d+|bracket|winner|loser)$/i;
+/** An opponent not decided yet: "Rutgers or #6 UCLA", "Michigan State/#20 Washington", "Winner of QF1". */
+const UNDECIDED = /\s(?:or)\s|[a-z.)]\s*\/\s*(?:#|no\.?\s*)?\d*\s*[a-z(]|^(?:winner|loser)s?\s+of\b/i;
 const CONFERENCE_LIKE = /(^conference\b|\b(conference|league|athletic association|ncaa)$|^ncaa\b)/i;
 
 /** True for schedule rows that are not a team: "TBD", "Semifinals", "MAC Tournament", "Conference USA", "NCAA College Cup". */
@@ -147,6 +154,7 @@ export function isPlaceholderOpponent(name: string): boolean {
   if (!n) return true;
   if (PLACEHOLDER_EXACT.test(n)) return true;
   if (PLACEHOLDER_SUFFIX.test(n) && !/\(/.test(n)) return true;
+  if (UNDECIDED.test(n)) return true;
   if (CONFERENCE_LIKE.test(n)) return true;
   if (isExhibitionName(n)) return true;
   if (knownConferenceKeys.has(teamKey(n))) return true;

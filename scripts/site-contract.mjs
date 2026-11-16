@@ -51,7 +51,8 @@ await call('/api/leaders', { season, gender: 'm', division: 'd1', stat: 'goals',
 await call('/api/standings', { season, gender: 'm', division: 'd1' });
 await call('/api/rankings', { season, gender: 'm', division: 'd1' });
 await call('/api/conferences', { season, gender: 'm', division: 'd1' });
-if (CONF) { await call(`/api/conferences/${CONF}`, { season, gender: 'm' }); await call(`/api/conferences/${CONF}/table`, { season, gender: 'm', view: 'form' }); await call('/api/sim-odds', { conference: CONF, season, gender: 'm' }); }
+if (CONF) { await call(`/api/conferences/${CONF}`, { season, gender: 'm' }); await call(`/api/conferences/${CONF}/table`, { season, gender: 'm', view: 'form' }); await call('/api/sim-odds', { conference: CONF, season, gender: 'm' }); await call('/api/conference-tournament', { conference: CONF, season, gender: 'm' }); }
+await call('/api/conference-tournaments', { season, gender: 'm' });
 await call('/api/elo', { gender: 'm', division: 'd1', limit: 10 });
 await call('/api/rpi', { gender: 'm', division: 'd1', limit: 10 });
 await call('/api/tournament', { season, gender: 'm' });

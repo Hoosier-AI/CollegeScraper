@@ -3,6 +3,7 @@ import { registerJob, type JobContext } from './runner.js';
 import { selectAll, kvSet } from '../db/client.js';
 import { updateGame, listProgramSeasons, isOthersFixture } from '../db/repos.js';
 import { currentSeason, eastern } from './seasons.js';
+import { classifySeason } from './classifyPostseason.js';
 
 interface G { id: string; status: string; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; ncaa_contest_id?: number | null; source_of_truth: string | null; site_fetched_at: string | null; ncaa_fetched_at: string | null; conference_game: boolean; postseason: boolean; tournament: string | null }
 interface TS { game_id: string; program_id: string; source: string; is_home: boolean; goals: number | null; shots: number | null; yellow_cards: number | null }
@@ -112,6 +113,9 @@ export async function reconcileGames(ctx: JobContext): Promise<void> {
     return true;
   };
 
+  // Tournament games first (conference tournaments found from the games, NCAA tournament games from NCAA.com), so the
+  // conference flag below leaves them out of the conference tables.
+  if (!programIds) await classifySeason(db, season, (k, n) => ctx.inc(k, n));
   // Conference flag: school schedules mark many non-conference games as "conference" (their descriptor cell also
   // carries TV/network text), so the flag is derived from membership instead: both sides in the same conference
   // for this season and not a postseason/tournament game. Applied to every game of the season (standings need
