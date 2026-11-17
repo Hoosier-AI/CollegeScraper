@@ -149,14 +149,34 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
             // Box scores read against "TBA" (or the wrong way round) are read again with the real teams.
             ...(reread ? { site_fetched_at: null, ncaa_fetched_at: null, source_of_truth: null, detail_attempts: 0 } : {}),
           };
-          await updateGame(db, existing.id, fix);
-          if (reread) for (const t of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events', 'college_game_raw']) {
-            const { error } = await db.from(t).delete().eq('game_id', existing.id);
-            if (error) log.warn({ t, id: existing.id, err: error.message }, 'TBA game detail cleanup failed');
+          // NCAA.com sometimes lists the game twice: the played one against "TBA" and an unplayed copy with both teams
+          // (Worcester St., 2026-11-06, contests 6666330 and 6671276). The played row is kept and the copy removed; any
+          // other clash is left alone and counted, never allowed to stop the sweep.
+          const { data: clash } = await db.from('college_games').select('id,status,home_score,away_score,ncaa_contest_id')
+            .eq('game_date', existing.game_date).eq('home_program_id', homeId).eq('away_program_id', awayId).neq('id', existing.id).limit(1);
+          const other = clash?.[0];
+          const unplayedCopy = !!other && other.status !== 'final' && other.home_score == null && other.away_score == null && existing.home_score != null;
+          if (other && !unplayedCopy) {
+            ctx.inc('placeholder_side_duplicates');
+            log.warn({ game: existing.id, other: other.id }, 'TBA side not replaced: the real pairing is already stored');
+          } else {
+            if (other) {
+              // The copy's contest is left unlinked: when the sweep reaches it, it finds this game by date and teams and
+              // records the pair as a duplicate contest (above) instead of moving the link.
+              await db.from('college_games').delete().eq('id', other.id);
+              if (other.ncaa_contest_id) byContest.delete(String(other.ncaa_contest_id));
+              const at = games.findIndex((x) => x.id === other.id); if (at >= 0) games.splice(at, 1);
+              ctx.inc('placeholder_copies_removed');
+            }
+            await updateGame(db, existing.id, fix);
+            if (reread) for (const t of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events', 'college_game_raw']) {
+              const { error } = await db.from(t).delete().eq('game_id', existing.id);
+              if (error) log.warn({ t, id: existing.id, err: error.message }, 'TBA game detail cleanup failed');
+            }
+            Object.assign(existing, fix);
+            ctx.inc(placeholderSide ? 'placeholder_sides_fixed' : 'empty_sides_filled');
+            log.info({ game: existing.id, date: g.date, home: base.home_name, away: base.away_name, swap, copyRemoved: !!other }, 'TBA side replaced from NCAA.com');
           }
-          Object.assign(existing, fix);
-          ctx.inc(placeholderSide ? 'placeholder_sides_fixed' : 'empty_sides_filled');
-          log.info({ game: existing.id, date: g.date, home: base.home_name, away: base.away_name, swap }, 'TBA side replaced from NCAA.com');
         }
       }
       if (existing) {
