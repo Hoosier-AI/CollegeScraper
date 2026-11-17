@@ -112,7 +112,7 @@ export function setKnownConferences(names: Iterable<string>): void { for (const 
 
 const PROMO_WORDS = /\b(day|night|game|opener|senior|seniors|giveaway|appreciation|youth|kids?|alumni|homecoming|fest|dh|doubleheader|out|recognition|welcome|celebration|triple|points|app|student|students|school|pink|purple|white|gold|military|heritage|hispanic|faculty|staff|family|weekend|free|admission|tournament|classic|cup|showcase|tba|tbd)\b/i;
 
-/** "RV TCU", "#2/5 Duke", "#T19 South Carolina", "NR/#20 North Carolina", "[RV] Xavier", "vs. No. 12 Elon" → team name only. */
+/** "RV TCU", "[6] Portland", "#2/5 Duke", "#T19 South Carolina", "NR/#20 North Carolina", "[RV] Xavier", "vs. No. 12 Elon" → team name only. */
 export function cleanOpponentName(raw: string): string {
   let s = String(raw ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:vs\.?|at|@|versus)\s+/i, '');
   for (let i = 0; i < 3; i++) {
@@ -120,6 +120,8 @@ export function cleanOpponentName(raw: string): string {
       .replace(/^(?:#|no\.?\s*)t?\d+(?:\s*\/\s*(?:#|no\.?\s*|\()?t?\d+\)?)?\s+/i, '')
       // Tournament seeds: "(2) Washington", "#17/(7) North Carolina", "No. 1 seed Indiana".
       .replace(/^\(\d{1,2}\)\s*/, '')
+      // Bracketed seeds: "[6] Portland" (California's schedule, 2026 NCAA first round).
+      .replace(/^\[\d{1,2}\]\s*/, '')
       .replace(/^seed\s+/i, '');
   }
   // A round note after the name: "Washington (B1G Quarterfinal)", "San Diego State (Pac-12 Final)".

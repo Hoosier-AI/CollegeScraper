@@ -6,7 +6,7 @@
 import { registerJob, type JobContext } from './runner.js';
 import { makeFetcher } from './fetcher.js';
 import { log } from '../log.js';
-import { listPrograms, listGames, updateGame, upsertGameByNcaa } from '../db/repos.js';
+import { listPrograms, listGames, updateGame, upsertGameByNcaa, type GameRow } from '../db/repos.js';
 import { findGame } from '../identity/gameMatch.js';
 import { currentSeason } from './seasons.js';
 import { ncaaRoundLabel } from './sweepScoreboard.js';
@@ -41,6 +41,7 @@ export async function ncaaBracketJob(ctx: JobContext): Promise<void> {
     const page = parseBracketPage(html);
     if (!page) { ctx.inc('pages_unparsed'); log.warn({ gender, division }, 'ncaa bracket page had no bracket data'); continue; }
     ctx.inc('pages');
+    const field = new Set<string>();
     for (const g of page.games) {
       if (!g.teams.length || !g.date) continue;
       const side = (home: boolean) => {
@@ -51,6 +52,7 @@ export async function ncaaBracketJob(ctx: JobContext): Promise<void> {
         return { id: p?.id ?? null, name: p?.short_name ?? t.name, seed: t.seed };
       };
       const home = side(true), away = side(false);
+      for (const id of [home?.id, away?.id]) if (id) field.add(id);
       const tourney = {
         postseason: true, postseason_source: 'ncaa', tournament: 'NCAA Tournament', tournament_conference_id: null, conference_game: false,
         tournament_round: ncaaRoundLabel(g.round), round_number: g.round, bracket_slot: g.slot, home_seed: home?.seed ?? null, away_seed: away?.seed ?? null,
@@ -81,6 +83,24 @@ export async function ncaaBracketJob(ctx: JobContext): Promise<void> {
           log.warn({ contest: g.contestId, err: err instanceof Error ? err.message : String(err) }, 'ncaa bracket game insert skipped');
         }
       }
+    }
+    // Once the bracket starts, a team in the field plays only bracket games. Anything else on its schedule from then on
+    // is a school's guess at the next round ("at Louisville" on CSU Bakersfield's site, if it wins on Thursday) or a
+    // copy we failed to match ("at [6] Portland"): not a game. Only unplayed fixtures no NCAA contest backs are removed;
+    // a school schedule read may add them again, so every run checks.
+    const first = page.games.map((g) => g.date).filter((d): d is string => !!d).sort()[0];
+    if (first) {
+      const stale = games.filter((x) => x.gender === gender && x.division === division && !x.ncaa_contest_id && !(x as GameRow & { postseason?: boolean }).postseason
+        && x.status === 'scheduled' && x.home_score == null && x.away_score == null && x.game_date >= first
+        && ((!!x.home_program_id && field.has(x.home_program_id)) || (!!x.away_program_id && field.has(x.away_program_id))));
+      for (const x of stale) {
+        const { error } = await db.from('college_games').delete().eq('id', x.id).is('ncaa_contest_id', null).eq('status', 'scheduled').is('home_score', null);
+        if (error) { ctx.inc('speculative_fixture_delete_failed'); log.warn({ id: x.id, err: error.message }, 'speculative fixture not removed'); continue; }
+        log.info({ id: x.id, date: x.game_date, home: x.home_name, away: x.away_name }, 'speculative fixture removed (NCAA tournament team)');
+        ctx.inc('speculative_fixtures_removed');
+      }
+      const gone = new Set(stale.map((x) => x.id));
+      for (let i = games.length - 1; i >= 0; i--) if (gone.has(games[i]!.id)) games.splice(i, 1);
     }
     await ctx.heartbeat();
   }

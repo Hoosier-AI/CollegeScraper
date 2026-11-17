@@ -15,3 +15,12 @@ describe('NCAA.com placeholder teams', () => {
     expect(LOOKAHEAD_DAYS).toBeGreaterThanOrEqual(4);
   });
 });
+
+import { cleanOpponentName } from '../src/normalize/aliasIndex.js';
+describe('opponent names with a bracketed seed', () => {
+  it('drops "[6]"', () => {
+    expect(cleanOpponentName('[6] Portland')).toBe('Portland');
+    expect(cleanOpponentName('at [12] North Carolina')).toBe('North Carolina');
+    expect(cleanOpponentName('[RV] Xavier')).toBe('Xavier');
+  });
+});
