@@ -51,6 +51,8 @@ async function resumable(ctx: JobContext, name: string) {
 registerJob('hourly', async (ctx) => {
   const season = Number(ctx.params.season ?? currentSeason());
   await step(ctx, 'sweep-scoreboard', { season, days: 'recent' });
+  // The NCAA bracket (Nov 1 to Dec 20 only; the job skips itself outside that): seeds and byes before the scoreboard has them.
+  await step(ctx, 'ncaa-bracket', { season });
   await step(ctx, 'fetch-games-ncaa', { season, recent_days: 3 });
   await step(ctx, 'sync-site', { season, only_pending_boxscores: 3, stages: ['boxscores'] });
   await step(ctx, 'reconcile-games', { season });

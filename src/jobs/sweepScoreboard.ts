@@ -132,26 +132,30 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         ctx.inc('ncaa_duplicate_contests');
         continue;
       }
-      if (existing && homeId && awayId && (placeholderIds.has(existing.home_program_id ?? '') || placeholderIds.has(existing.away_program_id ?? ''))) {
-        // Stored against "TBA" and NCAA.com now names both teams: take them. The team we already had says which way
-        // round our scores are; a game with no real side yet keeps NCAA.com's orientation.
+      const placeholderSide = !!existing && (placeholderIds.has(existing.home_program_id ?? '') || placeholderIds.has(existing.away_program_id ?? ''));
+      if (existing && homeId && awayId && (placeholderSide || !existing.home_program_id || !existing.away_program_id)) {
+        // Stored against "TBA", or with one side still empty (a seeded team waiting for its opponent, from ncaa-bracket),
+        // and NCAA.com now names both teams: take them. The team we already had says which way round our scores are;
+        // a game with no real side yet keeps NCAA.com's orientation.
         const ours = [existing.home_program_id, existing.away_program_id].filter((id) => id && !placeholderIds.has(id));
         if (ours.length && !ours.some((id) => id === homeId || id === awayId)) { ctx.inc('placeholder_side_conflicts'); }
         else {
           const swap = existing.home_program_id === awayId || existing.away_program_id === homeId;
-          const fix = {
+          const reread = placeholderSide || swap;
+          const fix: Record<string, unknown> = {
             home_program_id: homeId, away_program_id: awayId, home_name: base.home_name, away_name: base.away_name,
             home_score: swap ? existing.away_score : existing.home_score, away_score: swap ? existing.home_score : existing.away_score,
-            // Box scores read against "TBA" are read again with the real teams.
-            site_fetched_at: null, ncaa_fetched_at: null, source_of_truth: null, detail_attempts: 0,
+            ...(swap ? { home_seed: (existing as any).away_seed ?? null, away_seed: (existing as any).home_seed ?? null } : {}),
+            // Box scores read against "TBA" (or the wrong way round) are read again with the real teams.
+            ...(reread ? { site_fetched_at: null, ncaa_fetched_at: null, source_of_truth: null, detail_attempts: 0 } : {}),
           };
           await updateGame(db, existing.id, fix);
-          for (const t of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events', 'college_game_raw']) {
+          if (reread) for (const t of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events', 'college_game_raw']) {
             const { error } = await db.from(t).delete().eq('game_id', existing.id);
             if (error) log.warn({ t, id: existing.id, err: error.message }, 'TBA game detail cleanup failed');
           }
           Object.assign(existing, fix);
-          ctx.inc('placeholder_sides_fixed');
+          ctx.inc(placeholderSide ? 'placeholder_sides_fixed' : 'empty_sides_filled');
           log.info({ game: existing.id, date: g.date, home: base.home_name, away: base.away_name, swap }, 'TBA side replaced from NCAA.com');
         }
       }

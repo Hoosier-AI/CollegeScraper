@@ -2,6 +2,7 @@
 import './discoverTeams.js';
 import './detectSites.js';
 import './sweepScoreboard.js';
+import './ncaaBracket.js';
 import './fetchGamesNcaa.js';
 import './finalDetail.js';
 import './mergeTwins.js';
