@@ -17,28 +17,44 @@ export function ncaaRoundLabel(round: number): string {
   return ['First round', 'Second round', 'Third round', 'Quarterfinal', 'Semifinal', 'Final'][round - 1] ?? `Round ${round}`;
 }
 
+/** NCAA.com lists a game whose opponent isn't known yet (a conference tournament's next round) against a team called
+ *  "TBA" (seo tba), then fills in the real opponent on the same contest once it is. "TBA" is not a team. */
+export const isPlaceholderTeam = (t: { seo?: string | null; short?: string | null; full?: string | null }): boolean =>
+  [t.seo, t.short, t.full].some((v) => !!v && /^(tba|tbd)$/i.test(v.trim()));
+
+/** Days ahead read on every run: the NCAA bracket is announced on a Monday for games from Thursday, and conference
+ *  tournament pairings a few days out, so a window of yesterday to tomorrow left the bracket off the site until the
+ *  day before (2026-11-16). */
+export const LOOKAHEAD_DAYS = 7;
+
 /** params: { season?, gender?, division?, days?: 'all'|'recent', force? } */
 export async function sweepScoreboard(ctx: JobContext): Promise<void> {
   const db = ctx.db;
   const season = Number(ctx.params.season ?? currentSeason());
   const fetcher = makeFetcher(db, { freshMs: ctx.params.force ? 0 : (ctx.params.days === 'recent' ? 0 : 7 * 86400_000) });
   const freshFetcher = makeFetcher(db, { freshMs: 0 });
+  // Days ahead change slowly (pairings, kickoff times): read at most every three hours.
+  const aheadFetcher = makeFetcher(db, { freshMs: 3 * 3600_000 });
   const { store } = makeTransport(db, fetcher);
   await store.init();
   const genders: Gender[] = ctx.params.gender ? [ctx.params.gender as Gender] : ['m', 'w'];
   const divisions: Division[] = ctx.params.division ? [ctx.params.division as Division] : ['d1', 'd2', 'd3'];
   const programs = await listPrograms(db);
   const bySeo = new Map(programs.map((p) => [`${p.school_seo}|${p.gender}`, p.id]));
+  // "TBA" programs made from NCAA.com placeholders before this was caught (2026: one per gender, 118 games).
+  const placeholderIds = new Set(programs.filter((p) => /^(tba|tbd)$/i.test(p.school_seo ?? '')).map((p) => p.id));
   const games = await listGames(db, season);
   const byContest = new Map(games.filter((g) => g.ncaa_contest_id).map((g) => [String(g.ncaa_contest_id), g]));
   type DupContest = { gender: string; division: string; date: string; home: string | null; away: string | null; homeScore: number | null; awayScore: number | null; contests: string[] };
   const dupContests = new Map<string, DupContest>(Object.entries((await kvGet<Record<string, DupContest>>(db, `ncaa_duplicate_contests:${season}`)) ?? {}));
 
   let dates: string[];
-  if (ctx.params.days === 'recent') {
-    const d = new Date(); dates = [];
-    for (const off of [-1, 0, 1]) { const x = new Date(d); x.setUTCDate(d.getUTCDate() + off); dates.push(x.toISOString().slice(0, 10)); }
-  } else { const today = new Date().toISOString().slice(0, 10); dates = [...eachDate(`${season}-08-10`, `${season}-12-20` < today ? `${season}-12-20` : today)]; }
+  const dayOff = (off: number) => { const x = new Date(); x.setUTCDate(x.getUTCDate() + off); return x.toISOString().slice(0, 10); };
+  const seasonEnd = `${season}-12-20`;
+  const ahead = [...Array(LOOKAHEAD_DAYS - 1).keys()].map((i) => dayOff(i + 2)).filter((d) => d <= seasonEnd && d >= `${season}-08-10`);
+  if (ctx.params.days === 'recent') dates = [...[-1, 0, 1].map(dayOff), ...ahead];
+  else { const today = dayOff(0); dates = [...eachDate(`${season}-08-10`, seasonEnd < today ? seasonEnd : today), ...ahead]; }
+  const tomorrow = dayOff(1);
 
   // NCAA tournament games. A division's scoreboard also lists other divisions' championship games now and then (a D2
   // second-round game on the D1 men's page, 2025-11-23), so a game counts only under the championship id that most of
@@ -66,7 +82,7 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
     let dayGames;
     // Scoreboard days change until their games end: the last three days are always refetched, older days may be cached.
     const recentDay = Date.now() - Date.parse(`${date}T00:00:00Z`) < 3 * 86400_000;
-    try { dayGames = await scoreboardDay(recentDay ? freshFetcher : fetcher, store, gender, division, date); }
+    try { dayGames = await scoreboardDay(date > tomorrow ? aheadFetcher : recentDay ? freshFetcher : fetcher, store, gender, division, date); }
     catch (err) { ctx.inc('days_failed'); log.warn({ gender, division, date, err: err instanceof Error ? err.message : String(err) }, 'scoreboard day failed'); continue; }
     if (!dayGames.length) { ctx.inc('days_missing'); continue; }
     // NCAA.com leaves some finished games marked 'pre' while still counting them in its records: a past date with
@@ -80,6 +96,7 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
       // A team NCAA.com lists but we have never registered (NAIA opponent, new member) gets a non-member program, so
       // the game has both sides and counts in its opponent's record. verify-membership promotes real members.
       const ensure = async (t: typeof g.home): Promise<string | null> => {
+        if (isPlaceholderTeam(t)) return null;
         const name = (t.short || t.full || t.seo || '').trim();
         // Teams NCAA.com lists without a school page (NAIA, junior colleges) get a synthetic slug from their name.
         const seo = t.seo || (isCleanOpponentName(name) ? opponentSeo(name) : null);
@@ -115,6 +132,29 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         ctx.inc('ncaa_duplicate_contests');
         continue;
       }
+      if (existing && homeId && awayId && (placeholderIds.has(existing.home_program_id ?? '') || placeholderIds.has(existing.away_program_id ?? ''))) {
+        // Stored against "TBA" and NCAA.com now names both teams: take them. The team we already had says which way
+        // round our scores are; a game with no real side yet keeps NCAA.com's orientation.
+        const ours = [existing.home_program_id, existing.away_program_id].filter((id) => id && !placeholderIds.has(id));
+        if (ours.length && !ours.some((id) => id === homeId || id === awayId)) { ctx.inc('placeholder_side_conflicts'); }
+        else {
+          const swap = existing.home_program_id === awayId || existing.away_program_id === homeId;
+          const fix = {
+            home_program_id: homeId, away_program_id: awayId, home_name: base.home_name, away_name: base.away_name,
+            home_score: swap ? existing.away_score : existing.home_score, away_score: swap ? existing.home_score : existing.away_score,
+            // Box scores read against "TBA" are read again with the real teams.
+            site_fetched_at: null, ncaa_fetched_at: null, source_of_truth: null, detail_attempts: 0,
+          };
+          await updateGame(db, existing.id, fix);
+          for (const t of ['college_game_team_stats', 'college_game_player_stats', 'college_game_events', 'college_game_raw']) {
+            const { error } = await db.from(t).delete().eq('game_id', existing.id);
+            if (error) log.warn({ t, id: existing.id, err: error.message }, 'TBA game detail cleanup failed');
+          }
+          Object.assign(existing, fix);
+          ctx.inc('placeholder_sides_fixed');
+          log.info({ game: existing.id, date: g.date, home: base.home_name, away: base.away_name, swap }, 'TBA side replaced from NCAA.com');
+        }
+      }
       if (existing) {
         // NCAA.com's home/away is official: a fixture stored the other way round (from a schedule stamp) is flipped.
         if (homeId && awayId && existing.home_program_id === awayId && existing.away_program_id === homeId) {
@@ -130,11 +170,15 @@ export async function sweepScoreboard(ctx: JobContext): Promise<void> {
         }
         if (!existing.home_program_id && homeId) patch.home_program_id = homeId;
         if (!existing.away_program_id && awayId) patch.away_program_id = awayId;
-        if (existing.status !== 'final') {
+        // A game called off part-way and ruled a no contest (Akron at West Virginia, 2026-09-03, weather) keeps its
+        // score on NCAA.com but is never final there and counts in no record: stored 'cancelled', only NCAA.com's own
+        // 'final' brings it back.
+        const noContest = existing.status === 'cancelled' && g.state !== 'final';
+        if (existing.status !== 'final' && !noContest) {
           if (played(g)) { Object.assign(patch, { status: 'final', home_score: g.home.score, away_score: g.away.score, live_period: 'FINAL', live_clock: null }); }
           else if (g.state === 'live') Object.assign(patch, { status: 'live', home_score: g.home.score, away_score: g.away.score, live_period: g.currentPeriod, live_clock: g.contestClock, live_updated_at: new Date().toISOString() });
         }
-        if (existing.home_score == null && g.home.score != null && played(g)) { patch.home_score = g.home.score; patch.away_score = g.away.score; }
+        if (existing.home_score == null && g.home.score != null && played(g) && !noContest) { patch.home_score = g.home.score; patch.away_score = g.away.score; }
         // Where it is shown: NCAA.com's broadcaster only when neither school's schedule named one.
         if (g.network && !(existing as any).broadcast) { patch.broadcast = g.network; patch.broadcast_source = 'ncaa'; }
         if (tourney) Object.assign(patch, tourney);
