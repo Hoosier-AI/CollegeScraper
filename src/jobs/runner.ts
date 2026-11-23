@@ -41,6 +41,35 @@ export function registerJob(name: string, fn: JobFn): void { registry.set(name, 
 export function jobNames(): string[] { return [...registry.keys()].sort(); }
 export function getJob(name: string): JobFn | undefined { return registry.get(name); }
 
+/** Set once this process has handed its runs back (releaseRunsForShutdown): no heartbeat may claim them again. */
+let handedBack = false;
+
+/**
+ * A deploy or restart: hand the runs this process is in the middle of back to the queue, for the new process to
+ * claim at once. Without this, each deploy left the run "running" with a stopped heartbeat, it was claimed again
+ * 10 minutes later, and the claim counted as a crash: three deploys during the Tuesday weekly re-sync
+ * (2026-11-17, 12:50 to 1:46 PM ET) closed it as "stopped after 3 attempts". The run's heartbeat is backdated past
+ * the 10-minute stale mark and the claim it used is given back, so a restart never counts toward the 3.
+ * Returns how many runs were handed back.
+ */
+export async function releaseRunsForShutdown(db: Db): Promise<number> {
+  handedBack = true;
+  let released = 0;
+  for (const id of new Set(laneRuns.values())) {
+    try {
+      const { data } = await db.from('college_crawl_runs').select('attempts').eq('id', id).eq('status', 'running').maybeSingle();
+      if (!data) continue;
+      const { error } = await db.from('college_crawl_runs')
+        .update({ attempts: Math.max(0, (Number(data.attempts) || 1) - 1), heartbeat_at: new Date(Date.now() - 11 * 60_000).toISOString() })
+        .eq('id', id).eq('status', 'running');
+      if (!error) released++;
+    } catch (err) {
+      log.warn({ runId: id, err: String(err) }, 'handing the run back failed');
+    }
+  }
+  return released;
+}
+
 export function makeContext(db: Db, runId: string | null, params: Record<string, unknown>): JobContext {
   const counters: JobContext['counters'] = {};
   let lastBeat = 0;
@@ -56,7 +85,7 @@ export function makeContext(db: Db, runId: string | null, params: Record<string,
       return cancelledFlag;
     },
     async heartbeat() {
-      if (!runId) return;
+      if (!runId || handedBack) return;
       const now = Date.now();
       if (now - lastBeat < 30_000) return;
       lastBeat = now;
@@ -109,6 +138,7 @@ async function execute(db: Db, ctx: JobContext, job: string, fn: JobFn): Promise
   // ctx.heartbeat(), and many long ones never do (ratings, aggregates, reconcile, the composites' long steps), so a
   // healthy run could be started a second time beside itself. The runner now beats for every job while it runs.
   const beat = setInterval(() => {
+    if (handedBack) return;
     void db.from('college_crawl_runs').update({ heartbeat_at: new Date().toISOString() }).eq('id', ctx.runId!).eq('status', 'running')
       .then(({ error }) => { if (error) log.warn({ job, runId: ctx.runId, err: error.message }, 'run heartbeat failed'); }, () => {});
   }, 60_000);

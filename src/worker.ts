@@ -5,7 +5,7 @@
 import { loadConfig } from './config.js';
 import { getDb } from './db/client.js';
 import { registerAllJobs } from './jobs/index.js';
-import { runningNow } from './jobs/runner.js';
+import { releaseRunsForShutdown, runningNow } from './jobs/runner.js';
 import { log } from './log.js';
 import { meterFetch, outboundSnapshot } from './ops/netMeter.js';
 import { flushRequests, startRequestFlush } from './ops/sourceRequests.js';
@@ -16,11 +16,31 @@ const cfg = loadConfig();
 registerAllJobs();
 
 const controller = new AbortController();
-const stop = () => { controller.abort(); void flushRequests(getDb()).catch(() => {}); setTimeout(() => process.exit(0), 20_000).unref(); };
+/** Hand any run still in flight back to the queue (so a restart does not count as a crash), then exit. */
+const handBackAndExit = () => {
+  void releaseRunsForShutdown(getDb())
+    .then((n) => { if (n) log.info({ released: n }, 'runs handed back for the next process'); }, () => {})
+    .finally(() => process.exit(0));
+};
+let stopping = false;
+const stop = () => {
+  if (stopping) return;
+  stopping = true;
+  controller.abort();
+  void flushRequests(getDb()).catch(() => {});
+  // Jobs get 15 s to finish on their own (Render ends the container 30 s after SIGTERM); whatever is still running
+  // then is handed back. The new process is already up by now (zero-downtime deploy), so it picks the run up at once.
+  setTimeout(handBackAndExit, 15_000).unref();
+  setTimeout(() => process.exit(0), 22_000).unref();
+};
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
-// The parent is gone (it crashed or was killed): do not run on alone.
-process.on('disconnect', () => { controller.abort(); process.exit(0); });
+// The parent is gone (it crashed or was killed): do not run on alone, but give the runs back first (3 s at most).
+process.on('disconnect', () => {
+  controller.abort();
+  setTimeout(() => process.exit(0), 3_000).unref();
+  handBackAndExit();
+});
 
 // Event-loop watchdog for this process (the web process has its own on /health).
 let last = Date.now();

@@ -3,6 +3,7 @@ import { loadConfig, assertWritable, type Config } from '../config.js';
 import type { FetchCacheStore, FetchRecord } from '../http/client.js';
 import { log } from '../log.js';
 import { meterFetch } from '../ops/netMeter.js';
+import { retryingFetch } from './retryFetch.js';
 
 export type Db = SupabaseClient<any, 'public', any>;
 
@@ -14,7 +15,12 @@ export function getDb(cfg: Config = loadConfig()): Db {
   assertWritable(cfg);
   client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { 'x-client-info': 'plaibook-college-scraper' }, fetch: meterFetch(fetch) },
+    // Passing gateway errors and dropped connections are tried again for requests that are safe to repeat
+    // (src/db/retryFetch.ts): one 502 used to end hour-long jobs. Each try is metered.
+    global: {
+      headers: { 'x-client-info': 'plaibook-college-scraper' },
+      fetch: retryingFetch(meterFetch(fetch), { onRetry: ({ attempt, reason, url }) => log.warn({ attempt, reason, path: new URL(url).pathname }, 'database request retried') }),
+    },
   });
   log.info({ host: new URL(cfg.SUPABASE_URL).host }, 'database target');
   return client;
