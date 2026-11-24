@@ -8,7 +8,9 @@ export const COMPANY = 'Plaibook Technologies, Inc.';
 export const SITE_NAME = 'Plaibook Live';
 export const SITE = 'www.plaibook.live';
 /** The one address on every page. Change it here only. */
-export const CONTACT = 'support@plaibook.soccer';
+// hello@plaibook.work is the one customer-facing address across Plaibook (2026-11-22); the old
+// support@plaibook.soccer was never a monitored inbox.
+export const CONTACT = 'hello@plaibook.work';
 export const UPDATED = 'October 27, 2026';
 
 export type Block = string | { bullets: string[] } | { table: { head: string[]; rows: string[][] } };
@@ -23,7 +25,7 @@ const mail = (subject: string) => `[${CONTACT}](mailto:${CONTACT}?subject=${enco
 const ABOUT: LegalPage = {
   slug: 'about', path: '/about', nav: 'About', title: 'About Plaibook Live',
   description: 'Plaibook Live is a free soccer statistics site for NCAA college soccer, professional leagues and international football, run by Plaibook Technologies, Inc.',
-  intro: `${SITE_NAME} is a free soccer statistics site covering NCAA college soccer (Divisions I, II and III, men's and women's), professional leagues around the world and international football. It is run by ${COMPANY}, the company behind Plaibook, the coaching platform at plaibook.soccer. The Site is free to use; it is supported by advertising, sponsorships and paid data access.`,
+  intro: `${SITE_NAME} is a free soccer statistics site covering NCAA college soccer (Divisions I, II and III, men's and women's), professional leagues around the world and international football. It is run by ${COMPANY}, the company behind Plaibook, the coaching platform at [plaibook.soccer](https://www.plaibook.soccer/?utm_source=stats&utm_medium=referral&utm_campaign=about). The Site is free to use; it is supported by advertising, sponsorships and paid data access.`,
   sections: [
     { id: 'what', heading: 'What you will find here', blocks: [B([
       'Scores, schedules, box scores, lineups and live games for every NCAA soccer program we can find, with team and player pages, conference tables, rankings, transfers and TV listings.',
@@ -164,7 +166,7 @@ const PRIVACY: LegalPage = {
       'The Site is served only over HTTPS, access to our systems is limited, and we keep as little personal information as we can.',
     ] },
     { id: 'changes', heading: 'Changes and contact', blocks: [
-      `We will update this policy if what we collect changes; the date at the top says when it last changed. Questions: ${mail('Privacy request')}, or ${COMPANY}.`,
+      `We will update this policy if what we collect changes; the date at the top says when it last changed. Questions: ${mail('Privacy request')}.`,
     ] },
   ],
 };

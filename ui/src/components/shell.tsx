@@ -276,7 +276,7 @@ export function Footer() {
           <div className="space-y-3">
             <Link to="/" aria-label="Plaibook Live home" className="inline-block"><Logo size={26} /></Link>
             <p className="max-w-xs text-sm leading-relaxed text-chalk-300">Free soccer stats for NCAA college soccer, professional leagues and international football.</p>
-            <p className="text-sm text-chalk-400">Coaching a team? <a href="https://www.plaibook.soccer/?utm_source=stats&amp;utm_medium=referral&amp;utm_campaign=footer" className="text-pitch-300 hover:text-pitch-200">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p>
+            <p className="text-sm text-chalk-400">Coaching a team? <a href="https://www.plaibook.soccer/?utm_source=stats&amp;utm_medium=referral&amp;utm_campaign=footer" className="text-pitch-300 hover:text-pitch-200">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches. Every Coach+ tool is free for 14 days, no card.</p>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
             {FOOTER_COLUMNS.map((c) => (

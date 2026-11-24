@@ -29,7 +29,7 @@ export function wrapBody(page: PageType, crumbs: { name: string; path: string }[
   const bc = crumbs.length > 1
     ? `<nav aria-label="Breadcrumb"><ol>${crumbs.map((c, i) => `<li>${i === crumbs.length - 1 ? esc(c.name) : a(c.path, c.name)}</li>`).join('')}</ol></nav>`
     : '';
-  const cta = `<aside class="ssr-cta"><p><a href="${esc(ctaHref(page))}">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches.</p></aside>`;
+  const cta = `<aside class="ssr-cta"><p><a href="${esc(ctaHref(page))}">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches. Every Coach+ tool is free for 14 days, no card.</p></aside>`;
   return `<section id="ssr">${nav}${bc}<article>${inner}</article>${cta}</section>`;
 }
 
