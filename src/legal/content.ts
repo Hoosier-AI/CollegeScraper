@@ -125,7 +125,7 @@ const TERMS: LegalPage = {
 const PRIVACY: LegalPage = {
   slug: 'privacy', path: '/privacy', nav: 'Privacy', title: 'Privacy Policy',
   description: 'What Plaibook Live collects (very little), what stays in your browser, how advertising works, and the rights you have.',
-  intro: `${SITE_NAME} has no accounts and sets no cookies of its own. To stay free it shows sponsors, which we serve ourselves without cookies or tracking, and it may show display ads from Google AdSense, which do use cookies; the section on cookies below explains how, and [Your privacy choices](/privacy-choices) lets you turn off personalised ads. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}.`,
+  intro: `${SITE_NAME} has no accounts and sets no cookies of its own. To stay free it shows sponsors, which we serve ourselves without cookies or tracking, and it may show display ads from Google AdSense, which do use cookies; the section on cookies below explains how, and [Your privacy choices](/privacy-choices) lets you turn off personalised ads. This policy explains the little we collect when you visit ${SITE}, what stays in your own browser, and how we handle information about the athletes on the Site. It is provided by ${COMPANY}`,
   sections: [
     { id: 'collect', heading: 'What we collect when you visit', blocks: [
       T(['What', 'Why', 'How long'], [
