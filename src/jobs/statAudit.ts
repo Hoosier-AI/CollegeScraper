@@ -2,7 +2,7 @@
 // Quality tab shows the latest and the trend; the hub is told when a rate drops below its target).
 //   College players: each NCAA.com individual leaderboard (goals, assists, points, saves, shutouts, game-winning goals,
 //     keeper minutes, GAA, save %) against our season stats. NCAA.com is a day or two behind, so a player whose team
-//     played in the two days before the list is left out.
+//     played in the two days before the list is left out, and so is a team NCAA.com's own record is still short on.
 //   College teams: NCAA.com's team leaderboards (scoring, goals against, corners and fouls a game, W-L-T %).
 //   Pro: in the US leagues' current seasons, the provider's season goals, assists and minutes against the sum of its
 //     match lines, and goals against American Soccer Analysis.
@@ -65,6 +65,10 @@ async function collegeChecks(db: Db, season: number): Promise<AuditRow[]> {
   if (!lists.length) return out;
   const asOf = String(lists[0].week_of).slice(0, 10);
   const busy = await busyPrograms(db, season, asOf);
+  // NCAA.com never caught up with some teams: its own record for them counts fewer games than ours and every result
+  // it lists is in ours (the standings check's ncaa_record_lag; 281 teams in 2026, most a single last game their
+  // school never posted). Their leaderboard lines are a game short, so they say nothing about our numbers.
+  for (const c of await selectAll<any>(db, 'college_standings_checks', 'program_id', (q) => q.eq('season', season).eq('field', 'ncaa_record_lag').order('program_id'))) busy.add(c.program_id);
   // Latest value per subject and list.
   const latest = new Map<string, any>();
   for (const r of lists) { const k = `${r.label}|${r.player_season_id ?? r.program_id}`; if (!latest.has(k)) latest.set(k, r); }

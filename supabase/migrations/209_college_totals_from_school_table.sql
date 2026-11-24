@@ -128,6 +128,19 @@ BEGIN
       LEFT JOIN _gwg gw ON gw.game_id = gps.game_id
      WHERE g.season = p_season AND g.status = 'final';
 
+  -- Analysed first: without row counts the two keeper updates below join by nested loop (minutes, not seconds).
+  ANALYZE _truth;
+  -- Two keepers cannot have more minutes in goal than the game had: when a zero-filled line was given the whole
+  -- game ("90" for a keeper who came off at half-time), the keeper with the most minutes gets what the others left.
+  UPDATE _truth t SET gk_minutes = x.len - x.others
+    FROM (SELECT k.game_id, k.program_id, k.player_season_id, CASE WHEN k.overtime THEN 110 ELSE 90 END AS len,
+                 sum(k.gk_minutes) OVER w - k.gk_minutes AS others, sum(k.gk_minutes) OVER w AS total,
+                 row_number() OVER (PARTITION BY k.game_id, k.program_id ORDER BY k.gk_minutes DESC, k.player_season_id) AS rn
+            FROM _truth k WHERE k.is_goalie AND coalesce(k.gk_minutes, 0) > 0
+          WINDOW w AS (PARTITION BY k.game_id, k.program_id)) x
+   WHERE x.rn = 1 AND x.others > 0 AND x.total > x.len + 5 AND x.len - x.others > 0
+     AND t.game_id = x.game_id AND t.program_id = x.program_id AND t.player_season_id = x.player_season_id AND t.is_goalie;
+
   -- A keeper who kept goal alone for the whole game allowed exactly what the opponent scored.
   UPDATE _truth t SET goals_allowed = CASE WHEN t.is_home THEN t.away_score ELSE t.home_score END
     FROM (SELECT game_id, program_id FROM _truth WHERE is_goalie AND coalesce(gk_minutes, 0) > 0 GROUP BY game_id, program_id HAVING count(*) = 1) one
@@ -201,7 +214,7 @@ BEGIN
     FROM _truth t JOIN team_minutes tm ON tm.game_id = t.game_id AND tm.program_id = t.program_id
     GROUP BY t.player_season_id
   ), last_final AS (
-    SELECT side.program_id, max(g.game_date) AS d
+    SELECT side.program_id, max(g.game_date) AS d, count(*) FILTER (WHERE NOT coalesce(g.forfeit, false)) AS played
       FROM college_games g CROSS JOIN LATERAL (VALUES (g.home_program_id), (g.away_program_id)) AS side(program_id)
      WHERE g.season = p_season AND g.status = 'final' AND side.program_id IS NOT NULL GROUP BY side.program_id
   ), school AS (
@@ -210,7 +223,9 @@ BEGIN
     -- NCAA.com's leaders: the school table agreed 94% on assists, 96% on goals, 89% on saves; the sum of our game
     -- lines 78%, 91% and 73% (a box score missing an assist, or corrected later, is the usual gap).
     SELECT st.player_season_id, st.gp, st.goals, st.assists, st.points, st.gwg, st.saves, st.ga, st.shutouts, st.minutes,
-           (st.fetched_at::date > lf.d) AS fresh
+           (st.fetched_at::date > lf.d) AS fresh,
+           -- Someone on the team has as many games in the table as the team has played: the table is up to date.
+           coalesce(max(st.gp) OVER (PARTITION BY ps.program_id) >= lf.played, false) AS complete
       FROM college_site_season_stats st JOIN college_player_seasons ps ON ps.id = st.player_season_id
       LEFT JOIN last_final lf ON lf.program_id = ps.program_id
      WHERE ps.season = p_season AND (p_program IS NULL OR ps.program_id = p_program)
@@ -235,9 +250,12 @@ BEGIN
       CASE WHEN k.is_gk AND sc.saves IS NOT NULL AND coalesce(sc.minutes, 0) > 0 THEN CASE WHEN k.fresh THEN sc.minutes ELSE greatest(r.gk_minutes, sc.minutes) END ELSE r.gk_minutes END AS gk_minutes,
       r.gk_wins, r.gk_losses, r.gk_ties, r.team_minutes
     FROM summed r LEFT JOIN school sc ON sc.player_season_id = r.player_season_id
-    -- "After the last final" is not enough the morning after a game: the table must also cover as many games as we hold.
+    -- "After the last final" is not enough: the table must also cover every game the team has played (or as many
+    -- games for this player as we hold). Some schools never post their last game (48 teams whose season ended on
+    -- 2026-10-31 were still a game short on NCAA.com and on their own table weeks later); there the table is a floor
+    -- and our game lines, which have that game, give the total.
     CROSS JOIN LATERAL (SELECT coalesce(r.gk_minutes, 0) > 0 AS is_gk,
-                               coalesce(sc.fresh AND coalesce(sc.gp, 0) >= coalesce(r.gp, 0), false) AS fresh) k
+                               coalesce(sc.fresh AND (sc.complete OR coalesce(sc.gp, 0) >= coalesce(r.gp, 0)), false) AS fresh) k
   )
   INSERT INTO college_player_season_stats AS s (player_season_id, gp, gs, minutes, goals, assists, points, shots, sog, pk_goals, pk_att,
       fouls, yc, rc, corners, offsides, gwg, hat_tricks, ga, saves, shutouts, gk_minutes, gk_wins, gk_losses, gk_ties,
@@ -278,6 +296,9 @@ BEGIN
   -- ---- player splits ----
   DELETE FROM college_player_season_splits sp USING college_player_seasons ps
    WHERE sp.player_season_id = ps.id AND ps.season = p_season AND (p_program IS NULL OR ps.program_id = p_program);
+  -- One team's refresh: a player with a line under this team but a roster row on another (a mislinked line) kept his
+  -- old splits and the insert below failed on them.
+  DELETE FROM college_player_season_splits sp USING (SELECT DISTINCT player_season_id FROM _truth) t WHERE sp.player_season_id = t.player_season_id;
   INSERT INTO college_player_season_splits (player_season_id, split, gp, gs, minutes, goals, assists, points, shots, sog, saves, ga)
   SELECT t.player_season_id, sp.split,
          count(*) FILTER (WHERE t.participated), count(*) FILTER (WHERE t.starter), sum(t.minutes),
