@@ -25,7 +25,8 @@ const PLAYER: Record<string, { col: string; target: number }> = {
 };
 const TEAM: Record<string, { value: (t: any) => number | null; target: number }> = {
   'Scoring Offense': { value: (t) => t.gf_pg, target: 0.8 },
-  'Team Goals Against Average': { value: (t) => t.ga_pg, target: 0.8 },
+  // NCAA.com's team GAA is goals against per 90 minutes played, not per game (overtime games run 110).
+  'Team Goals Against Average': { value: (t) => (t.minutes ? Math.round((t.ga * 90 * 1000) / t.minutes) / 1000 : t.ga_pg), target: 0.8 },
   'Corner Kicks Per Game': { value: (t) => t.corners_pg, target: 0.7 },
   'Fouls Per Game': { value: (t) => (t.gp ? t.fouls / t.gp : null), target: 0.7 },
   'Won-Lost-Tied Percentage': { value: (t) => (t.gp ? (t.w + 0.5 * t.t) / t.gp : null), target: 0.8 },
@@ -36,6 +37,18 @@ async function busyPrograms(db: Db, season: number, asOf: string): Promise<Set<s
   const from = new Date(Date.parse(`${asOf}T12:00:00Z`) - 2 * 86400_000).toISOString().slice(0, 10);
   const games = await selectAll<any>(db, 'college_games', 'home_program_id,away_program_id', (q) => q.eq('season', season).eq('status', 'final').gte('game_date', from).order('id'));
   return new Set(games.flatMap((g) => [g.home_program_id, g.away_program_id]).filter(Boolean));
+}
+
+/** NCAA.com pads some lists with rows that have no value (243 of the women's D3 assists list, 2026-11-24). Counted as
+ *  zeros they made assists look 65% right when 82% were. */
+export const hasValue = (r: { value: unknown }): boolean => r.value != null && r.value !== '' && Number.isFinite(Number(r.value));
+
+/** Minutes each team has played in its finals: 90 a game, 110 when it went to overtime. */
+async function teamMinutes(db: Db, season: number): Promise<Map<string, number>> {
+  const games = await selectAll<any>(db, 'college_games', 'home_program_id,away_program_id,overtime,forfeit', (q) => q.eq('season', season).eq('status', 'final').not('home_score', 'is', null).order('id'));
+  const out = new Map<string, number>();
+  for (const g of games) { if (g.forfeit) continue; for (const pid of [g.home_program_id, g.away_program_id]) if (pid) out.set(pid, (out.get(pid) ?? 0) + (g.overtime ? 110 : 90)); }
+  return out;
 }
 
 export function summarize(pairs: { ours: number | null; theirs: number; who: string }[], tol: number) {
@@ -63,15 +76,16 @@ async function collegeChecks(db: Db, season: number): Promise<AuditRow[]> {
   ]);
   const st = new Map(stats.map((s) => [s.player_season_id, s])); const prog = new Map(seasons.map((s) => [s.id, s.program_id]));
   for (const [label, def] of Object.entries(PLAYER)) {
-    const pairs = rows.filter((r) => r.label === label && r.player_season_id && !busy.has(prog.get(r.player_season_id)))
+    const pairs = rows.filter((r) => r.label === label && r.player_season_id && hasValue(r) && !busy.has(prog.get(r.player_season_id)))
       .map((r) => ({ ours: st.get(r.player_season_id)?.[def.col] == null ? null : Number(st.get(r.player_season_id)[def.col]), theirs: Number(r.value), who: String(r.subject_name ?? r.player_season_id) }));
     if (pairs.length) out.push({ area: 'college', check_key: `ncaa:${label}`, label: `Players: ${label} vs NCAA.com`, target: def.target, ...summarize(pairs, agreeWithin(label)) });
   }
   const progIds = [...new Set(rows.filter((r) => !r.player_season_id && r.program_id).map((r) => r.program_id))] as string[];
-  const teams = new Map((progIds.length ? await selectIn<any>(db, 'college_team_season_stats', 'program_id,gp,w,t,gf_pg,ga_pg,corners_pg,fouls', 'program_id', progIds, (q) => q.eq('season', season)) : []).map((t) => [t.program_id, t]));
+  const teams = new Map((progIds.length ? await selectIn<any>(db, 'college_team_season_stats', 'program_id,gp,w,t,ga,gf_pg,ga_pg,corners_pg,fouls', 'program_id', progIds, (q) => q.eq('season', season)) : []).map((t) => [t.program_id, t]));
+  const minutes = progIds.length ? await teamMinutes(db, season) : new Map<string, number>();
   for (const [label, def] of Object.entries(TEAM)) {
-    const pairs = rows.filter((r) => r.label === label && !r.player_season_id && r.program_id && !busy.has(r.program_id))
-      .map((r) => { const t = teams.get(r.program_id); return { ours: t ? def.value(t) : null, theirs: Number(r.value), who: String(r.subject_name ?? r.program_id) }; });
+    const pairs = rows.filter((r) => r.label === label && !r.player_season_id && r.program_id && hasValue(r) && !busy.has(r.program_id))
+      .map((r) => { const t = teams.get(r.program_id); return { ours: t ? def.value({ ...t, minutes: minutes.get(r.program_id) ?? null }) : null, theirs: Number(r.value), who: String(r.subject_name ?? r.program_id) }; });
     if (pairs.length) out.push({ area: 'college', check_key: `ncaa-team:${label}`, label: `Teams: ${label} vs NCAA.com`, target: def.target, ...summarize(pairs, agreeWithin(label)) });
   }
   return out;
@@ -106,6 +120,23 @@ async function proChecks(db: Db): Promise<AuditRow[]> {
   const def: Record<string, [string, number, number]> = { goals: ['Pro US: season goals vs match lines', 0.95, 0.5], assists: ['Pro US: season assists vs match lines', 0.9, 0.5], minutes: ['Pro US: season minutes vs match lines (within 30)', 0.85, 30.5], asa_goals: ['Pro US: season goals vs American Soccer Analysis', 0.9, 0.5] };
   for (const [k, [label, target, tol]] of Object.entries(def)) if (pairs[k]!.length) out.push({ area: 'pro', check_key: `pro-us:${k}`, label, target, ...summarize(pairs[k]!, tol) });
   return out;
+}
+
+export interface BracketGame { division: string | null; game_date: string; status: string; bracket_slot: number; home_program_id: string | null; away_program_id: string | null; home_score: number | null; away_score: number | null; shootout_winner: string | null }
+
+/** Pure: in each division's bracket, the winner of a finished game is one of the two teams in the slot it feeds.
+ *  D1, D2 and D3 number their slots alike, so each division is its own tree (read as one, 2026-11: 35% "right"). */
+export function bracketTree(rows: BracketGame[], side: string): { compared: number; bad: { who: string; ours: unknown; theirs: unknown }[] } {
+  const bySlot = new Map(rows.map((r) => [`${r.division}|${r.bracket_slot}`, r]));
+  let compared = 0; const bad: { who: string; ours: unknown; theirs: unknown }[] = [];
+  for (const r of rows) {
+    const nx = bySlot.get(`${r.division}|${(Math.floor(r.bracket_slot / 100) + 1) * 100 + Math.ceil((r.bracket_slot % 100) / 2)}`);
+    if (r.status !== 'final' || r.home_score == null || r.away_score == null || !nx?.home_program_id || !nx?.away_program_id) continue;
+    const w = r.home_score > r.away_score ? r.home_program_id : r.away_score > r.home_score ? r.away_program_id : r.shootout_winner;
+    compared++;
+    if (!w || (w !== nx.home_program_id && w !== nx.away_program_id)) bad.push({ who: `${side} ${String(r.division ?? '').toUpperCase()} slot ${r.bracket_slot} (${r.game_date})`, ours: w, theirs: [nx.home_program_id, nx.away_program_id] });
+  }
+  return { compared, bad };
 }
 
 export interface MemberRow { season: number; program: string; gender: string; division: string; conference: string | null; ncaa_member: boolean | null }
@@ -169,18 +200,10 @@ async function postseasonChecks(db: Db, season: number): Promise<AuditRow[]> {
       rate: rate(done.length - noChamp.length, done.length), worst: noChamp.slice(0, 20).map((t) => ({ who: `${t.gender === 'w' ? "Women's" : "Men's"} ${name.get(t.conference) ?? t.conference}: final level, no shootout result`, ours: null, theirs: 1 })) });
   }
   for (const g of ['m', 'w'] as const) {
-    const rows = await selectAll<any>(db, 'college_games', 'id,game_date,status,bracket_slot,home_program_id,away_program_id,home_score,away_score,shootout_winner',
+    const rows = await selectAll<any>(db, 'college_games', 'id,game_date,division,status,bracket_slot,home_program_id,away_program_id,home_score,away_score,shootout_winner',
       (q) => q.eq('season', season).eq('gender', g).eq('postseason_source', 'ncaa').not('bracket_slot', 'is', null).order('id'));
     if (!rows.length) continue;
-    const bySlot = new Map(rows.map((r) => [r.bracket_slot, r]));
-    let compared = 0; const bad: { who: string; ours: unknown; theirs: unknown }[] = [];
-    for (const r of rows) {
-      const nx = bySlot.get((Math.floor(r.bracket_slot / 100) + 1) * 100 + Math.ceil((r.bracket_slot % 100) / 2));
-      if (r.status !== 'final' || r.home_score == null || !nx?.home_program_id || !nx?.away_program_id) continue;
-      const w = r.home_score > r.away_score ? r.home_program_id : r.away_score > r.home_score ? r.away_program_id : r.shootout_winner;
-      compared++;
-      if (!w || (w !== nx.home_program_id && w !== nx.away_program_id)) bad.push({ who: `${g === 'w' ? "Women's" : "Men's"} slot ${r.bracket_slot} (${r.game_date})`, ours: w, theirs: [nx.home_program_id, nx.away_program_id] });
-    }
+    const { compared, bad } = bracketTree(rows, g === 'w' ? "Women's" : "Men's");
     out.push({ area: 'college', check_key: `post:ncaa-tree:${g}`, label: `Postseason: ${g === 'w' ? "women's" : "men's"} NCAA bracket, each winner in the next slot`, target: 1, compared, agree: compared - bad.length, rate: compared ? rate(compared - bad.length, compared) : 1, worst: bad.slice(0, 15) });
   }
   return out;

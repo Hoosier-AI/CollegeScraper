@@ -102,7 +102,11 @@ export async function refreshRankings(ctx: JobContext): Promise<void> {
               const team = r.Team ?? '';
               const pid = (r.teamSeo ? bySeo.get(`${r.teamSeo}|${gender}`) : null) ?? resolve(gender, division, team);
               const rank = Number(String(r.Rank ?? '').replace(/\D/g, '')) || rows.length + 1;
-              const value = Number(r[valueCol]) || null;
+              // NCAA.com pads some lists with rows that have no value cell at all (243 of the women's D3 assists list,
+              // 2026-11-24): not a zero, and not a leader. A real 0 stays a 0.
+              const cell = String(r[valueCol] ?? '').replace(/,/g, '').trim();
+              if (cell === '') { ctx.inc('category_rows_without_value'); continue; }
+              const value = Number.isFinite(Number(cell)) ? Number(cell) : null;
               if (cat.kind === 'team') {
                 rows.push({ season, gender, division, poll: `ncaa:${cat.id}`, week_of: today, rank, program_id: pid, subject_name: `${cat.name}|${team}`, value, label: cat.name });
               } else {

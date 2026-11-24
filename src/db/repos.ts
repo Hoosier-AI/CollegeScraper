@@ -103,6 +103,8 @@ export interface RosterWriteResult { created: number; linked: number; playerSeas
 
 /** Resolve identities and upsert players + player_seasons for one program-season. */
 export async function writeRoster(db: Db, programId: string, season: number, host: string | null, roster: Roster, source: 'site_json' | 'site_html'): Promise<RosterWriteResult> {
+  // A roster page that did not parse gives rows without a name (710 of them in 2026): never stored.
+  roster = { ...roster, players: roster.players.filter((p) => /\p{L}/u.test(`${p.firstName ?? ''}${p.lastName ?? ''}`)) };
   const known = await knownPlayerSeasons(db, programId, host);
   const prior = known.filter((k) => k.season < season);
   const current = known.filter((k) => k.season === season);

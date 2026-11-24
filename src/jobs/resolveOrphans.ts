@@ -3,7 +3,7 @@
 // exists (their site box-score rows move over), otherwise the missing side is filled in. Scheduled placeholder
 // rows ("TBD", "Semifinals") are deleted.  params: { season? }
 import { registerJob, type JobContext } from './runner.js';
-import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame, upsertSchools, upsertProgram, upsertProgramSeasons, type GameRow } from '../db/repos.js';
+import { listPrograms, listSchools, listProgramSeasons, listGames, updateGame, upsertSchools, upsertProgram, upsertProgramSeasons, refreshAggregates, type GameRow } from '../db/repos.js';
 import { setMembership, setKnownConferences, buildAliasIndex, resolveName, isPlaceholderOpponent, isExhibitionName, isCleanOpponentName, opponentSeo, cleanOpponentName, resolveNameExact, realProgramFor } from '../normalize/aliasIndex.js';
 import { listConferences } from '../db/standingsRepo.js';
 import { findGame } from '../identity/gameMatch.js';
@@ -156,6 +156,28 @@ export async function resolveOrphans(ctx: JobContext): Promise<void> {
     if (gone.length) await db.from('college_players').delete().in('id', gone);
   }
   ctx.inc('boxscore_only_removed', dead.length);
+
+  // The same player twice on one team (two roster syncs at once, or a box score read before the roster) splits his
+  // games between two identities: NCAA.com says 13 goals, we showed 0 and 13. Folded together every night
+  // (migration 209); two people who really share a name (the school gives them different ids) are left alone.
+  const dups = await db.rpc('college_duplicate_player_seasons', { p_season: season });
+  if (dups.error) log.warn({ err: dups.error.message }, 'duplicate players: list failed');
+  else {
+    const touched = new Set<string>();
+    for (const d of (dups.data ?? []) as DuplicatePlayer[]) {
+      if (d.verdict !== 'merge') { ctx.inc(`duplicate_players_${d.verdict}`); continue; }
+      const { error } = await db.rpc('college_merge_player_season', { p_from: d.drop_id, p_to: d.keep_id });
+      if (error) { ctx.inc('duplicate_players_failed'); log.warn({ err: error.message, name: d.name_key }, 'duplicate player merge failed'); continue; }
+      ctx.inc('duplicate_players_merged'); touched.add(d.program_id);
+    }
+    // Their season totals now, not at the next full refresh (a handful of teams on a normal night).
+    if (touched.size <= 25) for (const pid of touched) await refreshAggregates(db, season, pid).catch((err) => log.warn({ err: String(err) }, 'aggregates after merge failed'));
+  }
+  const blank = await db.rpc('college_remove_blank_players', { p_season: season });
+  if (blank.error) log.warn({ err: blank.error.message }, 'nameless roster rows: removal failed');
+  else ctx.inc('nameless_players_removed', Number(blank.data ?? 0));
 }
+
+export interface DuplicatePlayer { program_id: string; name_key: string; keep_id: string; drop_id: string; shared_games: number; verdict: 'merge' | 'distinct' | 'unsure' }
 
 registerJob('resolve-orphans', resolveOrphans);
