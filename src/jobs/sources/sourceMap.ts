@@ -215,6 +215,9 @@ async function checkSource(ctx: JobContext, SOURCE: string, leagueIds: number[],
         for (const r of main) {
           const id = teams.get(r.team_ext); const a = id != null ? byTeam.get(id) : undefined;
           const ref = id == null ? null : a && (r.played == null || a.played === r.played) ? { points: a.points, played: a.played } : games.some((g) => g.home_team_id === id || g.away_team_id === id) ? recordAfter(games, id, r.played) : a ? { points: a.points, played: a.played } : null;
+          // API-Football holds fewer games for the club than the table counts (games awarded after a withdrawal are
+          // not fixtures: Hatayspor and Gaziantep in the 2022-23 Süper Lig): nothing to compare at the same point.
+          if (ref && r.played != null && ref.played != null && ref.played < r.played) { ctx.inc(`${SOURCE}_clubs_reference_short`); continue; }
           rows.push(...checkStanding(r, ref && id != null ? { key: String(id), points: ref.points, played: ref.played } : null, at));
         }
       }
