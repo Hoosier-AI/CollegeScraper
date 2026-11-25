@@ -596,4 +596,10 @@ GRANT EXECUTE ON FUNCTION public.college_duplicate_player_seasons(integer) TO se
 GRANT EXECUTE ON FUNCTION public.college_merge_player_season(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.college_remove_blank_players(integer) TO service_role;
 
+-- The season refresh takes under 3 minutes on a quiet database and over 5 beside the quality checks; at the old
+-- 300 s limit it was cancelled and rolled back (2026-11-24, twice in one evening). The gateway still answers at ~125 s;
+-- this is how long the database may go on working.
+ALTER ROLE service_role SET statement_timeout = '600s';
+notify pgrst, 'reload config';
+
 notify pgrst, 'reload schema';
