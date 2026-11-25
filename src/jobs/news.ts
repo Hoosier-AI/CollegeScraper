@@ -162,6 +162,21 @@ registerJob('news-feeds', async (ctx: JobContext) => {
   await queue.onIdle();
 });
 
+/** GDELT answers 429 ("one request every 5 seconds") to most single requests when it is busy, whoever asks; the
+ *  fourth try nine seconds apart got through (2026-11-24, when 22 of 30 hourly reads had failed). Five tries. */
+export async function gdeltPatiently(ctx: JobContext, url: string, read: (u: string) => Promise<string> = (u) => fetchFeed(ctx, u, true, true), waitMs = 9000): Promise<string> {
+  let last: unknown;
+  for (let i = 0; i < 5; i += 1) {
+    try { return await read(url); } catch (err) {
+      last = err;
+      if (!/429|fetch failed|timed? ?out|HTTP 5\d\d/i.test(String(err))) throw err;
+      ctx.inc('gdelt_retries');
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  throw last;
+}
+
 registerJob('news-gdelt', async (ctx: JobContext) => {
   const db = ctx.db;
   if ((await sourcesOff(db)).has('gdelt')) { ctx.note('skipped', 'switched off in the hub'); return; }
@@ -170,7 +185,7 @@ registerJob('news-gdelt', async (ctx: JobContext) => {
   const { data } = await db.from('news_sources').select(SRC_COLS).eq('kind', 'gdelt').eq('enabled', true).order('last_fetched_at', { ascending: true, nullsFirst: true }).limit(Math.min(3, Number(ctx.params.queries) || 1));
   const [ix, recent] = await Promise.all([entityIndex(db), loadRecent(db)]);
   for (const s of (data ?? []) as any[]) {
-    await readSource(ctx, s, ix, recent, async () => parseGdelt(await fetchFeed(ctx, s.url, true, true)));
+    await readSource(ctx, s, ix, recent, async () => parseGdelt(await gdeltPatiently(ctx, s.url)));
     await new Promise((r) => setTimeout(r, 6000));
   }
 });
@@ -231,7 +246,19 @@ registerJob('news-discover', async (ctx: JobContext) => {
     const { error } = await db.from('news_sources').upsert(found, { onConflict: 'id', ignoreDuplicates: true });
     if (error) throw new Error(`club sources: ${error.message}`);
   }
+  // A club that takes its feed down (London City Lionesses, 404 from 2026-10-23, 779 failed reads a month later) is
+  // retired after two weeks without a story, so it stops failing every hour and leaves the hub's alerts; when the
+  // club's home page announces a working feed again, it comes back with that address.
+  const retired = await selectAll<{ id: string }>(db, 'news_sources', 'id', (q) => q.in('kind', ['club', 'federation']).eq('enabled', false).like('last_error', `${RETIRED}%`).order('id'));
+  const back = found.filter((x) => retired.some((r) => r.id === x.id));
+  for (const x of back) { await db.from('news_sources').update({ url: x.url, enabled: true, fails: 0, last_error: null }).eq('id', x.id); ctx.inc('feeds_back'); }
+  const dead = await selectAll<{ id: string; last_error: string | null }>(db, 'news_sources', 'id,last_error', (q) => q.in('kind', ['club', 'federation']).eq('enabled', true).gte('fails', 24)
+    .or(`last_ok_at.is.null,last_ok_at.lt.${new Date(Date.now() - 14 * 86400_000).toISOString()}`).order('id'));
+  for (const d of dead) { await db.from('news_sources').update({ enabled: false, last_error: `${RETIRED} ${d.last_error ?? ''}`.trim() }).eq('id', d.id); ctx.inc('feeds_retired'); }
 });
+
+/** Marks a feed the job switched off itself (a founder's own switch in the hub is never undone). */
+export const RETIRED = 'retired (no feed for two weeks):';
 
 registerJob('news-retag', async (ctx: JobContext) => {
   const db = ctx.db;
