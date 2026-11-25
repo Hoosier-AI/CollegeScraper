@@ -13,7 +13,7 @@ import { selectAll, upsertChunked } from '../../db/client.js';
 import { patchSeason, refreshAggregates, upsertFixtures, upsertStandings } from '../../db/proRepo.js';
 import { patchSourceSeason, sourceIdMap, upsertSrcGames, upsertSrcTeams } from '../../db/sourceRepo.js';
 import { finalScore, parseSeasonFile, type OfMatch } from '../../sources/openfootball/parse.js';
-import { OF_LEAGUES, OF_RAW, ofClub, type OfLeague } from '../../sources/openfootball/leagues.js';
+import { OF_LEAGUES, OF_RAW, OF_SKIP, ofClub, type OfLeague } from '../../sources/openfootball/leagues.js';
 import { WIKI_TARGETS } from './wikipedia.js';
 import { FD_LEAGUES } from '../../sources/footballData/parse.js';
 import { sourcesOff } from '../../pro/sources.js';
@@ -56,6 +56,7 @@ export async function openfootballSync(ctx: JobContext): Promise<void> {
     const to = Math.min(Number(ctx.params.to) || cur, cur);
     for (let season = Math.max(Number(ctx.params.from) || l.first, l.first); season <= to; season += 1) {
       if (await ctx.cancelled()) return;
+      if (OF_SKIP.has(`${l.league}|${season}`)) { ctx.inc('seasons_skipped_bad_file'); continue; }
       // A finished season is read once; the season in play (and the one before, for late corrections) every run.
       if (done.has(`${l.league}|${season}`) && season < cur - 1 && !ctx.params.force) continue;
       let res: Awaited<ReturnType<typeof f.get>>;

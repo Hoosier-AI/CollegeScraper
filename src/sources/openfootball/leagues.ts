@@ -19,6 +19,12 @@ const span = (s: number) => `${s}-${String((s + 1) % 100).padStart(2, '0')}`;
 const dir = (repo: string, file: string) => (s: number) => `${repo}/master/${span(s)}/${file}`;
 const europe = (country: string, code: string) => (s: number) => `europe/master/${country}/${span(s)}_${code}.txt`;
 
+/** League seasons whose openfootball file is not read: its scores are wrong. The 2025-26 files of the three lower
+ *  English leagues agree with API-Football, football-data.co.uk and Wikipedia through October 2025, then carry other
+ *  scores for the same fixtures (Stockport County v Luton Town on 8 November: 2-2 in the file, 0-3 played) and stop
+ *  at the end of December. football-data.co.uk has all three seasons in full. */
+export const OF_SKIP = new Set(['41|2025', '42|2025', '43|2025']);
+
 export const OF_LEAGUES: OfLeague[] = [
   { league: 253, name: 'MLS', country: null, first: 2005, tz: '-05:00', path: (s) => `world/master/north-america/major-league-soccer/${s}_mls.txt` },
   { league: 39, name: 'Premier League', country: 'eng', first: 2010, tz: '+00:00', path: dir('england', '1-premierleague.txt') },
