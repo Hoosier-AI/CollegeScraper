@@ -1,14 +1,16 @@
 // Pure: a source's numbers against API-Football's, one row per field (pro_source_checks). Scores must be equal. Goals
 // and assists must be equal for a finished season; in the current one they may be one apart (the two sources update
 // their totals at different times). Minutes: American Soccer Analysis counts stoppage time and API-Football stops at
-// 90 a match, so ASA's may run up to 20% (plus 15) above API-Football's and 10 below. Club totals are not compared:
+// 90 a match, and ASA's NWSL seasons take in the playoffs, so ASA's may run up to 35% (plus one match) above
+// API-Football's and 10 below (20% plus 15 until 2026-11-24: 140 of the 2025 NWSL's players "differed", every one of
+// them with ASA higher; a wrong match is as often lower). Club totals are not compared:
 // ASA's leave own goals out, and every club result is already checked game by game.
 import type { AdvPlayerSeasonRow, SrcGameRow } from '../../sources/asa/parse.js';
 
 export type CheckStatus = 'agree' | 'differ' | 'unmatched';
 export interface CheckRow { source: string; kind: 'game' | 'player_season' | 'standing'; key: string; field: string; league_id: number; season: number; pro_key: string | null; ours: number | null; api: number | null; status: CheckStatus; checked_at: string }
 
-export const minutesAgree = (ours: number, api: number) => ours >= api - 10 && ours <= api * 1.2 + 15;
+export const minutesAgree = (ours: number, api: number) => ours >= api - 10 && ours <= api * 1.35 + 90;
 const countsAgree = (ours: number, api: number, current: boolean) => (current ? Math.abs(ours - api) <= 1 : ours === api);
 
 export function checkGame(g: SrcGameRow, f: { id: number; home_goals: number | null; away_goals: number | null; status: string; swapped?: boolean } | null, at = new Date().toISOString()): CheckRow[] {
