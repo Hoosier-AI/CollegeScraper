@@ -33,14 +33,21 @@ BEGIN
   -- and does not mark starters; NCAA.com does).
   -- Every source's lines for the season's finals, read once and hash-joined below (a lookup per line through the
   -- primary key took 18-21 s for a full season).
+  -- The season's lines are read from the big table once (2026-11-24: read twice, for _lines and for _truth, the two
+  -- reads alone took 160 s on a busy database and the whole refresh ran into the 300 s statement limit).
+  DROP TABLE IF EXISTS _raw;
+  CREATE TEMP TABLE _raw ON COMMIT DROP AS
+    SELECT gps.*, (gps.source = g.source_of_truth) AS from_truth
+      FROM college_game_player_stats gps JOIN college_games g ON g.id = gps.game_id
+     WHERE g.season = p_season AND g.status = 'final' AND g.source_of_truth IS NOT NULL AND gps.player_season_id IS NOT NULL
+       AND (p_program IS NULL OR gps.program_id = p_program);
+  ANALYZE _raw;
   DROP TABLE IF EXISTS _lines;
   CREATE TEMP TABLE _lines ON COMMIT DROP AS
     SELECT gps.game_id, gps.program_id, gps.source, gps.player_season_id, max(gps.minutes) AS minutes, bool_or(gps.starter) AS starter,
            max(gps.gk_minutes) AS gk_minutes, max(gps.goals) AS goals, max(gps.assists) AS assists, max(gps.saves) AS saves,
            max(gps.goals_allowed) AS goals_allowed
-      FROM college_game_player_stats gps JOIN college_games g ON g.id = gps.game_id
-     WHERE g.season = p_season AND g.status = 'final' AND g.source_of_truth IS NOT NULL AND gps.player_season_id IS NOT NULL
-       AND (p_program IS NULL OR gps.program_id = p_program)
+      FROM _raw gps
      GROUP BY gps.game_id, gps.program_id, gps.source, gps.player_season_id;
   ANALYZE _lines;
   -- Game-winning goals worked out from the order of the winner's goals (the loser's total + 1), from the truth source's
@@ -116,11 +123,9 @@ BEGIN
            g.home_program_id, g.away_program_id, g.home_score, g.away_score, g.overtime, g.game_date,
            (gps.program_id = g.home_program_id) AS is_home, g.neutral_site, g.conference_game,
            CASE WHEN gps.program_id = g.home_program_id THEN g.away_program_id ELSE g.home_program_id END AS opp_program_id
-      FROM (SELECT DISTINCT ON (x.game_id, x.player_season_id) x.*, (x.source = gx.source_of_truth) AS from_truth
-              FROM college_game_player_stats x JOIN college_games gx ON gx.id = x.game_id
-             WHERE gx.season = p_season AND gx.status = 'final' AND gx.source_of_truth IS NOT NULL AND x.player_season_id IS NOT NULL
-               AND (p_program IS NULL OR x.program_id = p_program)
-             ORDER BY x.game_id, x.player_season_id, (x.source = gx.source_of_truth) DESC, x.minutes DESC NULLS LAST) gps
+      FROM (SELECT DISTINCT ON (x.game_id, x.player_season_id) x.*
+              FROM _raw x
+             ORDER BY x.game_id, x.player_season_id, x.from_truth DESC, x.minutes DESC NULLS LAST) gps
       JOIN college_games g ON g.id = gps.game_id
       LEFT JOIN _lines alt
              ON alt.game_id = gps.game_id AND alt.program_id = gps.program_id AND alt.player_season_id = gps.player_season_id
