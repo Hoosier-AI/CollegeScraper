@@ -183,7 +183,7 @@ describe('ApiFootball client', () => {
     const api = new ApiFootball({ key: 'k'.repeat(32), base: undefined, reserve: undefined, fetchImpl: f.impl, sleep: noSleep });
     await api.get('leagues');
     expect(f.calls).toContain('https://v3.football.api-sports.io/leagues');
-    expect(api.floor('everyday')).toBe(1500);
+    expect(api.floor('everyday')).toBe(500);
   });
 
   it('reads the provider\'s errors field in both shapes', () => {

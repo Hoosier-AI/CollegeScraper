@@ -40,8 +40,10 @@ const schema = z.object({
   // News: the Guardian's Content API (football section). Off until set; the free key is for non-commercial use.
   GUARDIAN_API_KEY: z.string().min(10).optional(),
   API_FOOTBALL_BASE: z.string().url().optional(),
-  PRO_RESERVE: z.coerce.number().int().nonnegative().default(1500),
-  PRO_BACKFILL_RESERVE: z.coerce.number().int().nonnegative().default(2500),
+  // 500 since 2026-11-24 (1,500 before): the Plaibook app spends a handful of requests a day (4 on 2026-11-23), and
+  // the 1,000 it never used are a third of a day of live scores.
+  PRO_RESERVE: z.coerce.number().int().nonnegative().default(500),
+  PRO_BACKFILL_RESERVE: z.coerce.number().int().nonnegative().default(1500),
   PRO_PER_MIN: z.coerce.number().int().positive().default(600),
   // How many seasons back (the current one included) the backfill fills.
   PRO_BACKFILL_SEASONS: z.coerce.number().int().positive().default(3),

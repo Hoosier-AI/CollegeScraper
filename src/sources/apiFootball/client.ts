@@ -85,7 +85,7 @@ export class ApiFootball {
   constructor(opts: ApiFootballOptions) {
     // Unset options (undefined from an empty env var) keep their defaults.
     const given = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined)) as ApiFootballOptions;
-    this.o = { base: API_FOOTBALL_BASE, reserve: 1500, backfillReserve: 2500, everydayPerDay: 2600, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
+    this.o = { base: API_FOOTBALL_BASE, reserve: 500, backfillReserve: 1500, everydayPerDay: 2600, perMinute: 120, fetchImpl: fetch, sleep: defaultSleep, now: Date.now, ...given };
     this.pace = this.o.perMinute;
     this.queue = ApiFootball.queueFor(this.pace);
     const now = this.o.now();
@@ -105,7 +105,8 @@ export class ApiFootball {
    * `backfillReserve`, and never below the reserve plus what the everyday jobs still need for the rest of the day.
    * With a flat 2,500 the crawl spent 5,000 requests in the first hour after the midnight-UTC reset and left live
    * scores 1,000 for the day: gone by 5 AM Eastern, and every pro-live and pro-scoreboard run until 7 PM stopped at
-   * the floor (864 of 968 runs a day, 2026-11-18 to 22). Now the crawl leaves 2,600 at the reset, less as the day goes.
+   * the floor (864 of 968 runs a day, 2026-11-18 to 22). Now the crawl leaves 2,600 at the reset, less as the day goes
+   * (with the defaults: it stops at 3,100 at the reset and at 1,500 by the end of the day).
    */
   floor(lane: Lane): number {
     if (lane !== 'backfill') return this.o.reserve;
