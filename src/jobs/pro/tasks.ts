@@ -246,6 +246,12 @@ const handlers: Record<string, Handler> = {
     }
     t.ctx.inc('season_rows', wrote);
     const done = pages != null && page > pages;
+    // The provider's season minutes run short of its own match lines (NWSL 2026: half the players, about 100 minutes
+    // each); where the lines cover every appearance the total is their sum (migration 210).
+    if (done) {
+      const fix = await t.ctx.db.rpc('pro_minutes_from_lines', { p_league: league, p_season: season });
+      if (fix.error) t.ctx.note('minutes_from_lines', fix.error.message); else t.ctx.inc('minutes_from_lines', Number(fix.data ?? 0));
+    }
     return { done, page: done ? 0 : page - 1, pages };
   },
 

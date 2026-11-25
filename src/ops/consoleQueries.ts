@@ -85,6 +85,22 @@ export async function runsPage(db: Db, f: RunFilter) {
   return { rows: data ?? [], total: total ?? 0, limit, offset };
 }
 
+type Rollup = Record<string, { last_done: any | null; last_failed: any | null; queued: number; running: number }>;
+
+/** Jobs that run as a step of a composite and have no runs of their own: the composite's last success is theirs.
+ *  (The live RPI is a step of `hourly`; read by its own runs it looked 30 hours old while it was 10 minutes old,
+ *  2026-11-24.) */
+export const STEP_OF: Record<string, string> = { 'college-rpi': 'hourly' };
+
+/** Pure: each step job gets its composite's newest success when that is later than its own. */
+export function withSteps(by: Rollup): Rollup {
+  for (const [job, parent] of Object.entries(STEP_OF)) {
+    const own = by[job]?.last_done?.finished_at, via = by[parent]?.last_done?.finished_at;
+    if (via && (!own || Date.parse(via) > Date.parse(own))) by[job] = { ...(by[job] ?? { last_failed: null, queued: 0, running: 0 }), last_done: by[parent]!.last_done };
+  }
+  return by;
+}
+
 /** Per job: the newest done and the newest failed run, plus queued/running counts. */
 export async function jobRollup(db: Db) {
   // One query in the database (migration 153); reading 14 days of runs here took 5-9 s.
@@ -93,7 +109,7 @@ export async function jobRollup(db: Db) {
     const by: Record<string, { last_done: any | null; last_failed: any | null; queued: number; running: number }> = {};
     for (const name of jobNames()) by[name] = { last_done: null, last_failed: null, queued: 0, running: 0 };
     for (const r of data as { job: string; last_done: any; last_failed: any; queued: number; running: number }[]) by[r.job] = { last_done: r.last_done ?? null, last_failed: r.last_failed ?? null, queued: r.queued, running: r.running };
-    return by;
+    return withSteps(by);
   }
   const recent = await selectAll<any>(db, 'college_crawl_runs', 'id,job,status,created_at,started_at,finished_at,error,counters', (q) => q.gte('created_at', new Date(Date.now() - 14 * 86400_000).toISOString()).order('created_at', { ascending: false }));
   const by: Record<string, { last_done: any | null; last_failed: any | null; queued: number; running: number }> = {};
@@ -105,7 +121,7 @@ export async function jobRollup(db: Db) {
     if (r.status === 'queued') j.queued += 1;
     if (r.status === 'running') j.running += 1;
   }
-  return by;
+  return withSteps(by);
 }
 
 export function catalogue() {

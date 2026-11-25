@@ -1,3 +1,4 @@
+import { withSteps } from '../src/ops/consoleQueries.js';
 import { describe, expect, it } from 'vitest';
 import { AnalyticsMeter, deviceOf, normalizePath, normalizeQuery, pageKind, referrerHost } from '../src/api/analytics.js';
 import { isBot } from '../src/pro/onView.js';
@@ -134,6 +135,14 @@ describe('attention rules', () => {
     expect(attentionFrom(i)).toEqual([]);
     i.memory = { heap_mb: 1000, heap_limit_mb: 1100 };
     expect(attentionFrom(i)).toEqual([expect.objectContaining({ id: 'health:memory', level: 'warn', href: '/stats/service#health' })]);
+  });
+  it('a job that runs as a step of a composite takes the composite\'s last success', () => {
+    const run = (ago: number) => ({ last_done: { finished_at: iso(ago) }, last_failed: null, queued: 0, running: 0 });
+    const by = withSteps({ 'college-rpi': run(30 * 3600_000), hourly: run(10 * 60_000) });
+    expect(by['college-rpi']!.last_done.finished_at).toBe(iso(10 * 60_000));
+    // Its own later run stays; a missing composite changes nothing.
+    expect(withSteps({ 'college-rpi': run(60_000), hourly: run(3600_000) })['college-rpi']!.last_done.finished_at).toBe(iso(60_000));
+    expect(withSteps({ 'college-rpi': run(60_000) })['college-rpi']!.last_done.finished_at).toBe(iso(60_000));
   });
   it('flags computed data left behind its cadence, in season, unless switched off or never run', () => {
     const i = base(); // 2026-10-13: in season
