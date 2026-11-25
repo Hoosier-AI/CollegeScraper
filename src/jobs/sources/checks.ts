@@ -60,6 +60,31 @@ export function recordsFromResults(games: { home_team_id: number; away_team_id: 
   return out;
 }
 
+/** A club's matches played and points after its first `n` finished games (in the order given: kickoff order). The
+ *  comparison for a table that is a matchday behind API-Football's, and for seasons whose playoff games the provider
+ *  files under regular-season rounds (MLS 2018-2024: 35 or 36 "played" against the table's 34). */
+export function recordAfter(games: { home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null }[], teamId: number, n: number | null): { played: number; points: number } {
+  let played = 0, points = 0;
+  for (const g of games) {
+    if (n != null && played >= n) break;
+    if (g.home_goals == null || g.away_goals == null || (g.home_team_id !== teamId && g.away_team_id !== teamId)) continue;
+    const mine = g.home_team_id === teamId ? g.home_goals : g.away_goals, theirs = g.home_team_id === teamId ? g.away_goals : g.home_goals;
+    played += 1; points += mine > theirs ? 3 : mine === theirs ? 1 : 0;
+  }
+  return { played, points };
+}
+
+/** How much of the source's total the reference carries over the players both have (1 = all of it). API-Football has
+ *  about half the minutes and goals of the USL and MLS Next Pro seasons, and few assists outside the top leagues: a
+ *  comparison against that says the reference is short, not that our match is wrong. */
+export function carried(pairs: { ours: number | null; api: number | null }[]): number {
+  let ours = 0, api = 0;
+  for (const p of pairs) if (p.ours != null && p.api != null) { ours += p.ours; api += p.api; }
+  return ours > 0 ? api / ours : 1;
+}
+/** Under these the reference does not carry the stat for the league season and it is not compared. */
+export const REFERENCE_CARRIES = { minutes: 0.8, assists: 0.7 };
+
 /** Agreement of a league season's compared fields (unmatched rows count against it). Null with nothing compared. */
 export function agreementRate(rows: { status: CheckStatus }[]): number | null {
   if (!rows.length) return null;

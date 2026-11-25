@@ -16,7 +16,7 @@ import { ASA_LEAGUES } from '../../sources/asa/leagues.js';
 import { type AdvPlayerSeasonRow, type SrcGameRow } from '../../sources/asa/parse.js';
 import { mapGames, mapPlayer, mapTeams, type ApiPerson, type ApiFixture, type Mapped } from './mapping.js';
 import { bestOf, clubScore } from '../../sources/match.js';
-import { checkGame, checkPlayerSeason, checkStanding, isRegularRound, recordsFromResults, type CheckRow } from './checks.js';
+import { carried, checkGame, checkPlayerSeason, checkStanding, isRegularRound, recordAfter, REFERENCE_CARRIES, type CheckRow } from './checks.js';
 
 /** `.in()` over many values, a few hundred at a time (the filter travels in the URL). */
 export async function selectIn<T>(db: Db, table: string, columns: string, column: string, values: (string | number)[], apply?: (q: any) => any): Promise<T[]> {
@@ -177,10 +177,16 @@ async function checkSource(ctx: JobContext, SOURCE: string, leagueIds: number[],
         // The provider's own totals when it has them, else ours from its match lines.
         const totals = new Map<string, (typeof api)[number]>();
         for (const r of api) { const k = `${r.player_id}|${r.team_id}`; if (!totals.has(k) || r.source === 'provider') totals.set(k, r); }
-        for (const r of adv) {
-          const p = players.get(r.player_ext), t = teams.get(r.team_ext);
-          const hit = p != null && t != null ? totals.get(`${p}|${t}`) : undefined;
-          rows.push(...checkPlayerSeason(r, hit ? { key: `${p}|${t}`, minutes: hit.minutes, goals: hit.goals, assists: hit.assists } : null, at, season >= (currentOf.get(league) ?? 9999)));
+        const pairs = adv.map((r) => { const p = players.get(r.player_ext), t = teams.get(r.team_ext); return { r, p, t, hit: p != null && t != null ? totals.get(`${p}|${t}`) : undefined }; });
+        // A reference that carries well under the source's minutes for the players both have is missing matches
+        // (USL Championship 2025: half): nothing about players is compared and the season rests on its game checks.
+        // The same for assists alone, which API-Football records thinly outside the top leagues.
+        const both = pairs.filter((x) => x.hit && x.r.minutes);
+        const minutesCarried = carried(both.map((x) => ({ ours: x.r.minutes, api: x.hit!.minutes })));
+        const assistsCarried = carried(both.map((x) => ({ ours: x.r.assists, api: x.hit!.assists })));
+        if (minutesCarried < REFERENCE_CARRIES.minutes) ctx.inc(`${SOURCE}_seasons_reference_short`);
+        else for (const { r, p, t, hit } of pairs) {
+          rows.push(...checkPlayerSeason(r, hit ? { key: `${p}|${t}`, minutes: hit.minutes, goals: hit.goals, assists: assistsCarried < REFERENCE_CARRIES.assists ? null : hit.assists } : null, at, season >= (currentOf.get(league) ?? 9999)));
         }
       } else ctx.inc(`${SOURCE}_player_checks_waiting_on_api`);
     }
@@ -190,21 +196,26 @@ async function checkSource(ctx: JobContext, SOURCE: string, leagueIds: number[],
     if (tables.length) {
       const { data: seasonRow } = await db.from('pro_seasons').select('coverage').eq('league_id', league).eq('season', season).maybeSingle();
       const isApiSeason = !!seasonRow && !(seasonRow as { coverage?: { source?: string } }).coverage?.source;
-      let apiTable = isApiSeason ? await selectAll<{ team_id: number; points: number | null; played: number | null }>(db, 'pro_standings', 'team_id,points,played', (x) => x.eq('league_id', league).eq('season', season).eq('source', 'api-football')) : [];
-      // No table from API-Football (pre-pro leagues): its regular-season results, added up, are the comparison.
-      if (isApiSeason && !apiTable.length) {
-        const games = (await selectAll<{ home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; round: string | null }>(db, 'pro_fixtures', 'home_team_id,away_team_id,home_goals,away_goals,round',
-          (x) => x.eq('league_id', league).eq('season', season).eq('status', 'final').eq('source', 'api-football'))).filter((g) => isRegularRound(g.round));
-        apiTable = [...recordsFromResults(games)].map(([team_id, r]) => ({ team_id, points: r.points, played: r.played }));
-      }
-      if (apiTable.length) {
+      const apiTable = isApiSeason ? await selectAll<{ team_id: number; points: number | null; played: number | null }>(db, 'pro_standings', 'team_id,points,played', (x) => x.eq('league_id', league).eq('season', season).eq('source', 'api-football')) : [];
+      // API-Football's regular-season results in kickoff order: the comparison when it has no table (pre-pro leagues),
+      // and when its table and the source's are not at the same number of games (the source a matchday behind, or
+      // the provider counting playoff games as regular season): each club's record after as many games as the
+      // source's table counts.
+      const games = isApiSeason ? (await selectAll<{ home_team_id: number; away_team_id: number; home_goals: number | null; away_goals: number | null; round: string | null; kickoff: string | null }>(db, 'pro_fixtures', 'home_team_id,away_team_id,home_goals,away_goals,round,kickoff',
+        (x) => x.eq('league_id', league).eq('season', season).eq('status', 'final').eq('source', 'api-football').order('kickoff', { ascending: true }).order('id'))).filter((g) => isRegularRound(g.round)) : [];
+      if (apiTable.length || games.length) {
         const byTeam = new Map(apiTable.map((r) => [r.team_id, r]));
-        // Conference tables when there are any (an overall table repeats the same clubs).
+        // Conference tables when there are any (an overall table repeats the same clubs), unless they are a cup's:
+        // the 2021 NWSL page's "East Division" is the Challenge Cup, four games against the league's 24.
         const groups = new Set(tables.map((r) => r.group_name));
-        const main = [...groups].some((g) => /conference|division|group/i.test(g)) ? tables.filter((r) => /conference|division|group/i.test(r.group_name)) : tables.filter((r) => r.group_name === [...groups][0]);
+        const most = (rs: typeof tables) => Math.max(0, ...rs.map((r) => r.played ?? 0));
+        const grouped = tables.filter((r) => /conference|division|group/i.test(r.group_name));
+        const rest = tables.filter((r) => !/conference|division|group/i.test(r.group_name));
+        const main = grouped.length && most(grouped) * 2 >= most(rest) ? grouped : rest.length ? rest.filter((r) => r.group_name === rest[0]!.group_name) : tables.filter((r) => r.group_name === [...groups][0]);
         for (const r of main) {
           const id = teams.get(r.team_ext); const a = id != null ? byTeam.get(id) : undefined;
-          rows.push(...checkStanding(r, a ? { key: String(id), points: a.points, played: a.played } : null, at));
+          const ref = id == null ? null : a && (r.played == null || a.played === r.played) ? { points: a.points, played: a.played } : games.some((g) => g.home_team_id === id || g.away_team_id === id) ? recordAfter(games, id, r.played) : a ? { points: a.points, played: a.played } : null;
+          rows.push(...checkStanding(r, ref && id != null ? { key: String(id), points: ref.points, played: ref.played } : null, at));
         }
       }
     }
