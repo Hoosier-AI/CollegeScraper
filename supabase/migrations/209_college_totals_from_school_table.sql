@@ -298,7 +298,9 @@ BEGIN
    WHERE sp.player_season_id = ps.id AND ps.season = p_season AND (p_program IS NULL OR ps.program_id = p_program);
   -- One team's refresh: a player with a line under this team but a roster row on another (a mislinked line) kept his
   -- old splits and the insert below failed on them.
-  DELETE FROM college_player_season_splits sp USING (SELECT DISTINCT player_season_id FROM _truth) t WHERE sp.player_season_id = t.player_season_id;
+  IF p_program IS NOT NULL THEN
+    DELETE FROM college_player_season_splits sp USING (SELECT DISTINCT player_season_id FROM _truth) t WHERE sp.player_season_id = t.player_season_id;
+  END IF;
   INSERT INTO college_player_season_splits (player_season_id, split, gp, gs, minutes, goals, assists, points, shots, sog, saves, ga)
   SELECT t.player_season_id, sp.split,
          count(*) FILTER (WHERE t.participated), count(*) FILTER (WHERE t.starter), sum(t.minutes),
