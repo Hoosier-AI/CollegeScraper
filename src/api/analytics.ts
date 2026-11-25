@@ -3,6 +3,8 @@
 // to /api/t once a person is on the page (it waits for a scroll, touch, key or pointer move: since 2026-10-16 a
 // crawler driving a real desktop browser sent ~100,000 "visitors" a day, 99.9% desktop with no referrer), so bots,
 // automated browsers and the owner (an admin token in the browser) are not counted.
+// Since 2026-11-24 one input is not enough either (a crawler sent it): a visit counts on its second page, or after
+// fifteen seconds with input at two moments (ui/src/lib/engaged.ts).
 //
 // Nothing personal is stored. A visitor is a one-way code made from IP, user agent and a server secret that differs
 // every day; the code is kept for that day only (stats_visitor_seen, deleted the next day, migration 203) so a restart

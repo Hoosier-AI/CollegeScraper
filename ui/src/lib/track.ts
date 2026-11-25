@@ -1,34 +1,44 @@
 // Cookie-free analytics (src/api/analytics.ts): one beacon per page change and one per search the visitor settles on.
 // Nothing is stored in the browser and nothing identifies the visitor; the owner (an admin token here) is not counted.
 import { isAdmin } from './api';
+import { isEngaged, SECOND_PAGE_MS, STAY_MS } from './engaged';
 
 let lastPath = '';
 let landed = false;
 
 // A view is only sent once a person is on the page: real input (a pointer move, tap or key press the browser marks as
-// trusted; a scroll does not count, a script scrolling the page fires one too) after the page has been in view for
-// at least three seconds. A crawler driving a real browser passed the first version of this (scroll) for ~90,000
-// "visitors" on 2026-10-20 (it runs 03:00-16:00 UTC, about 100k requests an hour). Automated browsers that say so
-// (navigator.webdriver) never send. Until then the latest view waits; it goes the moment both are true.
+// trusted; a scroll does not count, a script scrolling the page fires one too) and then either a second page or a
+// stay (engaged.ts has the rule and why: a crawler in real browsers passed "one input after three seconds" twice,
+// 2026-10-20 and 2026-11-14). Automated browsers that say so (navigator.webdriver) never send. Until then the visit's
+// views wait (the first few, in order); they go the moment the visit counts.
 let human = false;
-let waiting: Record<string, unknown> | null = null;
+const waiting: Record<string, unknown>[] = [];
+const MAX_WAITING = 8;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
-const DWELL_MS = 3000;
 let visibleMs = 0; let visibleSince: number | null = null;
-let input = false;
+let firstInputMs: number | null = null; let lastInputMs: number | null = null;
+let pages = 0;
+let timer0: ReturnType<typeof setTimeout> | null = null;
 const shownFor = () => visibleMs + (visibleSince != null ? now() - visibleSince : 0);
 function check(): void {
-  if (human || !input || shownFor() < DWELL_MS) return;
+  if (human) return;
+  const shownMs = shownFor();
+  if (!isEngaged({ input: firstInputMs != null, shownMs, firstInputMs, lastInputMs, pages })) {
+    // Looked at again when the next threshold can have passed; after the last one only input or a new page can
+    // change the answer, and both call this.
+    if (firstInputMs != null && !timer0 && shownMs < STAY_MS) timer0 = setTimeout(() => { timer0 = null; check(); }, Math.max(250, (shownMs < SECOND_PAGE_MS ? SECOND_PAGE_MS : STAY_MS) - shownMs) + 50);
+    return;
+  }
   human = true;
   for (const ev of HUMAN_EVENTS) window.removeEventListener(ev, onInput, true);
-  if (waiting) { const w = waiting; waiting = null; send(w); }
+  for (const w of waiting.splice(0)) send(w);
 }
 function onInput(e: Event): void {
-  if (!e.isTrusted || input) return;
-  input = true;
-  check();
-  // Input before three seconds in view: the view goes once the page has been in view long enough.
-  if (!human) setTimeout(check, Math.max(0, DWELL_MS - shownFor()) + 50);
+  if (!e.isTrusted) return;
+  const t = shownFor();
+  if (firstInputMs == null) firstInputMs = t;
+  // One reading a second is plenty (pointer moves arrive by the hundred).
+  if (lastInputMs == null || t - lastInputMs >= 1000) { lastInputMs = t; check(); }
 }
 const HUMAN_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'touchstart'] as const;
 if (typeof window !== 'undefined' && !(navigator as Navigator & { webdriver?: boolean }).webdriver) {
@@ -42,7 +52,7 @@ if (typeof window !== 'undefined' && !(navigator as Navigator & { webdriver?: bo
 
 function send(body: Record<string, unknown>): void {
   if (isAdmin()) return;
-  if (body.t === 'view' && !human) { waiting = body; return; }
+  if (body.t === 'view' && !human) { if (waiting.length < MAX_WAITING) waiting.push(body); return; }
   if (body.t === 'view') body = { ...body, h: 1 };
   try {
     const data = JSON.stringify(body);
@@ -54,8 +64,10 @@ function send(body: Record<string, unknown>): void {
 export function trackView(path: string): void {
   if (path === lastPath) return;
   lastPath = path;
+  pages += 1;
   send({ t: 'view', path, ref: landed ? null : document.referrer || null });
   landed = true;
+  if (typeof window !== 'undefined') check();
 }
 
 let pending: { scope: 'college' | 'pro' | 'all'; q: string; n: number } | null = null;
