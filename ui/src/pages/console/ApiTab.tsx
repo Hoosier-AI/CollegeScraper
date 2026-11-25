@@ -14,7 +14,8 @@ export default function ApiTab() {
   if (q.isPending) return <div className="space-y-3" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-64" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const d = q.data;
-  const today = new Date().toISOString().slice(0, 10);
+  // The service counts by Eastern day.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const byPrincipal = new Map<string, { today: number; week: number; limited: number; last: string | null }>();
   for (const u of d.usage) { const c = byPrincipal.get(u.principal) ?? { today: 0, week: 0, limited: 0, last: null }; c.week += u.requests; c.limited += u.limited; if (u.day === today) c.today += u.requests; if (u.last_seen_at && (!c.last || u.last_seen_at > c.last)) c.last = u.last_seen_at; byPrincipal.set(u.principal, c); }
   for (const u of d.pending) { const c = byPrincipal.get(u.principal) ?? { today: 0, week: 0, limited: 0, last: null }; c.today += u.requests; c.week += u.requests; c.limited += u.limited; byPrincipal.set(u.principal, c); }

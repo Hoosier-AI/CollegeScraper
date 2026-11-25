@@ -79,9 +79,12 @@ describe('AnalyticsMeter', () => {
   });
   it('counts a visitor again on a new day', () => {
     const m = new AnalyticsMeter(null);
+    // Days are Eastern: 7:59 PM and 8:01 PM on the 13th are one day (they straddle midnight UTC), 12:01 AM is the next.
     m.view({ path: '/', ua: MAC, ip: '3.3.3.3' }, Date.parse('2026-10-13T23:59:00Z'));
     m.view({ path: '/', ua: MAC, ip: '3.3.3.3' }, Date.parse('2026-10-14T00:01:00Z'));
-    expect(m.pending().visitors.map((v) => v.who.length)).toEqual([1, 1]);
+    expect(m.pending().visitors.map((v) => [v.day, v.who.length])).toEqual([['2026-10-13', 1]]);
+    m.view({ path: '/', ua: MAC, ip: '3.3.3.3' }, Date.parse('2026-10-14T04:01:00Z'));
+    expect(m.pending().visitors.map((v) => [v.day, v.who.length])).toEqual([['2026-10-13', 1], ['2026-10-14', 1]]);
   });
   it('a visitor has the same code across restarts on a day (same secret), a different one the next day', () => {
     const a = new AnalyticsMeter(null, [], 60_000, 's3cret'); const b = new AnalyticsMeter(null, [], 60_000, 's3cret');

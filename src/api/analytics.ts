@@ -6,6 +6,8 @@
 // Since 2026-11-24 one input is not enough either (a crawler sent it): a visit counts on its second page, or after
 // fifteen seconds with input at two moments (ui/src/lib/engaged.ts).
 //
+// A day is an Eastern day (since 2026-11-24; UTC days put the evening's visits on tomorrow in the hub).
+//
 // Nothing personal is stored. A visitor is a one-way code made from IP, user agent and a server secret that differs
 // every day; the code is kept for that day only (stats_visitor_seen, deleted the next day, migration 203) so a restart
 // no longer counts everyone again, and the IP itself is never stored. Counted in memory and written once a minute
@@ -13,6 +15,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { Db } from '../db/client.js';
 import { log } from '../log.js';
+import { eastern } from '../jobs/seasons.js';
 
 export type Section = 'college' | 'pro' | 'other';
 export interface PageKind { group: string; section: Section; /** False when the address carries no page of its own (lists). */ keep: boolean }
@@ -139,7 +142,7 @@ export class AnalyticsMeter {
   view(v: { path: string; ref?: string | null; ua?: string; ip?: string }, now = Date.now()): boolean {
     const path = normalizePath(v.path);
     if (!path) return false;
-    const day = new Date(now).toISOString().slice(0, 10);
+    const day = eastern(new Date(now)).date;
     const kind = pageKind(path);
     bump(this.p.views, `${day}|${kind.keep ? path : '(other)'}|${kind.group}`);
     const host = referrerHost(v.ref, this.ownHosts);
@@ -156,7 +159,7 @@ export class AnalyticsMeter {
   search(scope: 'college' | 'pro' | 'all', query: string | undefined, results: number, now = Date.now()): boolean {
     const q = normalizeQuery(query);
     if (!q) return false;
-    const day = new Date(now).toISOString().slice(0, 10);
+    const day = eastern(new Date(now)).date;
     const k = `${day}|${scope}|${q}`;
     const s = this.p.searches.get(k) ?? { n: 0, zero: 0 };
     s.n += 1; if (results <= 0) s.zero += 1;

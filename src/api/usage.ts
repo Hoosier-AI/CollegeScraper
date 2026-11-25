@@ -2,6 +2,7 @@
 // college_api_usage_add RPC. Principals: a key's name, 'admin', 'anon' (keyless /v1), 'site' (the viewer's own reads).
 import type { Db } from '../db/client.js';
 import { log } from '../log.js';
+import { eastern } from '../jobs/seasons.js';
 
 export class UsageMeter {
   private counts = new Map<string, { requests: number; limited: number; seen: number }>();
@@ -9,7 +10,7 @@ export class UsageMeter {
   constructor(private db: Db | null, private flushMs = 60_000) {}
 
   hit(principal: string, limited = false, now = Date.now()): void {
-    const key = `${new Date(now).toISOString().slice(0, 10)}|${principal}`;
+    const key = `${eastern(new Date(now)).date}|${principal}`; // an Eastern day, like the site's analytics
     const c = this.counts.get(key) ?? { requests: 0, limited: 0, seen: now };
     c.requests += 1; if (limited) c.limited += 1; c.seen = now;
     this.counts.set(key, c);
