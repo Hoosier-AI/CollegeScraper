@@ -19,7 +19,7 @@
 //   sidelined:<player>         a player's injury, illness and suspension history
 //   coach_trophies:<coach>     a coach's honours
 // sidelined, trophies and coach_trophies ask for up to 20 people a request (the task plus 19 other due ones of its kind).
-import type { JobContext } from '../runner.js';
+import { enqueue, type JobContext } from '../runner.js';
 import type { ApiFootball } from '../../sources/apiFootball/client.js';
 import {
   parseCoaches, parseCountries, parseCountryTeams, parseInjuries, parseLeaguePlayers, parseProfile, parseProfilesPage, parseSidelined, parseSquad, parseTeamStatistics,
@@ -251,6 +251,9 @@ const handlers: Record<string, Handler> = {
     if (done) {
       const fix = await t.ctx.db.rpc('pro_minutes_from_lines', { p_league: league, p_season: season });
       if (fix.error) t.ctx.note('minutes_from_lines', fix.error.message); else t.ctx.inc('minutes_from_lines', Number(fix.data ?? 0));
+      // The sources are compared with these totals: a season's check is only ever re-run for the current season, so
+      // new totals for a past one (a re-crawl) would never be looked at again.
+      await enqueue(t.ctx.db, 'source-check', { league, season }).catch(() => {});
     }
     return { done, page: done ? 0 : page - 1, pages };
   },

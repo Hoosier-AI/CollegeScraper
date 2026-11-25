@@ -95,7 +95,7 @@ describe('ApiFootball client', () => {
     expect(calls.filter((c) => c.endsWith('/status'))).toHaveLength(1);
     now += 6 * 60_000;
     await api.refreshIfLow();
-    expect(api.headroom('backfill')).toBe(7488 - 2500);
+    expect(api.headroom('backfill')).toBe(7488 - api.floor('backfill'));
     await api.get('fixtures', { ids: '1' }, 'backfill');
     expect(calls.filter((c) => !c.endsWith('/status'))).toHaveLength(1);
   });
@@ -167,6 +167,16 @@ describe('ApiFootball client', () => {
     const f = fakeFetch([{ remaining: 7000, body: { response: { team: { id: 1 } }, results: 11, errors: [] } }]);
     const api = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: f.impl, sleep: noSleep });
     expect((await api.get('teams/statistics', { league: 253, season: 2025, team: 1 })).response).toEqual([{ team: { id: 1 } }]);
+  });
+  it('the backfill leaves the everyday jobs what the rest of the day still needs', () => {
+    let now = Date.parse('2026-11-24T00:00:00Z');
+    const api = new ApiFootball({ key: 'k'.repeat(32), fetchImpl: fakeFetch([]).impl, sleep: noSleep, now: () => now, reserve: 1500, backfillReserve: 2500, everydayPerDay: 2600 });
+    expect(api.floor('backfill')).toBe(4100); // at the reset: the app's 1,500 and a whole day of live scores
+    now = Date.parse('2026-11-24T12:00:00Z');
+    expect(api.floor('backfill')).toBe(2800); // half the day left
+    now = Date.parse('2026-11-24T23:00:00Z');
+    expect(api.floor('backfill')).toBe(2500); // never under the backfill reserve
+    expect(api.floor('everyday')).toBe(1500);
   });
   it('an unset option (undefined) keeps its default', async () => {
     const f = fakeFetch([ok(7000)]);
