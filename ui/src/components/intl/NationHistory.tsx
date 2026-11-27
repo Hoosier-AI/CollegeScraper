@@ -63,7 +63,7 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
     { key: 'years', label: 'Years', priority: 2, value: (c) => c.first, render: (c) => `${c.first.slice(0, 4)}–${c.last.slice(0, 4)}` },
   ];
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatTile label={`Since ${h.first_match?.slice(0, 4) ?? '–'}`} value={fmt.num(r.played)} sub={`matches · ${r.w}-${r.d}-${r.l}`} />
         <StatTile label="Won" value={`${winPct(r)}%`} sub={`${fmt.num(r.gf)} goals for, ${fmt.num(r.ga)} against`} accent />
@@ -71,7 +71,7 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
         <StatTile label="World Cups" value={h.world_cups.editions || '–'} sub={h.world_cups.years.length ? `last ${h.world_cups.years[0]}` : 'squads from the World Cup database'} />
       </div>
       {h.elo && <EloChart slug={slug} gender={h.gender} caption={`${h.nation.name}${h.gender === 'w' ? ' women' : ''}: Plaibook Elo since ${h.elo.series[0]?.date.slice(0, 4) ?? ''}`} />}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Top scorers">
           {h.scorers.length ? <ol className="frame divide-y divide-field-700 text-sm">{h.scorers.slice(0, 15).map((s, i) => (
             <li key={s.name} className="flex items-center gap-2 px-3 py-1.5"><span className="w-5 text-right text-xs tnum text-chalk-500">{i + 1}</span>
@@ -90,7 +90,7 @@ export function NationHistoryView({ h, slug }: { h: History; slug: string }) {
         </Section>
       </div>
       <Section title="Latest results"><ResultList rows={h.recent} nation={key} /></Section>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Biggest wins"><ResultList rows={h.biggest_wins} nation={key} empty="None yet." /></Section>
         <Section title="Heaviest defeats"><ResultList rows={h.worst_defeats} nation={key} empty="None yet." /></Section>
       </div>

@@ -61,8 +61,8 @@ export default function Records() {
       {q.isPending && <Skeleton className="h-96" />}
       {d && !d.played && <EmptyState title="No games yet" body="Records appear once the season's first games are played." />}
       {d && d.played > 0 && (
-        <div className={`space-y-6 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
-          <section className="space-y-2">
+        <div className={`stack ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
+          <section className="stack-sm">
             <h2 className="h-section">Team runs still going</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               <Card title="Unbeaten" sub="Games without a loss" empty={!d.team.unbeaten.length}>{d.team.unbeaten.map((t) => team(t.program_id, count(t.unbeaten, 'games')))}</Card>
@@ -71,14 +71,14 @@ export default function Records() {
               <Card title="Scoring" sub="Games in a row with a goal" empty={!d.team.scoring.length}>{d.team.scoring.map((t) => team(t.program_id, count(t.scoring, 'games')))}</Card>
             </div>
           </section>
-          <section className="space-y-2">
+          <section className="stack-sm">
             <h2 className="h-section">Player runs still going</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Card title="Scoring streak" sub="Games played in a row with a goal" empty={!d.player.goals.length}>{d.player.goals.map((p) => player(p, count(p.goals, 'games'), `${prog(p.program_id)?.name ?? ''}, last ${fmt.day(p.last)}`, p.player_id))}</Card>
               <Card title="Point streak" sub="Games played in a row with a goal or an assist" empty={!d.player.points.length}>{d.player.points.map((p) => player(p, count(p.points, 'games'), `${prog(p.program_id)?.name ?? ''}, last ${fmt.day(p.last)}`, p.player_id))}</Card>
             </div>
           </section>
-          <section className="space-y-2">
+          <section className="stack-sm">
             <h2 className="h-section">Best single games this season</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               <Card title="Most goals" sub="Three or more in a game" empty={!d.games.goals.length}>{d.games.goals.map((g) => player(g, count(g.goals, 'goals'), gameSub(g), `${g.game_id}-${g.player_id}-${g.name}`, href(`/matches/${g.game_id}`)))}</Card>

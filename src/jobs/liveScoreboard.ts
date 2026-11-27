@@ -19,6 +19,7 @@ import { currentSeason, eastern, liveDates } from './seasons.js';
 import { liveSettings } from '../ops/settings.js';
 import type { Division, Gender } from '../model.js';
 import { log } from '../log.js';
+import { meaningfulChange, observeCollegeGames, type PrevRow } from '../push/snapshots.js';
 
 const yesterdayOf = (date: string) => new Date(Date.parse(`${date}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
@@ -114,6 +115,7 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
   for (const g of pending) if (g.home_seo && g.away_seo) byFixture.set(`${g.game_date}|${g.home_seo}|${g.away_seo}`, g);
   const seen = new Set<string>();
   const nowIso = new Date().toISOString();
+  const pushPrev = new Map<string, PrevRow>();
   for (const { gender, division, date } of lists.values()) {
     if (await ctx.cancelled()) return;
     let day: ScoreboardGame[];
@@ -131,6 +133,8 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
       const patch = liveTransition(g, s, { swapped, etToday: et.date, nowIso });
       if (!patch) { ctx.inc('unchanged'); continue; }
       await updateGame(db, g.id, patch as Record<string, unknown>);
+      // App alerts: what the row said before this write, taken before g.status is overwritten on the next line.
+      try { const was: PrevRow = { status: g.status, home: g.home_score, away: g.away_score }; if (!pushPrev.has(g.id) && meaningfulChange(was, patch)) pushPrev.set(g.id, was); } catch { /* alerts never stop the scoreboard */ }
       if (patch.status) g.status = patch.status;
       if (patch.status === 'final') anyFinal = true;
       if (patch.status === 'final' && g.ncaa_contest_id != null) wentFinal.push(String(g.ncaa_contest_id));
@@ -138,6 +142,9 @@ export async function liveScoreboard(ctx: JobContext): Promise<void> {
     }
     await ctx.heartbeat();
   }
+  // App alerts: the games whose status or score just changed, read back and compared with the last state seen
+  // (src/push). Never fails the job.
+  try { if (pushPrev.size) { const n = await observeCollegeGames(db, [...pushPrev.keys()], pushPrev); if (n) ctx.inc('push_events', n); } } catch { /* alerts never stop the scoreboard */ }
   ctx.inc('absent_from_feed', pending.filter((g) => !seen.has(g.id)).length);
   ctx.inc('live_games', pending.filter((g) => g.status === 'live').length);
   // The final box score should land minutes after full time, not at the next half-hourly sweep: final-detail runs on

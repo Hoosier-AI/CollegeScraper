@@ -45,7 +45,7 @@ export function ProCountry() {
   const q = useQuery({ queryKey: ['pro-country', slug, gender], queryFn: () => api<CountryData>(`/api/pro/countries/${slug}?gender=${gender}`), placeholderData: keepPreviousData, retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   if (q.error instanceof ApiError && q.error.status === 404) return <EmptyState title="No such country" action={<Link className="btn-ghost btn-sm" to={proPaths2.countries}>All countries</Link>} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
   const c = d.country;
   return (
@@ -54,13 +54,13 @@ export function ProCountry() {
         meta={`${d.leagues.length} ${gender === 'w' ? "women's" : "men's"} competitions, ${d.clubs.length} clubs we follow`}>
         <Link to={`${proPaths2.players}?nationality=${encodeURIComponent(c.name)}`} className="btn-ghost btn-sm">All {c.name} players</Link>
       </PageHeader>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="space-y-5 lg:col-span-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="stack lg:col-span-8">
           <NewsSection title={`${c.name} national teams in the news`} q={{ country: c.name, gender }} max={5} />
           <Section title={`${c.name} players abroad`}><LeadersTable rows={d.abroad} stat="minutes" caption={`${c.name} players abroad`} empty={<p className="px-3 py-4 text-sm text-chalk-400">No players of this nationality abroad in our records yet.</p>} /></Section>
           <Section title={`Most-used ${c.name} players`}><LeadersTable rows={d.players} stat="minutes" caption={`${c.name} players by minutes`} empty={<p className="px-3 py-4 text-sm text-chalk-400">No season stats yet.</p>} /></Section>
         </div>
-        <div className="space-y-5 lg:col-span-4">
+        <div className="stack lg:col-span-4">
           {d.leagues.length > 0 && (
             <Section title="Competitions">
               <ul className="frame divide-y divide-field-700">{d.leagues.map((l) => <li key={l.id}><Link to={proPath.league(l.slug)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-field-800"><TeamLogo src={l.logo} name={l.name} size={18} /><span className="truncate text-chalk-200">{l.name}</span>{l.gender === 'w' && <span className="ml-auto text-2xs text-chalk-500">W</span>}</Link></li>)}</ul>

@@ -34,7 +34,7 @@ export function ConferenceDetail({ id }: { id: string }) {
   // The conference tournament (classify-postseason): a tab once it has started.
   const tq = useQuery({ queryKey: ['conference-tournament', id, f.season, f.gender], queryFn: () => api<{ tournament: ConfTournament | null }>(`/api/conference-tournament${qs({ conference: id, season: f.season, gender: f.gender })}`) });
   const tourney = tq.data?.tournament ?? null;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   if (!q.data?.conference) return <EmptyState title="No such conference" action={<Link className="btn-ghost btn-sm" to={href('/conferences')}>All conferences</Link>} />;
   const d = q.data; const c = d.conference;
@@ -58,7 +58,7 @@ export function ConferenceDetail({ id }: { id: string }) {
   );
   return (
     <div className="stack">
-      <header className="card flex flex-col gap-5 pad lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+      <header className="card flex flex-col gap-6 pad lg:flex-row lg:items-start lg:justify-between lg:gap-8">
         <div className="min-w-0">
           <Crumbs items={[{ label: divisionLabel(c.division), to: href('/conferences', { division: c.division }) }, { label: c.short_name ?? c.name }]} />
           <h1 className="display mt-1 text-3xl sm:text-4xl">{c.name}</h1>

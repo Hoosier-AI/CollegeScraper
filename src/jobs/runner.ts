@@ -26,7 +26,7 @@ export interface ParamSpec { name: string; type: 'number' | 'string' | 'boolean'
 export interface JobMeta {
   description: string;
   /** Which worker lane runs it: everything but the live scoreboard is 'crawl'; Plaibook Live Pro's everyday jobs run on 'pro'. */
-  lane: 'crawl' | 'live' | 'aux' | 'h2h' | 'pro' | 'pro-bulk' | 'sources' | 'history' | 'weekly';
+  lane: 'crawl' | 'live' | 'aux' | 'h2h' | 'pro' | 'pro-bulk' | 'sources' | 'history' | 'weekly' | 'push';
   /** A composite of other jobs (hourly, nightly…). */
   composite?: boolean;
   params: ParamSpec[];

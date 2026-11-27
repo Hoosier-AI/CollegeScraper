@@ -1,7 +1,7 @@
-import React, { lazy } from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createBrowserRouter, Navigate, RouterProvider, useLocation, useParams } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useLocation, useParams, type RouteObject } from 'react-router-dom';
 // Fonts are served from this site (no request to Google's servers): Archivo with its width axis, IBM Plex Sans.
 import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource/ibm-plex-sans/400.css';
@@ -11,6 +11,7 @@ import './index.css';
 import App from './App';
 import { NotFound, RouteError } from './components/shell';
 import { RequireAdmin } from './pages/Admin';
+import { isNative } from './lib/platform';
 
 // After a deploy the old page's chunks are gone: a tab opened before it fails to load the next page's code. Reload once
 // to pick up the new build (the flag stops a loop if the reload fails too).
@@ -25,6 +26,7 @@ window.addEventListener('load', () => { setTimeout(() => { try { sessionStorage.
 
 // Each page is its own chunk so the first paint only loads what the visitor asked for.
 const Home = lazy(() => import('./pages/Home'));
+const Following = lazy(() => import('./pages/Following'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Team = lazy(() => import('./pages/Team'));
 const Match = lazy(() => import('./pages/Match'));
@@ -42,7 +44,8 @@ const Tournament = lazy(() => import('./pages/Tournament'));
 const Records = lazy(() => import('./pages/Records'));
 const Legal = lazy(() => import('./pages/Legal'));
 const Photo = lazy(() => import('./pages/Photo'));
-const LEGAL_PAGES = ['about', 'contact', 'terms', 'privacy', 'sources', 'data-use', 'copyright', 'corrections', 'accessibility', 'advertise', 'privacy-choices'];
+// The phone app has no ads, so it leaves out the page about buying them and the one about ad choices (lib/platform.ts).
+const LEGAL_PAGES = ['about', 'contact', 'terms', 'privacy', 'sources', 'data-use', 'copyright', 'corrections', 'accessibility', 'advertise', 'privacy-choices'].filter((slug) => !(isNative && (slug === 'advertise' || slug === 'privacy-choices')));
 const Referee = lazy(() => import('./pages/Referee'));
 const ProReferees = lazy(() => import('./pages/pro/ProReferees'));
 const ProReferee = lazy(() => import('./pages/pro/ProReferee'));
@@ -54,8 +57,6 @@ const ProH2H = lazy(() => import('./pages/pro/ProH2H'));
 const ProCoach = lazy(() => import('./pages/pro/ProCoach'));
 const ProRankings = lazy(() => import('./pages/pro/ProRankings'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
-const Admin = lazy(() => import('./pages/Admin'));
-const Console = lazy(() => import('./pages/Console'));
 // Plaibook Live Pro.
 const ProMatches = lazy(() => import('./pages/pro/ProMatches'));
 const ProLeagues = lazy(() => import('./pages/pro/ProLeagues'));
@@ -97,6 +98,19 @@ function Redirect({ to, extra, params: extraParams }: { to: (params: Record<stri
   return <Navigate to={`${to(params)}${qs ? `?${qs}` : ''}`} replace />;
 }
 
+// The owner's sign-in and console: on the website only. The phone app's build leaves the routes and their code out
+// (those addresses are its not-found page).
+const OWNER_ROUTES: RouteObject[] = isNative ? [] : (() => {
+  const Admin = lazy(() => import('./pages/Admin'));
+  const Console = lazy(() => import('./pages/Console'));
+  return [
+    { path: 'admin', element: <Admin /> },
+    { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
+    { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
+    { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
+  ];
+})();
+
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } } });
 
 const router = createBrowserRouter([
@@ -107,6 +121,7 @@ const router = createBrowserRouter([
         errorElement: <RouteError />,
         children: [
           { index: true, element: <Home /> },
+          { path: 'following', element: <Following /> },
           { path: 'teams', element: <Teams /> },
           { path: 'teams/:id', element: <Team /> },
           { path: 'teams/:school/:gender', element: <Team /> },
@@ -140,10 +155,7 @@ const router = createBrowserRouter([
           { path: 'rankings', element: <Rankings /> },
           { path: 'search', element: <SearchPage /> },
           { path: 'news', element: <News /> },
-          { path: 'admin', element: <Admin /> },
-          { path: 'console', element: <RequireAdmin><Console /></RequireAdmin> },
-          { path: 'jobs', element: <Redirect to={() => '/console'} extra="tab=jobs" /> },
-          { path: 'quality', element: <Redirect to={() => '/console'} extra="tab=quality" /> },
+          ...OWNER_ROUTES,
           // One home page for every area (2026-10-14): the old Pro and International homes lead there.
           { path: 'pro', element: <Redirect to={() => '/'} /> },
           { path: 'pro/sources', element: <Navigate to="/sources" replace /> },

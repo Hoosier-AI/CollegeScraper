@@ -50,7 +50,7 @@ export default function Match() {
   const refetch = useMutation({ mutationFn: () => api(`/api/games/${id}/refetch`, { method: 'POST' }) });
   if (entity.missing) return <EmptyState title="No such match" body="The link may be out of date." />;
   if (entity.error) return <ErrorBox error={entity.error} />;
-  if (preview.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-44" /><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-64" /></div>;
+  if (preview.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-44" /><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-64" /></div>;
   if (preview.error) return <ErrorBox error={preview.error} retry={() => preview.refetch()} />;
   if (!preview.data?.game) return <EmptyState title="No such match" body="The link may be out of date." />;
   const p = preview.data; const g = p.game; const sides = p.sides;
@@ -115,7 +115,7 @@ export default function Match() {
         {referee && <span>Referee <span className="text-chalk-300">{referee}</span>{assistants.length ? `, assistants ${assistants.join(' and ')}` : ''}</span>}
         {duration && <span>Played in {duration}</span>}
         {g.status === 'live' && (
-          <span className="inline-flex items-center gap-1.5 font-medium text-win"><span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />Live, {liveClock(g.live ?? { period: g.live_period, clock: g.live_clock }).long.replace(/^./, (c) => c.toLowerCase())}{(g.live?.updated_at ?? g.live_updated_at) ? ` · score updated ${agoShort(g.live?.updated_at ?? g.live_updated_at, now)}` : ''}{provisional && box.data?.stats?.live_stats_at ? ` · stats ${agoShort(box.data.stats.live_stats_at, now)}` : ''}</span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-live"><span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-live motion-reduce:animate-none" />Live, {liveClock(g.live ?? { period: g.live_period, clock: g.live_clock }).long.replace(/^./, (c) => c.toLowerCase())}{(g.live?.updated_at ?? g.live_updated_at) ? ` · score updated ${agoShort(g.live?.updated_at ?? g.live_updated_at, now)}` : ''}{provisional && box.data?.stats?.live_stats_at ? ` · stats ${agoShort(box.data.stats.live_stats_at, now)}` : ''}</span>
         )}
         {admin && <button className="btn-ghost btn-sm" onClick={() => refetch.mutate()} disabled={refetch.isPending || refetch.isSuccess}>{refetch.isSuccess ? 'Re-fetch queued' : 'Re-fetch'}</button>}
       </div>
@@ -160,7 +160,7 @@ export default function Match() {
       )}
 
       {tab === 'lineups' && (
-        <div className="space-y-6">
+        <div className="stack">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1 space-y-1">
               {pastSides.length > 0 && (
@@ -196,7 +196,7 @@ export default function Match() {
         </Section>
       )}
       {tab === 'stats' && (
-        <div className="space-y-6">
+        <div className="stack">
           {played && players.length > 0 && (
             <Section title="Full player stats" right={sources.length === 2 ? <SegmentedControl label="Box score version" size="sm" value={statSrc ?? 'site'} onChange={(v) => setSrc(v)} options={sources.map((s) => ({ value: s, label: s === 'site' ? 'Version A' : 'Version B' }))} /> : undefined}>
               {[g.home.program_id, g.away.program_id].map((pid) => (
@@ -216,15 +216,15 @@ export default function Match() {
       {tab === 'players' && <KeyPlayers g={g} sides={sides} />}
       {tab === 'preview' && (played ? null : (
         // Before kickoff, one page: each side's team news, the season side by side, head to head, each side's last lineup and key players.
-        <div className="space-y-6">
+        <div className="stack">
         {p.elo && <WinChances elo={p.elo} home={g.home.name} away={g.away.name} drawLabel="Tie" rankingsHref={href('/rankings', { tab: 'elo' })} />}
         {(p.rpi?.home || p.rpi?.away) && <p className="text-sm text-chalk-300"><Link to={href('/rankings', { tab: 'rpi', division: p.rpi.home?.division ?? p.rpi.away?.division })} className="font-medium text-pitch-300 hover:text-pitch-200">Live RPI</Link>: {[[g.home.name, p.rpi.home], [g.away.name, p.rpi.away]].map(([n, r]: any) => `${n} ${r?.rank ? `No. ${r.rank} in ${r.division.toUpperCase()}` : 'unranked'}`).join(', ')}</p>}
         {(g.home.program_id || g.away.program_id) && <TeamNews sides={[g.home, g.away].filter((t) => t.program_id).map((t) => ({ label: t.name, q: { program: t.program_id! }, hide: `program:${t.program_id}`, href: `/teams/${t.program_id}` }))} />}
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <HeadToHead g={g} h2h={p.head_to_head} sides={sides} compact allHref={href(pathname, { tab: 'h2h' })} />
-          <div className="space-y-6">
+          <div className="stack">
             {(homeLu.status !== 'none' || awayLu.status !== 'none') && (
-              <section className="space-y-2">
+              <section className="stack-sm">
                 <h3 className="text-sm font-semibold text-chalk-100">Last lineups</h3>
                 <div className="mx-auto max-w-md"><Pitch home={homeLu} away={awayLu} homeName={g.home.name} awayName={g.away.name} /></div>
                 <ul className="space-y-0.5 text-xs text-chalk-400">
@@ -233,7 +233,7 @@ export default function Match() {
                 <Link to={href(pathname, { tab: 'lineups' })} className="text-sm text-pitch-300 hover:text-pitch-200">Full lineups and benches</Link>
               </section>
             )}
-            <section className="space-y-2"><h3 className="text-sm font-semibold text-chalk-100">Key players</h3><KeyPlayers g={g} sides={sides} narrow /></section>
+            <section className="stack-sm"><h3 className="text-sm font-semibold text-chalk-100">Key players</h3><KeyPlayers g={g} sides={sides} narrow /></section>
           </div>
         </div>
         </div>

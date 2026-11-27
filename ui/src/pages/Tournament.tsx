@@ -53,7 +53,7 @@ export default function Tournament() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-96" />}
       {d && tab === 'bracket' && (hasBracket
-        ? <Bracket b={d.bracket!} title={`${f.season} NCAA Division I ${genderLabel(f.gender)}'s tournament`} parts={4} split={4} />
+        ? <Bracket b={d.bracket!} title={`${f.season} NCAA Division I ${genderLabel(f.gender)} tournament`} parts={4} split={4} />
         : <EmptyState title="The bracket is not out yet" body="It appears here when NCAA.com lists the field. Until then, see the odds." />)}
       {d && tab === 'odds' && (hasBracket ? <RoundOdds d={d} href={href} /> : <Projected d={d} href={href} />)}
       {tab === 'conferences' && <ConferenceTournaments />}
@@ -86,7 +86,7 @@ function Projected({ d, href }: { d: Data; href: ReturnType<typeof useHref> }) {
         <p className="mt-2 text-2xs text-chalk-500">The committee also weighs results and other factors, so treat these as odds, not a bracket.</p>
       </RailCard>
     </>}>
-      <section className="min-w-0 space-y-2">
+      <section className="min-w-0 stack-sm">
         <h2 className="h-section">Projected field <span className="text-sm font-normal text-chalk-500">{d.field.length} teams, the likeliest champion of each conference and the likeliest at-large teams</span></h2>
         <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {d.field.filter((t) => t.projected_seed).map((t) => (
@@ -106,7 +106,7 @@ function Projected({ d, href }: { d: Data; href: ReturnType<typeof useHref> }) {
           ))}
         </ul>
       </section>
-      <section className="min-w-0 space-y-2">
+      <section className="min-w-0 stack-sm">
         <h2 className="h-section">Every team's chances</h2>
         <DataTable rows={d.teams} columns={cols} rowKey={(t) => t.program_id} caption="NCAA tournament odds" defaultSort={{ key: 'bid', dir: 'desc' }} pageSize={50} noun="teams" />
       </section>
@@ -132,7 +132,7 @@ function RoundOdds({ d, href }: { d: Data; href: ReturnType<typeof useHref> }) {
       render: (t) => <span className={i === 5 ? 'font-semibold text-chalk-100' : ''}>{chance(t.rounds?.[i])}</span> })),
   ];
   return (
-    <section className="min-w-0 space-y-2">
+    <section className="min-w-0 stack-sm">
       <h2 className="h-section">Chances to go through <span className="text-sm font-normal text-chalk-500">the rest of the bracket played {d.sims ? fmt.num(d.sims) : 'thousands of'} times with Plaibook Elo; seeds host until the College Cup</span></h2>
       <DataTable rows={rows} columns={cols} rowKey={(t) => t.program_id} caption="NCAA tournament chances by round" defaultSort={{ key: 'win', dir: 'desc' }} pageSize={64} noun="teams" />
     </section>
@@ -149,7 +149,7 @@ function ConferenceTournaments() {
   if (!list.length) return <EmptyState title="No conference tournaments yet" body="They show here once they start, usually in late October." />;
   const done = list.filter((t) => t.status === 'done').length;
   return (
-    <section className="min-w-0 space-y-2">
+    <section className="min-w-0 stack-sm">
       <h2 className="h-section">Conference tournaments <span className="text-sm font-normal text-chalk-500">{done} of {list.length} decided; each champion takes its conference's automatic bid</span></h2>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {list.map((t) => (

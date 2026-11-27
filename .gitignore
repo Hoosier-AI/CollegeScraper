@@ -15,3 +15,9 @@ scripts/tmp/
 # Claude Code files stay local
 CLAUDE.md
 .claude/
+
+# Design work stays local
+design/references/
+ui/dist-native/
+ui/ios/App/App/public/
+ui/src/lab/

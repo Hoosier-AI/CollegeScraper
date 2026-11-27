@@ -23,23 +23,20 @@ export function MatchMasthead({ g, sides, scorers }: { g: any; sides?: any; scor
   const team = (side: 'home' | 'away') => {
     const s = g[side]; const info = sides?.[side];
     return (
-      <div className={`flex min-w-0 flex-col items-center gap-2 text-center ${side === 'home' ? 'sm:items-start sm:text-left' : 'sm:items-end sm:text-right'}`}>
-        <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={64} />
-        <div className="min-w-0">
-          <span className={`mb-1 inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-medium ${side === 'home' ? 'bg-pitch-400/15 text-pitch-300' : 'bg-field-800 text-chalk-300'}`}>{side === 'home' ? (g.neutral_site ? 'Home (neutral site)' : 'Home') : 'Away'}</span>
-          {s.program_id ? <Link to={href(`/teams/${s.program_id}`)} className="display block text-xl leading-tight hover:text-pitch-300 sm:text-2xl">{s.name ?? 'TBD'}</Link> : <span className="display block text-xl sm:text-2xl">{s.name ?? 'TBD'}</span>}
-          <div className="mt-1 text-xs text-chalk-400 tnum">
-            {s.rank && <span className="mr-2 text-note">No. {s.rank}</span>}
+      <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+        <span className="[&>*]:!h-12 [&>*]:!w-12 sm:[&>*]:!h-16 sm:[&>*]:!w-16"><TeamLogo src={s.logo} seo={s.seo} name={s.name} size={64} /></span>
+        <div className="min-w-0 max-w-full">
+          {s.program_id ? <Link to={href(`/teams/${s.program_id}`)} className="display block text-base leading-tight hover:text-pitch-300 sm:text-2xl">{s.short_name ?? s.name ?? 'TBD'}</Link> : <span className="display block text-base sm:text-2xl">{s.short_name ?? s.name ?? 'TBD'}</span>}
+          <div className="mt-0.5 text-xs text-chalk-500 tnum">
+            {s.rank && <span className="mr-1.5 text-note">No. {s.rank}</span>}
             {info?.stats && <span>{fmt.rec(info.stats.w, info.stats.l, info.stats.t)}</span>}
-            {info?.standing?.rank && info.stats && <span>, {fmt.ordinal(info.standing.rank)}{info.standing.of ? ` of ${info.standing.of}` : ''} in the {s.conference?.short ?? s.conference?.name ?? 'conference'}</span>}
+            {info?.standing?.rank && info.stats && <span className="hidden sm:inline">, {fmt.ordinal(info.standing.rank)}{info.standing.of ? ` of ${info.standing.of}` : ''} in the {s.conference?.short ?? s.conference?.name ?? 'conference'}</span>}
           </div>
           {(live || final) && scorers?.[side]?.length ? (
-            <ul className={`mt-2 space-y-0.5 text-sm ${side === 'home' ? '' : 'sm:text-right'}`} aria-label={`${s.name ?? side} scorers`}>
+            <ul className="mt-1.5 space-y-0.5 text-xs sm:text-sm" aria-label={`${s.name ?? side} scorers`}>
               {scorers[side].map((x) => (
-                <li key={x.name} className={`flex items-center gap-1.5 text-chalk-200 ${side === 'home' ? 'justify-center sm:justify-start' : 'justify-center sm:justify-end'}`}>
-                  <SoccerBall size={13} className="text-chalk-300" />
-                  <span className="font-medium text-chalk-100">{x.name}</span>
-                  <span className="text-chalk-400 tnum">{x.minutes.length ? x.minutes.join(', ') : x.count > 1 ? `×${x.count}` : ''}</span>
+                <li key={x.name} className="text-chalk-300">
+                  <span className="text-chalk-100">{x.name}</span> <span className="tnum">{x.minutes.length ? x.minutes.join(', ') : x.count > 1 ? `×${x.count}` : ''}</span>
                 </li>
               ))}
             </ul>
@@ -49,18 +46,19 @@ export function MatchMasthead({ g, sides, scorers }: { g: any; sides?: any; scor
     );
   };
   return (
-    <header className="card pad">
-      <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
+    <header className="stack">
+      {/* Home on the left, the score in the middle, away on the right, at every width. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 pt-1">
         {team('home')}
-        <div className="text-center">
-          {live || final ? <div className="display text-4xl tnum sm:text-5xl">{g.home.score ?? '–'}<span className="mx-2 text-chalk-500">–</span>{g.away.score ?? '–'}</div> : <div className="display text-3xl text-chalk-300 sm:text-4xl">{fmt.kickoff(g.start_epoch) ?? 'TBD'}</div>}
-          <div className={`mt-1 inline-flex items-center gap-1.5 text-sm ${live ? 'font-semibold text-win' : 'text-chalk-400'}`}>
-            {live && <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-win motion-reduce:animate-none" />}{statusLine}
+        <div className="pt-2 text-center sm:pt-3">
+          {live || final ? <div className="display whitespace-nowrap text-4xl leading-none tnum sm:text-5xl">{g.home.score ?? '–'}<span className="mx-1.5 text-chalk-500">-</span>{g.away.score ?? '–'}</div> : <div className="display whitespace-nowrap text-2xl leading-none text-chalk-300 sm:text-4xl">{fmt.kickoff(g.start_epoch) ?? 'TBD'}</div>}
+          <div className={`mt-1.5 inline-flex max-w-[9rem] items-center justify-center gap-1.5 text-xs sm:max-w-none sm:text-sm ${live ? 'font-semibold text-live' : 'text-chalk-400'}`}>
+            {live && <span aria-hidden className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-live motion-reduce:animate-none" />}{statusLine}
           </div>
         </div>
         {team('away')}
       </div>
-      <div className="mt-5 grid gap-4 border-t border-field-700 pt-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.3fr]">
+      <div className="card pad grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.3fr]">
         <Fact icon={<MapPin size={18} aria-hidden />} label="Where">
           {venueText(g) ? <>
             <span className="text-chalk-100">{venueText(g)}</span>
@@ -283,7 +281,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
   const total = h2h.home_wins + h2h.ties + h2h.away_wins;
   const pct = (n: number) => (total ? `${(n / total) * 100}%` : '0%');
   return (
-    <div className="space-y-6">
+    <div className="stack">
       {compact ? <>
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-chalk-100">This season, side by side</h3>
@@ -309,7 +307,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
         <h3 id="h2h-title" className="text-sm font-semibold text-chalk-100">Head-to-head{h2h.first_season ? <span className="font-normal text-chalk-500">, meetings since {h2h.first_season}</span> : null}</h3>
         {h2h.played ? (
           <>
-            <div className="card space-y-4 pad">
+            <div className="card stack-sm pad">
               <div className="grid grid-cols-3 items-end text-center">
                 <div><div className="display text-3xl tnum text-chalk-100">{h2h.home_wins}</div><div className="text-xs text-chalk-400">{hn} wins</div></div>
                 <div><div className="display text-3xl tnum text-chalk-300">{h2h.ties}</div><div className="text-xs text-chalk-400">ties</div></div>
@@ -367,7 +365,7 @@ export function HeadToHead({ g, h2h, sides, compact, allHref }: { g: any; h2h: a
         <h3 id="h2h-title" className="text-sm font-semibold text-chalk-100">Head-to-head{h2h.first_season ? <span className="font-normal text-chalk-500">, meetings since {h2h.first_season}</span> : null}</h3>
         {h2h.played ? (
           <>
-            <div className="card space-y-4 pad">
+            <div className="card stack-sm pad">
               <div className="grid grid-cols-3 items-end text-center">
                 <div><div className="display text-3xl tnum text-chalk-100">{h2h.home_wins}</div><div className="text-xs text-chalk-400">{hn} wins</div></div>
                 <div><div className="display text-3xl tnum text-chalk-300">{h2h.ties}</div><div className="text-xs text-chalk-400">ties</div></div>

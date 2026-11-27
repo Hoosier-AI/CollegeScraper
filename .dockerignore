@@ -1,0 +1,9 @@
+# Kept out of the image build (Dockerfile does `COPY ui ./ui`, which would otherwise take everything under ui/).
+# The iOS app's Xcode project and its bundle are built on a Mac, never on Render.
+ui/ios
+ui/dist-native
+# Installed inside the image by `npm ci`; a local copy must not overwrite it.
+ui/node_modules
+node_modules
+.git
+design

@@ -37,7 +37,7 @@ export function ClubSeasonDetail({ rows }: { rows: ClubSeasonRow[] }) {
   const periods = Object.keys(r.cards?.yellow ?? {}).filter((p) => !['91-105', '106-120'].includes(p) || (r.cards?.yellow?.[p] ?? 0) + (r.cards?.red?.[p] ?? 0) > 0);
   const streak = r.biggest?.streak ?? {};
   return (
-    <div className="space-y-4">
+    <div className="stack">
       {rows.length > 1 && (
         <SegmentedControl label="Competition" size="sm" value={String(pick)} onChange={(v) => setPick(Number(v))}
           options={rows.map((x, i) => ({ value: String(i), label: x.league?.name ?? 'Competition' }))} />
@@ -52,7 +52,7 @@ export function ClubSeasonDetail({ rows }: { rows: ClubSeasonRow[] }) {
         <Figure label="Longest runs" value={`${n(streak.wins)}W · ${n(streak.draws)}D · ${n(streak.loses)}L`} sub="in a row" />
         <Figure label="Matches" value={n(played)} sub={r.fixtures ? `${n(r.fixtures.wins?.total)}-${n(r.fixtures.draws?.total)}-${n(r.fixtures.loses?.total)}` : undefined} />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {formations.length > 0 && (
           <figure className="frame pad">
             <figcaption className="mb-2 text-xs text-chalk-400">Formations used (starts)</figcaption>

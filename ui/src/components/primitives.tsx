@@ -158,11 +158,11 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
   const idx = options.findIndex((o) => o.value === value);
   const move = (d: number) => { const next = options[(idx + d + options.length) % options.length]; if (next) onChange(next.value); };
   return (
-    <div role="radiogroup" aria-label={label} className={`inline-flex rounded-md border border-field-700 bg-field-950 p-0.5 ${size === 'sm' ? 'text-xs' : 'text-sm'}`}
+    <div role="radiogroup" aria-label={label} className={`inline-flex rounded-lg bg-field-900 p-0.5 ${size === 'sm' ? 'text-xs' : 'text-sm'}`}
       onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(1); } if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(-1); } }}>
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={o.value === value} tabIndex={o.value === value ? 0 : -1} title={o.title}
-          className={`rounded px-2.5 font-medium transition-colors duration-150 ${size === 'sm' ? 'py-1 coarse:min-h-11' : 'py-1.5 coarse:min-h-11'} ${o.value === value ? 'bg-field-700 text-chalk-100' : 'text-chalk-400 hover:text-chalk-100'}`}
+          className={`whitespace-nowrap rounded-md px-2.5 font-medium transition-colors duration-150 ${size === 'sm' ? 'py-1 coarse:min-h-9' : 'py-1.5 coarse:min-h-9'} ${o.value === value ? 'bg-field-950 text-pitch-300' : 'text-chalk-400 hover:text-chalk-100'}`}
           onClick={() => onChange(o.value)}>{o.label}</button>
       ))}
     </div>
@@ -270,7 +270,7 @@ export function PageWithRail({ children, rail, label = 'More about this' }: { ch
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]">
       <div className="stack min-w-0">{children}</div>
-      <aside aria-label={label} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">{rail}</aside>
+      <aside aria-label={label} className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">{rail}</aside>
     </div>
   );
 }
@@ -407,8 +407,8 @@ export function JsonViewer({ value, title }: { value: unknown; title?: string })
 /** A match or count that is in play now: the pulsing dot (still under reduced motion) with an optional label. */
 export function LiveDot({ label, className = '' }: { label?: ReactNode; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-win ${className}`}>
-      <span aria-hidden className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-win motion-reduce:animate-none" />
+    <span className={`inline-flex items-center gap-1.5 text-live ${className}`}>
+      <span aria-hidden className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-live motion-reduce:animate-none" />
       {label}
     </span>
   );

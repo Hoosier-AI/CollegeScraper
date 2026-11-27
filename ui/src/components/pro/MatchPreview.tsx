@@ -206,11 +206,11 @@ function PeopleList({ team, side }: { team: ProMatch['home']; side: PreviewSide 
 
 export function MatchPreview({ m, p, h2h }: { m: ProMatch; p: ProPreview; h2h: ProMatch[] }) {
   return (
-    <div className="space-y-5">
+    <div className="stack">
     {/* What can change the line-ups (injuries, bans, call-ups, coaching changes, signings) for each side, then the latest. */}
     <TeamNews sides={[m.home, m.away].map((t) => ({ label: t.name, q: { team: String(t.id) }, hide: `pro_team:${t.id}`, href: proPath.team(t.slug) }))} />
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-      <div className="space-y-5">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <div className="stack">
         {p.prediction && (p.prediction.home_pct != null || Object.keys(p.prediction.comparison ?? {}).length > 0) && <Section title="Chances"><Chances m={m} p={p.prediction} /></Section>}
         <Section title="Form">
           <div className="frame space-y-2 pad">
@@ -222,7 +222,7 @@ export function MatchPreview({ m, p, h2h }: { m: ProMatch; p: ProPreview; h2h: P
         {p.table && (p.table.home || p.table.away) && <Section title="In the table"><TableRows m={m} table={p.table} /></Section>}
         <Section title="Head to head"><HeadToHead m={m} h2h={h2h} /></Section>
       </div>
-      <div className="space-y-5">
+      <div className="stack">
         <Section title="Last starting elevens"><LastXIs m={m} p={p} /></Section>
         <Section title={`Top scorers and absences, ${m.league.name}`}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

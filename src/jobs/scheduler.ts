@@ -12,6 +12,7 @@ import { enqueue } from './runner.js';
 import { currentSeason, eastern, inLiveWindow, liveDates } from './seasons.js';
 import { pendingLiveCount } from './liveScoreboard.js';
 import { proLiveDue } from './pro/scoreboard.js';
+import { pushDue } from '../push/send.js';
 import { loadConfig } from '../config.js';
 import { liveSettings, schedulerOverrides, schedulerPaused, setKv, KV, type LiveSettings } from '../ops/settings.js';
 import { log } from '../log.js';
@@ -83,6 +84,9 @@ export const SCHEDULE: ScheduleEntry[] = [
   { job: 'pro-elo', label: 'Pro: Plaibook Elo', cadence: 'daily 11:50 UTC', due: (c) => c.h === 11 && c.m === 50 },
   { job: 'intl-elo', label: 'International: Plaibook Elo', cadence: 'daily 11:40 UTC (when results changed)', due: (c) => c.h === 11 && c.m === 40 },
   { job: 'asa-salaries', label: 'Sources: MLS salaries', cadence: 'Mondays 08:55 UTC', due: (c) => c.dow === 1 && c.h === 8 && c.m === 55 },
+  // App alerts: the score jobs queue push-send themselves when a match changes; this is the backstop for one that
+  // could not be queued, and (switch on) the regular run that also prunes old rows.
+  { job: 'push-send', label: 'App alerts: send', cadence: 'every minute while alerts are waiting, or while PUSH_ENABLED is on', due: () => true, gate: async (db) => pushDue(db) },
   { job: 'asa-shots', label: 'Sources: shot maps', cadence: 'every 30 minutes at :15 and :45, until every final has its shots', due: (c) => c.m === 15 || c.m === 45 },
 ];
 

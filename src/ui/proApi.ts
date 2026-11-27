@@ -22,6 +22,7 @@ import { crawlBlock, crawlLeagues } from '../ops/proCrawlConsole.js';
 import { BROKEN_AT, advForLeaders, sourcesOff } from '../pro/sources.js';
 import { swr } from '../ops/swr.js';
 import { teamOfWeek } from '../pro/teamOfWeek.js';
+import { leagueBracket } from '../pro/bracketData.js';
 import { proFlow } from '../match/flowQueries.js';
 import { proTableView } from '../standings/viewQueries.js';
 import { icsCalendar } from '../calendar/ics.js';
@@ -53,6 +54,14 @@ export function registerProApi(app: FastifyInstance): void {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
     const r = await pro.league(getDb(), req.params.slug, season(req.query.season));
     return r ? reply.header('Cache-Control', CACHE).send(r) : notFound(reply, 'league', req.params.slug);
+  });
+  // The knockout stage as a bracket (src/pro/bracket.ts), for pro cups and international tournaments alike: both are
+  // rows of pro_leagues, and the International pages read /api/pro/leagues/:slug too. 404 when there is none.
+  app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>('/api/pro/leagues/:slug/bracket', async (req, reply) => {
+    if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });
+    const s = season(req.query.season);
+    const r = await memo(memoKey('league-bracket', [req.params.slug, s]), () => leagueBracket(getDb(), req.params.slug, s));
+    return r ? reply.header('Cache-Control', 'public, max-age=300').send(r) : reply.code(404).send({ error: 'no bracket' });
   });
   app.get<{ Params: { slug: string }; Querystring: Record<string, string> }>('/api/pro/teams/:slug', async (req, reply) => {
     if (!SLUG.test(req.params.slug)) return reply.code(400).send({ error: 'bad slug' });

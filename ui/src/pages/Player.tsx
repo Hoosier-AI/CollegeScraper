@@ -45,7 +45,7 @@ export default function Player() {
   const pro = useQuery({ queryKey: ['pro-from-college', id], queryFn: () => api<{ pro: { name: string; slug: string } | null }>(`/api/pro/from-college/${id}`), enabled: !!id, staleTime: 300_000 });
   if (entity.missing) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/players">Browse players</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-48" /></div>;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
   const p = q.data?.player;
   if (!p) return <EmptyState title="No such player" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to="/players">Browse players</Link>} />;
@@ -114,10 +114,8 @@ export default function Player() {
           </div>
         ) : undefined}
         actions={<>
-          <PageActions title={p.display_name} follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: p.photo_url ?? latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} />
-          <Link className="btn-ghost btn-sm" to={`/compare?a=${p.id}`}><GitCompare size={14} /> Compare</Link>
+          <PageActions title={p.display_name} follow={{ kind: 'player', id: p.id, name: p.display_name, href: `/players/${p.slug ?? p.id}`, image: p.photo_url ?? latest?.headshot_url ?? p.headshot_url ?? null, sub: latest?.program?.name ?? null }} more={[{ label: 'Compare', icon: GitCompare, to: `/compare?a=${p.id}` }, { label: p.photo_url ? 'New photo' : 'Add photo', icon: Camera, to: `/photo?player=${p.slug ?? p.id}` }]} />
           {st && <StatCardButton path={`/players/${p.slug ?? p.id}`} name={p.display_name} />}
-          <Link className="btn-quiet btn-sm" to={`/photo?player=${p.slug ?? p.id}`}><Camera size={14} /> {p.photo_url ? 'New photo' : 'Add photo'}</Link>
         </>}
       >
         {pro.data?.pro && <Link to={`/pro/players/${pro.data.pro.slug}`} className="inline-flex items-center gap-1.5 rounded-md bg-pitch-400/15 px-2.5 py-1.5 text-xs font-medium text-pitch-300 hover:bg-pitch-400/25 coarse:min-h-11"><Trophy size={13} aria-hidden /> Now playing professionally: pro career and stats</Link>}

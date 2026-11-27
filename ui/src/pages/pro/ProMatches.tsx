@@ -127,7 +127,7 @@ function IntlQuietDay({ date, gender, onOpen }: { date: string; gender: 'm' | 'w
   const { next, prev } = q.data!;
   if (!next && !prev) return <EmptyState title={`No ${game} international matches on ${longDay(date)}`} body="None scheduled yet." />;
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <p className="rounded-md border border-field-700 bg-field-900/60 px-3 py-2 text-sm text-chalk-300">
         No {game} international matches on {longDay(date)}. National teams play in windows a few days long{next ? <>; the next is <strong className="font-semibold text-chalk-100">{longDay(next.date)}</strong></> : ''}.
       </p>
@@ -139,7 +139,7 @@ function IntlQuietDay({ date, gender, onOpen }: { date: string; gender: 'm' | 'w
 
 function DayBoard({ title, day, onOpen }: { title: string; day: Around; onOpen: (iso: string) => void }) {
   return (
-    <section className="space-y-2" aria-label={title}>
+    <section className="stack-sm" aria-label={title}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-chalk-100">{title} <span className="font-normal text-chalk-400">· {day.total} {day.total === 1 ? 'match' : 'matches'}</span></h2>
         <button type="button" className="btn-ghost btn-sm" onClick={() => onOpen(day.date)}>Open this day</button>

@@ -51,6 +51,18 @@ services:
       # Plaibook Live Pro: API-Football (Plaibook's Pro-plan key, shared with the app; see .env.example for the floors).
       - key: API_FOOTBALL_KEY
         sync: false
+      # App alerts (src/push): off until PUSH_ENABLED is "1" (until then the sender only logs what it would send).
+      # APNS_KEY_P8 is the .p8 key file's text; the key id and team id come from the Apple Developer account.
+      - key: PUSH_ENABLED
+        sync: false
+      - key: APNS_KEY_P8
+        sync: false
+      - key: APNS_KEY_ID
+        sync: false
+      - key: APNS_TEAM_ID
+        sync: false
+      - key: APNS_BUNDLE_ID
+        value: live.plaibook.app
       - key: LOG_LEVEL
         value: info
       - key: PORT

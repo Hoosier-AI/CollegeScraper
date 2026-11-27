@@ -35,7 +35,7 @@ function ComparePlayers() {
     </div>
   );
   if (!a || !b) return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Compare players" meta="Pick two players to see their season side by side." />
       <div className="flex flex-wrap gap-4">{!a && pick('a')}{a && !b && pick('b')}</div>
       {a && <p className="text-sm text-chalk-400">First player: <Link className="text-pitch-300" to={proPath.player(a)}>{a}</Link></p>}
@@ -48,7 +48,7 @@ function ComparePlayers() {
   const seasons = sides.map(mainSeason);
   const val = (i: number, k: string, rate: boolean) => { const s = seasons[i] as any; if (!s) return null; const v = s[k]; return rate ? per90(v, s.minutes) : v ?? null; };
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title="Compare players" meta="Each player's busiest club season in their latest season with minutes." />
       <div className="grid grid-cols-2 gap-3">
         {sides.map((p, i) => (
@@ -84,7 +84,7 @@ function ComparePlayers() {
           </Card>
         ) : null;
       })()}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {sides.map((p) => p.percentiles && p.percentiles.rows.length > 0 ? <PercentileBars key={p.player.id} rows={p.percentiles.rows} caption={`${p.player.name}: ${p.percentiles.league?.name ?? ''} ${p.percentiles.season}`} /> : <p key={p.player.id} className="text-sm text-chalk-400">No percentiles for {p.player.name} yet (450+ minutes needed).</p>)}
       </div>
     </div>
@@ -120,17 +120,17 @@ function CompareClubs() {
     </div>
   );
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title="Compare clubs" meta="Two clubs side by side: this season a match in their league, against the rest of that league, with Plaibook Elo and their meetings." />
       {(!ta || !tb) && <div className="flex flex-wrap gap-4">{!ta && pick('ta', 'First club')}{!tb && pick('tb', 'Second club')}</div>}
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {ta && tb && q.isPending && <Skeleton className="h-96" />}
       {q.data && (
-        <div className="mx-auto max-w-4xl space-y-4">
+        <div className="mx-auto max-w-4xl stack">
           <TeamCompareHead a={head(q.data.a, 'ta')} b={head(q.data.b, 'tb')} />
           {q.data.rows.length ? <TeamCompareRows rows={q.data.rows} peerNote="its own league this season" /> : <EmptyState title="No league numbers yet this season" />}
           {(q.data.meetings?.matches.length ?? 0) > 0 && (
-            <section className="space-y-2">
+            <section className="stack-sm">
               <h2 className="flex items-baseline justify-between h-section">Last meetings<Link to={`/pro/h2h?a=${ta}&b=${tb}`} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
               <div className="frame divide-y divide-field-700">{q.data.meetings!.matches.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div>
             </section>

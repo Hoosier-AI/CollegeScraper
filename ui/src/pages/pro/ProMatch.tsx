@@ -64,7 +64,7 @@ export default function ProMatch() {
   });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="match" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-96" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
   if ((d.match.league.scope === 'intl') !== intl) return <MoveSection to={proPath.match(slug, d.match.league.scope ?? 'club')} />;
   const m = d.match;
@@ -122,7 +122,7 @@ export default function ProMatch() {
       )}
       {tab === 'preview' && d.preview && <PageWithRail label="Match in numbers" rail={rail}><MatchPreview m={m} p={d.preview} h2h={d.h2h} /></PageWithRail>}
       {tab === 'lineups' && hasLineups && (
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <Section title="Formations"><ProPitch home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>
           <Section title="Lineups">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -133,7 +133,7 @@ export default function ProMatch() {
         </div>
       )}
       {tab === 'stats' && (
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           {hasStats && <Section title="Team stats" className={hasShots ? '' : 'lg:col-span-2'}><TeamStatsCompare home={d.home.stats} away={d.away.stats} homeName={m.home.name} awayName={m.away.name} /></Section>}
           {hasShots && <Section title="Shot map" className={hasShotsWide ? 'lg:col-span-2' : ''}><ShotMap shots={d.advanced!.shots} homeName={m.home.name} awayName={m.away.name} score={[m.home.score ?? null, m.away.score ?? null]} /></Section>}
           {hasLineups && <Section title="Player stats" className="lg:col-span-2"><PlayerMatchStats home={d.home} away={d.away} homeName={m.home.name} awayName={m.away.name} /></Section>}

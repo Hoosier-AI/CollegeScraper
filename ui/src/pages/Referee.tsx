@@ -63,11 +63,11 @@ export default function Referee() {
           <p className="mt-1.5 text-2xs text-chalk-500">Games, then the team's record in them (won-lost-tied).</p>
         </RailCard>
       )}>
-        <section className="min-w-0 space-y-2">
+        <section className="min-w-0 stack-sm">
           <h2 className="h-section">By season</h2>
           <DataTable rows={d.seasons} columns={cols} rowKey={(s) => `${s.season}-${s.gender}-${s.division}`} caption={`${r.name} by season`} />
         </section>
-        <section className="min-w-0 space-y-2">
+        <section className="min-w-0 stack-sm">
           <h2 className="h-section">Latest games</h2>
           <ul className="frame divide-y divide-field-700">
             {d.recent.map((x) => (

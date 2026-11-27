@@ -1,6 +1,8 @@
 // Cookie-free analytics (src/api/analytics.ts): one beacon per page change and one per search the visitor settles on.
 // Nothing is stored in the browser and nothing identifies the visitor; the owner (an admin token here) is not counted.
 import { isAdmin } from './api';
+import { apiUrl } from './apiBase';
+import { isNative } from './platform';
 import { isEngaged, SECOND_PAGE_MS, STAY_MS } from './engaged';
 
 let lastPath = '';
@@ -54,9 +56,12 @@ function send(body: Record<string, unknown>): void {
   if (isAdmin()) return;
   if (body.t === 'view' && !human) { if (waiting.length < MAX_WAITING) waiting.push(body); return; }
   if (body.t === 'view') body = { ...body, h: 1 };
+  // The phone app says so, so its visits can be told from the website's.
+  if (isNative) body = { ...body, app: 1 };
   try {
     const data = JSON.stringify(body);
-    if (!navigator.sendBeacon?.('/api/t', data)) void fetch('/api/t', { method: 'POST', body: data, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+    const to = apiUrl('/api/t');
+    if (!navigator.sendBeacon?.(to, data)) void fetch(to, { method: 'POST', body: data, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
   } catch { /* analytics never breaks the page */ }
 }
 

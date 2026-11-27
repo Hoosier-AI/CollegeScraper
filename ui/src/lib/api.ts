@@ -1,6 +1,7 @@
 // Thin fetch wrapper: unwraps JSON and, when an admin secret has been stored, attaches it.
 // The read routes are public, so most of the site works with no token at all.
 import { useEffect, useState } from 'react';
+import { apiUrl } from './apiBase';
 
 const KEY = 'college-ui-token';
 const listeners = new Set<() => void>();
@@ -27,7 +28,9 @@ export class ApiError extends Error { constructor(public status: number, message
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const send = (bearer: string) => fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}), ...(init.headers ?? {}) } });
+  // Content-Type goes only with a body: a read with no custom header is a "simple" request, which the app (another
+  // origin, src/http/cors.ts) can send without a preflight round trip first.
+  const send = (bearer: string) => fetch(apiUrl(path), { ...init, headers: { ...(init.body != null ? { 'Content-Type': 'application/json' } : {}), ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}), ...(init.headers ?? {}) } });
   let res = await send(token);
   // A stored admin secret the server no longer accepts: drop it and try again as a visitor, so the public pages keep
   // working (the console then asks for the secret again).

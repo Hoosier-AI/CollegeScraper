@@ -81,6 +81,7 @@ export const JOB_META: Record<string, JobMeta> = {
   'college-elo': { description: 'College: Plaibook Elo for every program from every result since 2024 (conference levels), ranks by gender and division. No requests.', lane: 'aux', params: [] },
   'pro-elo': { description: 'Pro: Plaibook Elo for every club from every result since 2023 (country levels), world ranks by gender. No requests.', lane: 'aux', params: [] },
   'intl-elo': { description: 'International: Plaibook Elo for every nation from every result since 1872 (the World Football Elo method), current ratings and ranks. No requests.', lane: 'sources', params: [force] },
+  'push-send': { description: 'App alerts: sends the waiting kick-off, goal, half-time and full-time alerts to the devices that follow the match (Apple push). With PUSH_ENABLED off it does everything except the request to Apple and logs what it would send. Queued by the score jobs when a match changes, and every minute while alerts wait.', lane: 'push', params: [] },
   'hourly': { description: 'Every 30 minutes in season: recent scoreboard days, NCAA box scores, pending school box scores, reconcile, aggregates.', lane: 'crawl', composite: true, params: [season] },
   'nightly': { description: 'Daily: two-day sweep, NCAA re-fetch, school sync (no bios), orphans, reconcile, aggregates, standings, polls, quality, retention.', lane: 'crawl', composite: true, params: [season], dangerous: true },
   'standings': { description: 'Every 3 hours in season: membership verification, conference standings, polls.', lane: 'crawl', composite: true, params: [season] },
@@ -99,6 +100,9 @@ export const AUX_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'a
 export const SOURCE_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'sources').map(([n]) => n);
 /** The jobs the 'pro-bulk' lane claims: the long crawl work, kept off both the college crawl and the pro scoreboard. */
 export const PRO_BULK_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'pro-bulk').map(([n]) => n);
+
+/** The jobs the 'push' lane claims: app alerts, so a send never waits behind a crawl and never holds one up. */
+export const PUSH_JOBS = Object.entries(JOB_META).filter(([, m]) => m.lane === 'push').map(([n]) => n);
 
 export function metaFor(name: string): JobMeta {
   return JOB_META[name] ?? { description: '', lane: 'crawl', params: [] };

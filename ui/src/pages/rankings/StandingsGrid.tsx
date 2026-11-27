@@ -39,7 +39,7 @@ export function StandingsGrid(props: { conference?: string; embedded?: boolean }
   const shown = conference ? groups.filter(([, g]) => g.id === conference) : groups;
   const scope = props.conference ? `${genderLabel(f.gender)}, ${f.season}` : `${divisionLabel(division)} ${genderLabel(f.gender)}, ${f.season}`;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       {!props.embedded && <PageHeader title="Conference tables" meta={q.data ? `${scope}: ${q.data.official} rows from official conference tables, ${q.data.computed} computed from results` : scope}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => patch({ division: v === 'd1' ? null : v, conference: null })} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[240px]" />}</Field>
@@ -49,9 +49,9 @@ export function StandingsGrid(props: { conference?: string; embedded?: boolean }
         <p className="mt-2 max-w-3xl leading-relaxed"><Badge tone="teal">Official</Badge> tables are read from the conference's own standings page: rank, points and records exactly as published. <Badge tone="gray">Computed</Badge> tables come from our stored results (3 points for a win, 1 for a tie). Each official row is then compared with the record we compute from our own game list: <b className="text-win">Verified</b> means both records match; <b className="text-chalk-300">Source behind</b> means every result the conference lists is in our record and we hold games it has not posted yet; <b className="text-note">Differs</b> lists the two records.</p>
       </details>
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
-      {q.isPending && <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="space-y-2"><Skeleton className="h-6 w-40" /><Skeleton className="h-56" /></div>)}</div>}
+      {q.isPending && <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="space-y-2"><Skeleton className="h-6 w-40" /><Skeleton className="h-56" /></div>)}</div>}
       {q.data && !q.data.rows.length && <EmptyState title={`No standings for ${scope} yet`} body={admin ? 'Run compute-standings from the Jobs page.' : 'Conference play has not started, or the tables have not been collected yet.'} />}
-      <div className={props.conference ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-2'}>
+      <div className={props.conference ? 'grid gap-6' : 'masonry-2'}>
         {shown.map(([conf, g]) => {
           const rows = g.rows;
           const official = rows[0]?.source === 'conference';

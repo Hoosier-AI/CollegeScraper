@@ -59,9 +59,9 @@ export default function ProLeagues() {
         : <EmptyState title="No competitions match" body="Try a country name, or clear the filter." action={<button className="btn-ghost btn-sm" onClick={search.clear}>Clear</button>} />)}
       {/* Balanced columns: each country goes to the shortest column in priority order, so the big countries read across
           the top (USA, England, Spain...) and no card is stretched to its neighbour's height. */}
-      <div className="grid items-start gap-4" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
         {cols.map((col, i) => (
-          <div key={i} className="space-y-4">
+          <div key={i} className="stack">
             {col.map(([country, list]) => <CountryCard key={country} country={country} list={list} />)}
           </div>
         ))}

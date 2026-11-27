@@ -1,7 +1,10 @@
 // HTTP surface for Render: health, enqueue, run listing, cancel. Starts the worker loop.
 import { registerLegalApi } from './legal/routes.js';
 import { hasDisguisedPath } from './http/routePath.js';
+import { registerCors } from './http/cors.js';
+import { registerAppLinks } from './http/appLinks.js';
 import { registerPhotoApi } from './legal/photos.js';
+import { registerPushApi } from './push/routes.js';
 import { adsTxt, ADS_OFF, buildCsp } from './money/config.js';
 import { adsSettings } from './ops/settings.js';
 import { makeExtraSeo } from './seo/extra.js';
@@ -109,6 +112,9 @@ app.addHook('onSend', async (_req, reply, payload) => {
   return payload;
 });
 
+// Which pages open in the iOS app (universal links, src/http/appLinks.ts).
+registerAppLinks(app);
+
 // ads.txt: names the site's one ad seller (Google AdSense) once a publisher id is set; 404 until then.
 app.get('/ads.txt', async (_req, reply) => {
   const body = adsTxt(await adsSettings(getDb()).catch(() => ADS_OFF));
@@ -178,6 +184,9 @@ const limitSite = async (req: FastifyRequest, reply: FastifyReply): Promise<bool
 // Usage per principal (keys, admin, anon, site) for the console; flushed to the database once a minute.
 const usage = new UsageMeter(cfg.SUPABASE_URL ? getDb() : null);
 usage.start();
+// The phone app reads /api from another origin (capacitor://localhost). Before registerUiApi: its hook answers the
+// preflight, which carries no secret and would be refused by the admin check there (src/http/cors.ts).
+registerCors(app);
 // The mirror is registered after /v1's key check (below); its inner requests skip the per-visitor limit.
 let siteMirror: ReturnType<typeof registerSiteMirror> | null = null;
 registerUiApi(app, { authorized, limitAnonymous: limitSite, internal: (req) => siteMirror?.internal(req) ?? false });
@@ -185,6 +194,8 @@ registerUiApi(app, { authorized, limitAnonymous: limitSite, internal: (req) => s
 registerLegalApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 'plaibook-stats' });
 // Player photos sent in on /photo, reviewed in the hub (src/legal/photos.ts).
 registerPhotoApi(app, { salt: cfg.COLLEGE_TRIGGER_SECRET ?? cfg.SUPABASE_URL ?? 'plaibook-stats' });
+// The app's device routes: register, follows, alert settings, forget (src/push/routes.ts).
+registerPushApi(app);
 
 // Cookie-free site analytics (src/api/analytics.ts): the viewer's beacon on every page change and settled search.
 // Bots are not counted; the viewer itself skips the owner (an admin token in the browser).

@@ -47,7 +47,7 @@ const NOTE: Record<Exclude<TableViewKey, 'all'>, string> = { home: 'Home matches
 export function ProTableView({ league, season, view, hrefOf }: { league: number; season: number; view: Exclude<TableViewKey, 'all'>; hrefOf: (t: Row['team']) => string | null }) {
   const q = useQuery({ queryKey: ['ptv', league, season, view], queryFn: () => api<{ groups: { name: string; rows: Row[] }[] }>(`/api/pro/leagues/${league}/table${qs({ season, view })}`), staleTime: 300_000 });
   if (q.isPending) return <Skeleton className="h-96" />;
-  return <div className="space-y-4">{(q.data?.groups ?? []).map((g) => <div key={g.name} className="space-y-1.5">{g.name && <h3 className="text-sm font-semibold text-chalk-200">{g.name}</h3>}<ViewTable rows={g.rows} caption={`${g.name} ${view} table`} hrefOf={hrefOf} /></div>)}<p className="text-2xs text-chalk-500">{NOTE[view]} Worked out from the results we hold; points 3 for a win, 1 for a draw.</p></div>;
+  return <div className="stack">{(q.data?.groups ?? []).map((g) => <div key={g.name} className="space-y-1.5">{g.name && <h3 className="text-sm font-semibold text-chalk-200">{g.name}</h3>}<ViewTable rows={g.rows} caption={`${g.name} ${view} table`} hrefOf={hrefOf} /></div>)}<p className="text-2xs text-chalk-500">{NOTE[view]} Worked out from the results we hold; points 3 for a win, 1 for a draw.</p></div>;
 }
 
 export function CollegeTableView({ conference, season, gender, view, hrefOf }: { conference: string; season: number; gender: 'm' | 'w'; view: Exclude<TableViewKey, 'all'>; hrefOf: (t: Row['team']) => string | null }) {

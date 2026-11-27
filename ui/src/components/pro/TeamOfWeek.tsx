@@ -27,12 +27,12 @@ export function TeamOfWeek({ league, season, round, onRound }: { league: number;
   const best = d.xi.find((x) => x.best);
   const meta = d.rounds.find((r) => r.round === d.round);
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm text-chalk-300">The best-rated XI of {roundName(d.round)}{meta ? `, ${meta.matches} matches` : ''}, in a 4-3-3: ratings from the match data, 45 minutes or more.</p>
         {d.rounds.length > 1 && <Select aria-label="Round" className="h-9 max-w-[220px] text-sm" value={d.round} onChange={onRound} options={d.rounds.map((r) => ({ value: r.round, label: roundName(r.round) }))} />}
       </div>
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
         <XIPitch lines={lines} crests={crests} label={`Team of the week, ${roundName(d.round)}: ${d.xi.map((x) => `${x.display} (${x.rating.toFixed(1)})`).join(', ')}`} />
         <div className="space-y-3">
           {best && (

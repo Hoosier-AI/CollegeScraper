@@ -36,7 +36,7 @@ export default function ProTeams() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-64" />}
       {q.data && !groups.length && <EmptyState title={term ? `No club matches “${search.value}”` : 'No clubs listed yet'} body={term ? 'Clear the search, or look Worldwide.' : 'Try Worldwide or another league.'} action={term ? <button className="btn-ghost btn-sm" onClick={search.clear}>Clear search</button> : undefined} />}
-      <div className={`grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
+      <div className={`masonry ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
         {groups.map((g) => (
           <section key={g.league.id} className="frame overflow-hidden" aria-label={g.league.name}>
             <h2 className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-chalk-100">

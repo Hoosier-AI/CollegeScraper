@@ -5,13 +5,13 @@ import { startScheduler } from './jobs/scheduler.js';
 import { getDb } from './db/client.js';
 import { log } from './log.js';
 import { CHECK_JOBS } from './pro/crawlSites.js';
-import { AUX_JOBS, PRO_BULK_JOBS, PRO_LANE_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
+import { AUX_JOBS, PRO_BULK_JOBS, PRO_LANE_JOBS, PUSH_JOBS, SOURCE_JOBS } from './jobs/catalogue.js';
 import type { Config } from './config.js';
 
 export function startWorkers(controller: AbortController, cfg: Pick<Config, 'WORKERS_ENABLED' | 'SCHEDULER_ENABLED'>): void {
   if (cfg.WORKERS_ENABLED !== '0') {
     // Three lanes: the crawl (minutes to hours per run), the live scoreboard (seconds, every minute in game hours) and short side jobs.
-    workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'h2h-detail', 'backfill', 'weekly', ...AUX_JOBS, ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
+    workerLoop(getDb(), { signal: controller.signal, exclude: ['live', 'h2h-detail', 'backfill', 'weekly', ...AUX_JOBS, ...PRO_LANE_JOBS, ...PRO_BULK_JOBS, ...SOURCE_JOBS, ...PUSH_JOBS], lane: 'crawl' }).catch((err) => { log.error({ err: String(err) }, 'worker crashed'); process.exit(1); });
     workerLoop(getDb(), { signal: controller.signal, jobs: ['live'], idleMs: 10_000, lane: 'live' }).catch((err) => { log.error({ err: String(err) }, 'live worker crashed'); process.exit(1); });
     // A third lane for short side jobs (finals' box scores, weather, ratings, sims, RPI, Elo, the stat audit) so they
     // never wait hours behind the nightly crawl. They also keep running while the college crawl is paused.
@@ -33,6 +33,9 @@ export function startWorkers(controller: AbortController, cfg: Pick<Config, 'WOR
     workerLoop(getDb(), { signal: controller.signal, jobs: ['backfill'], idleMs: 30_000, lane: 'history' }).catch((err) => { log.error({ err: String(err) }, 'history worker crashed'); process.exit(1); });
     // Box scores for earlier meetings a match page asked for: their own lane, so a backlog never holds up final-detail.
     workerLoop(getDb(), { signal: controller.signal, jobs: ['h2h-detail'], idleMs: 15_000, lane: 'h2h' }).catch((err) => { log.error({ err: String(err) }, 'h2h worker crashed'); process.exit(1); });
+    // App alerts (push-send): its own lane, so an alert never waits behind a crawl and a slow send to Apple never
+    // holds one. Asked every 5 s: a goal alert is queued the moment the score job sees the goal.
+    workerLoop(getDb(), { signal: controller.signal, jobs: PUSH_JOBS, idleMs: 5_000, lane: 'push' }).catch((err) => { log.error({ err: String(err) }, 'push worker crashed'); process.exit(1); });
     // The scraped and open sources (ASA, Wikipedia, openfootball ...): two workers that download, side by side (each
     // site keeps its own per-host limit in the shared client), and one that matches, checks and fills, one job at a
     // time so a check never runs in the middle of a matching pass. Never on API-Football's quota.

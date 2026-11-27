@@ -59,13 +59,13 @@ export default function Matches() {
   const scope = [division ? divisionLabel(division) : 'all divisions', genderLabel(f.gender)].join(', ');
   const updated = q.data?.generated_at ? Math.max(0, Math.round((now - Date.parse(q.data.generated_at)) / 1000)) : null;
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <PageHeader title="Matches" meta={`${longDay(date)}, ${scope}`}>
         <Field label="Division">{() => <SegmentedControl label="Division" size="sm" value={division} onChange={(v) => { setDivision(v); if (conference) setConference(''); }} options={DIV_OPTIONS} />}</Field>
         <Field label="Conference">{(id) => <Select id={id} value={conference} onChange={setConference} options={confOptions} className="max-w-[220px]" />}</Field>
       </PageHeader>
       {/* The day stays in reach while scrolling a long matchday. */}
-      <div className="sticky top-14 z-20 -mx-4 bg-field-950/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"><DateStrip date={date} today={today} onChange={setDate} counts={counts} /></div>
+      <div className="sticky top-[var(--topbar-h)] z-20 -mx-3.5 bg-field-950/95 px-3.5 py-2 backdrop-blur sm:-mx-6 sm:px-6"><DateStrip date={date} today={today} onChange={setDate} counts={counts} /></div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-chalk-400" role="group" aria-label="Show only">
         <Chip on={show === 'live'} onClick={() => setShow(show === 'live' ? '' : 'live')}>Live{q.data?.live ? ` (${q.data.live})` : ''}</Chip>
         <Chip on={!!tv} onClick={() => setTv(tv ? '' : '1')} title="Games with a TV or streaming listing">On TV{q.data ? ` (${tvCount})` : ''}</Chip>
@@ -81,7 +81,7 @@ export default function Matches() {
         <EmptyState title={`No matches on ${longDay(date)}`} body={nextWithGames ? `The next matchday is ${longDay(nextWithGames)}.` : 'Try another day or widen the filters.'}
           action={nextWithGames ? <button className="btn-ghost btn-sm" onClick={() => setDate(nextWithGames)}>Go to {longDay(nextWithGames)}</button> : undefined} />
       )}
-      <div className={`space-y-6 ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
+      <div className={`stack ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
         {GROUPS.map((grp) => {
           const rows = games.filter((g) => grp.statuses.includes(g.status) && (grp.pending === undefined || !!g.result_pending === grp.pending));
           if (!rows.length) return null;

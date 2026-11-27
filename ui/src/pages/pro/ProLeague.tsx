@@ -18,6 +18,7 @@ import { ProMoved } from './ProMoved';
 import { MoveSection } from '../../components/pro/MoveSection';
 import { useSection } from '../../lib/section';
 import { ProHero, StatTile } from '../../components/pro/Hero';
+import { Bracket, BracketCard, type BracketData, type BracketGame } from '../../components/Bracket';
 import { AdvancedLeaders, ExpectedTable, type AdvLeaderLine, type ExpectedLine, type SourceCredit } from '../../components/pro/Advanced';
 
 interface TeamLine { team: ProTeamRef; played: number; w: number; d: number; l: number; gf: number; ga: number; clean_sheets: number; shots: number | null; shots_on: number | null; corners: number | null; fouls: number | null; yellow: number | null; red: number | null; possession: number | null }
@@ -25,8 +26,12 @@ interface LeagueData { league: ProLeagueRef & { current_season: number | null };
   champions: { season: number; teams: { team: ProTeamRef; group: string; points: number | null }[] }[]; team_table: TeamLine[];
   advanced_leaders?: { credit: SourceCredit; table?: ExpectedLine[]; xg: AdvLeaderLine[]; xa: AdvLeaderLine[]; g_plus: AdvLeaderLine[] } | null;
   history_sources?: { what: string; name: string; url: string | null; license: string | null }[] | null }
-// The competition tab order every area uses: Table, Matches, Players, Teams, News, then History.
-type Tab = 'table' | 'matches' | 'players' | 'week' | 'teams' | 'news' | 'history';
+// The knockout stage (src/pro/bracketData.ts): the bracket from its first full round, the third-place game, and the
+// rounds before the bracket (play-offs, numbered rounds) as lists.
+interface KnockoutData { season: number; bracket: BracketData | null; third_place: BracketGame | null; preliminary: { label: string; games: BracketGame[] }[]; has_groups: boolean }
+const KNOCKOUT_ROUND = /final|round of \d|play-?off|knockout|\d(st|nd|rd|th) round|preliminary/i;
+// The competition tab order every area uses: Table, Knockout (where there is one), Matches, Players, Teams, News, then History.
+type Tab = 'table' | 'knockout' | 'matches' | 'players' | 'week' | 'teams' | 'news' | 'history';
 // Old tab ids (before 2026-10-14) still open the right tab.
 const OLD_TAB: Record<string, Tab> = { results: 'matches', fixtures: 'matches', stats: 'teams' };
 
@@ -84,9 +89,9 @@ function StatsTab({ league, season, current, teams, scorers = [], assists = [], 
   // Form guide: every club in table order with its last five.
   const formRows = standings.flatMap((g) => g.rows).filter((r) => r.form).sort((a, b) => (b.points ?? 0) - (a.points ?? 0) || (a.rank ?? 99) - (b.rank ?? 99));
   return (
-    <div className="space-y-5">
+    <div className="stack">
       {(scorers.length > 0 || assists.length > 0) && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <LeaderCards title="Top scorers" rows={scorers} value={(r) => String(r.goals)} />
           <LeaderCards title="Most assists" rows={assists} value={(r) => String(r.assists)} />
         </div>
@@ -118,6 +123,33 @@ function StatsTab({ league, season, current, teams, scorers = [], assists = [], 
   );
 }
 
+/** Games outside the tree (the third-place game, a preliminary round): the bracket's own cards in a grid. */
+function GameGrid({ games }: { games: BracketGame[] }) {
+  return <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">{games.map((g, i) => <li key={g.id ?? i} className="h-14"><BracketCard g={g} /></li>)}</ol>;
+}
+
+function Knockout({ k, name }: { k: KnockoutData; name: string }) {
+  // The latest preliminary round first: the one closest to the bracket.
+  const earlier = [...k.preliminary].reverse();
+  return (
+    <div className="stack">
+      {k.bracket && <Bracket b={k.bracket} title={`${name} ${k.season} knockout stage`} />}
+      {k.third_place && <Section title="Third place"><GameGrid games={[k.third_place]} /></Section>}
+      {earlier.length > 0 && (
+        <section className="stack-sm min-w-0">
+          <h2 className="h-section">{k.bracket ? 'Earlier rounds' : 'Knockout rounds'}</h2>
+          {earlier.map((r) => (
+            <div key={r.label} className="space-y-2">
+              <h3 className="text-sm font-semibold text-chalk-100">{r.label}</h3>
+              <GameGrid games={r.games} />
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
 function Leaders({ rows, stat, label }: { rows: ProLeader[]; stat: 'goals' | 'assists'; label: string }) {
   if (!rows.length) return <p className="text-sm text-chalk-400">No {label.toLowerCase()} recorded yet.</p>;
   return (
@@ -143,7 +175,7 @@ export default function ProLeague() {
   const intl = useSection() === 'intl';
   const patch = useUrlPatch();
   const [seasonParam] = useUrlState('season', '');
-  const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'matches', 'players', 'week', 'teams', 'news', 'history', ...Object.keys(OLD_TAB)] });
+  const [rawTab] = useUrlState('tab', 'table', { allow: ['table', 'knockout', 'matches', 'players', 'week', 'teams', 'news', 'history', ...Object.keys(OLD_TAB)] });
   const tab = OLD_TAB[rawTab] ?? (rawTab as Tab);
   const [round, setRound] = useUrlState('round');
   const [tview, setTview] = useUrlState('view', 'all', { allow: ['all', 'home', 'away', 'form'] }) as [TableViewKey, (v: string) => void];
@@ -151,15 +183,20 @@ export default function ProLeague() {
   // Team of the week: a tab only where the matches have player ratings (the latest round, shared with the tab).
   const lid = q.data?.league.id, lseason = q.data?.season;
   const totw = useQuery({ queryKey: ['totw', lid, lseason, ''], queryFn: () => api<Totw>(totwUrl(lid!, lseason!)), enabled: !!lid && !!lseason, staleTime: 300_000 });
+  // The knockout stage: asked for where there can be one (a cup, no table or several groups, or a knockout round among
+  // the matches), not for an ordinary league with one table. A 404 means none; the tab is then not shown.
+  const ld = q.data;
+  const mayKnockout = !!ld?.season && (ld.league.type === 'cup' || ld.standings.length !== 1 || [...ld.results, ...ld.fixtures].some((m) => !!m.round && KNOCKOUT_ROUND.test(m.round)));
+  const ko = useQuery({ queryKey: ['pro-league-bracket', slug, ld?.season], queryFn: () => api<KnockoutData>(`/api/pro/leagues/${slug}/bracket${qs({ season: ld!.season })}`), enabled: mayKnockout, staleTime: 300_000, retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="league" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
   const l = d.league;
   // A national-team competition is International's page, a club one Pro's.
   if ((l.scope === 'intl') !== intl) return <MoveSection to={proPath.league(slug, null, null, l.scope ?? 'club')} />;
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'table', label: 'Table' }, { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'players', label: 'Players' }, ...((totw.data?.rounds.length ?? 0) > 0 ? [{ id: 'week' as Tab, label: 'Team of the week' }] : []), { id: 'teams', label: 'Teams' }, { id: 'news', label: 'News' },
+    { id: 'table', label: 'Table' }, ...(ko.data ? [{ id: 'knockout' as Tab, label: 'Knockout' }] : []), { id: 'matches', label: 'Matches', count: d.results.length + d.fixtures.length }, { id: 'players', label: 'Players' }, ...((totw.data?.rounds.length ?? 0) > 0 ? [{ id: 'week' as Tab, label: 'Team of the week' }] : []), { id: 'teams', label: 'Teams' }, { id: 'news', label: 'News' },
     ...(d.champions.length ? [{ id: 'history' as Tab, label: 'History', count: d.champions.length }] : []),
   ];
   const where = intl ? (l.confederation && l.confederation !== 'FIFA' && l.confederation !== 'Other' ? l.confederation : 'Worldwide') : l.country && l.country !== 'World' ? l.country : 'Continental';
@@ -186,16 +223,18 @@ export default function ProLeague() {
       <TabsNav label="Competition sections" tabs={tabs} value={tab as Tab} hrefFor={tabHref} />
       {tab === 'table' && (
         // The table, and beside it on wide screens what a reader looks for next: who scores, who just played, who is next.
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           {d.standings.length
-            ? <div className="space-y-4">
+            ? <div className="stack">
                 {l.type !== 'cup' && d.season && <div className="flex justify-end"><TableViewSwitch value={tview} onChange={setTview} /></div>}
                 {tview !== 'all' && d.season ? <ProTableView league={l.id} season={d.season} view={tview} hrefOf={(t) => (t.slug ? proPath.team(t.slug, d.season, l.scope === 'intl') : null)} />
                 : d.standings.map((g) => <Section key={g.name || 'table'} title={g.name || `${d.season} table`}><LeagueTable rows={g.rows} caption={`${l.name} ${g.name} ${d.season}`} season={d.season} /></Section>)}
                 {(d.advanced_leaders?.table?.length ?? 0) > 0 && <Section title="Expected table"><ExpectedTable rows={d.advanced_leaders!.table!} season={d.season} /></Section>}
                 </div>
-            : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Matches.' : 'The table appears once the first matches have been played.'} />}
-          <aside className="space-y-4">
+            : ko.data
+              ? <EmptyState title="No table for this season" body="This is a knockout competition: the rounds are drawn on the Knockout tab." action={<Link to={tabHref('knockout')} className="text-sm font-medium text-pitch-400 hover:text-pitch-300">See the knockout stage</Link>} />
+              : <EmptyState title="No table for this season" body={l.type === 'cup' ? 'Knockout competitions have no table; see Matches.' : 'The table appears once the first matches have been played.'} />}
+          <aside className="stack">
             <NewsSection title="Latest news" q={{ league: String(l.id) }} hide={`pro_league:${l.id}`} max={4} dense right={<Link to={tabHref('news')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>} />
             {d.scorers.length > 0 && <Section title="Top scorers" right={<Link to={tabHref('players')} className="text-xs text-pitch-300 hover:text-pitch-200">All</Link>}><Leaders rows={d.scorers.slice(0, 5)} stat="goals" label="Goals" /></Section>}
             {d.assists.length > 0 && <Section title="Most assists"><Leaders rows={d.assists.slice(0, 5)} stat="assists" label="Assists" /></Section>}
@@ -204,14 +243,18 @@ export default function ProLeague() {
           </aside>
         </div>
       )}
+      {tab === 'knockout' && (ko.data ? <Knockout k={ko.data} name={l.name} />
+        : ko.isLoading ? <Skeleton className="h-96" />
+        : ko.error && !(ko.error instanceof ApiError && ko.error.status === 404) ? <ErrorBox error={ko.error} retry={() => ko.refetch()} />
+        : <EmptyState title="No knockout stage for this season" body="The bracket appears once the knockout rounds are scheduled." />)}
       {tab === 'matches' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Section title="Results">{d.results.length ? <div className="frame divide-y divide-field-700">{d.results.map((m) => <ProMatchRow key={m.id} m={m} showDate />)}</div> : <p className="text-sm text-chalk-400">No results yet.</p>}</Section>
           <Section title="Fixtures">{d.fixtures.length ? <div className="frame divide-y divide-field-700">{d.fixtures.map((m) => <ProMatchRow key={m.id} m={m} showDate />)}</div> : <p className="text-sm text-chalk-400">No upcoming fixtures. The season may be over, or the next round is not scheduled yet.</p>}</Section>
         </div>
       )}
       {tab === 'players' && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <Section title="Top scorers"><Leaders rows={d.scorers} stat="goals" label="Goals" /></Section>
           <Section title="Most assists"><Leaders rows={d.assists} stat="assists" label="Assists" /></Section>
           {d.advanced_leaders && <div className="md:col-span-2"><Section title="Advanced leaders"><AdvancedLeaders data={d.advanced_leaders} season={d.season} /></Section></div>}

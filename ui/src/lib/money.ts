@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
+import { isNative } from './platform';
 
 export interface PublicAds { enabled: boolean; client: string | null; slots: { rail: string | null; inline: string | null } }
 export interface PublicSponsor { placement: 'site' | 'college' | 'pro' | 'intl' | 'news'; name: string; url: string; tagline: string | null }
@@ -13,7 +14,9 @@ export interface PublicSponsor { placement: 'site' | 'college' | 'pro' | 'intl' 
 const OFF: PublicAds = { enabled: false, client: null, slots: { rail: null, inline: null } };
 
 export function useMoney(): { ads: PublicAds; sponsors: PublicSponsor[] } {
-  const q = useQuery({ queryKey: ['meta'], queryFn: () => api<{ ads?: PublicAds; sponsors?: PublicSponsor[] }>('/api/meta') });
+  // The phone app carries no ads and no sponsors: it never asks, and always answers off.
+  const q = useQuery({ queryKey: ['meta'], queryFn: () => api<{ ads?: PublicAds; sponsors?: PublicSponsor[] }>('/api/meta'), enabled: !isNative });
+  if (isNative) return { ads: OFF, sponsors: [] };
   return { ads: q.data?.ads ?? OFF, sponsors: q.data?.sponsors ?? [] };
 }
 
@@ -58,7 +61,7 @@ function applyChoice() { if (typeof window !== 'undefined') queue().requestNonPe
 let loaded: string | null = null;
 /** Adds Google's ad script once (only ever called while ads are switched on). */
 export function loadAdsense(client: string) {
-  if (loaded === client) return;
+  if (isNative || loaded === client) return;
   loaded = client;
   applyChoice();
   const s = document.createElement('script');

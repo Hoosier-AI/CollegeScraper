@@ -1,11 +1,11 @@
 // One match in a list: the moment (minute, kickoff or FT) on the left, both sides stacked, the score on the right.
 import { Link } from 'react-router-dom';
-import { Tv } from 'lucide-react';
 import { networkShort, type Broadcast } from '../../lib/tv';
 import { fmt } from '../../lib/api';
 import { useHref } from '../../lib/filters';
-import { Badge, TeamLogo } from '../primitives';
-import { WeatherMini, type MatchWeather } from './Weather';
+import { TeamLogo } from '../primitives';
+import { ScoreRow } from './ScoreRow';
+import type { MatchWeather } from './Weather';
 import { liveClock } from '../../lib/liveClock';
 
 export interface MatchLike {
@@ -28,18 +28,6 @@ export function liveMinute(live: { period: string | null; clock: string | null }
   return liveClock(live).minute;
 }
 
-function Side({ s, winner, loser, home }: { s: MatchLike['home']; winner: boolean; loser: boolean; home?: boolean }) {
-  return (
-    <span className={`flex min-w-0 items-center gap-2 ${loser ? 'text-chalk-400' : 'text-chalk-100'}`}>
-      <TeamLogo src={s.logo} seo={s.seo} name={s.name} size={20} />
-      {s.seed != null && <span className="shrink-0 text-2xs text-chalk-500 tnum" title={`Seed ${s.seed}`}>({s.seed})</span>}
-      {s.rank && <span className="shrink-0 text-2xs text-chalk-500 tnum">No. {s.rank}</span>}
-      <span className={`truncate ${winner ? 'font-semibold' : 'font-medium'}`}>{s.name ?? 'TBD'}</span>
-      {home && <span className="shrink-0 text-2xs text-chalk-500">home</span>}
-    </span>
-  );
-}
-
 export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: boolean; dense?: boolean }) {
   const href = useHref();
   const live = g.status === 'live';
@@ -53,37 +41,13 @@ export function MatchRow({ g, showDate, dense }: { g: MatchLike; showDate?: bool
   const clock = liveClock(g.live);
   const when = live ? clock.minute : final ? 'FT' : pending ? 'No result' : g.status === 'scheduled' ? (fmt.kickoff(g.start_epoch) ?? 'TBD') : g.status === 'postponed' ? 'PPD' : g.status === 'cancelled' ? 'CANC' : g.status;
   const tag = g.tournament ? (g.tournament_round ? `${g.tournament}, ${g.tournament_round.toLowerCase()}` : g.tournament) : (g.conference_game ? (g.home.conference?.short ?? g.home.conference?.name ?? 'Conference') : null);
+  const side = (x: MatchLike['home'], won: boolean) => ({ name: x.short_name ?? x.name ?? 'TBD', logo: x.logo, seo: x.seo, score: x.score, rank: x.rank, seed: x.seed, won });
+  const how = final ? (g.forfeit ? 'forfeit' : g.shootout ? 'pens' : g.overtime ? 'extra time' : null) : null;
+  const meta = dense ? null : [!final && g.broadcast?.network ? networkShort(g.broadcast.network) : null, tag, g.neutral_site ? 'neutral site' : null].filter(Boolean).join(' · ');
   return (
-    <Link to={href(`/matches/${g.id}`)} className={`flex items-center gap-3 px-3 transition-colors duration-150 hover:bg-field-800 coarse:min-h-[60px] ${dense ? 'py-1.5' : 'py-2'}`} aria-label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${live ? clock.long : when}`}>
-      <span className={`w-[4.5rem] shrink-0 text-center text-xs tnum ${live ? 'font-semibold text-win' : pending ? 'text-note' : 'text-chalk-500'}`} title={live ? clock.long : pending ? 'The result has not been reported yet' : g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined}>
-        {showDate && !live ? <span className="block text-2xs">{fmt.day(g.game_date)}</span> : null}
-        <span className="flex items-center justify-center gap-1 whitespace-nowrap">
-          {live && <span aria-hidden className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-win motion-reduce:animate-none" />}
-          {when}
-        </span>
-        {/* Live: how much of the match is left, in words ("5 min left", "Added time"). */}
-        {live && clock.detail && <span className="block whitespace-nowrap text-2xs font-normal text-win/80">{clock.detail}</span>}
-        {/* The network, short, under the time (phones have no room elsewhere). */}
-        {!final && g.broadcast?.network && <span className="block truncate text-2xs font-normal text-pitch-300 sm:hidden" title={g.broadcast.network}>{networkShort(g.broadcast.network)}</span>}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
-        <Side s={g.home} winner={homeWin} loser={awayWin} home={!g.neutral_site} />
-        <Side s={g.away} winner={awayWin} loser={homeWin} />
-      </span>
-      <span className="hidden shrink-0 flex-col items-end gap-0.5 text-right text-2xs text-chalk-500 sm:flex">
-        {!final && g.broadcast?.network && <span className="inline-flex items-center gap-1 font-medium text-pitch-300" title={`On ${g.broadcast.network}`}><Tv size={11} aria-hidden />{g.broadcast.network}</span>}
-        {tag && <span>{tag}{g.neutral_site ? ', neutral' : ''}</span>}
-        {!tag && g.neutral_site && <span>Neutral site</span>}
-        {(g.venue?.city || (g.weather && !final)) && <span className="inline-flex items-center gap-2">{g.venue?.city && <span>{g.venue.city}</span>}{g.weather && !final && !live && <WeatherMini w={g.weather} />}</span>}
-      </span>
-      <span className="flex w-5 shrink-0 flex-col items-end gap-0.5 text-sm tnum">
-        {live || final ? <>
-          <span className={homeWin ? 'font-semibold text-chalk-100' : awayWin ? 'text-chalk-400' : 'text-chalk-100'}>{hs ?? '–'}</span>
-          <span className={awayWin ? 'font-semibold text-chalk-100' : homeWin ? 'text-chalk-400' : 'text-chalk-100'}>{as ?? '–'}</span>
-        </> : <span className="text-chalk-500">–</span>}
-      </span>
-      {final && (g.forfeit || g.shootout || g.overtime) && <Badge className="hidden sm:inline-flex">{g.forfeit ? 'Forfeit' : g.shootout ? 'PK' : 'OT'}</Badge>}
-    </Link>
+    <ScoreRow to={href(`/matches/${g.id}`)} label={`${g.home.name ?? 'TBD'} ${hs ?? ''} ${g.away.name ?? 'TBD'} ${as ?? ''}, ${live ? clock.long : when}`}
+      when={when} date={showDate && !live ? fmt.day(g.game_date) : null} live={live} played={live || final} home={side(g.home, homeWin)} away={side(g.away, awayWin)}
+      sub={live ? clock.detail : how} meta={meta || null} title={pending ? 'The result has not been reported yet' : g.status === 'scheduled' ? fmt.kickoffEt(g.start_epoch) ?? undefined : undefined} />
   );
 }
 

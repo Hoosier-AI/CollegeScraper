@@ -58,7 +58,7 @@ interface MinorData { minor: true; player: { id: number; name: string; slug: str
 
 function MinorNotice({ d }: { d: MinorData }) {
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-2xl stack">
       <Crumbs items={[...(d.team ? [{ label: d.team.name, to: proPath.team(d.team.slug) }] : []), { label: d.player.name }]} />
       <h1 className="display text-3xl text-chalk-100">{d.player.name}</h1>
       {d.team && <p className="flex items-center gap-2 text-chalk-300"><TeamLogo src={d.team.logo} name={d.team.name} size={20} /><Link to={proPath.team(d.team.slug)} className="hover:text-pitch-300">{d.team.name}</Link></p>}
@@ -154,7 +154,7 @@ export default function ProPlayer() {
   const career = useQuery({ queryKey: ['intl-player', slug], queryFn: () => api<IntlCareer>(`/api/intl/players/${slug}`), enabled: onIntl, staleTime: 300_000 });
   if (q.error instanceof ApiError && q.error.status === 404) return <ProMoved kind="player" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   if ('minor' in q.data!) return <MinorNotice d={q.data} />;
   const d = q.data!;
   const p = d.player;

@@ -20,7 +20,9 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
   const conf = t.season?.college_conferences?.name;
   const finals = (games ?? []).filter((g) => g.status === 'final').sort((a, b) => String(a.game_date).localeCompare(String(b.game_date)));
   const last = finals[finals.length - 1];
-  const next = (games ?? []).filter((g) => g.status !== 'final').sort((a, b) => String(a.game_date).localeCompare(String(b.game_date)))[0];
+  // Next: the first game still to come. A past game with no result (called off, never reported) is not "next".
+  const today = todayEastern();
+  const next = (games ?? []).filter((g) => g.status !== 'final' && String(g.game_date).slice(0, 10) >= today).sort((a, b) => String(a.game_date).localeCompare(String(b.game_date)))[0];
   const ncaaRec = t.season?.official_w != null ? fmt.rec(t.season.official_w, t.season.official_l, t.season.official_t) : null;
   const ours = s ? fmt.rec(s.w, s.l, s.t) : null;
   // Two independent checks: the conference table (conf + overall record) and NCAA.com's leaderboard record.
@@ -43,8 +45,8 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
   const usc = t.usc;
   const move = usc?.previous_rank != null ? usc.previous_rank - usc.rank : null;
   return (
-    <header className="card overflow-hidden">
-      <div className="flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+    <header className="stack">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
         <div className="flex min-w-0 items-start gap-4">
           <span className="shrink-0 [&>*]:!h-14 [&>*]:!w-14 sm:[&>*]:!h-[72px] sm:[&>*]:!w-[72px]"><TeamLogo src={school?.logo_svg_url} seo={p.school_seo} name={p.name} size={72} /></span>
           <div className="min-w-0">
@@ -75,13 +77,13 @@ export function TeamMasthead({ t, id, season, games }: { t: any; id: string; sea
             </dl>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <FormPips form={[...(s.form_last5 ?? '')].reverse().join('')} label="Last five, latest on the right" />
-              <span className="text-xs text-chalk-500">Last five, latest on the right{s.streak ? `; ${streakWords(s.streak)}` : ''}</span>
+              {s.streak && <span className="text-xs text-chalk-500">{streakWords(s.streak)}</span>}
             </div>
           </div>
         ) : <p className="text-sm text-chalk-500">No results stored for this season yet.</p>}
       </div>
       {(last || next) && (
-        <div className="grid grid-cols-1 border-t border-field-700 sm:grid-cols-2">
+        <div className="card grid grid-cols-1 overflow-hidden sm:grid-cols-2">
           {last ? <GameStrip label="Last match" g={last} id={id} href={href} /> : <div className="p-4 text-sm text-chalk-500">No matches played yet.</div>}
           {next ? <GameStrip label="Next match" g={next} id={id} href={href} /> : <div className="border-t border-field-700 p-4 text-sm text-chalk-500 sm:border-l sm:border-t-0">No matches scheduled.</div>}
         </div>

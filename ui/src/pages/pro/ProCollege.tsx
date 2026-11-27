@@ -26,7 +26,7 @@ export default function ProCollege() {
   const term = search.value.trim().toLowerCase();
   const groups = useMemo(() => (q.data?.groups ?? []).filter((g) => !term || g.school.name.toLowerCase().includes(term) || g.players.some((p) => p.name.toLowerCase().includes(term))), [q.data, term]);
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title={<span className="flex items-center gap-3"><GraduationCap size={28} aria-hidden className="text-pitch-300" />College to Pro</span>}
         meta={q.data ? `${fmt.num(q.data.total)} ${gender === 'w' ? "women's" : "men's"} professional players from ${fmt.num(q.data.schools)} colleges` : 'Professional players who played NCAA soccer'}>
         <Field label="Find">{(id) => <input id={id} type="search" className="input w-48" placeholder="School or player" value={search.draft} onChange={(e) => search.setDraft(e.target.value)} />}</Field>
@@ -35,7 +35,7 @@ export default function ProCollege() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-96" />}
       {q.data && !groups.length && <EmptyState title="No links yet" body="Links appear as player profiles with birth dates arrive and the weekly college match runs." />}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="masonry">
         {(term ? groups : groups.slice(0, shownSchools)).map((g) => {
           const key = g.school.seo ?? g.school.name;
           const all = !!term || open.has(key) || g.players.length <= PER_SCHOOL + 1;

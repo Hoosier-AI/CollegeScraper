@@ -47,7 +47,7 @@ export default function IntlRankings() {
         </div>
       </details>
       {q.data?.movers && (q.data.movers.up.length > 0 || q.data.movers.down.length > 0) && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-2">
           <Movers title="Biggest risers this year" rows={q.data.movers.up} />
           <Movers title="Biggest fallers this year" rows={q.data.movers.down} />
         </div>

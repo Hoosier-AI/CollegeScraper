@@ -66,7 +66,7 @@ export default function ProTeam() {
   // International: a nation the provider never had a side for is its history alone.
   if (q.error instanceof ApiError && q.error.status === 404) return intl ? <IntlNation slug={slug} /> : <ProMoved kind="team" slug={slug} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
   const d = q.data!;
   const t = d.team;
   if (!!t.national !== intl) return <MoveSection to={proPath.team(slug, null, !!t.national)} />;
@@ -176,13 +176,13 @@ export default function ProTeam() {
         </PageWithRail>
       )}
       {tab === 'matches' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Section title="Results">{d.results.length ? <div className="frame divide-y divide-field-700">{d.results.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div> : <p className="text-sm text-chalk-400">No results this season yet.</p>}</Section>
           <Section title="Fixtures">{d.fixtures.length ? <div className="frame divide-y divide-field-700">{d.fixtures.map((m) => <ProMatchRow key={m.id} m={m} showDate showLeague />)}</div> : <p className="text-sm text-chalk-400">No upcoming fixtures.</p>}</Section>
         </div>
       )}
       {tab === 'stats' && (
-        <div className="space-y-5">
+        <div className="stack">
           {sum && (
             <div className={`grid grid-cols-2 gap-2 sm:grid-cols-4 ${sum.shots != null || sum.poss != null ? 'lg:grid-cols-8' : ''}`}>
               <StatTile label="Matches" value={sum.p} sub={`${sum.w}-${sum.d}-${sum.l}`} />
@@ -196,7 +196,7 @@ export default function ProTeam() {
             </div>
           )}
           {formItems.length > 0 && (
-            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
               <ResultStrip items={formItems.slice(-15)} caption={`Last ${Math.min(15, formItems.length)} results`} />
               <PointsLine results={formItems.map((f) => f.result)} caption={`Points over the ${d.season} season, every competition`} />
             </div>
@@ -219,7 +219,7 @@ export default function ProTeam() {
           )}
           {d.advanced && d.advanced.competitions.length > 0 && <Section title={`${d.season} advanced`}><TeamAdvancedCards competitions={d.advanced.competitions} /></Section>}
           {(d.season_detail?.length ?? 0) > 0 && <Section title={`${d.season} in detail`}><ClubSeasonDetail rows={d.season_detail!} /></Section>}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {periodShown ? <Section title="Goals by period"><GoalsByPeriod rows={d.goals_by_period} /></Section>
               : <Section title="Goals by period"><p className="text-sm text-chalk-400">Shows once goal times are in for most of the season's matches.</p></Section>}
             <Section title="Home and away">
@@ -262,7 +262,7 @@ export default function ProTeam() {
         : <EmptyState title="No coaches listed" />)}
       {tab === 'news' && <NewsFeed q={{ team: String(t.id) }} hide={`pro_team:${t.id}`} empty={`No news for ${t.name} yet`} />}
       {tab === 'transfers' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Section title={`In (${ins.length})`}><TransfersList rows={ins} showPlayer empty="No arrivals recorded yet." /></Section>
           <Section title={`Out (${outs.length})`}><TransfersList rows={outs} showPlayer empty="No departures recorded yet." /></Section>
         </div>

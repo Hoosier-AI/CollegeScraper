@@ -71,7 +71,7 @@ function ComparePlayers() {
     );
   };
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title="Compare players" meta="Two college players side by side: each one's latest season, totals, rates and division percentiles." />
       {(!a.id || !b.id) && (
         <div className="flex flex-wrap gap-4">
@@ -172,17 +172,17 @@ function CompareTeams() {
     </div>
   );
   return (
-    <div className="space-y-5">
+    <div className="stack">
       <PageHeader title="Compare teams" meta={`Two college teams side by side, ${f.season}: a game, against their own division, with Elo, RPI and their meetings.`} />
       {(!ta || !tb) && <div className="flex flex-wrap gap-4">{!ta && <ProgramPicker label="First team" gender={f.gender} onPick={(id) => patch({ ta: id })} />}{!tb && <ProgramPicker label="Second team" gender={f.gender} onPick={(id) => patch({ tb: id })} />}</div>}
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {ta && tb && q.isPending && <Skeleton className="h-96" />}
       {q.data && (
-        <div className="mx-auto max-w-4xl space-y-4">
+        <div className="mx-auto max-w-4xl stack">
           <TeamCompareHead a={head(q.data.a, 'ta')} b={head(q.data.b, 'tb')} />
           {q.data.rows.length ? <TeamCompareRows rows={q.data.rows} peerNote="its own division this season" /> : <EmptyState title="No numbers yet this season" />}
           {(q.data.meetings?.games?.length ?? 0) > 0 && (
-            <section className="space-y-2">
+            <section className="stack-sm">
               <h2 className="flex items-baseline justify-between h-section">Last meetings<Link to={href('/h2h', { a: ta, b: tb })} className="text-xs font-normal text-pitch-300 hover:text-pitch-200">Every meeting</Link></h2>
               <div className="frame divide-y divide-field-700">{q.data.meetings!.games!.slice(0, 5).map((g: any) => <MatchRow key={g.id} g={g} showDate />)}</div>
             </section>

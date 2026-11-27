@@ -36,8 +36,8 @@ export default function ProCoach() {
           {now?.start && <StatTile label="In charge since" value={fmt.date(now.start)} />}
         </div>
       </ProHero>
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-        <section className="space-y-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <section className="stack-sm">
           <h2 className="h-section">Career</h2>
           {d.career.length ? <ul className="frame divide-y divide-field-700 text-sm">
             {d.career.map((x, i) => {
@@ -46,7 +46,7 @@ export default function ProCoach() {
             })}
           </ul> : <p className="text-sm text-chalk-400">No career recorded.</p>}
         </section>
-        <section className="space-y-2">
+        <section className="stack-sm">
           <h2 className="h-section">Trophies as coach</h2>
           {d.trophies.length ? <ul className="frame divide-y divide-field-700 text-sm">
             {d.trophies.map((t, i) => <li key={i} className="flex items-center gap-2.5 px-3 py-2"><Trophy size={15} aria-hidden className="shrink-0 text-note" /><span className="min-w-0 flex-1 truncate text-chalk-100">{t.league}</span><span className="text-xs text-chalk-400">{[t.country, t.season].filter(Boolean).join(', ')}</span></li>)}

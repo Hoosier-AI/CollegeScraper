@@ -19,6 +19,7 @@ import { currentSponsors } from '../money/config.js';
 import { registerIntlApi } from './intlApi.js';
 import { registerNewsApi } from '../news/queries.js';
 import { follows, parseFollows } from './follows.js';
+import { DEVICE_ROUTES } from '../push/routes.js';
 import { collegeTeamOfWeek } from '../college/teamOfWeek.js';
 import { collegeFlow } from '../match/flowQueries.js';
 import { simOdds, tournamentOdds } from '../college/simOdds.js';
@@ -61,6 +62,9 @@ export function registerUiApi(app: FastifyInstance, opts: UiApiOptions | ((h: st
     if (req.method === 'POST' && path === '/api/requests') return;
     // So does the player photo form (src/legal/photos.ts).
     if (req.method === 'POST' && path === '/api/photo-submissions') return;
+    // The app's four device routes (src/push/routes.ts): each checks the device's own install token and keeps its
+    // own limits. Matched by method AND route, so nothing else under /api/device is let through.
+    if (DEVICE_ROUTES.has(`${req.method} ${path}`)) return;
     if (adminOnly(req.method, path)) {
       if (!authorized(req.headers.authorization)) return reply.code(401).send({ error: 'unauthorized' });
       return;

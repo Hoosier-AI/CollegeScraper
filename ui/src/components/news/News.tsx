@@ -113,7 +113,7 @@ export function TeamNews({ sides, title = 'Team news' }: { sides: { label: strin
   const lists = sides.map((side) => ({ side, stories: forSide(side.hide) }));
   if (lists.every((l) => !l.stories.length)) return null;
   return (
-    <section className="min-w-0 space-y-2">
+    <section className="min-w-0 stack-sm">
       <h2 className="h-section">{title}</h2>
       <div className="grid gap-3 md:grid-cols-2">
         {lists.map(({ side, stories }) => (
@@ -133,7 +133,7 @@ export function NewsSection({ title, q, hide, max = 5, dense, right }: { title: 
   const stories = news.data?.pages[0]?.stories ?? [];
   if (news.isPending || !stories.length) return null;
   return (
-    <section className="min-w-0 space-y-2">
+    <section className="min-w-0 stack-sm">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="h-section">{title}</h2>{right}</div>
       <NewsList stories={stories.slice(0, max)} hide={hide} dense={dense} />
     </section>

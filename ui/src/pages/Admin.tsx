@@ -2,6 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { setToken, useAdmin } from '../lib/api';
+import { apiUrl } from '../lib/apiBase';
 import { Logo } from '../components/Brand';
 
 export default function Admin() {
@@ -22,7 +23,7 @@ function Login() {
     setBusy(true);
     try {
       // /api/runs is admin-only, so a 200 here proves the secret rather than just that the server is up.
-      const r = await fetch('/api/runs?limit=1', { headers: { Authorization: `Bearer ${v.trim()}` } });
+      const r = await fetch(apiUrl('/api/runs?limit=1'), { headers: { Authorization: `Bearer ${v.trim()}` } });
       if (!r.ok) throw new Error(r.status === 401 ? 'That secret was rejected.' : `Server error ${r.status}`);
       setToken(v.trim());
       navigate(state?.from && state.from !== '/admin' ? state.from : '/console', { replace: true });

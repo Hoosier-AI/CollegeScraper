@@ -5,6 +5,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { ArrowLeftRight, BarChart3, CalendarDays, Flag, Star, Network, Flame, Globe, GraduationCap, Medal, Newspaper, Shield, Swords, Trophy, Users, Map as MapIcon, Tv } from 'lucide-react';
 import type { Section } from './section';
+import { isNative } from './platform';
 
 export type SlotKey = 'matches' | 'competitions' | 'teams' | 'players' | 'leaders' | 'rankings' | 'news';
 export interface NavItem { key: string; to: string; label: string; icon: LucideIcon; /** One line for the More sheet. */ hint?: string }
@@ -72,8 +73,24 @@ export const AREA_NAV: Record<Section, { slots: NavItem[]; more: NavItem[] }> = 
   },
 };
 
-/** The phone bar: Home, then the same four on every area (Matches, the competitions slot, Teams) and More. */
-export const PHONE_SLOTS: SlotKey[] = ['matches', 'competitions', 'teams'];
+/** The phone bar (2026-11 redesign): the same five on every page. Scores, My teams, Competitions and Stats, then More.
+ *  Competitions and Stats open the current area's own page (conferences, leagues or tournaments; that area's leaders). */
+export function phoneBar(area: Section): (NavItem & { lit: string[] })[] {
+  const s = Object.fromEntries(AREA_NAV[area].slots.map((x) => [x.key, x.to])) as Record<SlotKey, string>;
+  return [
+    { key: 'scores', to: '/', label: 'Scores', icon: CalendarDays, lit: [s.matches] },
+    { key: 'following', to: '/following', label: 'My teams', icon: Star, lit: ['/following'] },
+    { key: 'competitions', to: s.competitions, label: 'Competitions', icon: Trophy, lit: [s.competitions, ...(area === 'college' ? ['/tournament'] : [])] },
+    { key: 'stats', to: s.leaders, label: 'Stats', icon: BarChart3, lit: [s.leaders, s.players, s.rankings] },
+  ];
+}
+/** What the phone's More sheet lists from the area's slots (the rest are on the bar). */
+export const SHEET_SLOTS: SlotKey[] = ['matches', 'teams', 'players', 'rankings', 'news'];
+/** About and legal: in the footer on wide screens, in the More sheet on phones. */
+const ALL_ABOUT_LINKS: [string, string][] = [['/about', 'About'], ['/contact', 'Contact'], ['/corrections', 'Report an error'], ['/sources', 'Credits'], ['/terms', 'Terms'], ['/privacy', 'Privacy'], ['/privacy-choices', 'Privacy choices'], ['/copyright', 'Copyright'], ['/accessibility', 'Accessibility'], ['/data-use', 'Data use'], ['/advertise', 'Advertise']];
+/** The phone app has no ads, so no page about buying them and none about ad choices. */
+const WEB_ONLY_ABOUT = ['/advertise', '/privacy-choices'];
+export const ABOUT_LINKS: [string, string][] = isNative ? ALL_ABOUT_LINKS.filter(([to]) => !WEB_ONLY_ABOUT.includes(to)) : ALL_ABOUT_LINKS;
 
 /** Whether a path sits under a menu item: the item itself or a page inside it (/pro/teams/x lights Teams). */
 export const under = (path: string, to: string) => path === to || path.startsWith(`${to}/`);

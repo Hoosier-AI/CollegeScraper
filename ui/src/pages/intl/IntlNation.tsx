@@ -10,7 +10,7 @@ export function IntlNation({ slug }: { slug: string }) {
   const q = useNationHistory(slug);
   if (q.error instanceof ApiError && q.error.status === 404) return <EmptyState title="Not found" body="There is no national team at this address." action={<Link className="btn-ghost btn-sm" to="/intl/teams">Every national team</Link>} />;
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />;
-  if (q.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
+  if (q.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
   const h = q.data!;
   return (
     <div className="stack">

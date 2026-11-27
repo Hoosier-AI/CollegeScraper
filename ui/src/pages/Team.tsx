@@ -46,7 +46,7 @@ export default function Team() {
   const refreshAll = () => { qc.invalidateQueries({ queryKey: ['program', id] }); qc.invalidateQueries({ queryKey: ['roster', id] }); qc.invalidateQueries({ queryKey: ['pgames', id] }); };
   if (entity.missing) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
   if (entity.error) return <ErrorBox error={entity.error} />;
-  if (team.isPending) return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-64" /></div>;
+  if (team.isPending) return <div className="stack" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-64" /></div>;
   if (team.error) return <ErrorBox error={team.error} retry={() => team.refetch()} />;
   if (!team.data?.program) return <EmptyState title="No such team" body="The link may be out of date." action={<Link className="btn-ghost btn-sm" to={href('/teams')}>Browse teams</Link>} />;
   const t = team.data; const p = t.program; const s = t.teamStats;
@@ -144,7 +144,7 @@ function SeasonProfile({ t, id, season, href, admin }: { t: any; id: string; sea
           </table></div>
         ) : <EmptyState title="No conference table yet" body={admin ? 'Run compute-standings.' : undefined} />}
       </Section>
-      <div className="space-y-6">
+      <div className="stack">
         <Section title="Goals by period">
           {periodsShown ? <><GoalsByPeriod rows={pd!.rows} /><p className="mt-1 text-xs text-chalk-500">Scored and conceded by 15-minute period, from the play-by-play of {pd!.timed} of {pd!.games} matches.</p></>
             : <p className="text-sm text-chalk-500">{periods.isPending ? 'Loading…' : 'Shows once goal times are in for most of the season\'s matches.'}</p>}

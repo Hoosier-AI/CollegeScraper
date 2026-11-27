@@ -11,6 +11,7 @@ import { fetchDetails, refreshTouched } from './detail.js';
 import type { Db } from '../../db/client.js';
 import { coverageOf } from './coverage.js';
 import { noticesFor, notifyPlaibookPro, type ProNotice } from './notify.js';
+import { observeProFixtures } from '../../push/snapshots.js';
 
 /** Store the fixtures of enabled competitions; returns how many finals still need detail. */
 export async function storeFixtures(db: Db, items: AfFixtureItem[], leagues: Map<number, LeagueInfo>): Promise<{ stored: number; finals: number; skipped: number }> {
@@ -39,14 +40,19 @@ export async function proScoreboard(ctx: JobContext): Promise<void> {
     const given = Array.isArray(ctx.params.dates) ? (ctx.params.dates as unknown[]).map(String).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
     const days = given.length ? given : scoreboardDays(String(ctx.params.days ?? 'auto'));
     let finals = 0;
+    const pushFinals: number[] = [];
     for (const date of days) {
       const res = await api.get<AfFixtureItem>('fixtures', { date });
       const r = await storeFixtures(ctx.db, res.response, leagues);
+      // App alerts: the finals just stored that kicked off in the last 12 hours (older ones cannot alert).
+      try { for (const it of res.response) if (leagues.get(it.league.id)?.enabled) { const f = parseFixture(it); if (f.status === 'final' && Date.now() - Date.parse(f.kickoff) < 12 * 3600_000) pushFinals.push(f.id); } } catch { /* alerts never stop the scores */ }
       ctx.inc('fixtures', r.stored); ctx.inc('skipped_disabled', r.skipped); finals += r.finals;
       await ctx.heartbeat();
     }
     ctx.inc('finals', finals);
     if (finals) await enqueue(ctx.db, 'pro-final-detail', {});
+    // App alerts: a final pro-live did not see end still gets its full-time alert (one already sent is not repeated).
+    try { const n = await observeProFixtures(ctx.db, pushFinals); if (n) ctx.inc('push_events', n); } catch { /* alerts never stop the scores */ }
   });
 }
 
@@ -111,6 +117,13 @@ export async function proLive(ctx: JobContext): Promise<void> {
       // The league table moves with the result: pro-standings picks the league seasons with a final newer than it.
       if (notices.length) await enqueue(ctx.db, 'pro-standings', {});
     }
+    // App alerts: every match the live pass stored (their events are written by now, so a goal can name its scorer)
+    // and the ones that just finished, read back from pro_fixtures (all competitions, not notify.ts's US scene).
+    try {
+      const stored = res.response.filter((it) => leagues.get(it.league.id)?.enabled).map((it) => it.fixture.id);
+      const n = await observeProFixtures(ctx.db, [...stored, ...finished]);
+      if (n) ctx.inc('push_events', n);
+    } catch { /* alerts never stop the scores */ }
     // Plaibook syncs the linked clubs now (and anything still waiting from an earlier run goes with it).
     const sent = await notifyPlaibookPro(notices, ctx.db);
     if (notices.length) ctx.note('plaibook', `${sent}: ${notices.length} final${notices.length === 1 ? '' : 's'}`);

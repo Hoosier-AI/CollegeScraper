@@ -30,7 +30,7 @@ export default function ProAbroad() {
       {q.isPending && <Skeleton className="h-64" />}
       {d && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="space-y-6">
+          <div className="stack">
             {/* Everyone who played: goal and assist makers as cards, every other appearance in a compact list. */}
             <Section title={`This week: ${d.lines.length} ${d.lines.length === 1 ? 'appearance' : 'appearances'}`}>
               {d.lines.length ? (

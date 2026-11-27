@@ -2,6 +2,7 @@
 // calling and how much, the limits in force, and the Plaibook connection. Keys are set on the Render service only.
 import { useState } from 'react';
 import { api, fmt } from '../../lib/api';
+import { PUBLIC_WEB_ORIGIN } from '../../lib/publicOrigin';
 import { agoShort, useNow } from '../../lib/hooks';
 import { useConsole, type ApiData } from '../../lib/console';
 import { ErrorBox, Note, Section, Skeleton } from '../../components/primitives';
@@ -47,7 +48,7 @@ export default function ApiTab() {
         </div>
         <div className="mt-3 space-y-1">
           <p className="text-xs text-chalk-500">Plaibook's server calls the 17 college routes under /v1 and every site read through /v1/site (client: <code>docs/plaibook-client.mjs</code>, contract: <code>docs/PLAIBOOK_API.md</code>):</p>
-          <CopyField label="Example request" value={`curl -H "X-Api-Key: <plaibook key>" ${d.public_url ?? window.location.origin}/v1/site/pro/rankings`} />
+          <CopyField label="Example request" value={`curl -H "X-Api-Key: <plaibook key>" ${d.public_url ?? PUBLIC_WEB_ORIGIN}/v1/site/pro/rankings`} />
         </div>
       </Section>
 

@@ -86,8 +86,9 @@ export function ncaaBracket(rows: BracketRow[]): Bracket | null {
   return { rounds: out, champion, complete: !!champion, teams };
 }
 
-/** A conference tournament's bracket from its games (round_number set by classify-postseason). */
-export function conferenceBracket(rows: BracketRow[]): Bracket | null {
+/** A conference tournament's bracket from its games (round_number set by classify-postseason). `opts.rounds` fixes
+ *  the number of rounds when the caller knows it (a pro cup's round names say so: src/pro/bracket.ts). */
+export function conferenceBracket(rows: BracketRow[], opts: { rounds?: number } = {}): Bracket | null {
   const games = [...rows].filter((g) => g.round_number != null).sort((a, b) => a.game_date.localeCompare(b.game_date) || a.id.localeCompare(b.id));
   if (!games.length) return null;
   const byTeam = new Map<string, BracketRow[]>();
@@ -95,7 +96,7 @@ export function conferenceBracket(rows: BracketRow[]): Bracket | null {
   const prevOf = (t: string | null, g: BracketRow) => { if (!t) return null; const l = byTeam.get(t)!; const i = l.indexOf(g); return i > 0 ? l[i - 1]! : null; };
   const nextOf = (t: string, g: BracketRow) => { const l = byTeam.get(t)!; const i = l.indexOf(g); return i < l.length - 1 ? l[i + 1]! : null; };
   const teams = byTeam.size;
-  const rounds = Math.max(...games.map((g) => g.round_number!), Math.ceil(Math.log2(Math.max(2, teams))));
+  const rounds = Math.max(...games.map((g) => g.round_number!), opts.rounds ?? Math.ceil(Math.log2(Math.max(2, teams))));
   const winner = (g: BracketRow) => winnerId(g, (t) => !!nextOf(t, g));
   const grid: (BracketGame | null)[][] = Array.from({ length: rounds }, (_, i) => Array(2 ** (rounds - i - 1)).fill(null));
   const placed = new Set<string>();

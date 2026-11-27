@@ -5,9 +5,19 @@ import { selectIn, type Db } from '../db/client.js';
 import { isMinor } from '../pro/minor.js';
 import { eastern } from '../jobs/seasons.js';
 
-export type FollowKind = 'team' | 'player' | 'pro-team' | 'pro-player';
+// 'conference' (a college conference id) and 'pro-league' (a competition id) are followed by the app for alerts
+// (src/push); GET /api/follows accepts them and returns nothing for them yet.
+export type FollowKind = 'team' | 'player' | 'pro-team' | 'pro-player' | 'conference' | 'pro-league';
 export interface FollowRef { kind: FollowKind; id: string }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True when `id` is a well-formed id for this follow kind (a uuid for college, an integer for pro). */
+export function validFollow(kind: string, id: string): kind is FollowKind {
+  if (kind === 'team' || kind === 'player' || kind === 'conference') return UUID.test(id);
+  if (kind === 'pro-team' || kind === 'pro-player') return /^-?\d{1,10}$/.test(id);
+  if (kind === 'pro-league') return /^\d{1,10}$/.test(id);
+  return false;
+}
 
 /** "team:<uuid>,pro-player:154,..." into valid refs (unknown kinds and malformed ids dropped, at most 40). */
 export function parseFollows(raw: unknown): FollowRef[] {
@@ -15,8 +25,7 @@ export function parseFollows(raw: unknown): FollowRef[] {
   for (const part of String(raw ?? '').split(',').slice(0, 40)) {
     const i = part.lastIndexOf(':'); if (i < 0) continue;
     const kind = part.slice(0, i) as FollowKind, id = part.slice(i + 1).trim();
-    if ((kind === 'team' || kind === 'player') && UUID.test(id)) out.push({ kind, id });
-    else if ((kind === 'pro-team' || kind === 'pro-player') && /^-?\d{1,10}$/.test(id)) out.push({ kind, id });
+    if (validFollow(kind, id)) out.push({ kind, id });
   }
   return out;
 }

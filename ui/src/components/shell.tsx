@@ -2,11 +2,12 @@
 // and the pages shown when a route is missing or throws.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Link, NavLink, isRouteErrorResponse, useLocation, useRouteError, useSearchParams } from 'react-router-dom';
-import { ChevronDown, Flag, Gauge, GraduationCap, Home as HomeIcon, MoreHorizontal, Search, Shield, Trophy, X } from 'lucide-react';
+import { ChevronDown, Gauge, Home as HomeIcon, MoreHorizontal, Search, Shield, Star, X } from 'lucide-react';
 import { GENDER_PAGES, useGender, useGenderSync } from '../lib/proGender';
 import { isIntlPath, isProPath as isProSection, sectionOf, type Section } from '../lib/section';
-import { AREA_LABEL, AREA_NAV, PHONE_SLOTS, navItemFor, under, type NavItem } from '../lib/nav';
+import { ABOUT_LINKS, AREA_LABEL, AREA_NAV, SHEET_SLOTS, navItemFor, phoneBar, under, type NavItem } from '../lib/nav';
 import { useAdmin, clearToken } from '../lib/api';
+import { isNative } from '../lib/platform';
 import { useFilters } from '../lib/filters';
 import { useUrlPatch } from '../lib/urlState';
 import { Logo } from './Brand';
@@ -37,16 +38,16 @@ function AreaSwitch({ section }: { section: Section | null }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useDismiss(open, () => setOpen(false), root);
-  const cls = (on: boolean) => `rounded px-2 py-1 text-xs font-semibold transition-colors duration-150 coarse:py-2 ${on ? 'bg-pitch-400/20 text-pitch-300' : 'text-chalk-400 hover:text-chalk-100'}`;
+  const cls = (on: boolean) => `rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-150 coarse:py-2 ${on ? 'bg-field-950 text-pitch-300' : 'text-chalk-400 hover:text-chalk-100'}`;
   const areas: Section[] = ['college', 'pro', 'intl'];
   return (
     <>
-      <nav aria-label="Area" className="hidden shrink-0 items-center gap-0.5 rounded-md border border-field-700 p-0.5 sm:flex">
+      <nav aria-label="Area" className="hidden shrink-0 items-center gap-0.5 rounded-lg bg-field-900 p-0.5 sm:flex">
         {areas.map((a) => <Link key={a} to={AREA_HOME[a]} className={cls(section === a)} aria-current={section === a ? 'true' : undefined}>{AREA_LABEL[a]}</Link>)}
       </nav>
       <div ref={root} className="relative shrink-0 sm:hidden">
         <button type="button" className="flex min-h-11 items-center gap-1.5 rounded-md pr-1 text-sm font-semibold text-chalk-100" aria-expanded={open} aria-haspopup="true" aria-controls="area-menu" onClick={() => setOpen((v) => !v)}>
-          <Logo withText={false} size={24} />{section ? AREA_LABEL[section] : 'Plaibook Live'}<ChevronDown size={14} aria-hidden className="text-chalk-400" />
+          <Logo withText={false} size={24} />{section ? AREA_LABEL[section] : 'Scores'}<ChevronDown size={14} aria-hidden className="text-chalk-400" />
         </button>
         {open && (
           <nav id="area-menu" aria-label="Area" className="absolute left-0 top-full z-40 mt-1 w-56 rounded-lg border border-field-700 bg-field-900 p-1 shadow-xl shadow-black/50">
@@ -138,7 +139,8 @@ const FILTERLESS = ['/', '/admin', '/search', '/console'];
 
 export function TopBar() {
   useGenderSync();
-  const admin = useAdmin();
+  // The phone app has no console (lib/platform.ts), so never its menu item.
+  const admin = useAdmin() && !isNative;
   const { pathname } = useLocation();
   const home = pathname === '/';
   const section = sectionOf(pathname);
@@ -152,19 +154,18 @@ export function TopBar() {
   const searchRow = useRef<HTMLDivElement>(null);
   useEffect(() => { if (searching) searchRow.current?.querySelector('input')?.focus(); }, [searching]);
   return (
-    <header className="sticky top-0 z-30 border-b border-field-700 bg-field-950" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <header className="sticky top-0 z-30 border-b border-field-700/70 bg-field-950" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="gutter mx-auto flex h-14 max-w-page items-center gap-2 sm:gap-4">
         <Link to="/" className="hidden shrink-0 rounded sm:block" aria-label="Plaibook Live home"><Logo size={34} className="hidden xl:inline-flex" /><Logo withText={false} size={28} className="xl:hidden" /></Link>
         <AreaSwitch section={home ? null : section} />
         {/* The home page belongs to no one area: its search and the switch are the way in. */}
         {!home && <AreaNav area={section} admin={admin} />}
         {!home && <div className="flex-1 md:hidden" />}
-        {!home && <>
-          <button type="button" className="btn-ghost btn-icon shrink-0" aria-label={searching ? 'Close search' : 'Search'} aria-expanded={searching} aria-controls="site-search-row" onClick={() => setSearching((v) => !v)}>
-            {searching ? <X size={18} /> : <Search size={18} />}
-          </button>
-        </>}
-        {home && <div className="ml-auto" />}
+        {home && <div className="flex-1" />}
+        <button type="button" className="btn-quiet btn-icon shrink-0" aria-label={searching ? 'Close search' : 'Search'} aria-expanded={searching} aria-controls="site-search-row" onClick={() => setSearching((v) => !v)}>
+          {searching ? <X size={19} /> : <Search size={19} />}
+        </button>
+        <Link to="/following" className={`btn-quiet btn-icon hidden shrink-0 md:inline-flex ${pathname === '/following' ? 'text-pitch-300' : ''}`} aria-label="My teams" title="My teams"><Star size={19} /></Link>
         {showSeason && <SeasonPicker />}
         {showGender && <GenderToggle />}
         {admin && <button className="btn-quiet btn-sm hidden lg:inline-flex" onClick={() => clearToken()}><Shield size={14} /> Sign out</button>}
@@ -178,44 +179,44 @@ export function TopBar() {
   );
 }
 
-/** Phones: the same five everywhere. Home, Matches, the competitions slot, Teams, and More for the rest. On the home
- *  page itself, the three areas and search. */
+/** Phones: the same five on every page. Scores, My teams, Competitions, Stats, and More for the rest: the area
+ *  switch, the area's other pages, and the about and legal links the footer carries on wide screens. */
 export function BottomBar() {
-  const admin = useAdmin();
+  // The phone app has no console (lib/platform.ts), so never its menu item.
+  const admin = useAdmin() && !isNative;
   const { pathname } = useLocation();
   const [sheet, setSheet] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useDismiss(sheet, () => setSheet(false), root);
-  const home = pathname === '/';
   const area = sectionOf(pathname);
   const { slots, more } = AREA_NAV[area];
-  const homeItem = { key: 'home', to: '/', label: 'Home', icon: HomeIcon };
-  const items: NavItem[] = home
-    ? [homeItem, { key: 'college', to: '/matches', label: 'College', icon: GraduationCap }, { key: 'pro', to: '/pro/matches', label: 'Pro', icon: Trophy }, { key: 'intl', to: '/intl/matches', label: 'Intl', icon: Flag }, { key: 'search', to: '/search', label: 'Search', icon: Search }]
-    : [homeItem, ...PHONE_SLOTS.map((k) => slots.find((s) => s.key === k)!).filter(Boolean)];
-  const rest = home ? [] : [...slots.filter((s) => !PHONE_SLOTS.includes(s.key as never)), ...more, ...(admin ? [ADMIN_ITEM] : [])];
-  const inRest = rest.some((i) => under(pathname, i.to));
-  const tab = (on: boolean) => `flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-2xs font-medium ${on ? 'text-pitch-300' : 'text-chalk-400'}`;
+  const items = phoneBar(area);
+  const isOn = (n: (typeof items)[number]) => (n.to === '/' ? pathname === '/' : false) || n.lit.some((t) => under(pathname, t));
+  const rest = [...SHEET_SLOTS.map((k) => slots.find((x) => x.key === k)!).filter(Boolean), ...more, ...(admin ? [ADMIN_ITEM] : [])];
+  const inRest = !items.some(isOn);
+  const tab = (on: boolean) => `flex min-h-[54px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${on ? 'text-pitch-300' : 'text-chalk-500'}`;
   return (
     <div ref={root} className="md:hidden">
       {sheet && (
-        <div id="more-sheet" className="fixed inset-x-0 z-30 max-h-[70dvh] overflow-auto rounded-t-xl border-t border-field-700 bg-field-900 p-2 shadow-2xl shadow-black/60" style={{ bottom: 'calc(56px + env(safe-area-inset-bottom))' }}>
-          <p className="px-3 pb-1 pt-1 text-xs font-semibold text-chalk-500">{AREA_LABEL[area]}</p>
+        <div id="more-sheet" className="fixed inset-x-0 z-30 max-h-[76dvh] overflow-auto rounded-t-xl bg-field-900 p-2 shadow-2xl shadow-black/60" style={{ bottom: 'calc(54px + env(safe-area-inset-bottom))' }}>
+          <nav aria-label="Area" className="m-1 grid grid-cols-3 gap-0.5 rounded-lg bg-field-950 p-0.5">
+            {(['college', 'pro', 'intl'] as Section[]).map((a) => <Link key={a} to={AREA_HOME[a]} aria-current={area === a && pathname !== '/' ? 'true' : undefined} className={`flex min-h-10 items-center justify-center rounded-md text-sm font-medium ${area === a && pathname !== '/' ? 'bg-field-800 text-pitch-300' : 'text-chalk-400'}`}>{AREA_LABEL[a]}</Link>)}
+          </nav>
           <ul className="grid grid-cols-1 gap-0.5">{rest.map((n) => <li key={n.key}><MenuLink n={n} on={under(pathname, n.to)} /></li>)}</ul>
+          <nav aria-label="About and legal" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-field-700/60 px-3 pb-2 pt-3 text-xs text-chalk-400">
+            {ABOUT_LINKS.map(([to, label]) => <Link key={to} to={to} className="py-1 hover:text-chalk-100">{label}</Link>)}
+          </nav>
+          <p className="px-3 pb-2 text-2xs leading-relaxed text-chalk-500">Team names, logos and competition names are trademarks of their owners. Plaibook Live is independent and is not affiliated with or endorsed by the NCAA, any conference, school, league or federation. © {new Date().getFullYear()} Plaibook Technologies, Inc.</p>
         </div>
       )}
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700 bg-field-950" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length + (rest.length ? 1 : 0)}, minmax(0, 1fr))` }}>
-          {items.map((n) => (
-            <NavLink key={n.key} to={n.to} end={n.to === '/'} className={({ isActive }) => tab(isActive && !sheet)}>
-              {({ isActive }) => <><n.icon size={20} aria-hidden strokeWidth={isActive && !sheet ? 2.25 : 1.75} /><span>{n.label}</span></>}
-            </NavLink>
-          ))}
-          {rest.length > 0 && (
-            <button type="button" className={tab(sheet || inRest)} aria-expanded={sheet} aria-controls="more-sheet" onClick={() => setSheet((v) => !v)}>
-              <MoreHorizontal size={20} aria-hidden strokeWidth={sheet || inRest ? 2.25 : 1.75} /><span>More</span>
-            </button>
-          )}
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-field-700/70 bg-field-950" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="grid grid-cols-5">
+          {items.map((n) => { const on = isOn(n) && !sheet; return (
+            <Link key={n.key} to={n.to} aria-current={on ? 'page' : undefined} className={tab(on)}><n.icon size={20} aria-hidden strokeWidth={on ? 2.25 : 1.75} /><span>{n.label}</span></Link>
+          ); })}
+          <button type="button" className={tab(sheet || inRest)} aria-expanded={sheet} aria-controls="more-sheet" onClick={() => setSheet((v) => !v)}>
+            <MoreHorizontal size={20} aria-hidden strokeWidth={sheet || inRest ? 2.25 : 1.75} /><span>More</span>
+          </button>
         </div>
       </nav>
     </div>
@@ -266,20 +267,22 @@ const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
 export function Footer() {
   const { pathname } = useLocation();
   const year = new Date().getFullYear();
+  // The phone app has no ads: no page about buying them and none about ad choices (the same two lib/nav.ts drops).
+  const columns = isNative ? FOOTER_COLUMNS.map((c) => ({ ...c, links: c.links.filter(([to]) => to !== '/advertise' && to !== '/privacy-choices') })) : FOOTER_COLUMNS;
   const link = (to: string, label: string) => (to.includes('#')
     ? <a href={to} className="inline-block py-1 text-chalk-300 hover:text-pitch-300">{label}</a>
     : <Link to={to} className="inline-block py-1 text-chalk-300 hover:text-pitch-300">{label}</Link>);
   return (
-    <footer className="mt-16 border-t border-field-700 bg-field-900/40">
+    <footer className="mt-16 hidden border-t border-field-700/70 bg-field-900/40 md:block">
       <div className="gutter mx-auto w-full max-w-page pb-28 pt-10 md:pb-10">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,3fr)]">
           <div className="space-y-3">
             <Link to="/" aria-label="Plaibook Live home" className="inline-block"><Logo size={26} /></Link>
             <p className="max-w-xs text-sm leading-relaxed text-chalk-300">Free soccer stats for NCAA college soccer, professional leagues and international football.</p>
-            <p className="text-sm text-chalk-400">Coaching a team? <a href="https://www.plaibook.soccer/?utm_source=stats&amp;utm_medium=referral&amp;utm_campaign=footer" className="text-pitch-300 hover:text-pitch-200">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches. Every Coach+ tool is free for 14 days, no card.</p>
+            {!isNative && <p className="text-sm text-chalk-400">Coaching a team? <a href="https://www.plaibook.soccer/?utm_source=stats&amp;utm_medium=referral&amp;utm_campaign=footer" className="text-pitch-300 hover:text-pitch-200">Coach with Tekki</a>, Plaibook's AI assistant for soccer coaches. Every Coach+ tool is free for 14 days, no card.</p>}
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
-            {FOOTER_COLUMNS.map((c) => (
+            {columns.map((c) => (
               <div key={c.title}>
                 <h2 className="mb-2 text-xs font-semibold text-chalk-100">{c.title}</h2>
                 <ul className="space-y-0.5 text-sm">{c.links.map(([to, label]) => <li key={to}>{link(to, label)}</li>)}</ul>

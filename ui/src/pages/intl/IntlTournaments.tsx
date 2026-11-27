@@ -35,7 +35,7 @@ export default function IntlTournaments() {
       {q.error && <ErrorBox error={q.error} retry={() => q.refetch()} />}
       {q.isPending && <Skeleton className="h-64" />}
       {q.data && !total && <EmptyState title="No tournaments match" body={term ? 'Clear the filter, or try the other level.' : 'Try the other level.'} />}
-      <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="masonry">
         {groups.map(([conf, list]) => (
           <section key={conf} className="frame overflow-hidden" aria-label={CONFEDERATION_LABEL[conf] ?? conf}>
             <h2 className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-chalk-100"><span className="min-w-0 truncate">{CONFEDERATION_LABEL[conf] ?? conf}</span><span className="ml-auto text-2xs font-normal text-chalk-500 tnum">{list.length}</span></h2>

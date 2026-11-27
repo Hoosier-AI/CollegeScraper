@@ -2,7 +2,8 @@
 // Tokens are named for what they are on a football pitch at night: the field (surfaces), chalk (text) and
 // pitch (the Plaibook teal). Result and verification colours are only ever applied to data, never to chrome.
 const field = { 950: '#0A1628', 900: '#10203A', 800: '#182C4E', 700: '#24395F', 600: '#33497A' };
-const chalk = { 100: '#EEF3F8', 200: '#D6DFEA', 300: '#B9C6D8', 400: '#98A9C0', 500: '#7F91AA' };
+// 500 is the quiet text tone: lifted a little (2026-11 redesign) so small grey text reads on a phone outdoors.
+const chalk = { 100: '#EEF3F8', 200: '#D6DFEA', 300: '#B9C6D8', 400: '#98A9C0', 500: '#8497B3' };
 const pitch = { 300: '#5EEAD4', 400: '#2DD4BF', 500: '#14B8A6', 600: '#0F9F8F' };
 
 export default {
@@ -15,6 +16,8 @@ export default {
       colors: {
         field, chalk, pitch,
         win: '#5EEAD4', loss: '#FCA5A5', draw: '#CBD5E1', note: '#FBBF24',
+        // A match in play: the minute, the dot, the count. Teal is kept for what can be pressed and where you are.
+        live: '#F87171',
         // The away side and the defending group in charts (was a hex literal in five files).
         away: '#7DD3FC',
         // Match ratings, one scale everywhere (components/Rating.tsx ratingTone): 9+ elite ... below 6 poor.

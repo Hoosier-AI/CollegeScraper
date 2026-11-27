@@ -11,6 +11,11 @@ import { SponsorLine } from './components/SponsorLine';
 import { removeServerSummary } from './lib/entity';
 import { trackView } from './lib/track';
 import { setLinkSection } from './lib/section';
+import { isNative } from './lib/platform';
+import { lazy } from 'react';
+
+// The app's native layer (status bar, alerts, links): its own chunk, loaded only in the app's build.
+const NativeBridge = isNative ? lazy(() => import('./components/NativeBridge').then((m) => ({ default: m.NativeBridge }))) : null;
 
 export default function App() {
   const admin = useAdmin();
@@ -18,7 +23,7 @@ export default function App() {
   // Before the page renders: Pro and International share their pages, and their links follow the half the reader is in.
   setLinkSection(pathname);
   // /api/meta is public, so probe an admin-only route to notice a secret that has been rotated away.
-  const check = useQuery({ queryKey: ['admin-check'], queryFn: () => api('/api/runs?limit=1'), enabled: admin, retry: false, staleTime: 5 * 60_000 });
+  const check = useQuery({ queryKey: ['admin-check'], queryFn: () => api('/api/runs?limit=1'), enabled: admin && !isNative, retry: false, staleTime: 5 * 60_000 });
   const rejected = check.error instanceof ApiError && check.error.status === 401;
   useEffect(() => { if (rejected) clearToken(); }, [rejected]);
   useFocusMain();
@@ -29,21 +34,23 @@ export default function App() {
   return (
     <FiltersProvider>
       <a href="#main" className="sr-only-focusable">Skip to content</a>
+      {NativeBridge && <Suspense fallback={null}><NativeBridge /></Suspense>}
       <div className="flex min-h-[100dvh] flex-col">
         <TopBar />
-        <SponsorLine />
-        {/* From 1600px wide: a 160px rail on each side for advertising (components/AdRail.tsx). */}
-        <div className="gutter mx-auto w-full max-w-page flex-1 rails:grid rails:grid-cols-[160px_minmax(0,1fr)_160px] rails:gap-6">
-          <AdRail side="left" />
+        {!isNative && <SponsorLine />}
+        {/* From 1600px wide: a 160px rail on each side for advertising (components/AdRail.tsx). The phone app has no
+            ads, sponsors or rails (lib/platform.ts). */}
+        <div className={`gutter mx-auto w-full max-w-page flex-1 ${isNative ? '' : 'rails:grid rails:grid-cols-[160px_minmax(0,1fr)_160px] rails:gap-6'}`}>
+          {!isNative && <AdRail side="left" />}
           <main id="main" tabIndex={-1} className="min-w-0 pb-24 pt-5 outline-none sm:pt-6 md:pb-8">
             <Suspense fallback={<div className="space-y-4" aria-busy="true"><Skeleton className="h-8 w-64" /><Skeleton lines={3} /><Skeleton className="h-64" /></div>}>
               <Outlet />
             </Suspense>
           </main>
-          <AdRail side="right" />
+          {!isNative && <AdRail side="right" />}
         </div>
         {/* One ad above the footer on every screen size while ads are on; a new unit for each page. */}
-        <AdSlot key={pathname} slot="inline" className="gutter mx-auto mt-10 w-full max-w-page" />
+        {!isNative && <AdSlot key={pathname} slot="inline" className="gutter mx-auto mt-10 w-full max-w-page" />}
         <Footer />
         <BottomBar />
       </div>

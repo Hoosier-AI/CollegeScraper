@@ -45,5 +45,7 @@ import './news.js';
 import './referees.js';
 import './collegeRatings.js';
 import './collegeSims.js';
+// App alerts (push-send).
+import '../push/send.js';
 
 export function registerAllJobs(): void { /* side-effect imports above */ }

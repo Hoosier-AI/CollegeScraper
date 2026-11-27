@@ -13,7 +13,7 @@ export function NewsHub({ base, filters, aside, intro }: { base: NewsQuery; filt
   const topStories = top.data?.pages[0]?.top ?? [];
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 stack">
         {intro}
         {filter.id === 'all' && (top.isPending ? <Skeleton className="h-40" /> : topStories.length > 0 && (
           <Section title="Top stories">
@@ -28,7 +28,7 @@ export function NewsHub({ base, filters, aside, intro }: { base: NewsQuery; filt
           <NewsFeed key={filter.id} q={{ ...base, kind: filter.kinds, limit: 25 }} empty={filter.id === 'all' ? 'No news yet' : `No ${filter.label.toLowerCase()} stories yet`} />
         </Section>
       </div>
-      {aside && <aside className="space-y-6 lg:sticky lg:top-20">{aside}</aside>}
+      {aside && <aside className="stack lg:sticky lg:top-20">{aside}</aside>}
     </div>
   );
 }

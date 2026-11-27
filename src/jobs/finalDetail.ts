@@ -11,6 +11,7 @@ import { log } from '../log.js';
 import { createHmac } from 'node:crypto';
 import type { Db } from '../db/client.js';
 import { kvGet, kvSet } from '../db/client.js';
+import { observeCollegeGames } from '../push/snapshots.js';
 
 interface FinalGame { id: string; home_program_id: string | null; away_program_id: string | null; ncaa_fetched_at: string | null; final_at?: string | null }
 interface Notice { game_id: string; home_program_id: string | null; away_program_id: string | null; final_at: string | null }
@@ -115,6 +116,9 @@ export async function finalDetail(ctx: JobContext): Promise<void> {
   }
   const told = await notifyPlaibook(games, process.env, fetch, ctx.db);
   ctx.inc(`plaibook_${told}`);
+  // App alerts: the stored final again now the box score is in (a score it corrected is sent as a corrected final;
+  // an unchanged one is nothing). Last, and never fails the job.
+  try { const n = await observeCollegeGames(ctx.db, landed.map((g) => g.id)); if (n) ctx.inc('push_events', n); } catch { /* alerts never stop the job */ }
 }
 
 registerJob('final-detail', finalDetail);

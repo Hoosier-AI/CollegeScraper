@@ -399,6 +399,8 @@ export function registerSeo(app: FastifyInstance, opts: SeoOptions) {
   }
   // Policy and information pages (src/legal): static text, rendered for crawlers and no-JavaScript readers.
   for (const slug of LEGAL_SLUGS) app.get(LEGAL[slug].path, (req, reply) => serve(req, reply, keyOf(req), async () => ({ head: legalHead(slug, ctx()), body: legalBody(slug) })));
+  // My teams: what a reader follows lives in their browser, so there is nothing to index.
+  app.get('/following', (_req, reply) => shell(reply.header('X-Robots-Tag', 'noindex')));
   app.get('/tv', (_req, reply) => shell(reply));
   app.get('/records', (_req, reply) => shell(reply));
   app.get('/compare', (_req, reply) => shell(reply));

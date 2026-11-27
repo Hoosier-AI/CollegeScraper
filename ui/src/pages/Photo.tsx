@@ -7,6 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, ImagePlus } from 'lucide-react';
 import { api } from '../lib/api';
+import { apiUrl } from '../lib/apiBase';
 import { useEntityId } from '../lib/entity';
 import { EmptyState, ErrorBox, PlayerAvatar, Skeleton } from '../components/primitives';
 
@@ -75,7 +76,7 @@ function PhotoForm({ playerId, name }: { playerId: string; name: string }) {
     body.set('photo', file);
     try {
       // Not api(): the browser sets the multipart boundary itself.
-      const res = await fetch('/api/photo-submissions', { method: 'POST', body });
+      const res = await fetch(apiUrl('/api/photo-submissions'), { method: 'POST', body });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out?.error ?? 'Could not send. Please try again.');
       setState('sent');
@@ -92,7 +93,7 @@ function PhotoForm({ playerId, name }: { playerId: string; name: string }) {
     </div>
   );
   return (
-    <form onSubmit={submit} className="frame space-y-4 pad" aria-labelledby="photo-title">
+    <form onSubmit={submit} className="frame stack pad" aria-labelledby="photo-title">
       <h2 id="photo-title" className="text-base font-semibold text-chalk-100">Send the photo</h2>
       <div>
         <label htmlFor="photo-file" className={label}>Photo (JPEG, PNG, WebP or HEIC, up to {MAX_MB} MB)</label>

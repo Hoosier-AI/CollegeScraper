@@ -47,6 +47,13 @@ const schema = z.object({
   PRO_PER_MIN: z.coerce.number().int().positive().default(600),
   // How many seasons back (the current one included) the backfill fills.
   PRO_BACKFILL_SEASONS: z.coerce.number().int().positive().default(3),
+  // App alerts (src/push). '1' sends to Apple; anything else does every step except the network call and logs
+  // "would send". The key is the .p8 file's text (line breaks may be written as \n), with its key id and the team id.
+  PUSH_ENABLED: z.string().default('0'),
+  APNS_KEY_P8: z.string().min(1).optional(),
+  APNS_KEY_ID: z.string().min(1).optional(),
+  APNS_TEAM_ID: z.string().min(1).optional(),
+  APNS_BUNDLE_ID: z.string().min(1).default('live.plaibook.app'),
 });
 
 export type Config = z.infer<typeof schema> & { userAgent: string; contactEmail: string };
@@ -86,6 +93,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     PRO_BACKFILL_RESERVE: env.PRO_BACKFILL_RESERVE || undefined,
     PRO_PER_MIN: env.PRO_PER_MIN || undefined,
     PRO_BACKFILL_SEASONS: env.PRO_BACKFILL_SEASONS || undefined,
+    PUSH_ENABLED: env.PUSH_ENABLED || undefined,
+    APNS_KEY_P8: env.APNS_KEY_P8 || undefined,
+    APNS_KEY_ID: env.APNS_KEY_ID || undefined,
+    APNS_TEAM_ID: env.APNS_TEAM_ID || undefined,
+    APNS_BUNDLE_ID: env.APNS_BUNDLE_ID || undefined,
   });
   const cfg: Config = {
     ...parsed,

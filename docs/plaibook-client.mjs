@@ -80,6 +80,7 @@ export const SITE_ROUTES = [
   { path: '/api/pro/fixtures/:id/referee', area: 'pro', gender: 'none' },
   { path: '/api/pro/leagues', area: 'pro', gender: 'none' },
   { path: '/api/pro/leagues/:slug', area: 'pro', gender: 'none' },
+  { path: '/api/pro/leagues/:slug/bracket', area: 'pro', gender: 'none' },
   { path: '/api/pro/leagues/:id/table', area: 'pro', gender: 'none' },
   { path: '/api/pro/leagues/:id/team-of-week', area: 'pro', gender: 'none' },
   { path: '/api/pro/teams', area: 'pro', gender: 'query' },

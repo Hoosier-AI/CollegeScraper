@@ -19,7 +19,7 @@ export function TitleRace({ conference, season, gender }: { conference: string; 
   if (!rows.length || rows.every((r) => r.conf_left === 0 && !r.clinched)) return null;
   const d1 = rows[0]!.division === 'd1';
   return (
-    <section className="min-w-0 space-y-2">
+    <section className="min-w-0 stack-sm">
       <h2 className="h-section">Title race <span className="text-sm font-normal text-chalk-500">the rest of the season played {fmt.num(rows[0]!.sims)} times, updated {fmt.agoWords(rows[0]!.run_at)}</span></h2>
       <div className="frame overflow-x-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">

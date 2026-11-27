@@ -72,11 +72,11 @@ export default function ProReferee() {
           <p className="mt-1.5 text-2xs text-chalk-500">Matches, then the club's record in them (won-drawn-lost).</p>
         </RailCard>
       )}>
-        <section className="min-w-0 space-y-2">
+        <section className="min-w-0 stack-sm">
           <h2 className="h-section">By competition and season</h2>
           <DataTable rows={d.seasons} columns={cols} rowKey={(s) => `${s.league?.id ?? 0}-${s.season}`} caption={`${r.name} by competition and season`} pageSize={15} noun="seasons" />
         </section>
-        <section className="min-w-0 space-y-2">
+        <section className="min-w-0 stack-sm">
           <h2 className="h-section">Latest matches</h2>
           <ul className="frame divide-y divide-field-700">
             {d.recent.map((x) => (

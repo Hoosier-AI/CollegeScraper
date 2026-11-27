@@ -2,13 +2,16 @@
 // preview with Download, and Share on phones that can share files (Instagram, X, Messages take the image directly).
 import { useEffect, useRef, useState } from 'react';
 import { Download, Image as ImageIcon, Share2, X } from 'lucide-react';
+import { apiUrl } from '../lib/apiBase';
+import { isNative } from '../lib/platform';
+import { shareFile } from '../lib/files';
 
 export function StatCardButton({ path, name }: { path: string; name: string }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [canShare, setCanShare] = useState(false);
   const blob = useRef<Blob | null>(null);
-  const src = `/card${path}.png`;
+  const src = apiUrl(`/card${path}.png`);
   const file = `plaibook-${path.split('/').filter(Boolean).pop() ?? 'card'}.png`;
   useEffect(() => {
     if (!open) return;
@@ -18,7 +21,8 @@ export function StatCardButton({ path, name }: { path: string; name: string }) {
       if (!live) return;
       blob.current = b;
       const f = new File([b], file, { type: 'image/png' });
-      setCanShare(typeof navigator.canShare === 'function' && navigator.canShare({ files: [f] }));
+      // In the app the share sheet is the native one and always there.
+      setCanShare(isNative || (typeof navigator.canShare === 'function' && navigator.canShare({ files: [f] })));
       setState('ready');
     }).catch(() => live && setState('failed'));
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -27,6 +31,7 @@ export function StatCardButton({ path, name }: { path: string; name: string }) {
   }, [open, src, file]);
   const share = async () => {
     if (!blob.current) return;
+    if (isNative) { await shareFile(blob.current, file, name, `${name} on plaibook.live`); return; }
     try { await navigator.share({ files: [new File([blob.current], file, { type: 'image/png' })], title: name, text: `${name} on plaibook.live` }); } catch { /* closed */ }
   };
   return (
@@ -46,7 +51,8 @@ export function StatCardButton({ path, name }: { path: string; name: string }) {
               {state === 'ready' && <img src={src} alt={`Stat card for ${name}`} className="mx-auto w-full rounded-lg border border-field-700" />}
             </div>
             <div className="flex gap-2 border-t border-field-700 px-4 py-3">
-              <a href={src} download={file} className={`btn-ghost flex-1 ${state === 'ready' ? '' : 'pointer-events-none opacity-40'}`}><Download size={16} aria-hidden /> Download</a>
+              {/* A download link in the app would only open the picture; Share saves it there. */}
+              {!isNative && <a href={src} download={file} className={`btn-ghost flex-1 ${state === 'ready' ? '' : 'pointer-events-none opacity-40'}`}><Download size={16} aria-hidden /> Download</a>}
               {canShare && <button type="button" className="btn-primary flex-1" onClick={share}><Share2 size={16} aria-hidden /> Share</button>}
             </div>
           </div>

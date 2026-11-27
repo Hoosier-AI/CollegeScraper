@@ -35,7 +35,7 @@ export default function Coach() {
           </div>
         )}
       </header>
-      <section className="space-y-2">
+      <section className="stack-sm">
         <h2 className="h-section">Seasons</h2>
         <ul className="frame divide-y divide-field-700 text-sm">
           {d.seasons.map((s) => (

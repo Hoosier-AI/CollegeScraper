@@ -1,6 +1,7 @@
 // Reads for Plaibook Live Pro: the site's /api/pro/* routes and the server-rendered /pro pages use the same functions,
 // so what a crawler reads and what a visitor sees cannot drift apart. Service-role reads of the pro_* tables.
 import { WIKI_TARGETS } from '../jobs/sources/wikipedia.js';
+import { mergeAlumni } from './alumni.js';
 import { oldestFetch, withNewMatches, type FinalRef, type FixtureLine } from './catchUp.js';
 import { coverageOf } from '../jobs/pro/coverage.js';
 import { sourcesOff } from './sources.js';
@@ -971,7 +972,7 @@ async function loadCollegeHub(db: Db, o: { gender?: 'm' | 'w' | null }) {
       team: p.current_team_id ? teams.get(p.current_team_id) ?? null : null, college_years: [l.first_season, l.last_season].filter(Boolean) });
     bySchool.set(key, g);
   }
-  const groups = [...bySchool.values()].map((g) => ({ ...g, players: g.players.sort((a, b) => b.minutes_recent - a.minutes_recent) })).sort((a, b) => b.players.length - a.players.length || a.school.name.localeCompare(b.school.name));
+  const groups = [...bySchool.values()].map((g) => ({ ...g, players: mergeAlumni(g.players) })).sort((a, b) => b.players.length - a.players.length || a.school.name.localeCompare(b.school.name));
   return { total: groups.reduce((n, g) => n + g.players.length, 0), schools: groups.length, groups };
 }
 

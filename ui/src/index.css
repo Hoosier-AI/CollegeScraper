@@ -3,7 +3,10 @@
 @tailwind utilities;
 
 @layer base {
-  html { font-synthesis: none; text-size-adjust: 100%; }
+  /* The sticky header's height, notch included: what anything that sticks under it offsets by. */
+  :root { --topbar-h: calc(3.5rem + env(safe-area-inset-top)); }
+  /* 97%: every rem-sized thing a touch smaller, so a phone shows more matches (2026-11 redesign). */
+  html { font-synthesis: none; text-size-adjust: 100%; font-size: 97%; }
   body { @apply bg-field-950 font-sans text-chalk-100 antialiased; }
   ::selection { @apply bg-pitch-500/40; }
   /* Every interactive element shows the same ring when reached from the keyboard. */
@@ -26,7 +29,7 @@
      page gutter 16px phone / 24px from sm, plus the notch on a landscape phone;
      24px between a page's sections (.stack); 16px inside a card on a phone, 20px from sm (.pad);
      12px between items in a card (.stack-sm); dense list rows 12px across, 10px down (.row-pad). */
-  .gutter { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+  .gutter { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
   @screen sm { .gutter { padding-left: max(1.5rem, env(safe-area-inset-left)); padding-right: max(1.5rem, env(safe-area-inset-right)); } }
   .stack { @apply space-y-6; }
   .stack-sm { @apply space-y-3; }
@@ -34,8 +37,26 @@
   .row-pad { @apply px-3 py-2.5; }
 
   /* Surfaces: .card is the raised block a section sits in; .frame is a flat outline for blocks inside one. */
-  .card { @apply rounded-xl border border-field-700 bg-field-900; }
-  .frame { @apply rounded-lg border border-field-700 bg-field-900/50; }
+  /* No outlines (2026-11 redesign): a block is a quiet change of tone, rows inside it are split by hairlines, and a
+     .frame inside a .card is the same tone, so nothing reads as a box in a box. */
+  .card { @apply rounded-lg bg-field-900; }
+  .frame { @apply rounded-lg bg-field-900/60; }
+  .card .frame, .card .card, .frame .frame { @apply bg-transparent; }
+  /* A competition's heading above its matches: a tinted band, edge to edge on phones. */
+  .band { @apply flex min-h-[34px] items-center gap-2 bg-field-900 px-3.5 py-1.5 text-sm; }
+  /* Rows split by hairlines. */
+  .rows > * + * { @apply border-t border-field-700/60; }
+  /* Sections of different heights side by side: packed into columns, so a short one never leaves a hole beside a tall
+     one (a row grid did: 2,000px of nothing under MLS Next Pro next to USL League Two). One column on phones, two from
+     md, three from xl; .masonry-2 stops at two. Same 24px between sections as everywhere else. */
+  .masonry, .masonry-2 { column-gap: 1.5rem; margin-bottom: -1.5rem; }
+  .masonry > *, .masonry-2 > * { break-inside: avoid; margin-bottom: 1.5rem; }
+  @screen md { .masonry { columns: 2; } }
+  @screen lg { .masonry-2 { columns: 2; } }
+  @screen xl { .masonry { columns: 3; } }
+  /* On phones a list runs to the screen edges: cancel the page gutter. */
+  .bleed { margin-left: calc(-1 * max(14px, env(safe-area-inset-left))); margin-right: calc(-1 * max(14px, env(safe-area-inset-right))); }
+  @screen sm { .bleed { margin-left: 0; margin-right: 0; } }
 
   /* Type roles. Nothing on the site is smaller than 12px except chart axis ticks (11px). */
   .h-section { @apply text-base font-semibold text-chalk-100; }

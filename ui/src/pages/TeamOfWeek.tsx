@@ -53,7 +53,7 @@ export default function TeamOfWeek() {
       {q.isPending && <Skeleton className="h-96" />}
       {d && !d.xi.length && <EmptyState title="No team of the week yet" body="It needs three or more games with box scores in the week. Pick another week, division or conference." />}
       {d && d.xi.length > 0 && (
-        <div className={`grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
+        <div className={`grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] ${q.isPlaceholderData ? 'opacity-60 transition-opacity duration-150' : ''}`}>
           <XIPitch lines={lines} crests={crests} linkOf={(l) => playerHref(d.xi[l.slot]!)} label={`Team of the week, ${weekLabel(d.week!)}: ${d.xi.map((x) => `${x.name} (${x.rating.toFixed(1)})`).join(', ')}`} />
           <div className="space-y-3">
             {best && (
