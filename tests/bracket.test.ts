@@ -93,7 +93,11 @@ describe('ncaaNextSlot', () => {
     expect([401, 402, 403, 404].map(next)).toEqual([501, 501, 502, 502]);
   });
   it('follows the teams when the pairing is crossed', () => {
-    const next = ncaaNextSlot([g(401, 'a', 'b'), g(402, 'c', 'd'), g(403, 'e', 'f'), g(404, 'g', 'h'), g(501, 'h', 'e'), g(502, 'b', null)]);
+    const next = ncaaNextSlot([g(401, 'a', 'b'), g(402, 'c', 'd'), g(403, 'e', 'f'), g(404, 'g', 'h'), g(501, 'h', 'e'), g(502, 'b', 'd')]);
     expect([401, 402, 403, 404].map(next)).toEqual([502, 502, 501, 501]);
+  });
+  it('follows each game on its own (2026 D2 men: 1+4 and 2+3)', () => {
+    const next = ncaaNextSlot([g(401, 'a', 'b'), g(402, 'c', 'd'), g(403, 'e', 'f'), g(404, 'g', 'h'), g(501, 'a', 'h'), g(502, 'e', 'd')]);
+    expect([401, 402, 403, 404].map(next)).toEqual([501, 502, 502, 501]);
   });
 });
