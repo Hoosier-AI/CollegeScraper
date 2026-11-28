@@ -5,7 +5,7 @@ import { registerJob, type JobContext } from './runner.js';
 import { kvGet, kvSet, selectAll, upsertChunked } from '../db/client.js';
 import { COLLEGE_DRAW_KEY, type DrawModel } from '../sources/intl/elo.js';
 import { type BracketSlot, type ConfKnockout, type NcaaField, type PlayedGame, type SimGame, type SimTeam } from '../college/sim.js';
-import { conferenceBracket, winnerId, type BracketRow } from '../college/bracket.js';
+import { conferenceBracket, ncaaNextSlot, winnerId, type BracketRow } from '../college/bracket.js';
 import { simRunner } from '../college/simThread.js';
 import { currentSeason } from './seasons.js';
 
@@ -29,7 +29,7 @@ export async function collegeSims(ctx: JobContext): Promise<void> {
       (q) => q.eq('season', season).eq('status', 'final').or('forfeit.is.null,forfeit.eq.false').not('home_score', 'is', null).not('home_program_id', 'is', null).not('away_program_id', 'is', null).order('id')),
     selectAll<any>(ctx.db, 'college_games', 'home_program_id,away_program_id,neutral_site,conference_game,postseason',
       (q) => q.eq('season', season).eq('status', 'scheduled').not('home_program_id', 'is', null).not('away_program_id', 'is', null).order('id')),
-    selectAll<any>(ctx.db, 'college_games', 'id,gender,game_date,status,home_program_id,away_program_id,home_score,away_score,home_seed,away_seed,neutral_site,shootout_winner,postseason_source,tournament_conference_id,round_number,bracket_slot',
+    selectAll<any>(ctx.db, 'college_games', 'id,gender,division,game_date,status,home_program_id,away_program_id,home_score,away_score,home_seed,away_seed,neutral_site,shootout_winner,postseason_source,tournament_conference_id,round_number,bracket_slot',
       (q) => q.eq('season', season).eq('postseason', true).order('id')),
   ]);
   const { conf: confKnockouts, ncaa: ncaaFields } = realTournaments(post);
@@ -108,10 +108,11 @@ export function realTournaments(post: any[]): { conf: Map<string, Map<string, Co
   }
   const ncaa = new Map<string, NcaaField>();
   for (const gender of ['m', 'w']) {
-    const games = post.filter((g) => g.postseason_source === 'ncaa' && g.gender === gender && g.bracket_slot != null);
+    const games = post.filter((g) => g.postseason_source === 'ncaa' && g.gender === gender && g.division === 'd1' && g.bracket_slot != null);
     if (!games.length) continue;
     const bySlot = new Map(games.map((g) => [g.bracket_slot, g]));
-    const onward = (slot: number) => (t: string) => { const nx = bySlot.get((Math.floor(slot / 100) + 1) * 100 + Math.ceil((slot % 100) / 2)); return !!nx && (nx.home_program_id === t || nx.away_program_id === t); };
+    const next = ncaaNextSlot(games);
+    const onward = (slot: number) => (t: string) => { const nx = bySlot.get(next(slot)); return !!nx && (nx.home_program_id === t || nx.away_program_id === t); };
     const slots: BracketSlot[] = games.map((g) => ({ slot: g.bracket_slot, home: g.home_program_id, away: g.away_program_id, homeSeed: g.home_seed, awaySeed: g.away_seed,
       winner: winnerId(row(g), onward(g.bracket_slot)), neutral: g.neutral_site }));
     const seeds = new Map<string, number>();

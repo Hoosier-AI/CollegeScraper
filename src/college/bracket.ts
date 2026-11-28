@@ -56,6 +56,27 @@ function toGame(g: BracketRow, position: number, winner: string | null, feeds: [
     overtime: !!g.overtime, shootout: !!g.shootout || (isPlayed(g) && g.home_score === g.away_score), neutral: !!g.neutral_site, feeds };
 }
 
+/** Where an NCAA game's winner goes next. NCAA.com numbers slots so position i feeds ceil(i/2) of the next round, but
+ *  not always in the late rounds: the 2026 Division II semifinals paired quarterfinals 3+4 and 1+2 the other way round.
+ *  A pair of games feeds the next-round game that already holds one of their teams; until then, the slot rule. One
+ *  division's games at a time (the divisions number their slots alike). */
+export function ncaaNextSlot(games: readonly { bracket_slot: number | null; home_program_id: string | null; away_program_id: string | null }[]): (slot: number) => number {
+  const bySlot = new Map(games.filter((g) => g.bracket_slot != null).map((g) => [g.bracket_slot!, g]));
+  const slotsOf = new Map<string, number[]>();
+  for (const [s, g] of bySlot) for (const t of [g.home_program_id, g.away_program_id]) if (t) slotsOf.set(t, [...(slotsOf.get(t) ?? []), s]);
+  return (slot: number) => {
+    const r = Math.floor(slot / 100), k = Math.ceil((slot % 100) / 2);
+    for (const s of [r * 100 + 2 * k - 1, r * 100 + 2 * k]) {
+      const g = bySlot.get(s);
+      for (const t of [g?.home_program_id, g?.away_program_id]) {
+        const next = t ? slotsOf.get(t)?.find((x) => Math.floor(x / 100) === r + 1) : undefined;
+        if (next != null) return next;
+      }
+    }
+    return (r + 1) * 100 + k;
+  };
+}
+
 /** NCAA tournament bracket from bracket slots. */
 export function ncaaBracket(rows: BracketRow[]): Bracket | null {
   const games = rows.filter((g) => g.bracket_slot != null);

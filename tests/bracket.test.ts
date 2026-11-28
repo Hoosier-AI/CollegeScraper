@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { conferenceBracket, ncaaBracket, type BracketRow } from '../src/college/bracket.js';
+import { conferenceBracket, ncaaBracket, ncaaNextSlot, type BracketRow } from '../src/college/bracket.js';
 import { classifyConference, type PsGame } from '../src/college/postseason.js';
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/postseason/${name}.json`, import.meta.url), 'utf8'));
@@ -83,5 +83,17 @@ describe('conference bracket from the tree', () => {
     const b = conferenceBracket(bigTenMen())!;
     const semi = b.rounds[1]!.games.find((g) => g!.home!.name === 'Washington')!;
     expect(semi.home!.winner).toBe(true);
+  });
+});
+
+describe('ncaaNextSlot', () => {
+  const g = (slot: number, home: string | null, away: string | null) => ({ bracket_slot: slot, home_program_id: home, away_program_id: away });
+  it('uses the slot rule until a next-round game holds one of the teams', () => {
+    const next = ncaaNextSlot([g(401, 'a', 'b'), g(402, 'c', 'd'), g(403, 'e', 'f'), g(404, 'g', 'h')]);
+    expect([401, 402, 403, 404].map(next)).toEqual([501, 501, 502, 502]);
+  });
+  it('follows the teams when the pairing is crossed', () => {
+    const next = ncaaNextSlot([g(401, 'a', 'b'), g(402, 'c', 'd'), g(403, 'e', 'f'), g(404, 'g', 'h'), g(501, 'h', 'e'), g(502, 'b', null)]);
+    expect([401, 402, 403, 404].map(next)).toEqual([502, 502, 501, 501]);
   });
 });

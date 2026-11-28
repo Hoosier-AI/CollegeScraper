@@ -24,6 +24,17 @@ describe('bracketTree', () => {
     const rows = [game('d3', 101, 'a', 'b', 1, 1, { shootout_winner: 'b' }), game('d3', 102, 'c', 'd', 2, 1), game('d3', 201, 'b', 'c'), game('d3', 103, 'e', 'f', 1, 0), game('d3', 202, null, null)];
     expect(bracketTree(rows, "Men's")).toEqual({ compared: 2, bad: [] });
   });
+  it('follows a semifinal pairing that is not the slot rule (2026 D2: quarterfinals 3+4 meet in 501)', () => {
+    const rows = [
+      game('d2', 401, 'a', 'b', 0, 1), game('d2', 402, 'c', 'd', 0, 1), game('d2', 403, 'e', 'f', 0, 1), game('d2', 404, 'g', 'h', 1, 0),
+      game('d2', 501, 'g', 'f'), game('d2', 502, 'b', 'd'),
+    ];
+    expect(bracketTree(rows, "Women's")).toEqual({ compared: 4, bad: [] });
+  });
+  it('still flags a loser who went through', () => {
+    const rows = [game('d2', 401, 'a', 'b', 0, 1), game('d2', 402, 'c', 'd', 0, 1), game('d2', 501, 'a', 'd')];
+    expect(bracketTree(rows, "Men's").bad.map((b) => b.who)).toEqual(["Men's D2 slot 401 (2026-11-20)"]);
+  });
 });
 
 describe('hasValue', () => {

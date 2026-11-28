@@ -12,6 +12,7 @@ import { registerJob, type JobContext } from './runner.js';
 import { kvGet, selectAll, selectIn, type Db } from '../db/client.js';
 import { POSTSEASON_KEY } from './classifyPostseason.js';
 import { currentSeason } from './seasons.js';
+import { ncaaNextSlot } from '../college/bracket.js';
 
 export interface AuditRow { area: 'college' | 'pro' | 'intl'; check_key: string; label: string; compared: number; agree: number; rate: number; target: number | null; worst: unknown[] }
 
@@ -132,9 +133,12 @@ export interface BracketGame { division: string | null; game_date: string; statu
  *  D1, D2 and D3 number their slots alike, so each division is its own tree (read as one, 2026-11: 35% "right"). */
 export function bracketTree(rows: BracketGame[], side: string): { compared: number; bad: { who: string; ours: unknown; theirs: unknown }[] } {
   const bySlot = new Map(rows.map((r) => [`${r.division}|${r.bracket_slot}`, r]));
+  // Where each game feeds, per division: the slot rule, or the next-round game its pair's teams are already in.
+  const nextIn = new Map<string, (slot: number) => number>();
+  for (const d of new Set(rows.map((r) => r.division))) nextIn.set(String(d), ncaaNextSlot(rows.filter((r) => r.division === d)));
   let compared = 0; const bad: { who: string; ours: unknown; theirs: unknown }[] = [];
   for (const r of rows) {
-    const nx = bySlot.get(`${r.division}|${(Math.floor(r.bracket_slot / 100) + 1) * 100 + Math.ceil((r.bracket_slot % 100) / 2)}`);
+    const nx = bySlot.get(`${r.division}|${nextIn.get(String(r.division))!(r.bracket_slot)}`);
     if (r.status !== 'final' || r.home_score == null || r.away_score == null || !nx?.home_program_id || !nx?.away_program_id) continue;
     const w = r.home_score > r.away_score ? r.home_program_id : r.away_score > r.home_score ? r.away_program_id : r.shootout_winner;
     compared++;
